@@ -261,13 +261,24 @@ export default function AdminLayout({
             style={{ borderColor: hexToRgba(currentAccent.primary, 0.25) }}
           >
             <div
-              className="grid h-8 w-8 place-items-center rounded-lg text-white shadow-sm transition-all duration-500"
-              style={{ background: `linear-gradient(135deg, ${currentAccent.primary}, ${currentAccent.hover})` }}
+              className="flex items-center justify-center h-8 rounded-lg text-white shadow-sm transition-all duration-500 overflow-hidden"
+              style={{ 
+                width: layoutConfig?.navbar_logo ? 'auto' : '2rem',
+                background: (layoutConfig?.navbar_logo || layoutConfig?.favicon) ? 'transparent' : `linear-gradient(135deg, ${currentAccent.primary}, ${currentAccent.hover})` 
+              }}
             >
-              <Zap className="h-4 w-4" />
+              {layoutConfig?.navbar_logo ? (
+                <img src={layoutConfig.navbar_logo} alt="Logo" className="h-full w-auto object-contain" />
+              ) : layoutConfig?.favicon ? (
+                <img src={layoutConfig.favicon} alt="Logo" className="h-full w-full object-contain" />
+              ) : (
+                <Zap className="h-4 w-4" />
+              )}
             </div>
-            <div className="leading-tight">
-              <div className="text-sm font-semibold text-slate-800">HireIQ</div>
+            <div className="leading-tight truncate">
+              <div className="text-sm font-semibold text-slate-800 truncate" title={adminUser?.company_name || 'HireIQ'}>
+                {adminUser?.company_name || 'HireIQ'}
+              </div>
               <div
                 className="text-[11px] font-medium transition-colors duration-500"
                 style={{ color: currentAccent.primary }}
@@ -380,13 +391,24 @@ export default function AdminLayout({
               {layoutConfig?.layout_type === "navbar" && (
                 <div className="flex items-center gap-3 border-r border-slate-200/60 pr-6 mr-2">
                   <div
-                    className="grid h-8 w-8 place-items-center rounded-lg text-white shadow-sm transition-all duration-500"
-                    style={{ background: `linear-gradient(135deg, ${currentAccent.primary}, ${currentAccent.hover})` }}
+                    className="flex items-center justify-center h-8 rounded-lg text-white shadow-sm transition-all duration-500 overflow-hidden"
+                    style={{ 
+                      width: layoutConfig?.navbar_logo ? 'auto' : '2rem',
+                      background: (layoutConfig?.navbar_logo || layoutConfig?.favicon) ? 'transparent' : `linear-gradient(135deg, ${currentAccent.primary}, ${currentAccent.hover})` 
+                    }}
                   >
-                    <Zap className="h-4 w-4" />
+                    {layoutConfig?.navbar_logo ? (
+                      <img src={layoutConfig.navbar_logo} alt="Logo" className="h-full w-auto object-contain" />
+                    ) : layoutConfig?.favicon ? (
+                      <img src={layoutConfig.favicon} alt="Logo" className="h-full w-full object-contain" />
+                    ) : (
+                      <Zap className="h-4 w-4" />
+                    )}
                   </div>
-                  <div className="leading-tight hidden sm:block">
-                    <div className="text-sm font-semibold text-slate-800">HireIQ</div>
+                  <div className="leading-tight hidden sm:block truncate max-w-[150px]">
+                    <div className="text-sm font-semibold text-slate-800 truncate" title={adminUser?.company_name || 'HireIQ'}>
+                      {adminUser?.company_name || 'HireIQ'}
+                    </div>
                     <div className="text-[11px] font-medium" style={{ color: currentAccent.primary }}>Recruiter</div>
                   </div>
                 </div>
