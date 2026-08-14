@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../utils/api";
+import Swal from "sweetalert2";
 import { 
   Search, 
   Filter, 
@@ -16,7 +17,8 @@ import {
   RefreshCw,
   Crown,
   Users,
-  Sliders
+  Sliders,
+  Upload
 } from "lucide-react";
 
 const Customize = () => {
@@ -35,6 +37,61 @@ const Customize = () => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  const fileInputRef = React.useRef(null);
+  const [selectedAdminForLogo, setSelectedAdminForLogo] = useState(null);
+
+  const handleLogoClick = (e, admin) => {
+    e.stopPropagation();
+    setSelectedAdminForLogo(admin);
+    if (fileInputRef.current) fileInputRef.current.click();
+  };
+
+  const handleLogoUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedAdminForLogo) return;
+
+    if (file.size > 200 * 1024) {
+      Swal.fire({ icon: "error", title: "Error", text: "Logo must be less than 200KB" });
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      setSelectedAdminForLogo(null);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      try {
+        const admin = selectedAdminForLogo;
+        const currentLayoutConfig = admin.layout_config || {
+          primary_color: "#4f46e5",
+          sidebar_bg_color: "#ffffff",
+          layout_type: "sidebar"
+        };
+        const updatedLayoutConfig = { 
+          ...currentLayoutConfig, 
+          favicon: reader.result,
+          navbar_logo: reader.result 
+        };
+
+        await api.put(`/master/companies/${admin.id}`, {
+          subscription_plan: admin.plan || "trial",
+          add_days: 0,
+          add_credits: 0,
+          features: admin.features || [],
+          layout_config: updatedLayoutConfig
+        });
+
+        Swal.fire({ icon: "success", title: "Success", text: "Sidebar logo updated!", timer: 1500, showConfirmButton: false });
+        fetchData();
+      } catch (err) {
+        Swal.fire({ icon: "error", title: "Error", text: "Failed to update logo." });
+      } finally {
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        setSelectedAdminForLogo(null);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Fetch all admins and plans
   const fetchData = async () => {
@@ -142,6 +199,15 @@ const Customize = () => {
   return (
     <div className="space-y-6 animate-[fadeIn_0.35s_ease-out] max-w-7xl mx-auto">
       
+      {/* Hidden File Input for Logo Upload */}
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        className="hidden" 
+        accept="image/png,image/jpeg,image/webp,image/x-icon" 
+        onChange={handleLogoUpload} 
+      />
+
       {/* Page Title & Meta Info */}
       <div className="flex justify-between items-center pb-1">
         <div>
@@ -307,8 +373,8 @@ const Customize = () => {
                     </div>
                   </div>
 
-                  {/* Status Badge */}
-                  <div className="shrink-0">
+                  {/* Status Badge & Logo Upload */}
+                  <div className="shrink-0 flex flex-col items-end gap-2">
                     {isExpired ? (
                       <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-rose-500/[0.04] text-rose-700 text-[10px] font-bold rounded-lg border border-rose-500/20">
                         <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
@@ -320,6 +386,14 @@ const Customize = () => {
                         Active
                       </span>
                     )}
+                    <button 
+                      onClick={(e) => handleLogoClick(e, admin)}
+                      className="inline-flex items-center gap-1 text-[9px] font-bold text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 px-2 py-1 rounded border border-slate-200 hover:border-indigo-200 transition-colors"
+                      title="Upload Sidebar Logo"
+                    >
+                      <Upload className="w-3 h-3" />
+                      Logo
+                    </button>
                   </div>
                 </div>
 
