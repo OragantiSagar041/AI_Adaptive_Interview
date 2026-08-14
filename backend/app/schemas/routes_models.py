@@ -398,6 +398,7 @@ class SecurityPoliciesUpdate(BaseModel):
     require_2fa: bool
     strict_session_timeout: bool
     restrict_ip: bool
+    allowed_ips: Optional[List[str]] = None
 
 class RecruiterUpdate(BaseModel):
     name: str

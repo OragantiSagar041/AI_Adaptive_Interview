@@ -341,6 +341,13 @@ export default function LoginPage() {
   const [resetLoading, setResetLoading] = useState(false)
   const [resetError, setResetError] = useState('')
 
+  // 2FA states
+  const [show2FA, setShow2FA] = useState(false)
+  const [tempAdminId, setTempAdminId] = useState('')
+  const [otp2FA, setOtp2FA] = useState('')
+  const [loading2FA, setLoading2FA] = useState(false)
+  const [error2FA, setError2FA] = useState('')
+
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', 'dark')
     document.documentElement.classList.add('dark')
@@ -360,7 +367,7 @@ export default function LoginPage() {
 
       try {
         const masterRes = await axios.post(API_BASE_URL + '/master/login', { username, password }, { timeout: 10000 })
-        if (masterRes.data?.role === 'master') {
+        if (masterRes.data?.role === 'master' || masterRes.data?.status === '2fa_required') {
           data = masterRes.data
           finalRole = 'master'
         }
@@ -383,10 +390,19 @@ export default function LoginPage() {
           setLoginLoading(false)
           return
         }
+        
         const role = data.role || 'tenant'
         if (role === 'super_admin' || role === 'superadmin') finalRole = 'superadmin'
         else if (role === 'tenant' || role === 'admin') finalRole = 'admin'
         else finalRole = role
+      }
+      
+      // Handle 2FA for both master and admin
+      if (data.status === '2fa_required') {
+        setTempAdminId(data.admin_id || data.master_id)
+        setShow2FA(true)
+        setLoginLoading(false)
+        return
       }
 
       // ── Step 3: Persist credentials ───────────────────────────────────────
@@ -427,6 +443,60 @@ export default function LoginPage() {
       if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) setLoginError('Request timed out.')
       else setLoginError(error.response?.data?.detail || error.response?.data?.message || 'Cannot connect to server.')
     } finally { setLoginLoading(false) }
+  }
+
+  const handleVerify2FA = async (e) => {
+    e.preventDefault()
+    if (!otp2FA) { setError2FA('Please enter the OTP.'); return }
+    setLoading2FA(true); setError2FA('')
+    
+    try {
+      const response = await axios.post(API_BASE_URL + '/admin/verify-2fa', { admin_id: tempAdminId, otp: otp2FA }, { timeout: 10000 })
+      const data = response.data
+      
+      let finalRole = data.role || 'tenant'
+      if (finalRole === 'super_admin' || finalRole === 'superadmin') finalRole = 'superadmin'
+      else if (finalRole === 'tenant' || finalRole === 'admin') finalRole = 'admin'
+      
+      // Persist credentials
+      const adminId = data.admin_id || data.master_id || data._id
+      const adminEmail = data.email || ''
+      const adminName = data.username || username
+      const plan = data.subscription_plan || 'Free Trial'
+      const planKey = data.subscription_plan_key || 'trial'
+      const planCapabilities = data.plan_capabilities || {}
+
+      if (data.token) {
+        sessionStorage.setItem('adminToken', data.token)
+        sessionStorage.setItem('masterToken', data.token)
+        dispatch(setCredentials({ role: finalRole, token: data.token, adminUser: data }))
+      }
+
+      sessionStorage.setItem('adminId', adminId)
+      sessionStorage.setItem('adminEmail', adminEmail)
+      sessionStorage.setItem('adminName', adminName)
+      sessionStorage.setItem('adminRole', finalRole)
+      sessionStorage.setItem('adminUser', JSON.stringify(data))
+      sessionStorage.setItem('subscriptionPlan', plan)
+      sessionStorage.setItem('subscriptionPlanKey', planKey)
+      sessionStorage.setItem('planCapabilities', JSON.stringify(planCapabilities))
+      sessionStorage.setItem('subscriptionExpiry', data.subscription_expiry || '')
+      sessionStorage.setItem('subscriptionCredits', data.credits ?? '')
+      sessionStorage.setItem('subscriptionWarningMessage', data.subscription_warning_message || '')
+      sessionStorage.setItem('adminCompany', data.company_name || '')
+
+      // Navigate to the correct dashboard
+      setShow2FA(false)
+      if (finalRole === 'superadmin') navigate('/superadmin/new-dashboard')
+      else if (finalRole === 'admin') navigate('/admin/dashboard')
+      else if (finalRole === 'master') navigate('/master/dashboard')
+      else {
+        setError2FA('Unrecognised account role. Please contact support.')
+      }
+    } catch (error) {
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) setError2FA('Request timed out.')
+      else setError2FA(error.response?.data?.detail || error.response?.data?.message || 'Invalid or expired OTP.')
+    } finally { setLoading2FA(false) }
   }
 
   const handleSendOTP = async () => {
@@ -680,6 +750,38 @@ export default function LoginPage() {
             {resetError && (
               <div className="lp-modal-error">
                 <i className="fas fa-exclamation-circle" />{resetError}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 2FA Modal */}
+      {show2FA && (
+        <div className="lp-modal-backdrop" onClick={e => { if (e.target === e.currentTarget) setShow2FA(false) }}>
+          <div className="lp-modal">
+            <button className="lp-modal-close" onClick={() => setShow2FA(false)}>
+              <i className="fas fa-times" />
+            </button>
+            
+            <h3 className="lp-modal-title">Two-Factor Authentication</h3>
+            <p className="lp-modal-sub">We sent a 6-digit security code to your email. Enter it below to sign in.</p>
+            
+            <div className="lp-mfield">
+              <label className="lp-mlabel">Security Code</label>
+              <input type="text" className="lp-minput lp-otp-input"
+                value={otp2FA} onChange={e => setOtp2FA(e.target.value)}
+                placeholder="● ● ● ● ● ●" maxLength={6} autoFocus
+              />
+            </div>
+            
+            <button className="lp-modal-btn" onClick={handleVerify2FA} disabled={loading2FA}>
+              {loading2FA ? 'Verifying...' : 'Verify Code & Sign In'}
+            </button>
+            
+            {error2FA && (
+              <div className="lp-modal-error">
+                <i className="fas fa-exclamation-circle" />{error2FA}
               </div>
             )}
           </div>

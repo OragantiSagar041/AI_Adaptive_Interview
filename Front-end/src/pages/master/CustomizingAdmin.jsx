@@ -128,6 +128,21 @@ const CustomizingAdmin = () => {
     );
   }
 
+  const allFeatures = admin?.allFeatures || [];
+  const planFeaturesMap = admin?.planFeaturesMap || {};
+  const initialFeatures = admin?.features && admin.features.length > 0 
+    ? admin.features 
+    : (planFeaturesMap[admin?.plan?.toLowerCase() || "trial"] || []);
+
+  const [selectedFeatures, setSelectedFeatures] = useState(initialFeatures);
+
+  const [layoutConfig, setLayoutConfig] = useState(admin?.layout_config || {
+    primary_color: "#4f46e5",
+    sidebar_bg_color: "#ffffff",
+    favicon: "",
+    navbar_logo: "",
+    layout_type: "sidebar"
+  });
 
   const handleLayoutChange = (e) => {
     const { name, value } = e.target;
@@ -144,6 +159,21 @@ const CustomizingAdmin = () => {
       const reader = new FileReader();
       reader.onloadend = () => {
         setLayoutConfig(prev => ({ ...prev, favicon: reader.result }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleNavbarLogoUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 200 * 1024) {
+        setError("Navbar logo must be less than 200KB");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setLayoutConfig(prev => ({ ...prev, navbar_logo: reader.result }));
       };
       reader.readAsDataURL(file);
     }
@@ -378,11 +408,11 @@ const CustomizingAdmin = () => {
               <p className="text-[10px] text-slate-400 font-medium">Choose whether the navigation menu appears on the left or at the top.</p>
             </div>
 
-            <div className="space-y-2 md:col-span-2">
+            <div className="space-y-2 md:col-span-1">
               <label className="flex items-center gap-2 text-xs font-bold text-slate-600 uppercase tracking-wide">
                 <ImageIcon className="w-4 h-4 text-slate-400" /> Custom Favicon
               </label>
-              <div className="flex items-center gap-4">
+              <div className="flex flex-col gap-4">
                 <div className="h-12 w-12 rounded-xl bg-white border border-slate-200 flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
                   {layoutConfig.favicon ? (
                     <img src={layoutConfig.favicon} alt="Favicon" className="w-full h-full object-contain p-1" />
@@ -397,7 +427,31 @@ const CustomizingAdmin = () => {
                     onChange={handleFaviconUpload}
                     className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 transition-colors"
                   />
-                  <p className="text-[10px] text-slate-400 font-medium mt-1">Recommended: 32x32 PNG or ICO. Max size: 200KB.</p>
+                  <p className="text-[10px] text-slate-400 font-medium mt-1">Sidebar/Tab Logo. Max 200KB.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2 md:col-span-1">
+              <label className="flex items-center gap-2 text-xs font-bold text-slate-600 uppercase tracking-wide">
+                <ImageIcon className="w-4 h-4 text-slate-400" /> Navbar Logo
+              </label>
+              <div className="flex flex-col gap-4">
+                <div className="h-12 w-24 rounded-xl bg-white border border-slate-200 flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
+                  {layoutConfig.navbar_logo ? (
+                    <img src={layoutConfig.navbar_logo} alt="Navbar Logo" className="w-full h-full object-contain p-1" />
+                  ) : (
+                    <span className="text-xs text-slate-400 font-medium">No Logo</span>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleNavbarLogoUpload}
+                    className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 transition-colors"
+                  />
+                  <p className="text-[10px] text-slate-400 font-medium mt-1">Optional. Horizontal logo for Navbar layout.</p>
                 </div>
               </div>
             </div>

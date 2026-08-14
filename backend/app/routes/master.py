@@ -94,15 +94,26 @@ router = APIRouter()
 
 @router.post("/master/login")
 def master_login(data: AdminLogin, request: Request):
-    client_ip = request.client.host if request.client else "unknown"
+    x_forwarded_for = request.headers.get("x-forwarded-for")
+    client_ip = x_forwarded_for.split(",")[0].strip() if x_forwarded_for else (request.client.host if request.client else "unknown")
+    global_policies = security_policies_collection.find_one({"_id": "global_policies"}) or {}
+    
+    # 1. IP Restriction Check
+    if global_policies.get("restrict_ip"):
+        allowed_ips = global_policies.get("allowed_ips", [])
+        if client_ip not in allowed_ips and client_ip != "unknown":
+            security_logs_collection.insert_one({
+                "event_type": "FAILED_LOGIN",
+                "username": data.username,
+                "ip_address": client_ip,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "reason": "IP Restricted"
+            })
+            raise HTTPException(status_code=403, detail="Login from this IP address is restricted.")
+            
     user = admins_collection.find_one({"username": data.username, "role": "master"})
     if not user:
-        security_logs_collection.insert_one({
-            "event_type": "FAILED_LOGIN",
-            "username": data.username,
-            "ip_address": client_ip,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        })
+        # User is not a master account (e.g. regular admin probing /master/login). Do not log FAILED_LOGIN.
         raise HTTPException(status_code=401, detail="Invalid master credentials")
         
     if not verify_password(data.password, user["password"]):
@@ -114,17 +125,39 @@ def master_login(data: AdminLogin, request: Request):
         })
         raise HTTPException(status_code=401, detail="Invalid master credentials")
         
-    last_ip = user.get("last_ip")
-    if last_ip and last_ip != client_ip:
-        security_logs_collection.insert_one({
-            "event_type": "NEW_IP_ADDRESS",
-            "username": data.username,
-            "ip_address": client_ip,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        })
     admins_collection.update_one({"_id": user["_id"]}, {"$set": {"last_ip": client_ip}})
     
-    access_token = create_access_token(data={"sub": str(user["_id"]), "role": user["role"], "company_id": str(user.get("company_id", ""))})
+    # 2. 2FA Check — Account-specific 2FA preference ONLY
+    user_2fa_enabled = bool(user.get("two_factor_enabled") or user.get("require_2fa") or user.get("is_2fa_enabled") or user.get("totp_enabled"))
+
+    if user_2fa_enabled:
+        import random
+        otp = str(random.randint(100000, 999999))
+        expiry_time = datetime.now(timezone.utc) + timedelta(minutes=10)
+        admins_collection.update_one({"_id": user["_id"]}, {"$set": {"otp": otp, "otp_expiry": expiry_time}})
+        
+        # Send OTP email
+        from app.routes.admin_dashboard import send_otp_email
+        send_otp_email(user.get("email", user["username"]), user.get("name", user["username"]), otp)
+        
+        return {
+            "status": "2fa_required",
+            "admin_id": str(user["_id"])
+        }
+    
+    # 3. Strict Session Timeout (30 mins if enabled, else default 7 days)
+    expires_delta = timedelta(minutes=30) if global_policies.get("strict_session_timeout") else None
+    
+    access_token = create_access_token(data={"sub": str(user["_id"]), "role": user["role"], "company_id": str(user.get("company_id", ""))}, expires_delta=expires_delta)
+    
+    # Log successful master login event
+    security_logs_collection.insert_one({
+        "event_type": "SUCCESSFUL_LOGIN",
+        "username": user["username"],
+        "ip_address": client_ip,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    })
+
     return {
         "status": "success",
         "master_id": str(user["_id"]),

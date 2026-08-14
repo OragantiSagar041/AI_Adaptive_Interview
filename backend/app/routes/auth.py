@@ -164,7 +164,22 @@ def firebase_auth(data: FirebaseAuthRequest):
 
 @router.post("/admin/login")
 def admin_login(data: AdminLogin, request: Request):
-    client_ip = request.client.host if request.client else "unknown"
+    x_forwarded_for = request.headers.get("x-forwarded-for")
+    client_ip = x_forwarded_for.split(",")[0].strip() if x_forwarded_for else (request.client.host if request.client else "unknown")
+    global_policies = security_policies_collection.find_one({"_id": "global_policies"}) or {}
+    
+    # 1. IP Restriction Check
+    if global_policies.get("restrict_ip"):
+        allowed_ips = global_policies.get("allowed_ips", [])
+        if client_ip not in allowed_ips and client_ip != "unknown":
+            security_logs_collection.insert_one({
+                "event_type": "FAILED_LOGIN",
+                "username": data.username,
+                "ip_address": client_ip,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "reason": "IP Restricted"
+            })
+            raise HTTPException(status_code=403, detail="Login from this IP address is restricted.")
     # Try username match first, then email match (for self-registered users)
     user = admins_collection.find_one({"username": data.username, "role": {"$ne": "master"}})
     if not user:
@@ -207,17 +222,38 @@ def admin_login(data: AdminLogin, request: Request):
     if plan_context["is_expired"]:
         print(f"User {user['username']} logged in with an expired subscription (Credits: {plan_context.get('credits')})")
         
-    last_ip = user.get("last_ip")
-    if last_ip and last_ip != client_ip:
-        security_logs_collection.insert_one({
-            "event_type": "NEW_IP_ADDRESS",
-            "username": data.username,
-            "ip_address": client_ip,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        })
     admins_collection.update_one({"_id": user["_id"]}, {"$set": {"last_ip": client_ip}})
+    
+    # 2. 2FA Check — Account-specific 2FA preference ONLY
+    user_2fa_enabled = bool(user.get("two_factor_enabled") or user.get("require_2fa") or user.get("is_2fa_enabled") or user.get("totp_enabled"))
+
+    if user_2fa_enabled:
+        otp = str(random.randint(100000, 999999))
+        expiry_time = datetime.now(timezone.utc) + timedelta(minutes=10)
+        admins_collection.update_one({"_id": user["_id"]}, {"$set": {"otp": otp, "otp_expiry": expiry_time}})
         
-    access_token = create_access_token(data={"sub": str(user["_id"]), "role": user.get("role", "tenant"), "company_id": str(user.get("company_id", ""))})
+        # Send OTP email
+        from app.routes.admin_dashboard import send_otp_email # Re-using existing brevo sender
+        send_otp_email(user.get("email", user["username"]), user.get("name", user["username"]), otp)
+        
+        return {
+            "status": "2fa_required",
+            "admin_id": str(user["_id"])
+        }
+        
+    # 3. Strict Session Timeout (30 mins if enabled, else default 7 days)
+    expires_delta = timedelta(minutes=30) if global_policies.get("strict_session_timeout") else None
+        
+    access_token = create_access_token(data={"sub": str(user["_id"]), "role": user.get("role", "tenant"), "company_id": str(user.get("company_id", ""))}, expires_delta=expires_delta)
+    
+    # Log successful login event
+    security_logs_collection.insert_one({
+        "event_type": "SUCCESSFUL_LOGIN",
+        "username": user["username"],
+        "ip_address": client_ip,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    })
+
     return {
         "status": "success",
         "admin_id": str(user["_id"]),
@@ -229,6 +265,113 @@ def admin_login(data: AdminLogin, request: Request):
         "subscription_plan": plan,
         "subscription_plan_key": plan_context["plan_key"],
         "subscription_expiry": expiry,
+        "subscription_days_remaining": plan_context["days_remaining"],
+        "subscription_warning": plan_context["warning"],
+        "subscription_warning_message": plan_context["warning_message"],
+        "plan_capabilities": plan_context["capabilities"],
+        "plan_features": plan_context["features"],
+        "layout_config": plan_context.get("layout_config"),
+        "credits": plan_context.get("credits", 0),
+    }
+
+# --------------------------------------------------------------------------------
+# 2FA VERIFICATION API
+# --------------------------------------------------------------------------------
+
+class Verify2FA(BaseModel):
+    admin_id: str
+    otp: str
+
+@router.post("/admin/verify-2fa")
+def verify_2fa(data: Verify2FA, request: Request):
+    x_forwarded_for = request.headers.get("x-forwarded-for")
+    client_ip = x_forwarded_for.split(",")[0].strip() if x_forwarded_for else (request.client.host if request.client else "unknown")
+    
+    admin_id_clean = (data.admin_id or "").strip()
+    provided_otp = str(data.otp or "").strip()
+
+    if not admin_id_clean or not provided_otp:
+        raise HTTPException(status_code=400, detail="admin_id and otp are required.")
+
+    try:
+        user_oid = ObjectId(admin_id_clean)
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid admin ID format.")
+        
+    user = admins_collection.find_one({"_id": user_oid})
+    if not user:
+        raise HTTPException(status_code=404, detail="Admin account not found.")
+        
+    stored_otp = str(user.get("otp") or "").strip()
+    if not stored_otp or stored_otp != provided_otp:
+        security_logs_collection.insert_one({
+            "event_type": "FAILED_LOGIN",
+            "username": user.get("username", "unknown"),
+            "ip_address": client_ip,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "reason": "Invalid 2FA OTP"
+        })
+        raise HTTPException(status_code=401, detail="Invalid OTP code.")
+        
+    expiry = user.get("otp_expiry")
+    now_dt = datetime.now(timezone.utc)
+    is_expired = False
+
+    if not expiry:
+        is_expired = True
+    elif isinstance(expiry, datetime):
+        exp_dt = expiry if expiry.tzinfo else expiry.replace(tzinfo=timezone.utc)
+        if now_dt > exp_dt:
+            is_expired = True
+    elif isinstance(expiry, str):
+        try:
+            exp_dt = datetime.fromisoformat(expiry.replace("Z", "+00:00"))
+            if not exp_dt.tzinfo:
+                exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+            if now_dt > exp_dt:
+                is_expired = True
+        except Exception:
+            pass
+
+    if is_expired:
+        security_logs_collection.insert_one({
+            "event_type": "FAILED_LOGIN",
+            "username": user.get("username", "unknown"),
+            "ip_address": client_ip,
+            "timestamp": now_dt.isoformat(),
+            "reason": "Expired 2FA OTP"
+        })
+        raise HTTPException(status_code=401, detail="OTP code has expired. Please log in again to receive a new OTP.")
+        
+    # OTP is valid, clear it
+    admins_collection.update_one({"_id": user["_id"]}, {"$unset": {"otp": "", "otp_expiry": ""}})
+    
+    global_policies = security_policies_collection.find_one({"_id": "global_policies"}) or {}
+    expires_delta = timedelta(minutes=30) if global_policies.get("strict_session_timeout") else None
+    
+    access_token = create_access_token(data={"sub": str(user["_id"]), "role": user.get("role", "tenant"), "company_id": str(user.get("company_id", ""))}, expires_delta=expires_delta)
+    
+    plan_context = get_admin_plan_context(user)
+    
+    # Log successful login event after 2FA
+    security_logs_collection.insert_one({
+        "event_type": "SUCCESSFUL_LOGIN",
+        "username": user["username"],
+        "ip_address": client_ip,
+        "timestamp": now_dt.isoformat()
+    })
+    
+    return {
+        "status": "success",
+        "admin_id": str(user["_id"]),
+        "token": access_token,
+        "username": user["username"],
+        "email": user.get("email", ""),
+        "name": user.get("name", user.get("username", "")),
+        "role": user.get("role", "tenant"),
+        "subscription_plan": plan_context["plan_label"],
+        "subscription_plan_key": plan_context["plan_key"],
+        "subscription_expiry": user.get("subscription_expiry"),
         "subscription_days_remaining": plan_context["days_remaining"],
         "subscription_warning": plan_context["warning"],
         "subscription_warning_message": plan_context["warning_message"],

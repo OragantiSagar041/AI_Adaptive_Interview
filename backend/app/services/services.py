@@ -2365,13 +2365,16 @@ def get_current_admin_details(credentials: HTTPAuthorizationCredentials = Depend
 
         return {
             "admin_id": admin_id,
+            "_id": admin_id,
             "company_id": company_id,
             "role": actual_role,
             "name": admin_name,
             "username": admin_doc.get("username") or admin_name,
             "email": admin_doc.get("email") or "",
             "company_name": admin_doc.get("company_name") or "",
-            "is_master": is_master
+            "is_master": is_master,
+            "two_factor_enabled": bool(admin_doc.get("two_factor_enabled") or admin_doc.get("require_2fa") or admin_doc.get("is_2fa_enabled") or admin_doc.get("totp_enabled")),
+            "require_2fa": bool(admin_doc.get("two_factor_enabled") or admin_doc.get("require_2fa") or admin_doc.get("is_2fa_enabled") or admin_doc.get("totp_enabled"))
         }
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid or expired token")

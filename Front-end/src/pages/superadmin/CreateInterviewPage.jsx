@@ -383,8 +383,7 @@ export default function CreateInterviewPage() {
             email: cleanEmail,
             resumeText: data.resume_text || prev.resumeText,
             resumeFileName: hasResume ? 'Existing candidate resume profile' : prev.resumeFileName,
-            phone: data.candidate_phone || prev.phone,
-            jobDescription: prev.jobDescription || data.job_description || ''
+            phone: data.candidate_phone || prev.phone
           }))
 
           Swal.fire({
@@ -398,7 +397,7 @@ export default function CreateInterviewPage() {
           })
 
           const effectiveResume = data.resume_text || singleCandidate.resumeText
-          const effectiveJd = singleCandidate.jobDescription || data.job_description
+          const effectiveJd = singleCandidate.jobDescription
           if (effectiveResume && effectiveJd) {
             handleCalculateAts(effectiveResume, effectiveJd)
           }
@@ -1079,13 +1078,12 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                           email: log.email || prev.email,
                           phone: log.phone || prev.phone,
                           resumeText: log.resume_text || log.resume_url || prev.resumeText,
-                          jobDescription: log.job_description || prev.jobDescription,
                           applicationId: log._id || log.id || ''
                         }));
                         // Automatically trigger ATS calculation if we have both
                         const resText = log.resume_text || log.resume_url || singleCandidate.resumeText;
-                        if (resText && (log.job_description || singleCandidate.jobDescription)) {
-                          handleCalculateAts(resText, log.job_description || singleCandidate.jobDescription);
+                        if (resText && singleCandidate.jobDescription) {
+                          handleCalculateAts(resText, singleCandidate.jobDescription);
                         }
                       }
                     }}

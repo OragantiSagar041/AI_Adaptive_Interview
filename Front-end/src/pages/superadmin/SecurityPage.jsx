@@ -21,8 +21,10 @@ export default function SecurityPage() {
   const [policies, setPolicies] = useState({
     require_2fa: true,
     strict_session_timeout: true,
-    restrict_ip: false
+    restrict_ip: false,
+    allowed_ips: []
   });
+  const [ipInput, setIpInput] = useState("");
 
   useEffect(() => {
     const fetchSecurityData = async () => {
@@ -39,6 +41,7 @@ export default function SecurityPage() {
         setData(statsRes.data);
         if (policiesRes.data.policies) {
           setPolicies(policiesRes.data.policies);
+          setIpInput((policiesRes.data.policies.allowed_ips || []).join(", "));
         }
       } catch (error) {
         console.error("Failed to fetch security data", error);
@@ -61,6 +64,23 @@ export default function SecurityPage() {
     }).catch((error) => {
       console.error("Failed to update policy", error);
       setPolicies(prevPolicies); // revert on failure
+    });
+  };
+
+  const handleSaveIps = () => {
+    const ips = ipInput.split(',').map(ip => ip.trim()).filter(ip => ip.length > 0);
+    const newPolicies = { ...policies, allowed_ips: ips };
+    setPolicies(newPolicies);
+    
+    api.put(`/api/superadmin/security/policies`, newPolicies, {
+      headers: { Authorization: `Bearer ${token}` }
+    }).then(() => {
+      // Re-fetch to confirm or just rely on state
+      setIpInput(ips.join(", "));
+    }).catch((error) => {
+      console.error("Failed to update IPs", error);
+      // Revert input on error
+      setIpInput((policies.allowed_ips || []).join(", "));
     });
   };
 
@@ -161,17 +181,31 @@ export default function SecurityPage() {
           
           <div className="space-y-4">
             {alerts.length > 0 ? (
-              alerts.map((alert, idx) => (
-                <div key={idx} className="p-4 bg-rose-50 rounded-xl border border-rose-200 flex justify-between items-center">
-                  <div>
-                    <h4 className="font-semibold text-rose-800">{alert.type}</h4>
-                    <p className="text-sm text-rose-600">IP: {alert.ip}</p>
+              alerts.map((alert, idx) => {
+                const isFailed = alert.type?.toLowerCase().includes("failed");
+                const isSuccess = alert.type?.toLowerCase().includes("successful");
+                const cardStyle = isFailed
+                  ? "bg-rose-50 border-rose-200 text-rose-800"
+                  : isSuccess
+                  ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                  : "bg-indigo-50 border-indigo-200 text-indigo-800";
+                const badgeStyle = isFailed
+                  ? "text-rose-600"
+                  : isSuccess
+                  ? "text-emerald-600"
+                  : "text-indigo-600";
+                return (
+                  <div key={idx} className={`p-4 rounded-xl border flex justify-between items-center ${cardStyle}`}>
+                    <div>
+                      <h4 className="font-semibold">{alert.type}</h4>
+                      <p className="text-sm opacity-80">IP: {alert.ip}</p>
+                    </div>
+                    <span className={`text-xs font-medium bg-white px-2 py-1 rounded-md shadow-sm ${badgeStyle}`}>
+                      {alert.time}
+                    </span>
                   </div>
-                  <span className="text-xs font-medium text-rose-500 bg-white px-2 py-1 rounded-md shadow-sm">
-                    {alert.time}
-                  </span>
-                </div>
-              ))
+                );
+              })
             ) : (
               <div className="p-8 text-center text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-300">
                 <ShieldCheck className="w-12 h-12 text-emerald-400 mx-auto mb-3 opacity-50" />
@@ -216,7 +250,7 @@ export default function SecurityPage() {
                     <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200 shadow-sm hover:border-indigo-200 transition-colors">
                       <div>
                         <p className="font-semibold text-slate-800">Require Two-Factor Authentication</p>
-                        <p className="text-sm text-slate-500 mt-1">Enforce 2FA for all Super Admin accounts</p>
+                        <p className="text-sm text-slate-500 mt-1">Enforce 2FA for Super Admin account</p>
                       </div>
                       <ToggleSwitch checked={policies.require_2fa} onChange={() => handleTogglePolicy('require_2fa')} />
                     </div>
@@ -233,12 +267,31 @@ export default function SecurityPage() {
                 <div>
                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 ml-1">Access Control</h3>
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200 shadow-sm hover:border-indigo-200 transition-colors">
-                      <div>
-                        <p className="font-semibold text-slate-800">Restrict by IP Address</p>
-                        <p className="text-sm text-slate-500 mt-1">Only allow dashboard logins from recognized corporate IP addresses</p>
+                    <div className="flex flex-col p-4 bg-white rounded-xl border border-slate-200 shadow-sm hover:border-indigo-200 transition-colors space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-semibold text-slate-800">Restrict by IP Address</p>
+                          <p className="text-sm text-slate-500 mt-1">Only allow dashboard logins from recognized corporate IP addresses</p>
+                        </div>
+                        <ToggleSwitch checked={policies.restrict_ip} onChange={() => handleTogglePolicy('restrict_ip')} />
                       </div>
-                      <ToggleSwitch checked={policies.restrict_ip} onChange={() => handleTogglePolicy('restrict_ip')} />
+                      {policies.restrict_ip && (
+                        <div className="pt-3 border-t border-slate-100 flex gap-3">
+                          <input
+                            type="text"
+                            value={ipInput}
+                            onChange={(e) => setIpInput(e.target.value)}
+                            placeholder="e.g., 192.168.1.1, 10.0.0.5"
+                            className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                          <button
+                            onClick={handleSaveIps}
+                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors"
+                          >
+                            Save IPs
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
