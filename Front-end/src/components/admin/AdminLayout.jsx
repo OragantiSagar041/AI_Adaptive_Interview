@@ -206,7 +206,7 @@ export default function AdminLayout({
     }
   }
 
-  const navItems = [
+  const baseNavItems = [
     { id: 'dashboard', label: 'Overview Dashboard', path: '/admin/dashboard' },
     { id: 'interviews', label: 'Interviews', path: '/admin/interviews' },
     { id: 'qualified', label: 'Qualified Candidates', path: '/admin/qualified-candidates' },
