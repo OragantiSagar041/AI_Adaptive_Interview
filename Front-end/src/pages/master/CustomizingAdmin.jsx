@@ -32,6 +32,7 @@ const CustomizingAdmin = () => {
     primary_color: "#4f46e5",
     sidebar_bg_color: "#ffffff",
     favicon: "",
+    navbar_logo: "",
     layout_type: "sidebar"
   });
 
@@ -128,21 +129,6 @@ const CustomizingAdmin = () => {
     );
   }
 
-  const allFeatures = admin?.allFeatures || [];
-  const planFeaturesMap = admin?.planFeaturesMap || {};
-  const initialFeatures = admin?.features && admin.features.length > 0 
-    ? admin.features 
-    : (planFeaturesMap[admin?.plan?.toLowerCase() || "trial"] || []);
-
-  const [selectedFeatures, setSelectedFeatures] = useState(initialFeatures);
-
-  const [layoutConfig, setLayoutConfig] = useState(admin?.layout_config || {
-    primary_color: "#4f46e5",
-    sidebar_bg_color: "#ffffff",
-    favicon: "",
-    navbar_logo: "",
-    layout_type: "sidebar"
-  });
 
   const handleLayoutChange = (e) => {
     const { name, value } = e.target;
