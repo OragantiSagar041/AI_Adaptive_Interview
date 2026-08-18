@@ -35,7 +35,9 @@ def preprocess_audio(input_path: str, output_path: str) -> bool:
         "-i", input_path,
         "-ar", "16000",
         "-ac", "1",
-        "-af", "highpass=f=80,lowpass=f=7500,loudnorm=I=-16:TP=-1.5:LRA=11,silenceremove=start_periods=1:start_duration=0.3:start_threshold=-35dB:stop_periods=1:stop_duration=0.3:stop_threshold=-35dB",
+        # Only safe spectral filters — no silenceremove (cuts first/last word) and no loudnorm (distorts fast speech).
+        # WebRTC autoGainControl + noiseSuppression already handles gain and silence in the browser.
+        "-af", "highpass=f=80,lowpass=f=7500",
         "-c:a", "pcm_s16le",
         output_path,
     ]

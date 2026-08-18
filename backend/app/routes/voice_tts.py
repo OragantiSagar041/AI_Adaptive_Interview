@@ -508,21 +508,20 @@ async def stt_endpoint(
                 compression = segment.get("compression_ratio", 0) if isinstance(segment, dict) else getattr(segment, "compression_ratio", 0)
                 segment_text = segment.get("text", "") if isinstance(segment, dict) else getattr(segment, "text", "")
 
-                # ── Aggressive hallucination filters ──
-                # Whisper marks high-confidence hallucinations with:
-                #   • avg_logprob < -0.7   (the strongest signal — real speech is usually > -0.4)
-                #   • compression > 1.6     (repetition loops)
-                #   • no_speech > 0.4       (silence with phantom text)
-                # Drop aggressively, recover nothing on doubt.
-                if avg_logprob < -0.7:
+                # ── Hallucination filters (calibrated for fast/accented speech) ──
+                # avg_logprob < -1.5  — real speech (even fast/accented) stays above -1.2.
+                #                       -0.7 was far too strict and was dropping real sentences.
+                # compression > 2.4   — repetition loops only (normal speech ~1.0-1.8)
+                # no_speech > 0.6     — high confidence silence; 0.4 was dropping real soft speech
+                if avg_logprob < -1.5:
                     hallucinated_segments += 1
                     dropped_segment_texts.append(segment_text.strip())
                     continue
-                if compression > 1.6:
+                if compression > 2.4:
                     hallucinated_segments += 1
                     dropped_segment_texts.append(segment_text.strip())
                     continue
-                if no_speech > 0.4:
+                if no_speech > 0.6:
                     hallucinated_segments += 1
                     dropped_segment_texts.append(segment_text.strip())
                     continue

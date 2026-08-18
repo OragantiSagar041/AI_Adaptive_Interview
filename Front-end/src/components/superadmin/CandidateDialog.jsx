@@ -613,7 +613,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                     )}
                   </div>
                 </div>
-                <div className="hidden sm:flex flex-col items-center justify-center mr-8">
+                <div className="hidden sm:flex flex-col items-center justify-center mr-16">
                   <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">AI Score</div>
                   <div className={`text-4xl font-black tabular-nums tracking-tighter mt-1 ${aiScore >= 75 ? 'text-emerald-600' : aiScore >= 50 ? 'text-amber-500' : 'text-rose-500'}`}>{aiScore.toFixed(0)}%</div>
                 </div>
