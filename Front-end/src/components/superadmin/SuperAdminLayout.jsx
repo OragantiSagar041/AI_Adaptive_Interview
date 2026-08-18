@@ -31,7 +31,8 @@ import {
   UserCheck,
   CreditCard,
   Link,
-  ClipboardList
+  ClipboardList,
+  User
 } from 'lucide-react'
 import {
   SidebarProvider,
@@ -77,7 +78,6 @@ export const superAdminNavItems = [
   { id: 'integrations', label: 'Integrations', icon: Link, path: '/superadmin/integrations' },
   // { id: 'audit', label: 'Audit Logs', path: '/superadmin/audit' },
   { id: 'security', label: 'Security', icon: Shield, path: '/superadmin/security' },
-  { id: 'settings', label: 'Settings', icon: Settings, path: '/superadmin/profile-settings' },
 ]
 
 import { setSelectedCandidate, setLiveResultsModalOpen, handleUpdateDecision } from '../../store/slices/interviewSlice'
@@ -138,6 +138,7 @@ export default function SuperAdminLayout() {
 
   const [notifications, setNotifications] = useState([])
   const [notifDropdownOpen, setNotifDropdownOpen] = useState(false)
+  const [dropdownOpen, setDropdownOpen] = useState(false)
   const [themeOpen, setThemeOpen] = useState(false)
   const notifRef = useRef(null)
   const themeRef = useRef(null)
@@ -791,30 +792,120 @@ export default function SuperAdminLayout() {
             {/* Right Side: Notifications & User Profile */}
             <div className="flex items-center gap-5">
               {/* Notification Bell */}
-              <button
-                onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
-                className="relative p-2.5 text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 rounded-full transition-all cursor-pointer flex items-center justify-center shadow-xs"
-                title="Notifications"
-              >
-                <Bell size={18} className="text-slate-600" />
-                {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-sky-500 text-white font-extrabold text-[9px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center shadow-sm border-2 border-white">
-                    {unreadCount}
-                  </span>
-                )}
-              </button>
-
-              {/* User Profile */}
-              <div className="flex items-center gap-4 border-l border-slate-200 pl-5">
-                <span className="text-sm text-slate-500 font-medium hidden sm:block">
-                  Welcome back, <span className="font-bold text-slate-800">{userName}</span>
-                </span>
+              <div className="relative" ref={notifRef}>
                 <button
-                  onClick={handleLogout}
-                  className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors cursor-pointer bg-transparent border-none"
+                  onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
+                  className="relative p-2.5 text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 rounded-full transition-all cursor-pointer flex items-center justify-center shadow-xs"
+                  title="Notifications"
                 >
-                  <LogOut size={15} /> Logout
+                  <Bell size={18} className="text-slate-600" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-sky-500 text-white font-extrabold text-[9px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center shadow-sm border-2 border-white">
+                      {unreadCount}
+                    </span>
+                  )}
                 </button>
+
+                {notifDropdownOpen && (
+                  <div className="absolute right-0 mt-3 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl py-2 z-50">
+                    <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100">
+                      <span className="text-xs font-bold text-slate-800 font-sans">Recent Notifications</span>
+                      {unreadCount > 0 && (
+                        <button
+                          onClick={handleMarkAllRead}
+                          className="text-[10px] font-bold text-indigo-600 hover:underline cursor-pointer border-none bg-transparent"
+                        >
+                          Mark all read
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="max-h-64 overflow-y-auto divide-y divide-slate-50">
+                      {notifications.length === 0 ? (
+                        <div className="py-8 text-center text-xs text-slate-400 font-sans">No notifications</div>
+                      ) : (
+                        notifications.slice(0, 5).map(n => (
+                          <div
+                            key={n.id}
+                            onClick={() => {
+                              if (!n.read) handleMarkRead(n.id)
+                              setNotifDropdownOpen(false)
+                              navigate('/superadmin/notifications')
+                            }}
+                            className={`p-3 text-left hover:bg-slate-50 cursor-pointer transition-colors flex gap-2.5 items-start ${!n.read ? 'bg-indigo-50/30' : ''}`}
+                          >
+                            <div className="p-1.5 rounded-lg bg-slate-50 flex-shrink-0 mt-0.5">
+                              {getNotifIcon(n.type)}
+                            </div>
+                            <div className="space-y-0.5 min-w-0">
+                              <div className="flex items-center gap-1.5 justify-between">
+                                <span className={`text-xs font-bold truncate block ${!n.read ? 'text-slate-800' : 'text-slate-600'}`}>{n.title}</span>
+                                {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 shrink-0" />}
+                              </div>
+                              <p className="text-[11px] text-slate-500 leading-normal line-clamp-2 font-sans">{n.message}</p>
+                              <span className="text-[9px] text-slate-400 block pt-0.5 font-sans">{formatRelativeTime(n.created_at)}</span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    <div className="border-t border-slate-100 px-4 pt-2 pb-1 text-center">
+                      <NavLink
+                        to="/superadmin/notifications"
+                        onClick={() => setNotifDropdownOpen(false)}
+                        className="text-[11px] font-bold text-indigo-600 hover:underline no-underline block py-1 font-sans"
+                      >
+                        View All Notifications
+                      </NavLink>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Profile Dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setDropdownOpen(!dropdownOpen)}
+                  className="flex items-center gap-2 p-1.5 px-2 hover:bg-slate-50 rounded-xl shadow-sm transition-all cursor-pointer border border-slate-100 bg-white"
+                >
+                  <img
+                    src={adminUser?.profile_image || adminUser?.avatar || "https://ui-avatars.com/api/?name=Super+Admin&background=random"}
+                    alt="Avatar"
+                    className="w-8 h-8 rounded-full object-cover border border-slate-200"
+                  />
+                  <div className="text-left hidden sm:block">
+                    <div className="text-[13px] font-semibold text-slate-800 leading-none">{userName}</div>
+                    <span className="text-[10px] text-slate-400 font-medium">Super Admin</span>
+                  </div>
+                  <ChevronDown size={14} className="text-slate-400 ml-1" />
+                </button>
+
+                {dropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setDropdownOpen(false)} />
+                    <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-lg py-1.5 z-50">
+                      <NavLink
+                        to="/superadmin/profile-settings"
+                        onClick={() => setDropdownOpen(false)}
+                        className="flex items-center gap-2.5 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 no-underline"
+                      >
+                        <User size={15} /> My Profile
+                      </NavLink>
+
+                      <hr className="border-slate-100 my-1" />
+                      <button
+                        onClick={() => {
+                          setDropdownOpen(false);
+                          handleLogout();
+                        }}
+                        className="w-full text-left flex items-center gap-2.5 px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 font-medium cursor-pointer border-none bg-transparent"
+                      >
+                        <LogOut size={15} /> Logout
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </header>
@@ -884,62 +975,6 @@ export default function SuperAdminLayout() {
           <main className="flex-1 overflow-y-auto bg-transparent relative">
 
             <div className="relative z-10">
-              {notifDropdownOpen && (
-                <div className="absolute right-4 top-4 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl py-2 z-50">
-                  <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100">
-                    <span className="text-xs font-bold text-slate-800 font-sans">Recent Notifications</span>
-                    {unreadCount > 0 && (
-                      <button
-                        onClick={handleMarkAllRead}
-                        className="text-[10px] font-bold text-indigo-600 hover:underline cursor-pointer border-none bg-transparent"
-                      >
-                        Mark all read
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="max-h-64 overflow-y-auto divide-y divide-slate-50">
-                    {notifications.length === 0 ? (
-                      <div className="py-8 text-center text-xs text-slate-400 font-sans">No notifications</div>
-                    ) : (
-                      notifications.slice(0, 5).map(n => (
-                        <div
-                          key={n.id}
-                          onClick={() => {
-                            if (!n.read) handleMarkRead(n.id)
-                            setNotifDropdownOpen(false)
-                            navigate('/superadmin/notifications')
-                          }}
-                          className={`p-3 text-left hover:bg-slate-50 cursor-pointer transition-colors flex gap-2.5 items-start ${!n.read ? 'bg-indigo-50/30' : ''
-                            }`}
-                        >
-                          <div className="p-1.5 rounded-lg bg-slate-50 flex-shrink-0 mt-0.5">
-                            {getNotifIcon(n.type)}
-                          </div>
-                          <div className="space-y-0.5 min-w-0">
-                            <div className="flex items-center gap-1.5 justify-between">
-                              <span className={`text-xs font-bold truncate block ${!n.read ? 'text-slate-800' : 'text-slate-600'}`}>{n.title}</span>
-                              {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 shrink-0" />}
-                            </div>
-                            <p className="text-[11px] text-slate-500 leading-normal line-clamp-2 font-sans">{n.message}</p>
-                            <span className="text-[9px] text-slate-400 block pt-0.5 font-sans">{formatRelativeTime(n.created_at)}</span>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                  <div className="border-t border-slate-100 px-4 pt-2 pb-1 text-center">
-                    <NavLink
-                      to="/superadmin/notifications"
-                      onClick={() => setNotifDropdownOpen(false)}
-                      className="text-[11px] font-bold text-indigo-600 hover:underline no-underline block py-1 font-sans"
-                    >
-                      View All Notifications
-                    </NavLink>
-                  </div>
-                </div>
-              )}
 
               <div className="p-4 lg:p-8">
                 <Outlet context={{ handleOpenLiveStreamAction }} />
