@@ -226,29 +226,44 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
    * Called once on socket open, and re-invoked on-demand if the stream doesn't arrive in time.
    */
   const sendOfferRef = useRef(null)
+  const connectionIdRef = useRef(null)
+  const viewerIdRef = useRef(null)
+  const offerIdRef = useRef(null)
+  const iceCandidateQueue = useRef([])
+  const wsReadyRef = useRef(false)
+  const offerAttemptsRef = useRef(0)
 
-  const sendOffer = useCallback(async (ws) => {
-    // Tear down any existing peer connection
+  const closePc = useCallback(() => {
     clearTimeout(streamTimeoutRef.current)
     pendingIceCandidatesRef.current = []
     if (pcRef.current) {
-      pcRef.current.close()
+      try { pcRef.current.close() } catch (_) {}
       pcRef.current = null
     }
-  }, [closePc])
+  }, [])
 
   // ── sendOffer ────────────────────────────────────────────────────────────────
   // Uses wsRef.current directly (no closure over ws param) to avoid stale refs.
   // Called when: WS opens, user force-retries, or 12s timeout fires.
   const sendOffer = useCallback(async (ws, connectionId) => {
+    const currentConnectionId = connectionId ?? connectionIdRef.current
+
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       console.warn('[AdminWebRTC] sendOffer: WS not open, skipping')
       return
     }
-    if (connectionIdRef.current !== connectionId || wsRef.current !== ws) {
+
+    if (currentConnectionId && connectionIdRef.current && connectionIdRef.current !== currentConnectionId) {
       console.warn('[AdminWebRTC] sendOffer: stale socket, skipping')
       return
     }
+
+    if (wsRef.current && wsRef.current !== ws) {
+      console.warn('[AdminWebRTC] sendOffer: stale socket instance, skipping')
+      return
+    }
+
+    if (currentConnectionId) connectionIdRef.current = currentConnectionId
 
     closePc()
 
@@ -263,7 +278,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
       pcRef.current = pc
       iceCandidateQueue.current = []
-      const offerId = `offer-${connectionId}-${nextOfferAttempt}`
+      const offerId = currentConnectionId ? `offer-${currentConnectionId}-${nextOfferAttempt}` : `offer-${Date.now()}-${nextOfferAttempt}`
       offerIdRef.current = offerId
 
       pc.onicecandidate = (e) => {

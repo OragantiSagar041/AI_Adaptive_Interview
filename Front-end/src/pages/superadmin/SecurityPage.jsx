@@ -26,11 +26,14 @@ export default function SecurityPage() {
   });
   const [ipInput, setIpInput] = useState("");
 
+  const [roleFilter, setRoleFilter] = useState("all");
+
   useEffect(() => {
     const fetchSecurityData = async () => {
       try {
+        const queryParam = roleFilter === "all" ? "" : `?role_filter=${roleFilter}`;
         const [statsRes, policiesRes] = await Promise.all([
-          dedupedGet(`/api/superadmin/security/stats`, {
+          dedupedGet(`/api/superadmin/security/stats${queryParam}`, {
             headers: { Authorization: `Bearer ${token}` }
           }),
           dedupedGet(`/api/superadmin/security/policies`, {
@@ -50,7 +53,7 @@ export default function SecurityPage() {
       }
     };
     if (token) fetchSecurityData();
-  }, [token]);
+  }, [token, roleFilter]);
 
   // Optimistic update — UI flips instantly, network call happens in background
   const handleTogglePolicy = (key) => {
@@ -174,9 +177,20 @@ export default function SecurityPage() {
         <div
           className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100"
         >
-          <div className="flex items-center gap-3 mb-6">
-            <AlertTriangle className="w-6 h-6 text-rose-500" />
-            <h2 className="text-lg font-semibold text-slate-800">Active Security Alerts</h2>
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="w-6 h-6 text-rose-500" />
+              <h2 className="text-lg font-semibold text-slate-800">Active Security Alerts</h2>
+            </div>
+            <select
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+              className="px-3 py-1.5 border border-slate-300 bg-white rounded-lg text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="all">All Roles</option>
+              <option value="super_admin">Super Admins</option>
+              <option value="tenant">Recruiters</option>
+            </select>
           </div>
           
           <div className="space-y-4">
