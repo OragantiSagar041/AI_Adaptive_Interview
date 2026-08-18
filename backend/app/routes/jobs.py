@@ -19,9 +19,10 @@ from typing import Any, Dict, List, Optional, Union
 import bcrypt, jwt, requests
 import cloudinary, cloudinary.uploader, cloudinary.api, cloudinary.utils
 import edge_tts
-# pyrefly: ignore [missing-import]
 import pypdf
 from bson import ObjectId
+from bson.errors import InvalidId
+from app.services.services import get_current_admin_details
 from bson.errors import InvalidId
 from docx import Document
 from dotenv import load_dotenv
@@ -229,7 +230,7 @@ os.makedirs(UPLOAD_RESUMES_DIR, exist_ok=True)
 os.makedirs(UPLOAD_COVER_LETTERS_DIR, exist_ok=True)
 
 @router.get("/api/public/resumes/{filename}")
-def get_uploaded_resume_file(filename: str):
+def get_uploaded_resume_file(filename: str, current_admin: dict = Depends(get_current_admin_details)):
     """Serve locally stored resumes if not using Cloudinary."""
     safe_filename = os.path.basename(filename)
     file_path = os.path.join(UPLOAD_RESUMES_DIR, safe_filename)
@@ -239,7 +240,7 @@ def get_uploaded_resume_file(filename: str):
     return FileResponse(file_path, media_type=media_type, filename=safe_filename)
 
 @router.get("/api/public/cover_letters/{filename}")
-def get_uploaded_cover_letter_file(filename: str):
+def get_uploaded_cover_letter_file(filename: str, current_admin: dict = Depends(get_current_admin_details)):
     """Serve locally stored cover letters."""
     safe_filename = os.path.basename(filename)
     file_path = os.path.join(UPLOAD_COVER_LETTERS_DIR, safe_filename)
@@ -272,6 +273,8 @@ async def apply_for_job(
             from bson import ObjectId
             if ObjectId.is_valid(job_id):
                 job = jobs_collection.find_one({"_id": ObjectId(job_id)})
+    except InvalidId:
+        pass # Ignore InvalidId and proceed to 404
     except Exception as db_err:
         logger.error(f"[JobApply] Database error looking up job {job_id}: {db_err}")
         raise HTTPException(status_code=503, detail="Database temporarily unavailable. Please try again later.")
@@ -309,6 +312,29 @@ async def apply_for_job(
         resume_filename = resume_file.filename
         try:
             file_bytes = await resume_file.read()
+            if len(file_bytes) > 5 * 1024 * 1024:
+                raise HTTPException(status_code=400, detail="Resume file size exceeds 5MB limit")
+            
+            # Simple magic byte / extension check
+            ext = os.path.splitext(resume_filename)[1].lower()
+            if ext not in ['.pdf', '.docx', '.doc', '.txt']:
+                raise HTTPException(status_code=400, detail="Invalid resume file type. Allowed: PDF, DOCX, DOC, TXT")
+            
+            if len(file_bytes) >= 4:
+                header = file_bytes[:4]
+                is_valid_magic = False
+                if ext == '.pdf' and header == b'%PDF':
+                    is_valid_magic = True
+                elif ext == '.docx' and header == b'PK\x03\x04':
+                    is_valid_magic = True
+                elif ext == '.doc' and header == b'\xd0\xcf\x11\xe0':
+                    is_valid_magic = True
+                elif ext == '.txt':
+                    is_valid_magic = True
+                
+                if not is_valid_magic:
+                    raise HTTPException(status_code=400, detail="File content does not match its extension signature")
+                
             if file_bytes:
                 # Extract text
                 extracted = extract_text_from_file(file_bytes, resume_filename)
@@ -346,6 +372,13 @@ async def apply_for_job(
         cover_letter_filename = cover_letter_file.filename
         try:
             cl_bytes = await cover_letter_file.read()
+            if len(cl_bytes) > 5 * 1024 * 1024:
+                raise HTTPException(status_code=400, detail="Cover letter file size exceeds 5MB limit")
+                
+            ext = os.path.splitext(cover_letter_filename)[1].lower()
+            if ext not in ['.pdf', '.docx', '.doc', '.txt']:
+                raise HTTPException(status_code=400, detail="Invalid cover letter file type. Allowed: PDF, DOCX, DOC, TXT")
+                
             if cl_bytes:
                 cl_extracted = extract_text_from_file(cl_bytes, cover_letter_filename)
                 if cl_extracted and not cover_letter:

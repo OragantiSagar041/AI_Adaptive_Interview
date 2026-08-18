@@ -78,7 +78,7 @@ services:
     image: nginx:alpine
     container_name: interview_nginx
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
@@ -90,7 +90,7 @@ services:
     build:
       context: ./Front-end
       args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:?VITE_API_BASE_URL must be provided}
     container_name: interview_frontend
     ports:
       - "80:80"

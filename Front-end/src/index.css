@@ -961,8 +961,8 @@ body,
 [data-theme="dark"] .border-slate-200,
 [data-theme="dark"] .border-gray-200,
 [data-theme="dark"] .border-slate-100,
-[data-theme="dark"] .border-[#e5edf7],
-[data-theme="dark"] .border-[#dbe4f0] {
+[data-theme="dark"] .border-\[\#e5edf7\],
+[data-theme="dark"] .border-\[\#dbe4f0\] {
   border-color: var(--border) !important;
 }
 
@@ -1016,8 +1016,8 @@ body,
 [data-theme="dark"] .border-white\30,
 [data-theme="dark"] .border-white\40,
 [data-theme="dark"] .border-white\60,
-[data-theme="dark"] .border-[#e5edf7],
-[data-theme="dark"] .border-[#dbe4f0] {
+[data-theme="dark"] .border-\[\#e5edf7\],
+[data-theme="dark"] .border-\[\#dbe4f0\] {
   border-color: var(--border) !important;
 }
 
@@ -1053,9 +1053,9 @@ body,
   background-color: #071225 !important;
 }
 
-[data-theme="dark"] .hover\:bg-white/10:hover,
+[data-theme="dark"] .hover\:bg-white\/10:hover,
 [data-theme="dark"] .hover\:bg-slate-50:hover,
-[data-theme="dark"] .hover\:bg-slate-50/50:hover {
+[data-theme="dark"] .hover\:bg-slate-50\/50:hover {
   background-color: rgba(255, 255, 255, 0.03) !important;
 }
 
