@@ -241,6 +241,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       try { pcRef.current.close() } catch (_) {}
       pcRef.current = null
     }
+    if (videoRef.current) videoRef.current.srcObject = null
   }, [])
 
   // ── sendOffer ────────────────────────────────────────────────────────────────
@@ -272,6 +273,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
       pcRef.current = pc
       iceCandidateQueue.current = []
+      const nextOfferAttempt = ++offerAttemptsRef.current
       const offerId = currentConnectionId ? `offer-${currentConnectionId}-${nextOfferAttempt}` : `offer-${Date.now()}-${nextOfferAttempt}`
       offerIdRef.current = offerId
 
