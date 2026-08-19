@@ -1972,13 +1972,14 @@ export default function AICallingAgentPage() {
         // Find matched candidate to use their actual name
         const matchedCandidate = availableCandidates && availableCandidates.find(c => c.phone && c.phone.replace(/\D/g, '') === phone);
         const nameToUse = matchedCandidate ? matchedCandidate.name : (manualCall.name || 'Candidate');
+        const appIdToUse = matchedCandidate ? (matchedCandidate._id || matchedCandidate.id) : selectedApplicationId;
         
         const formData = new FormData()
         formData.append('phone_number', phone)
         formData.append('candidate_name', nameToUse)
         formData.append('job_description', manualCall.jobDesc)
         if (selectedJobId) formData.append('job_id', selectedJobId)
-        if (selectedApplicationId) formData.append('application_id', selectedApplicationId)
+        if (appIdToUse) formData.append('application_id', appIdToUse)
         if (manualCall.resume) formData.append('resume', manualCall.resume)
         
         const r = await fetch(`${API_BASE_URL}/api/calls/initiate-manual`, {
@@ -2324,7 +2325,9 @@ export default function AICallingAgentPage() {
                               <button
                                 type="button"
                                 onClick={() => {
-                                  const phones = [...new Set(availableCandidates.map(c => c.phone).filter(Boolean))].join(', ');
+                                  const candidatesWithPhones = availableCandidates.filter(c => c.phone);
+                                  const phones = [...new Set(candidatesWithPhones.map(c => c.phone))].join(', ');
+                                  const names = [...new Set(candidatesWithPhones.map(c => c.name))].join(', ');
                                   
                                   const jobTitle = selectedJob ? selectedJob.title : '';
                                   const jobExp = selectedJob ? selectedJob.experience : '';
@@ -2336,7 +2339,7 @@ export default function AICallingAgentPage() {
                                   setManualCall(prev => ({
                                     ...prev,
                                     phone: phones,
-                                    name: "Bulk Candidates",
+                                    name: names || "Bulk Candidates",
                                     jobDesc: desc,
                                     resume: null
                                   }));
