@@ -226,7 +226,7 @@ export default function SuperDashboardPage() {
       <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
 
         {/* 1 — Total AI Interviews */}
-        <Card className="bg-white border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.04)] rounded-xl relative overflow-hidden flex flex-col justify-between">
+        <Card className="bg-violet-100 border-none shadow-sm rounded-2xl relative overflow-hidden flex flex-col justify-between">
           <CardContent className="p-4 flex flex-col h-full">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
@@ -265,7 +265,7 @@ export default function SuperDashboardPage() {
         </Card>
 
         {/* 2 — Active Today */}
-        <Card className="bg-white border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.04)] rounded-xl relative overflow-hidden flex flex-col justify-between">
+        <Card className="bg-blue-100 border-none shadow-sm rounded-2xl relative overflow-hidden flex flex-col justify-between">
           <CardContent className="p-4 flex flex-col h-full">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
@@ -375,7 +375,7 @@ export default function SuperDashboardPage() {
         </Card>
 
         {/* 3 — Completed Interviews */}
-        <Card className="bg-white border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.04)] rounded-xl relative overflow-hidden flex flex-col justify-between">
+        <Card className="bg-green-100 border-none shadow-sm rounded-2xl relative overflow-hidden flex flex-col justify-between">
           <CardContent className="p-4 flex flex-col h-full">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
@@ -409,7 +409,7 @@ export default function SuperDashboardPage() {
         </Card>
 
         {/* 4 — Pending Interviews (dynamic) */}
-        <Card className="bg-white border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.04)] rounded-xl relative overflow-hidden flex flex-col justify-between">
+        <Card className="bg-amber-100 border-none shadow-sm rounded-2xl relative overflow-hidden flex flex-col justify-between">
           <CardContent className="p-4 flex flex-col h-full">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
@@ -430,12 +430,7 @@ export default function SuperDashboardPage() {
                     <div className="text-[10px] text-slate-400 mt-0.5">Great job!</div>
                   </>
                 ) : (
-                  <>
-                    <div className="flex items-center justify-end text-amber-500 text-[10px] font-bold">
-                      <Clock className="w-3 h-3 mr-1" /> Action Needed
-                    </div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">Review pending</div>
-                  </>
+                  null
                 )}
               </div>
             </div>
@@ -456,7 +451,7 @@ export default function SuperDashboardPage() {
         </Card>
 
         {/* 5 — Avg AI Score */}
-        <Card className="bg-white border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.04)] rounded-xl relative overflow-hidden flex flex-col justify-between">
+        <Card className="bg-fuchsia-100 border-none shadow-sm rounded-2xl relative overflow-hidden flex flex-col justify-between">
           <CardContent className="p-4 flex flex-col h-full">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
@@ -498,7 +493,7 @@ export default function SuperDashboardPage() {
         </Card>
 
         {/* 6 — Candidates Hired */}
-        <Card className="bg-white border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.04)] rounded-xl relative overflow-hidden flex flex-col justify-between">
+        <Card className="bg-green-100 border-none shadow-sm rounded-2xl relative overflow-hidden flex flex-col justify-between">
           <CardContent className="p-4 flex flex-col h-full">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
@@ -527,10 +522,6 @@ export default function SuperDashboardPage() {
                   {hireRate}%
                 </div>
               </div>
-              <div>
-                <div className="text-[10px] font-medium text-slate-500 mb-0.5">Hire Rate</div>
-                <div className="text-[11px] font-semibold text-slate-700">{formatNum(dbStats?.selected) || 0} / {formatNum(dbStats?.completed) || 0} completed</div>
-              </div>
             </div>
             <div className="mt-3 flex items-center justify-end text-[11px]">
               <span className="text-teal-500 font-medium cursor-pointer flex items-center hover:underline" onClick={() => navigate('/superadmin/qualified-candidates')}>
@@ -541,7 +532,7 @@ export default function SuperDashboardPage() {
         </Card>
 
         {/* 7 — Candidates Rejected */}
-        <Card className="bg-white border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.04)] rounded-xl relative overflow-hidden flex flex-col justify-between">
+        <Card className="bg-rose-100 border-none shadow-sm rounded-2xl relative overflow-hidden flex flex-col justify-between">
           <CardContent className="p-4 flex flex-col h-full">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
@@ -570,10 +561,6 @@ export default function SuperDashboardPage() {
                   {rejectionRate}%
                 </div>
               </div>
-              <div>
-                <div className="text-[10px] font-medium text-slate-500 mb-0.5">Rejection Rate</div>
-                <div className="text-[11px] font-semibold text-slate-700">{formatNum(dbStats?.rejected) || 0} / {formatNum(dbStats?.completed) || 0} completed</div>
-              </div>
             </div>
             <div className="mt-3 flex items-center justify-end text-[11px]">
               <span className="text-rose-500 font-medium cursor-pointer flex items-center hover:underline" onClick={() => navigate('/superadmin/rejected-candidates')}>
@@ -584,7 +571,7 @@ export default function SuperDashboardPage() {
         </Card>
 
         {/* 8 — Expired Links */}
-        <Card className="bg-white border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.04)] rounded-xl relative overflow-hidden flex flex-col justify-between">
+        <Card className="bg-red-100 border-none shadow-sm rounded-2xl relative overflow-hidden flex flex-col justify-between">
           <CardContent className="p-4 flex flex-col h-full">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
@@ -601,13 +588,7 @@ export default function SuperDashboardPage() {
                 <div className="text-[10px] text-slate-400">vs yesterday</div>
               </div>
             </div>
-            <div className="mt-3 flex-1 h-12">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={sparklineData} barSize={4} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                  <Bar dataKey="v" fill="#fca5a5" radius={[2, 2, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            <div className="mt-3 flex-1"></div>
             <div className="mt-4 flex items-center justify-end text-[11px]">
               <span className="text-rose-500 font-medium cursor-pointer flex items-center hover:underline" onClick={() => {
                 dispatch(setStatusFilter('expired'));
