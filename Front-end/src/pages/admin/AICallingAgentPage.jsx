@@ -1938,33 +1938,69 @@ export default function AICallingAgentPage() {
 
 
   const handleManualCall = async () => {
-    const cleanPhone = (manualCall.phone || '').replace(/\D/g, '')
-    if (!cleanPhone) {
-      setPhoneError('Phone number is required')
-      alert('Please enter a phone number')
+    const rawPhones = (manualCall.phone || '').split(',').map(p => p.trim()).filter(Boolean)
+    if (rawPhones.length === 0) {
+      setPhoneError('Phone number(s) required')
+      alert('Please enter at least one phone number')
       return
     }
-    if (cleanPhone.length !== 10) {
-      setPhoneError('Please enter a valid 10-digit mobile number')
-      alert('Please enter a valid 10-digit mobile number (e.g. 9876543210)')
+    
+    const validPhones = []
+    const invalidPhones = []
+    for (const raw of rawPhones) {
+      const cleanPhone = raw.replace(/\D/g, '')
+      if (cleanPhone.length >= 10 && cleanPhone.length <= 15) validPhones.push(cleanPhone)
+      else invalidPhones.push(raw)
+    }
+
+    if (invalidPhones.length > 0) {
+      setPhoneError(`Invalid number(s): ${invalidPhones.join(', ')}`)
+      alert(`Invalid phone number(s): ${invalidPhones.join(', ')}. Must be 10-15 digits.`)
       return
     }
     setPhoneError('')
     setIsCalling(true)
+    
+    let successCount = 0;
+    let failCount = 0;
+    let errorMsgs = [];
+    
     try {
-      const formData = new FormData()
-      formData.append('phone_number', cleanPhone)
-      formData.append('candidate_name', manualCall.name || 'Candidate')
-      formData.append('job_description', manualCall.jobDesc)
-      if (selectedJobId) formData.append('job_id', selectedJobId)
-      if (selectedApplicationId) formData.append('application_id', selectedApplicationId)
-      if (manualCall.resume) formData.append('resume', manualCall.resume)
-      const r = await fetch(`${API_BASE_URL}/api/calls/initiate-manual`, {
-        method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: formData
-      })
-      const d = await r.json()
-      if (r.ok) { alert(d.message || 'Call initiated!'); setManualCall({ phone: '', name: '', jobDesc: '', resume: null }) }
-      else alert('Failed: ' + (d.detail || 'Unknown error'))
+      // Deduplicate validPhones to avoid calling the same number twice
+      const uniqueValidPhones = [...new Set(validPhones)]
+      for (const phone of uniqueValidPhones) {
+        // Find matched candidate to use their actual name
+        const matchedCandidate = availableCandidates && availableCandidates.find(c => c.phone && c.phone.replace(/\D/g, '') === phone);
+        const nameToUse = matchedCandidate ? matchedCandidate.name : (manualCall.name || 'Candidate');
+        
+        const formData = new FormData()
+        formData.append('phone_number', phone)
+        formData.append('candidate_name', nameToUse)
+        formData.append('job_description', manualCall.jobDesc)
+        if (selectedJobId) formData.append('job_id', selectedJobId)
+        if (selectedApplicationId) formData.append('application_id', selectedApplicationId)
+        if (manualCall.resume) formData.append('resume', manualCall.resume)
+        
+        const r = await fetch(`${API_BASE_URL}/api/calls/initiate-manual`, {
+          method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: formData
+        })
+        const d = await r.json()
+        if (r.ok) {
+          successCount++
+        } else {
+          failCount++
+          errorMsgs.push(`${phone}: ${d.detail || 'Unknown error'}`)
+        }
+      }
+      
+      let finalMsg = `Successfully initiated ${successCount} call(s).`
+      if (failCount > 0) {
+        finalMsg += `\nFailed ${failCount} call(s):\n${errorMsgs.join('\n')}`
+      }
+      alert(finalMsg)
+      if (successCount > 0 && failCount === 0) {
+        setManualCall({ phone: '', name: '', jobDesc: '', resume: null })
+      }
     } catch (e) { alert('Error: ' + e.message) } finally { setIsCalling(false) }
   }
 
@@ -1977,7 +2013,7 @@ export default function AICallingAgentPage() {
     { id: 'postcall', label: 'Post-Call', icon: <MailCheck size={15} /> },
     { id: 'recentcalls', label: 'Recent Calls', icon: <Clock size={15} /> },
     { id: 'approval', label: 'Approval', icon: <CheckCircle2 size={15} /> },
-    { id: 'dialer', label: 'Manual Dialer', icon: <Phone size={15} /> },
+    { id: 'dialer', label: 'Bulk Dialer', icon: <Phone size={15} /> },
   ]
 
   return (
@@ -2145,45 +2181,38 @@ export default function AICallingAgentPage() {
                 <div className="p-6 max-w-2xl mx-auto">
                   <div className="mb-6 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                     <h3 className="text-lg font-extrabold text-slate-800 flex items-center gap-2 mb-2">
-                      <Phone size={20} className="text-indigo-500" /> Manual Dialer
+                      <Phone size={20} className="text-indigo-500" /> Bulk Dialer
                     </h3>
                     <p className="text-slate-500 text-sm font-medium">
-                      Initiate an outbound AI call manually with a phone number and candidate context.
+                      Initiate outbound AI calls. Enter one or multiple comma-separated phone numbers.
                     </p>
                   </div>
                   <div className="space-y-5 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                       <div>
-                        <label className="block text-[0.7rem] font-bold uppercase tracking-wider text-slate-500 mb-2">Phone Number *</label>
+                        <label className="block text-[0.7rem] font-bold uppercase tracking-wider text-slate-500 mb-2">Phone Number(s) *</label>
                         <input
                           type="text"
-                          inputMode="numeric"
-                          maxLength={10}
                           value={manualCall.phone}
                           onChange={e => {
-                            // Block non-digits (0-9 only)
-                            const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                            // Allow digits, spaces, and commas
+                            const val = e.target.value.replace(/[^\d,\s]/g, '');
                             setManualCall({ ...manualCall, phone: val });
-                            if (val.length === 0) {
+                            if (val.trim().length === 0) {
                               setPhoneError('Phone number is required');
-                            } else if (val.length < 10) {
-                              setPhoneError('Please enter a valid 10-digit mobile number');
                             } else {
                               setPhoneError('');
                             }
                           }}
                           onBlur={e => {
-                            const val = e.target.value.replace(/\D/g, '');
-                            if (val.length === 0) {
+                            if (manualCall.phone.trim().length === 0) {
                               setPhoneError('Phone number is required');
-                            } else if (val.length < 10) {
-                              setPhoneError('Please enter a valid 10-digit mobile number');
                             } else {
                               setPhoneError('');
                             }
                           }}
                           className={`w-full px-4 py-3 bg-slate-50 border ${phoneError ? 'border-rose-500 focus:ring-rose-500/20 focus:border-rose-500' : 'border-slate-200 focus:ring-indigo-500/20 focus:border-indigo-500'} rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 transition-all font-semibold`}
-                          placeholder="e.g. 9876543210"
+                          placeholder="e.g. 9876543210, 8765432109"
                         />
                         {phoneError && (
                           <p className="text-xs text-rose-500 font-semibold mt-1.5 flex items-center gap-1">
@@ -2247,50 +2276,79 @@ export default function AICallingAgentPage() {
                             </select>
                           )}
                           {availableCandidates && availableCandidates.length > 0 && (
-                            <select
-                              className="bg-teal-50 border border-teal-100 text-[0.7rem] font-bold text-teal-700 rounded-lg px-2 py-1 outline-none focus:border-teal-500 cursor-pointer"
-                              onChange={(e) => {
-                                const appObjId = e.target.value;
-                                setSelectedApplicationId(appObjId);
-                                if (!appObjId) {
-                                  setCandidateResumeInfo(null);
-                                  return;
-                                }
-                                const candidate = availableCandidates.find(c => (c._id || c.id) === appObjId);
-                                if (candidate) {
+                            <div className="flex gap-2 items-center">
+                              <select
+                                className="bg-teal-50 border border-teal-100 text-[0.7rem] font-bold text-teal-700 rounded-lg px-2 py-1 outline-none focus:border-teal-500 cursor-pointer"
+                                onChange={(e) => {
+                                  const appObjId = e.target.value;
+                                  setSelectedApplicationId(appObjId);
+                                  if (!appObjId) {
+                                    setCandidateResumeInfo(null);
+                                    return;
+                                  }
+                                  const candidate = availableCandidates.find(c => (c._id || c.id) === appObjId);
+                                  if (candidate) {
+                                    const jobTitle = selectedJob ? selectedJob.title : '';
+                                    const jobExp = selectedJob ? selectedJob.experience : '';
+                                    const jobSkills = selectedJob ? selectedJob.skills : '';
+                                    const jobDescription = selectedJob ? selectedJob.description : '';
+
+                                    const desc = `Role: ${jobTitle}\nExperience: ${jobExp || ''}\nSkills: ${jobSkills || ''}\n\nCandidate Name: ${candidate.name || ''}\nCandidate Email: ${candidate.email || ''}\nCandidate Phone: ${candidate.phone || ''}\nCandidate Resume: ${candidate.resume_text || candidate.resume_url || ''}\n\nJob Description:\n${jobDescription || ''}`;
+
+                                    setManualCall(prev => ({
+                                      ...prev,
+                                      phone: candidate.phone || '',
+                                      name: candidate.name || '',
+                                      jobDesc: desc,
+                                      resume: null
+                                    }));
+
+                                    if (candidate.resume_url || candidate.resume_filename || candidate.resume_text) {
+                                      setCandidateResumeInfo({
+                                        name: candidate.resume_filename || (candidate.resume_url ? candidate.resume_url.split('/').pop() : 'Application Resume'),
+                                        url: candidate.resume_url,
+                                        hasText: !!candidate.resume_text
+                                      });
+                                    } else {
+                                      setCandidateResumeInfo(null);
+                                    }
+                                  }
+                                  e.target.value = "";
+                                }}
+                              >
+                                <option value="">Auto-fill Candidate...</option>
+                                {availableCandidates.map(c => (
+                                  <option key={c._id || c.id} value={c._id || c.id}>{c.name} ({c.email})</option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const phones = [...new Set(availableCandidates.map(c => c.phone).filter(Boolean))].join(', ');
+                                  
                                   const jobTitle = selectedJob ? selectedJob.title : '';
                                   const jobExp = selectedJob ? selectedJob.experience : '';
                                   const jobSkills = selectedJob ? selectedJob.skills : '';
                                   const jobDescription = selectedJob ? selectedJob.description : '';
 
-                                  const desc = `Role: ${jobTitle}\nExperience: ${jobExp || ''}\nSkills: ${jobSkills || ''}\n\nCandidate Name: ${candidate.name || ''}\nCandidate Email: ${candidate.email || ''}\nCandidate Phone: ${candidate.phone || ''}\nCandidate Resume: ${candidate.resume_text || candidate.resume_url || ''}\n\nJob Description:\n${jobDescription || ''}`;
+                                  const desc = `Role: ${jobTitle}\nExperience: ${jobExp || ''}\nSkills: ${jobSkills || ''}\n\nJob Description:\n${jobDescription || ''}`;
 
                                   setManualCall(prev => ({
                                     ...prev,
-                                    phone: candidate.phone || '',
-                                    name: candidate.name || '',
+                                    phone: phones,
+                                    name: "Bulk Candidates",
                                     jobDesc: desc,
                                     resume: null
                                   }));
-
-                                  if (candidate.resume_url || candidate.resume_filename || candidate.resume_text) {
-                                    setCandidateResumeInfo({
-                                      name: candidate.resume_filename || (candidate.resume_url ? candidate.resume_url.split('/').pop() : 'Application Resume'),
-                                      url: candidate.resume_url,
-                                      hasText: !!candidate.resume_text
-                                    });
-                                  } else {
-                                    setCandidateResumeInfo(null);
-                                  }
-                                }
-                                e.target.value = "";
-                              }}
-                            >
-                              <option value="">Auto-fill Candidate...</option>
-                              {availableCandidates.map(c => (
-                                <option key={c._id || c.id} value={c._id || c.id}>{c.name} ({c.email})</option>
-                              ))}
-                            </select>
+                                  setSelectedApplicationId('');
+                                  setCandidateResumeInfo(null);
+                                  setPhoneError('');
+                                }}
+                                className="bg-indigo-600 hover:bg-indigo-700 text-white text-[0.7rem] font-bold rounded-lg px-3 py-1.5 outline-none transition-colors shadow-sm"
+                              >
+                                Select All
+                              </button>
+                            </div>
                           )}
                         </div>
                       </div>
