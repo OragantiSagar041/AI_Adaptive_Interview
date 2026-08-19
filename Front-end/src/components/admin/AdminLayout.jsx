@@ -19,7 +19,8 @@ import {
   AlertCircle,
   ClipboardList,
   Palette,
-  ChevronDown
+  ChevronDown,
+  Bot
 } from 'lucide-react'
 import logoImage from '../../assets/logo.png'
 import AdminCopilot from './copilot/AdminCopilot'
@@ -207,19 +208,19 @@ export default function AdminLayout({
   }
 
   const baseNavItems = [
-    { id: 'dashboard', label: 'Overview Dashboard', path: '/admin/dashboard' },
-    { id: 'interviews', label: 'Interviews', path: '/admin/interviews' },
-    { id: 'qualified', label: 'Qualified Candidates', path: '/admin/qualified-candidates' },
-    { id: 'rejected', label: 'Rejected Candidates', path: '/admin/rejected-candidates' },
-    { id: 'create', label: 'Create Interview', path: '/admin/create-interview' },
-    { id: 'ai-calling', label: 'AI Calling Agent', path: '/admin/ai-calling' },
-    { id: 'conversational-flow', label: 'Conversational Flow', path: '/admin/conversational-flow' },
-    { id: 'jobs', label: 'Jobs', path: '/admin/jobs' },
-    { id: 'settings', label: 'Profile Settings', path: '/admin/profile-settings' },
+    { id: 'dashboard', label: 'Overview Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
+    { id: 'interviews', label: 'Interviews', path: '/admin/interviews', icon: ClipboardList },
+    { id: 'qualified', label: 'Qualified Candidates', path: '/admin/qualified-candidates', icon: UserCheck },
+    { id: 'rejected', label: 'Rejected Candidates', path: '/admin/rejected-candidates', icon: XCircle },
+    { id: 'create', label: 'Create Interview', path: '/admin/create-interview', icon: Plus },
+    { id: 'ai-calling', label: 'AI Calling Agent', path: '/admin/ai-calling', icon: Bot },
+    { id: 'conversational-flow', label: 'Conversational Flow', path: '/admin/conversational-flow', icon: MessageSquare },
+    { id: 'jobs', label: 'Jobs', path: '/admin/jobs', icon: Briefcase },
+    { id: 'settings', label: 'Profile Settings', path: '/admin/profile-settings', icon: Settings },
   ]
   const userFeatures = adminUser?.plan_features
   const filteredNavItems = (userFeatures && userFeatures.length > 0)
-    ? baseNavItems.filter(item => userFeatures.includes(item.label))
+    ? baseNavItems.filter(item => item.id === 'dashboard' || item.id === 'settings' || userFeatures.includes(item.label))
     : baseNavItems
   const navItems = (!filteredNavItems || filteredNavItems.length === 0) ? baseNavItems : filteredNavItems
 

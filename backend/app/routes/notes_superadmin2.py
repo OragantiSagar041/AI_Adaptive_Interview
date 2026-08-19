@@ -640,16 +640,33 @@ def get_superadmin_audit_logs(current_admin: dict = Depends(get_current_admin_de
 
 @router.post("/api/superadmin/security/stats")
 @router.get("/api/superadmin/security/stats")
-def get_superadmin_security_stats(current_admin: dict = Depends(get_current_admin_details)):
+def get_superadmin_security_stats(role_filter: Optional[str] = None, current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["master", "super_admin", "superadmin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
         
     now_utc = datetime.now(timezone.utc)
     yesterday = (now_utc - timedelta(days=1)).isoformat()
     
-    # 1. Real Failed Logins (24h)
+    # ── Tenant Isolation ──
+    company_id = current_admin.get("company_id")
+    company_query = {}
+    if company_id:
+        try:
+            company_query = {"company_id": {"$in": [company_id, str(company_id), ObjectId(company_id)]}}
+        except Exception:
+            company_query = {"company_id": {"$in": [company_id, str(company_id)]}}
+            
+    # Get all usernames in this company upfront so we can filter all stats
+    company_users = list(admins_collection.find(company_query, {"username": 1, "role": 1, "name": 1}))
+    company_usernames = {u["username"] for u in company_users if u.get("username")}
+    
+    # Create a mapping of username -> name for the UI alerts
+    username_to_name = {u["username"]: (u.get("name") or u["username"]) for u in company_users if u.get("username")}
+    
+    # 1. Real Failed Logins (24h) for THIS company only
     failed_logins_24h = security_logs_collection.count_documents({
         "event_type": "FAILED_LOGIN",
+        "username": {"$in": list(company_usernames)},
         "timestamp": {"$gte": yesterday}
     })
     
@@ -679,14 +696,28 @@ def get_superadmin_security_stats(current_admin: dict = Depends(get_current_admi
     
     security_score = min(100, max(0, score))
     
-    # 4. Real Active Sessions count
+    # ── Build a set of master usernames so we can exclude them from alerts ──
+    # Master is the platform owner — their logins should never appear in a
+    # SuperAdmin's security dashboard.
+    master_usernames = set(
+        u["username"]
+        for u in admins_collection.find({"role": "master"}, {"username": 1})
+        if u.get("username")
+    )
+
+    # 4. Real Active Sessions count — exclude master accounts
     session_minutes = 30 if strict_timeout_enabled else 1440
     session_cutoff = (now_utc - timedelta(minutes=session_minutes)).isoformat()
-    
-    active_admin_logins = len(security_logs_collection.distinct("username", {
-        "event_type": "SUCCESSFUL_LOGIN",
-        "timestamp": {"$gte": session_cutoff}
-    }))
+
+    active_admin_logins = len([
+        u for u in security_logs_collection.distinct("username", {
+            "event_type": "SUCCESSFUL_LOGIN",
+            "username": {"$in": list(company_usernames)},
+            "timestamp": {"$gte": session_cutoff}
+        })
+        if u not in master_usernames
+    ])
+
     
     active_copilot_sessions = copilot_sessions_collection.count_documents({
         "updated_at": {"$gte": session_cutoff}
@@ -698,15 +729,16 @@ def get_superadmin_security_stats(current_admin: dict = Depends(get_current_admi
     
     active_sessions = max(active_admin_logins + active_interview_sessions, active_copilot_sessions, active_admin_logins, 1 if current_admin else 0)
     
-    # 5. Real Users with 2FA percentage
-    total_admins = admins_collection.count_documents({})
+    # 5. Real Users with 2FA percentage for THIS company
+    total_admins = len(company_users)
     if total_admins == 0:
         users_with_2fa = "100%"
     else:
         if require_2fa_enabled:
             users_with_2fa = "100%"
         else:
-            enabled_2fa_count = admins_collection.count_documents({
+            enabled_2fa_query = {
+                **company_query,
                 "$or": [
                     {"two_factor_enabled": True},
                     {"totp_enabled": True},
@@ -714,13 +746,15 @@ def get_superadmin_security_stats(current_admin: dict = Depends(get_current_admi
                     {"otp": {"$exists": True}},
                     {"otp_secret": {"$exists": True}}
                 ]
-            })
+            }
+            enabled_2fa_count = admins_collection.count_documents(enabled_2fa_query)
             pct = int((enabled_2fa_count / total_admins) * 100)
             users_with_2fa = f"{pct}%"
             
-    # 6. Real Auth Methods distribution from DB
-    password_count = admins_collection.count_documents({"password": {"$exists": True, "$ne": ""}})
+    # 6. Real Auth Methods distribution for THIS company
+    password_count = admins_collection.count_documents({**company_query, "password": {"$exists": True, "$ne": ""}})
     google_sso_count = admins_collection.count_documents({
+        **company_query,
         "$or": [
             {"auth_provider": "google"},
             {"firebase_uid": {"$exists": True}},
@@ -729,6 +763,7 @@ def get_superadmin_security_stats(current_admin: dict = Depends(get_current_admi
         ]
     })
     saml_sso_count = admins_collection.count_documents({
+        **company_query,
         "$or": [
             {"auth_provider": "saml"},
             {"sso_provider": "saml"},
@@ -755,8 +790,37 @@ def get_superadmin_security_stats(current_admin: dict = Depends(get_current_admi
         {"name": "SAML", "value": max(saml_val, 0)}
     ]
     
-    # 7. Recent Alerts using actual event_type classification & probe artifact suppression
-    recent_logs = list(security_logs_collection.find().sort("timestamp", -1).limit(50))
+    # Base query for logs: must not be master, and MUST belong to this company
+    query_filter = {
+        "role": {"$ne": "master"},
+        "username": {"$in": list(company_usernames)}
+    }
+    
+    if role_filter:
+        if role_filter == "tenant":
+            # Recruiters are usually 'tenant', 'admin', or 'recruiter'
+            recruiter_usernames = {
+                u["username"] for u in company_users 
+                if u.get("role") not in ["master", "super_admin", "superadmin"] and u.get("username")
+            }
+            query_filter["$or"] = [
+                {"role": {"$in": ["tenant", "admin", "recruiter"]}, "username": {"$in": list(company_usernames)}},
+                {"username": {"$in": list(recruiter_usernames)}, "role": {"$exists": False}}
+            ]
+        elif role_filter == "super_admin":
+            super_usernames = {
+                u["username"] for u in company_users 
+                if u.get("role") in ["super_admin", "superadmin"] and u.get("username")
+            }
+            query_filter["$or"] = [
+                {"role": {"$in": ["super_admin", "superadmin"]}, "username": {"$in": list(company_usernames)}},
+                {"username": {"$in": list(super_usernames)}, "role": {"$exists": False}}
+            ]
+
+    recent_logs = list(security_logs_collection.find(
+        query_filter
+    ).sort("timestamp", -1).limit(50))
+
     
     # Pre-index successful login timestamps per user to filter legacy master_login probe artifacts
     success_timestamps = {}
@@ -776,10 +840,19 @@ def get_superadmin_security_stats(current_admin: dict = Depends(get_current_admi
     
     for log in recent_logs:
         username = log.get("username") or log.get("user") or "unknown"
+        # Resolve the display name (from admin's 'name' field) so alerts show
+        # the same friendly name as the Recruiters page — not the internal username.
+        display_name = username_to_name.get(username, username)
         ip_addr = log.get("ip_address") or log.get("ip") or "Unknown IP"
         evt_type = log.get("event_type", "UNKNOWN")
         ts = log.get("timestamp") or ""
-        
+
+        # ── Issue 1 Fix: skip master-role logins entirely ──
+        # Master is the platform owner. Their logins are irrelevant and
+        # confusing when shown in the SuperAdmin security dashboard.
+        if username in master_usernames:
+            continue
+
         # Suppress FAILED_LOGIN probe artifact if user had a SUCCESSFUL_LOGIN within 15s
         if evt_type == "FAILED_LOGIN" and username in success_timestamps:
             try:
@@ -822,7 +895,7 @@ def get_superadmin_security_stats(current_admin: dict = Depends(get_current_admi
             event_label = str(evt_type).replace("_", " ").title()
             
         recent_alerts.append({
-            "type": f"{event_label} ({username})",
+            "type": f"{event_label} ({display_name})",
             "ip": ip_addr,
             "time": time_str
         })
@@ -850,8 +923,15 @@ class SecurityPoliciesUpdate(BaseModel):
 
 @router.get("/api/superadmin/security/policies")
 def get_security_policies(current_admin: dict = Depends(get_current_admin_details)):
-    if current_admin.get("role") not in ["master", "super_admin", "superadmin"]:
+    # ── Issue 2 Fix ──
+    # Master is the platform owner. Global security policies only govern
+    # SuperAdmin accounts. Master must never be shown these settings because
+    # they do not apply to them.
+    if current_admin.get("role") == "master":
+        raise HTTPException(status_code=403, detail="Security policies do not apply to master accounts.")
+    if current_admin.get("role") not in ["super_admin", "superadmin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
+
         
     global_policies = security_policies_collection.find_one({"_id": "global_policies"}) or {}
     
@@ -884,7 +964,11 @@ def get_security_policies(current_admin: dict = Depends(get_current_admin_detail
 
 @router.put("/api/superadmin/security/policies")
 def update_security_policies(data: SecurityPoliciesUpdate, request: Request, current_admin: dict = Depends(get_current_admin_details)):
-    if current_admin.get("role") not in ["master", "super_admin", "superadmin"]:
+    # ── Issue 2 Fix ──
+    # Security policies only govern SuperAdmin and below — never master.
+    if current_admin.get("role") == "master":
+        raise HTTPException(status_code=403, detail="Security policies do not apply to master accounts.")
+    if current_admin.get("role") not in ["super_admin", "superadmin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
         
     x_forwarded_for = request.headers.get("x-forwarded-for")

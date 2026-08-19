@@ -145,15 +145,18 @@ def master_login(data: AdminLogin, request: Request):
             "admin_id": str(user["_id"])
         }
     
-    # 3. Strict Session Timeout (30 mins if enabled, else default 7 days)
-    expires_delta = timedelta(minutes=30) if global_policies.get("strict_session_timeout") else None
-    
+    # 3. Master always gets a 7-day token.
+    # Global security policies (strict_session_timeout etc.) are meant for
+    # SuperAdmin accounts only and must NEVER apply to the master/owner account.
+    expires_delta = None  # None → 7 days (see create_access_token default)
+
     access_token = create_access_token(data={"sub": str(user["_id"]), "role": user["role"], "company_id": str(user.get("company_id", ""))}, expires_delta=expires_delta)
-    
-    # Log successful master login event
+
+    # Log successful master login — stored with role so security dashboard can filter it out
     security_logs_collection.insert_one({
         "event_type": "SUCCESSFUL_LOGIN",
         "username": user["username"],
+        "role": "master",
         "ip_address": client_ip,
         "timestamp": datetime.now(timezone.utc).isoformat()
     })

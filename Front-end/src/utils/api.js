@@ -47,6 +47,68 @@ api.interceptors.request.use(
 );
 
 /* =============================================================================
+   TOKEN REFRESH HELPERS
+============================================================================= */
+
+/** Decode the JWT exp field without a library (just base64 parse the payload) */
+function getTokenExpiry(token) {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.exp ? payload.exp * 1000 : null; // convert to ms
+  } catch (_) {
+    return null;
+  }
+}
+
+let _refreshPromise = null; // deduplicate simultaneous refresh calls
+
+async function proactiveTokenRefresh() {
+  // Only refresh admin tokens, not candidate tokens
+  const token = sessionStorage.getItem('adminToken') || sessionStorage.getItem('masterToken') || sessionStorage.getItem('token');
+  if (!token) return;
+
+  const expiry = getTokenExpiry(token);
+  if (!expiry) return;
+
+  // Refresh if the token expires within 60 minutes
+  const msUntilExpiry = expiry - Date.now();
+  if (msUntilExpiry > 60 * 60 * 1000) return;
+
+  // Already expired — don't try to refresh (the 401 interceptor will redirect)
+  if (msUntilExpiry <= 0) return;
+
+  if (_refreshPromise) return _refreshPromise;
+
+  _refreshPromise = axios.post(
+    `${API_BASE_URL}/token/refresh`,
+    {},
+    { headers: { Authorization: `Bearer ${token}` } }
+  ).then(res => {
+    const newToken = res.data?.token;
+    if (newToken) {
+      // Update all storage keys so every subsequent request uses the new token
+      if (sessionStorage.getItem('adminToken')) sessionStorage.setItem('adminToken', newToken);
+      if (sessionStorage.getItem('masterToken')) sessionStorage.setItem('masterToken', newToken);
+      if (sessionStorage.getItem('token')) sessionStorage.setItem('token', newToken);
+      // Also update the token embedded in adminUser JSON
+      try {
+        const adminUser = JSON.parse(sessionStorage.getItem('adminUser') || '{}');
+        if (adminUser.token) {
+          adminUser.token = newToken;
+          sessionStorage.setItem('adminUser', JSON.stringify(adminUser));
+        }
+      } catch (_) {}
+    }
+  }).catch(() => {
+    // Refresh failed — don't crash, let normal 401 handling deal with it
+  }).finally(() => {
+    _refreshPromise = null;
+  });
+
+  return _refreshPromise;
+}
+
+/* =============================================================================
    RESPONSE INTERCEPTOR → pass-through response/error
 ============================================================================= */
 api.interceptors.response.use(
@@ -54,6 +116,11 @@ api.interceptors.response.use(
     const requestPath = String(response.config?.url || "")
     if (CANDIDATE_ROUTE_RE.test(requestPath)) {
       window.__candidateAuthFailCount = 0
+    }
+    // Silently refresh the token if it's getting close to expiry
+    // Skip refresh calls themselves to avoid infinite loops
+    if (!requestPath.includes('/token/refresh')) {
+      proactiveTokenRefresh();
     }
     return response
   },
@@ -82,6 +149,7 @@ api.interceptors.response.use(
     return Promise.reject(error)
   },
 );
+
 
 /* =============================================================================
    HEALTH & GENERAL

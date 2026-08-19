@@ -616,8 +616,8 @@ async def startup_event_db_and_email():
                 "subscription_plan": "master",
                 "created_at": datetime.now(timezone.utc).isoformat()
             })
-            print(f"Default master created: master / {master_pw} (Email: {default_email})")
-            
+            print(f"Default master account created. (Email: {default_email})")
+
         row = admins_collection.find_one({"username": "admin"})
         if not row:
             import secrets
@@ -635,7 +635,7 @@ async def startup_event_db_and_email():
                 "subscription_expiry": (datetime.now(timezone.utc) + timedelta(days=365)).isoformat(),
                 "created_at": datetime.now(timezone.utc).isoformat()
             })
-            print(f"Default admin created: admin / {admin_pw} (Email: {default_email})")
+            print(f"Default admin account created. (Email: {default_email})")
         else:
             # Upgrade legacy admin to tenant
             update_data = {}
