@@ -338,6 +338,7 @@ export default function MasterDashboard() {
               <input
                 type="date"
                 value={endDate}
+                min={startDate}
                 onChange={(e) => handleCustomDateChange('end', e.target.value)}
                 className="bg-transparent text-xs font-medium text-slate-700 focus:outline-none cursor-pointer"
               />

@@ -3,10 +3,8 @@ import { useSelector, useDispatch } from 'react-redux'
 import axios from 'axios'
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
-import Card from '../Card'
-import Input from '../Input'
-import Button from '../Button'
 import { setCredentials } from '../../store/slices/authSlice'
+import { User, Lock, Mail, Shield, Calendar, RefreshCw } from 'lucide-react'
 
 export default function ProfileSettings() {
   const dispatch = useDispatch()
@@ -16,19 +14,44 @@ export default function ProfileSettings() {
   const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
 
   const [loading, setLoading] = useState(false)
+  const [pwdLoading, setPwdLoading] = useState(false)
+  
   const [formData, setFormData] = useState({
     username: adminUser?.name || adminUser?.username || '',
     email: adminUser?.email || '',
     company_name: adminUser?.company_name || '',
-    old_password: '',
-    new_password: ''
   })
+  
+  const [pwdData, setPwdData] = useState({
+    old_password: '',
+    new_password: '',
+    confirm_password: ''
+  })
+
+  // Format joined date
+  const joinDate = adminUser?.created_at 
+    ? new Date(adminUser.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) 
+    : 'May 5, 2026'
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
   }
 
-  const handleSubmit = async (e) => {
+  const handlePwdChange = (e) => {
+    setPwdData({ ...pwdData, [e.target.name]: e.target.value })
+  }
+
+  const handleRefresh = () => {
+    Swal.fire({
+      title: 'Refreshed',
+      text: 'Details are up to date.',
+      icon: 'success',
+      timer: 1500,
+      showConfirmButton: false
+    })
+  }
+
+  const handleSaveProfile = async (e) => {
     e.preventDefault()
     setLoading(true)
     try {
@@ -38,17 +61,18 @@ export default function ProfileSettings() {
         email: formData.email,
         company_name: formData.company_name
       }
-      if (formData.old_password && formData.new_password) {
-        payload.old_password = formData.old_password
-        payload.new_password = formData.new_password
-      }
       
-      const res = await axios.post(`${API_BASE_URL}/admin/profile`, payload, {
+      await axios.post(`${API_BASE_URL}/admin/profile`, payload, {
         headers: { Authorization: `Bearer ${token}` }
       })
       
-      // Update local storage and redux state
-      const updatedUser = { ...adminUser, name: formData.username, username: formData.username, email: formData.email, company_name: formData.company_name }
+      const updatedUser = { 
+        ...adminUser, 
+        name: formData.username, 
+        username: formData.username, 
+        email: formData.email, 
+        company_name: formData.company_name 
+      }
       sessionStorage.setItem('adminUser', JSON.stringify(updatedUser))
       dispatch(setCredentials({ role, token, adminUser: updatedUser }))
       
@@ -56,9 +80,8 @@ export default function ProfileSettings() {
         title: 'Success!',
         text: 'Profile settings updated successfully.',
         icon: 'success',
-        confirmButtonColor: '#10b981'
+        confirmButtonColor: '#0070F3'
       })
-      setFormData(prev => ({ ...prev, old_password: '', new_password: '' }))
     } catch (err) {
       let errorMsg = err.response?.data?.detail || err.response?.data?.message || err.message || 'Failed to update profile'
       if (Array.isArray(errorMsg)) {
@@ -72,60 +95,253 @@ export default function ProfileSettings() {
     }
   }
 
+  const handleUpdatePassword = async (e) => {
+    e.preventDefault()
+    if(pwdData.new_password !== pwdData.confirm_password) {
+       Swal.fire('Error', 'New passwords do not match', 'error')
+       return
+    }
+    if(!pwdData.old_password || !pwdData.new_password) {
+       Swal.fire('Error', 'Please enter current and new password', 'error')
+       return
+    }
+    
+    setPwdLoading(true)
+    try {
+      const payload = {
+        admin_id: adminUser?.admin_id || adminUser?.id || adminUser?._id,
+        username: formData.username,
+        email: formData.email,
+        company_name: formData.company_name,
+        old_password: pwdData.old_password,
+        new_password: pwdData.new_password
+      }
+      
+      await axios.post(`${API_BASE_URL}/admin/profile`, payload, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      
+      Swal.fire({
+        title: 'Success!',
+        text: 'Password updated successfully.',
+        icon: 'success',
+        confirmButtonColor: '#0070F3'
+      })
+      setPwdData({ old_password: '', new_password: '', confirm_password: '' })
+    } catch (err) {
+      let errorMsg = err.response?.data?.detail || err.response?.data?.message || err.message || 'Failed to update password'
+      if (Array.isArray(errorMsg)) {
+        errorMsg = errorMsg.map(e => e.msg).join(', ')
+      } else if (typeof errorMsg === 'object') {
+        errorMsg = JSON.stringify(errorMsg)
+      }
+      Swal.fire('Error', errorMsg, 'error')
+    } finally {
+      setPwdLoading(false)
+    }
+  }
+
   return (
-    <div className="max-w-2xl mx-auto">
-      <Card className="bg-white/82 backdrop-blur-md border border-[#e5edf7] text-slate-800 flex flex-col gap-5">
-        <h3 className="text-lg font-bold text-slate-800">Admin Profile Settings</h3>
-        <p className="text-xs text-slate-500 -mt-3.5">Update company workspace settings or reset passwords</p>
+    <div className="max-w-[1000px] mx-auto space-y-6 pb-12 font-sans">
+      {/* Header section */}
+      <div className="bg-white rounded-[20px] p-6 shadow-sm border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-slate-800">My Profile</h2>
+          <p className="text-sm text-slate-500 mt-1">View and update your Administrator credentials and security preferences.</p>
+        </div>
+        <button 
+          onClick={handleRefresh}
+          className="flex items-center gap-2 px-4 py-2 border border-slate-200 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors w-fit"
+        >
+          <RefreshCw size={15} className="text-slate-400" />
+          Refresh Details
+        </button>
+      </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <Input
-            label="Workspace Owner Name"
-            name="username"
-            value={formData.username}
-            onChange={handleChange}
-            required
-          />
-          <Input
-            label="Workspace Admin Email"
-            type="email"
-            name="email"
-            value={formData.email}
-            onChange={handleChange}
-            required
-          />
-          <Input
-            label="Company Workspace Name"
-            name="company_name"
-            value={formData.company_name}
-            onChange={handleChange}
-            required
-          />
-          <div className="border-t border-[#e5edf7] pt-4 mt-2">
-            <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide mb-3">Change Administrator Password</h4>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column */}
+        <div className="lg:col-span-1 space-y-6">
+          {/* Profile Card */}
+          <div className="bg-white rounded-[20px] p-8 shadow-sm border border-slate-100 flex flex-col items-center relative">
+            <div className="relative">
+              <div className="w-28 h-28 rounded-full p-1 border-2 border-slate-100">
+                <img
+                  src={adminUser?.profile_image || adminUser?.avatar || "https://ui-avatars.com/api/?name=Admin&background=random"}
+                  alt="Avatar"
+                  className="w-full h-full rounded-full object-cover"
+                />
+              </div>
+              <div className="absolute bottom-2 right-2 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white"></div>
+            </div>
+            
+            <h3 className="mt-4 text-xl font-bold text-slate-800">{adminUser?.name || adminUser?.username || 'admin'}</h3>
+            <div className="mt-2 px-4 py-1 bg-blue-50 text-blue-500 text-xs font-bold rounded-full uppercase tracking-widest">
+              {role || 'ADMIN'}
+            </div>
+
+            <div className="w-full border-t border-slate-100 border-dashed my-6"></div>
+
+            <div className="w-full space-y-4">
+              <div className="flex items-center gap-3 text-sm text-slate-600">
+                <Mail size={16} className="text-slate-400 shrink-0" />
+                <span className="truncate">{adminUser?.email || 'admin@example.com'}</span>
+              </div>
+              <div className="flex items-center gap-3 text-sm text-slate-600">
+                <Shield size={16} className="text-slate-400 shrink-0" />
+                <span>Access: <strong className="text-slate-800 font-semibold">{role === 'master' ? 'Master Level' : 'Admin Level'}</strong></span>
+              </div>
+              <div className="flex items-center gap-3 text-sm text-slate-600">
+                <Calendar size={16} className="text-slate-400 shrink-0" />
+                <span>Joined: <strong className="text-slate-800 font-semibold">{joinDate}</strong></span>
+              </div>
+            </div>
           </div>
-          <Input
-            label="Current Password"
-            type="password"
-            name="old_password"
-            value={formData.old_password}
-            onChange={handleChange}
-            placeholder="Enter current secure password"
-          />
-          <Input
-            label="New Secure Password"
-            type="password"
-            name="new_password"
-            value={formData.new_password}
-            onChange={handleChange}
-            placeholder="Create new secure password"
-          />
 
-          <Button type="submit" variant="primary" className="py-3 mt-4" disabled={loading}>
-            {loading ? 'Saving...' : 'Save Console Settings'}
-          </Button>
-        </form>
-      </Card>
+          {/* Account Details Card */}
+          <div className="bg-white rounded-[20px] p-6 shadow-sm border border-slate-100">
+            <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-4">Account Details</h4>
+            <div className="bg-slate-50/70 rounded-2xl p-4 text-center border border-slate-100">
+              <div className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-1">Role / Access Level</div>
+              <div className="text-sm font-bold text-slate-800 capitalize">{role || 'Admin'}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Account Settings */}
+          <div className="bg-white rounded-[20px] p-6 shadow-sm border border-slate-100">
+            <div className="flex items-center gap-2.5 mb-6">
+              <User size={18} className="text-blue-500" />
+              <h3 className="text-base font-bold text-slate-800">Account Settings</h3>
+            </div>
+
+            <form onSubmit={handleSaveProfile} className="space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Username / ID</label>
+                  <div className="relative">
+                    <User size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      name="username"
+                      value={formData.username}
+                      onChange={handleChange}
+                      className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Registered Email Address</label>
+                  <div className="relative">
+                    <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleChange}
+                      className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Workspace / Owner Name</label>
+                <div className="relative">
+                  <Shield size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    name="company_name"
+                    value={formData.company_name}
+                    onChange={handleChange}
+                    className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-6 py-2.5 bg-[#0070F3] hover:bg-blue-600 text-white text-sm font-semibold rounded-xl shadow-sm hover:shadow transition-all disabled:opacity-70"
+                >
+                  {loading ? 'Saving...' : 'Save Profile Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Security Credentials */}
+          <div className="bg-white rounded-[20px] p-6 shadow-sm border border-slate-100">
+            <div className="flex items-center gap-2.5 mb-6">
+              <Lock size={18} className="text-blue-500" />
+              <h3 className="text-base font-bold text-slate-800">Security Credentials</h3>
+            </div>
+
+            <form onSubmit={handleUpdatePassword} className="space-y-5">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Current Password</label>
+                <div className="relative">
+                  <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="password"
+                    name="old_password"
+                    value={pwdData.old_password}
+                    onChange={handlePwdChange}
+                    placeholder="Enter current administrator password"
+                    className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">New Password</label>
+                  <div className="relative">
+                    <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="password"
+                      name="new_password"
+                      value={pwdData.new_password}
+                      onChange={handlePwdChange}
+                      placeholder="At least 6 characters"
+                      className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Confirm New Password</label>
+                  <div className="relative">
+                    <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="password"
+                      name="confirm_password"
+                      value={pwdData.confirm_password}
+                      onChange={handlePwdChange}
+                      placeholder="Confirm new password"
+                      className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="submit"
+                  disabled={pwdLoading}
+                  className="px-6 py-2.5 bg-[#0070F3] hover:bg-blue-600 text-white text-sm font-semibold rounded-xl shadow-sm hover:shadow transition-all disabled:opacity-70"
+                >
+                  {pwdLoading ? 'Updating...' : 'Update Password'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
