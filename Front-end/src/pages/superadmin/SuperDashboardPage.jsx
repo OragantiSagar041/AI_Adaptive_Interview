@@ -54,10 +54,34 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
+import { motion, useSpring, useTransform } from "framer-motion";
 
 function formatNum(n) {
   if (!n && n !== 0) return "0";
   return Number(n).toLocaleString();
+}
+
+function AnimatedNumber({ value, suffix = "", isDecimal = false }) {
+  const numericValue = typeof value === 'string' ? parseFloat(value.replace(/,/g, '')) : (typeof value === 'number' ? value : 0);
+  const [mounted, setMounted] = useState(false);
+  
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const spring = useSpring(0, { mass: 1, stiffness: 60, damping: 20 });
+  const display = useTransform(spring, (current) => {
+    const val = isDecimal ? current.toFixed(1) : Math.floor(current);
+    return formatNum(val) + suffix;
+  });
+
+  useEffect(() => {
+    if (mounted) {
+      spring.set(numericValue);
+    }
+  }, [numericValue, mounted, spring]);
+
+  return <motion.span>{display}</motion.span>;
 }
 
 function renderTrend(trend, goodIsUp = true) {
@@ -214,7 +238,7 @@ export default function SuperDashboardPage() {
   const starRating = avgScore / 20;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 bg-[#f8fafc] rounded-3xl p-2 sm:p-4 -m-2 sm:-m-4 min-h-screen">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
         <p className="text-sm text-slate-500">
@@ -226,379 +250,475 @@ export default function SuperDashboardPage() {
       <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
 
         {/* 1 — Total AI Interviews */}
-        <Card className="bg-violet-100 border-none shadow-sm rounded-2xl relative overflow-hidden flex flex-col justify-between">
-          <CardContent className="p-4 flex flex-col h-full">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded bg-violet-50 flex items-center justify-center">
-                  <Mic className="w-4 h-4 text-violet-500" />
-                </div>
-                <span className="text-xs font-semibold text-slate-700">Total AI Interviews</span>
-              </div>
-            </div>
-            <div className="mt-4 flex items-end justify-between">
-              <div className="text-3xl font-bold text-slate-900">{formatNum(dbStats?.total) || "0"}</div>
-              <div className="text-right">
-                {dbStats?.this_week != null && dbStats?.total ? (
-                  <div className="flex items-center justify-end text-emerald-500 text-[10px] font-bold">
-                    <TrendingUp className="w-3 h-3 mr-0.5" /> {dbStats.this_week} this week
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.15, ease: "easeOut", delay: 0.02 }}
+          whileHover={{ y: -4 }}
+          className="relative group rounded-2xl"
+        >
+          <div className="absolute -inset-0.5 bg-gradient-to-br from-transparent to-violet-400/0 group-hover:to-violet-400/10 rounded-2xl blur-md transition-all duration-300 z-0" />
+          <div className="relative z-10 bg-gradient-to-b from-white/80 to-white/40 backdrop-blur-2xl border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.05)] group-hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] rounded-2xl overflow-hidden flex flex-col justify-between h-full transition-all duration-500">
+            <div className="absolute -bottom-6 -right-6 w-32 h-32 bg-violet-400/20 blur-[40px] rounded-full group-hover:bg-violet-400/40 group-hover:scale-110 transition-all duration-500" />
+            <div className="p-4 flex flex-col h-full relative z-10">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded bg-violet-50 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
+                    <Mic className="w-4 h-4 text-violet-500" />
                   </div>
-                ) : (
-                  <div className="text-[10px] text-slate-400">Loading…</div>
-                )}
-                <div className="text-[10px] text-slate-400">last 7 days</div>
-              </div>
-            </div>
-            <div className="h-12 w-full mt-2">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={sparklineData}>
-                  <Line type="monotone" dataKey="v" stroke="#8b5cf6" strokeWidth={2} dot={true} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="mt-3 flex items-center justify-end text-[11px]">
-              <span className="text-indigo-500 font-medium cursor-pointer flex items-center hover:underline" onClick={() => navigate('/superadmin/interviews')}>
-                View trend <ArrowRight className="w-3 h-3 ml-0.5" />
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 2 — Active Today */}
-        <Card className="bg-blue-100 border-none shadow-sm rounded-2xl relative overflow-hidden flex flex-col justify-between">
-          <CardContent className="p-4 flex flex-col h-full">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded bg-blue-50 flex items-center justify-center">
-                  <Activity className="w-4 h-4 text-blue-500" />
+                  <span className="text-xs font-semibold text-slate-700">Total AI Interviews</span>
                 </div>
-                <span className="text-xs font-semibold text-slate-700">Active Today</span>
               </div>
-            </div>
-            <div className="mt-4 flex items-end justify-between">
-              <div className="text-3xl font-bold text-slate-900">{formatNum(dbStats?.today) || "0"}</div>
-              <div className="text-right">
-                <div className="flex items-center justify-end text-emerald-500 text-[10px] font-bold">
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 animate-pulse" /> Live
+              <div className="mt-4 flex items-end justify-between">
+                <div className="text-3xl font-bold text-slate-900">
+                  <AnimatedNumber value={dbStats?.total || 0} />
                 </div>
-                <div className="text-[10px] text-slate-400 mt-0.5">Last updated: 5s ago</div>
-              </div>
-            </div>
-            <div className="mt-4 flex-1 flex items-center">
-              <div className="w-full rounded-md bg-blue-50 p-2.5 flex items-center gap-2 text-xs text-blue-600 font-medium">
-                <Users className="w-4 h-4" /> {ongoingLiveCount || 0} candidates in active interviews
-              </div>
-            </div>
-            {/* Live Sessions Picker */}
-            <div className="mt-3 relative">
-              <div className="flex items-center justify-end text-[11px]">
-                <span
-                  className="text-blue-500 font-medium cursor-pointer flex items-center hover:underline"
-                  onClick={async () => {
-                    if (showLivePicker) {
-                      setShowLivePicker(false);
-                      return;
-                    }
-                    setShowLivePicker(true);
-                    setLivePickerLoading(true);
-                    try {
-                      await dispatch(loadLiveSessions(selectedAdminFilter));
-                    } finally {
-                      setLivePickerLoading(false);
-                    }
-                  }}
-                >
-                  View live <ArrowRight className="w-3 h-3 ml-0.5" />
-                </span>
-              </div>
-              {showLivePicker && (
-                <div className="absolute bottom-6 right-0 z-50 w-72 bg-white border border-slate-200 rounded-xl shadow-2xl overflow-hidden">
-                  <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100 bg-slate-50">
-                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Live Sessions</span>
-                    <button
-                      className="text-slate-400 hover:text-slate-600 text-xs cursor-pointer bg-transparent border-none"
-                      onClick={() => setShowLivePicker(false)}
-                    >✕</button>
-                  </div>
-                  {livePickerLoading ? (
-                    <div className="px-4 py-6 text-center text-xs text-slate-400">
-                      <div className="w-5 h-5 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin mx-auto mb-2" />
-                      Fetching live sessions...
-                    </div>
-                  ) : (!liveSessions || liveSessions.length === 0) ? (
-                    <div className="px-4 py-6 text-center text-xs text-slate-400">
-                      <div className="text-2xl mb-1">📡</div>
-                      No active live sessions right now.
+                <div className="text-right">
+                  {dbStats?.this_week != null && dbStats?.total ? (
+                    <div className="flex items-center justify-end text-emerald-500 text-[10px] font-bold">
+                      <TrendingUp className="w-3 h-3 mr-0.5" /> {dbStats.this_week} this week
                     </div>
                   ) : (
-                    <div className="max-h-56 overflow-y-auto divide-y divide-slate-50">
-                      {liveSessions.map((session, i) => (
-                        <button
-                          key={session.link_id || i}
-                          className="w-full text-left px-3 py-2.5 hover:bg-blue-50 transition-colors cursor-pointer flex items-center justify-between gap-2 bg-transparent border-none"
-                          onClick={() => {
-                            setShowLivePicker(false);
-                            if (handleOpenLiveStreamAction) {
-                              handleOpenLiveStreamAction(session);
-                            }
-                          }}
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <div className={`w-2 h-2 rounded-full shrink-0 ${session.online ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
-                            <div className="min-w-0">
-                              <div className="text-xs font-semibold text-slate-800 truncate">
-                                {session.candidate_name || 'Unknown Candidate'}
-                              </div>
-                              <div className="text-[10px] text-slate-400 truncate">
-                                {session.interview_title || session.link_id}
+                    <div className="text-[10px] text-slate-400">Loading…</div>
+                  )}
+                  <div className="text-[10px] text-slate-400">last 7 days</div>
+                </div>
+              </div>
+              <div className="h-12 w-full mt-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={sparklineData}>
+                    <Line type="monotone" dataKey="v" stroke="#8b5cf6" strokeWidth={2} dot={true} isAnimationActive={true} animationDuration={1500} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="mt-3 flex items-center justify-end text-[11px]">
+                <span className="text-indigo-500 font-medium cursor-pointer flex items-center hover:underline" onClick={() => navigate('/superadmin/interviews')}>
+                  View trend <ArrowRight className="w-3 h-3 ml-0.5" />
+                </span>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* 2 — Active Today */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.15, ease: "easeOut", delay: 0.02 }}
+          whileHover={{ y: -4 }}
+          className="relative group rounded-2xl"
+        >
+          <div className="absolute -inset-0.5 bg-gradient-to-br from-transparent to-blue-400/0 group-hover:to-blue-400/10 rounded-2xl blur-md transition-all duration-300 z-0" />
+          <div className="relative z-10 bg-gradient-to-b from-white/80 to-white/40 backdrop-blur-2xl border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.05)] group-hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] rounded-2xl overflow-hidden flex flex-col justify-between h-full transition-all duration-500">
+            <div className="absolute -bottom-6 -right-6 w-32 h-32 bg-blue-400/20 blur-[40px] rounded-full group-hover:bg-blue-400/40 group-hover:scale-110 transition-all duration-500" />
+            <div className="p-4 flex flex-col h-full relative z-10">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded bg-blue-50 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
+                    <Activity className="w-4 h-4 text-blue-500" />
+                  </div>
+                  <span className="text-xs font-semibold text-slate-700">Active Today</span>
+                </div>
+              </div>
+              <div className="mt-4 flex items-end justify-between">
+                <div className="text-3xl font-bold text-slate-900">
+                  <AnimatedNumber value={dbStats?.today || 0} />
+                </div>
+                <div className="text-right">
+                  <div className="flex items-center justify-end text-emerald-500 text-[10px] font-bold">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 animate-pulse" /> Live
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">Last updated: 5s ago</div>
+                </div>
+              </div>
+              <div className="mt-4 flex-1 flex items-center">
+                <div className="w-full rounded-md bg-blue-50/50 border border-blue-100/50 p-2.5 flex items-center gap-2 text-xs text-blue-600 font-medium">
+                  <Users className="w-4 h-4" /> {ongoingLiveCount || 0} candidates in active interviews
+                </div>
+              </div>
+              {/* Live Sessions Picker */}
+              <div className="mt-3 relative">
+                <div className="flex items-center justify-end text-[11px]">
+                  <span
+                    className="text-blue-500 font-medium cursor-pointer flex items-center hover:underline"
+                    onClick={async () => {
+                      if (showLivePicker) {
+                        setShowLivePicker(false);
+                        return;
+                      }
+                      setShowLivePicker(true);
+                      setLivePickerLoading(true);
+                      try {
+                        await dispatch(loadLiveSessions(selectedAdminFilter));
+                      } finally {
+                        setLivePickerLoading(false);
+                      }
+                    }}
+                  >
+                    View live <ArrowRight className="w-3 h-3 ml-0.5" />
+                  </span>
+                </div>
+                {showLivePicker && (
+                  <div className="absolute bottom-6 right-0 z-50 w-72 bg-white/95 backdrop-blur-xl border border-white/60 rounded-xl shadow-2xl overflow-hidden">
+                    <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100 bg-slate-50/50">
+                      <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Live Sessions</span>
+                      <button
+                        className="text-slate-400 hover:text-slate-600 text-xs cursor-pointer bg-transparent border-none"
+                        onClick={() => setShowLivePicker(false)}
+                      >✕</button>
+                    </div>
+                    {livePickerLoading ? (
+                      <div className="px-4 py-6 text-center text-xs text-slate-400">
+                        <div className="w-5 h-5 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin mx-auto mb-2" />
+                        Fetching live sessions...
+                      </div>
+                    ) : (!liveSessions || liveSessions.length === 0) ? (
+                      <div className="px-4 py-6 text-center text-xs text-slate-400">
+                        <div className="text-2xl mb-1">📡</div>
+                        No active live sessions right now.
+                      </div>
+                    ) : (
+                      <div className="max-h-56 overflow-y-auto divide-y divide-slate-50/50">
+                        {liveSessions.map((session, i) => (
+                          <button
+                            key={session.link_id || i}
+                            className="w-full text-left px-3 py-2.5 hover:bg-blue-50/50 transition-colors cursor-pointer flex items-center justify-between gap-2 bg-transparent border-none"
+                            onClick={() => {
+                              setShowLivePicker(false);
+                              if (handleOpenLiveStreamAction) {
+                                handleOpenLiveStreamAction(session);
+                              }
+                            }}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className={`w-2 h-2 rounded-full shrink-0 ${session.online ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
+                              <div className="min-w-0">
+                                <div className="text-xs font-semibold text-slate-800 truncate">
+                                  {session.candidate_name || 'Unknown Candidate'}
+                                </div>
+                                <div className="text-[10px] text-slate-400 truncate">
+                                  {session.interview_title || session.link_id}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {(session.proctoring_alerts || 0) > 0 && (
-                              <span className="bg-rose-100 text-rose-600 text-[10px] font-bold px-1.5 py-0.5 rounded">
-                                {session.proctoring_alerts} ⚠️
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {(session.proctoring_alerts || 0) > 0 && (
+                                <span className="bg-rose-100 text-rose-600 text-[10px] font-bold px-1.5 py-0.5 rounded">
+                                  {session.proctoring_alerts} ⚠️
+                                </span>
+                              )}
+                              <span className={`text-[10px] font-semibold ${session.online ? 'text-emerald-600' : 'text-slate-400'}`}>
+                                {session.online ? 'Online' : 'Offline'}
                               </span>
-                            )}
-                            <span className={`text-[10px] font-semibold ${session.online ? 'text-emerald-600' : 'text-slate-400'}`}>
-                              {session.online ? 'Online' : 'Offline'}
-                            </span>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 3 — Completed Interviews */}
-        <Card className="bg-green-100 border-none shadow-sm rounded-2xl relative overflow-hidden flex flex-col justify-between">
-          <CardContent className="p-4 flex flex-col h-full">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded bg-emerald-50 flex items-center justify-center">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                </div>
-                <span className="text-xs font-semibold text-slate-700">Completed Interviews</span>
-              </div>
-            </div>
-            <div className="mt-4 flex items-end justify-between">
-              <div className="text-3xl font-bold text-slate-900">{formatNum(dbStats?.completed) || "0"}</div>
-              <div className="text-right">
-                {renderTrend(dbStats?.completed_trend, true)}
-                <div className="text-[10px] text-slate-400">vs yesterday</div>
-              </div>
-            </div>
-            <div className="mt-3 flex-1">
-              <div className="text-[10px] font-semibold text-slate-500 mb-1.5">Completion Rate</div>
-              <Progress value={Number(completionRate)} className="h-2 bg-slate-100" />
-              <div className="text-[10px] text-slate-400 mt-1.5">{formatNum(dbStats?.completed) || 0} / {formatNum(dbStats?.total) || 0} completed</div>
-            </div>
-            <div className="mt-3 flex items-center justify-end text-[11px]">
-              <span className="text-emerald-500 font-medium cursor-pointer flex items-center hover:underline" onClick={() => {
-                dispatch(setStatusFilter('completed'));
-                navigate('/superadmin/interviews');
-              }}>
-                View details <ArrowRight className="w-3 h-3 ml-0.5" />
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 4 — Pending Interviews (dynamic) */}
-        <Card className="bg-amber-100 border-none shadow-sm rounded-2xl relative overflow-hidden flex flex-col justify-between">
-          <CardContent className="p-4 flex flex-col h-full">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded bg-amber-50 flex items-center justify-center">
-                  <Clock className="w-4 h-4 text-amber-500" />
-                </div>
-                <span className="text-xs font-semibold text-slate-700">Pending Interviews</span>
-              </div>
-            </div>
-            <div className="mt-4 flex items-end justify-between">
-              <div className="text-3xl font-bold text-slate-900">{formatNum(dbStats?.pending) || "0"}</div>
-              <div className="text-right">
-                {(!dbStats?.pending || dbStats?.pending === 0) ? (
-                  <>
-                    <div className="flex items-center justify-end text-emerald-500 text-[10px] font-bold">
-                      <CheckCircle2 className="w-3 h-3 mr-1" /> No Pending
-                    </div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">Great job!</div>
-                  </>
-                ) : (
-                  null
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
-            <div className="mt-4 flex-1 flex items-center">
-              {(!dbStats?.pending || dbStats?.pending === 0) ? (
-                <div className="w-full rounded-md bg-emerald-50/50 border border-emerald-100/50 p-2.5 flex items-center gap-2 text-xs text-emerald-600 font-medium">
-                  🎉 All interviews are up to date!
+          </div>
+        </motion.div>
+
+        {/* 3 — Completed Interviews */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.15, ease: "easeOut", delay: 0.03 }}
+          whileHover={{ y: -4 }}
+          className="relative group rounded-2xl"
+        >
+          <div className="absolute -inset-0.5 bg-gradient-to-br from-transparent to-emerald-400/0 group-hover:to-emerald-400/10 rounded-2xl blur-md transition-all duration-300 z-0" />
+          <div className="relative z-10 bg-gradient-to-b from-white/80 to-white/40 backdrop-blur-2xl border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.05)] group-hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] rounded-2xl overflow-hidden flex flex-col justify-between h-full transition-all duration-500">
+            <div className="absolute -bottom-6 -right-6 w-32 h-32 bg-emerald-400/20 blur-[40px] rounded-full group-hover:bg-emerald-400/40 group-hover:scale-110 transition-all duration-500" />
+            <div className="p-4 flex flex-col h-full relative z-10">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded bg-emerald-50 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                  </div>
+                  <span className="text-xs font-semibold text-slate-700">Completed Interviews</span>
                 </div>
-              ) : (
-                <div className="w-full rounded-md bg-amber-50/50 border border-amber-100/50 p-2.5 flex items-center gap-2 text-xs text-amber-600 font-medium">
-                  <Clock className="w-3 h-3" /> {dbStats.pending} pending to be completed
+              </div>
+              <div className="mt-4 flex items-end justify-between">
+                <div className="text-3xl font-bold text-slate-900">
+                  <AnimatedNumber value={dbStats?.completed || 0} />
                 </div>
-              )}
+                <div className="text-right">
+                  {renderTrend(dbStats?.completed_trend, true)}
+                  <div className="text-[10px] text-slate-400">vs yesterday</div>
+                </div>
+              </div>
+              <div className="mt-3 flex-1">
+                <div className="text-[10px] font-semibold text-slate-500 mb-1.5">Completion Rate</div>
+                <Progress value={Number(completionRate)} className="h-2 bg-slate-100" />
+                <div className="text-[10px] text-slate-400 mt-1.5">{formatNum(dbStats?.completed) || 0} / {formatNum(dbStats?.total) || 0} completed</div>
+              </div>
+              <div className="mt-3 flex items-center justify-end text-[11px]">
+                <span className="text-emerald-500 font-medium cursor-pointer flex items-center hover:underline" onClick={() => {
+                  dispatch(setStatusFilter('completed'));
+                  navigate('/superadmin/interviews');
+                }}>
+                  View details <ArrowRight className="w-3 h-3 ml-0.5" />
+                </span>
+              </div>
             </div>
-            <div className="mt-3 flex items-center justify-end text-[11px] min-h-[16px]">
+          </div>
+        </motion.div>
+
+        {/* 4 — Pending Interviews (dynamic) */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.15, ease: "easeOut", delay: 0.03 }}
+          whileHover={{ y: -4 }}
+          className="relative group rounded-2xl"
+        >
+          <div className="absolute -inset-0.5 bg-gradient-to-br from-transparent to-amber-400/0 group-hover:to-amber-400/10 rounded-2xl blur-md transition-all duration-300 z-0" />
+          <div className="relative z-10 bg-gradient-to-b from-white/80 to-white/40 backdrop-blur-2xl border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.05)] group-hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] rounded-2xl overflow-hidden flex flex-col justify-between h-full transition-all duration-500">
+            <div className="absolute -bottom-6 -right-6 w-32 h-32 bg-amber-400/20 blur-[40px] rounded-full group-hover:bg-amber-400/40 group-hover:scale-110 transition-all duration-500" />
+            <div className="p-4 flex flex-col h-full relative z-10">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded bg-amber-50 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
+                    <Clock className="w-4 h-4 text-amber-500" />
+                  </div>
+                  <span className="text-xs font-semibold text-slate-700">Pending Interviews</span>
+                </div>
+              </div>
+              <div className="mt-4 flex items-end justify-between">
+                <div className="text-3xl font-bold text-slate-900">
+                  <AnimatedNumber value={dbStats?.pending || 0} />
+                </div>
+                <div className="text-right">
+                  {(!dbStats?.pending || dbStats?.pending === 0) ? (
+                    <>
+                      <div className="flex items-center justify-end text-emerald-500 text-[10px] font-bold">
+                        <CheckCircle2 className="w-3 h-3 mr-1" /> No Pending
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">Great job!</div>
+                    </>
+                  ) : (
+                    null
+                  )}
+                </div>
+              </div>
+              <div className="mt-4 flex-1 flex items-center">
+                {(!dbStats?.pending || dbStats?.pending === 0) ? (
+                  <div className="w-full rounded-md bg-emerald-50/50 border border-emerald-100/50 p-2.5 flex items-center gap-2 text-xs text-emerald-600 font-medium">
+                    🎉 All interviews are up to date!
+                  </div>
+                ) : (
+                  <div className="w-full rounded-md bg-amber-50/50 border border-amber-100/50 p-2.5 flex items-center gap-2 text-xs text-amber-600 font-medium">
+                    <Clock className="w-3 h-3" /> {dbStats.pending} pending to be completed
+                  </div>
+                )}
+              </div>
+              <div className="mt-3 flex items-center justify-end text-[11px] min-h-[16px]">
+              </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </motion.div>
 
         {/* 5 — Avg AI Score */}
-        <Card className="bg-fuchsia-100 border-none shadow-sm rounded-2xl relative overflow-hidden flex flex-col justify-between">
-          <CardContent className="p-4 flex flex-col h-full">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded bg-fuchsia-50 flex items-center justify-center">
-                  <Star className="w-4 h-4 text-fuchsia-500" />
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.15, ease: "easeOut", delay: 0.04 }}
+          whileHover={{ y: -4 }}
+          className="relative group rounded-2xl"
+        >
+          <div className="absolute -inset-0.5 bg-gradient-to-br from-transparent to-fuchsia-400/0 group-hover:to-fuchsia-400/10 rounded-2xl blur-md transition-all duration-300 z-0" />
+          <div className="relative z-10 bg-gradient-to-b from-white/80 to-white/40 backdrop-blur-2xl border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.05)] group-hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] rounded-2xl overflow-hidden flex flex-col justify-between h-full transition-all duration-500">
+            <div className="absolute -bottom-6 -right-6 w-32 h-32 bg-fuchsia-400/20 blur-[40px] rounded-full group-hover:bg-fuchsia-400/40 group-hover:scale-110 transition-all duration-500" />
+            <div className="p-4 flex flex-col h-full relative z-10">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded bg-fuchsia-50 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
+                    <Star className="w-4 h-4 text-fuchsia-500" />
+                  </div>
+                  <span className="text-xs font-semibold text-slate-700">Avg AI Score</span>
                 </div>
-                <span className="text-xs font-semibold text-slate-700">Avg AI Score</span>
               </div>
-            </div>
-            <div className="mt-4 flex items-end justify-between">
-              <div className="flex items-baseline gap-1">
-                <div className="text-3xl font-bold text-slate-900">{avgScore > 0 ? starRating.toFixed(1) : '--'}</div>
-                <div className="text-sm font-medium text-slate-400">/ 5.0</div>
-              </div>
-              <div className="text-right">
-                <div className="text-[10px] text-slate-400">
-                  {avgScore > 0 ? `${avgScore.toFixed(1)} / 100` : 'No scored sessions'}
+              <div className="mt-4 flex items-end justify-between">
+                <div className="flex items-baseline gap-1">
+                  <div className="text-3xl font-bold text-slate-900">
+                    {avgScore > 0 ? <AnimatedNumber value={starRating} isDecimal={true} /> : '--'}
+                  </div>
+                  <div className="text-sm font-medium text-slate-400">/ 5.0</div>
                 </div>
-                <div className="text-[10px] text-slate-400">raw score</div>
-              </div>
-            </div>
-            <div className="mt-3 flex-1">
-              <div className="flex gap-1">
-                {[1, 2, 3, 4, 5].map(i => (
-                  <Star key={i} className={`w-5 h-5 ${i <= Math.floor(starRating) ? 'fill-indigo-500 text-indigo-500' : (i - 0.5 <= starRating ? 'fill-indigo-300 text-indigo-300' : 'text-slate-200')}`} />
-                ))}
-              </div>
-              {avgScore > 0 && (
-                <div className="text-[10px] font-semibold text-indigo-500 mt-2">
-                  {avgScore >= 70 ? 'Good Performance' : avgScore >= 50 ? 'Average Performance' : 'Needs Improvement'}
+                <div className="text-right">
+                  <div className="text-[10px] text-slate-400">
+                    {avgScore > 0 ? `${avgScore.toFixed(1)} / 100` : 'No scored sessions'}
+                  </div>
+                  <div className="text-[10px] text-slate-400">raw score</div>
                 </div>
-              )}
+              </div>
+              <div className="mt-3 flex-1">
+                <div className="flex gap-1">
+                  {[1, 2, 3, 4, 5].map(i => (
+                    <Star key={i} className={`w-5 h-5 ${i <= Math.floor(starRating) ? 'fill-indigo-500 text-indigo-500' : (i - 0.5 <= starRating ? 'fill-indigo-300 text-indigo-300' : 'text-slate-200')}`} />
+                  ))}
+                </div>
+                {avgScore > 0 && (
+                  <div className="text-[10px] font-semibold text-indigo-500 mt-2">
+                    {avgScore >= 70 ? 'Good Performance' : avgScore >= 50 ? 'Average Performance' : 'Needs Improvement'}
+                  </div>
+                )}
+              </div>
+              <div className="mt-3 flex items-center gap-2 text-[10px]">
+                <div className="bg-slate-50/50 px-2 py-1 rounded text-slate-500 font-medium flex-1 text-center">Avg Score: {avgScore > 0 ? `${avgScore.toFixed(1)}/100` : '--'}</div>
+                <div className="bg-slate-50/50 px-2 py-1 rounded text-slate-500 font-medium flex-1 text-center">Total Rated: {formatNum(dbStats?.completed) || 0}</div>
+              </div>
             </div>
-            <div className="mt-3 flex items-center gap-2 text-[10px]">
-              <div className="bg-slate-50 px-2 py-1 rounded text-slate-500 font-medium flex-1 text-center">Avg Score: {avgScore > 0 ? `${avgScore.toFixed(1)}/100` : '--'}</div>
-              <div className="bg-slate-50 px-2 py-1 rounded text-slate-500 font-medium flex-1 text-center">Total Rated: {formatNum(dbStats?.completed) || 0}</div>
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+        </motion.div>
 
         {/* 6 — Candidates Hired */}
-        <Card className="bg-green-100 border-none shadow-sm rounded-2xl relative overflow-hidden flex flex-col justify-between">
-          <CardContent className="p-4 flex flex-col h-full">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded bg-teal-50 flex items-center justify-center">
-                  <Target className="w-4 h-4 text-teal-500" />
-                </div>
-                <span className="text-xs font-semibold text-slate-700">Candidates Hired</span>
-              </div>
-            </div>
-            <div className="mt-4 flex items-end justify-between">
-              <div className="text-3xl font-bold text-slate-900">{formatNum(dbStats?.selected) || "0"}</div>
-              <div className="text-right">
-                {renderTrend(dbStats?.selected_trend, true)}
-                <div className="text-[10px] text-slate-400">vs yesterday</div>
-              </div>
-            </div>
-            <div className="mt-3 flex-1 flex items-center gap-4">
-              <div className="relative w-12 h-12">
-                <PieChart width={48} height={48}>
-                  <Pie data={[{ value: Number(hireRate) || 3.7 }, { value: 100 - (Number(hireRate) || 3.7) }]} innerRadius={18} outerRadius={24} dataKey="value" startAngle={90} endAngle={-270} stroke="none">
-                    <Cell fill="#14b8a6" />
-                    <Cell fill="#f1f5f9" />
-                  </Pie>
-                </PieChart>
-                <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-slate-700">
-                  {hireRate}%
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.15, ease: "easeOut", delay: 0.04 }}
+          whileHover={{ y: -4 }}
+          className="relative group rounded-2xl"
+        >
+          <div className="absolute -inset-0.5 bg-gradient-to-br from-transparent to-teal-400/0 group-hover:to-teal-400/10 rounded-2xl blur-md transition-all duration-300 z-0" />
+          <div className="relative z-10 bg-gradient-to-b from-white/80 to-white/40 backdrop-blur-2xl border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.05)] group-hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] rounded-2xl overflow-hidden flex flex-col justify-between h-full transition-all duration-500">
+            <div className="absolute -bottom-6 -right-6 w-32 h-32 bg-teal-400/20 blur-[40px] rounded-full group-hover:bg-teal-400/40 group-hover:scale-110 transition-all duration-500" />
+            <div className="p-4 flex flex-col h-full relative z-10">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded bg-teal-50 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
+                    <Target className="w-4 h-4 text-teal-500" />
+                  </div>
+                  <span className="text-xs font-semibold text-slate-700">Candidates Hired</span>
                 </div>
               </div>
+              <div className="mt-4 flex items-end justify-between">
+                <div className="text-3xl font-bold text-slate-900">
+                  <AnimatedNumber value={dbStats?.selected || 0} />
+                </div>
+                <div className="text-right">
+                  {renderTrend(dbStats?.selected_trend, true)}
+                  <div className="text-[10px] text-slate-400">vs yesterday</div>
+                </div>
+              </div>
+              <div className="mt-3 flex-1 flex items-center gap-4">
+                <div className="relative w-12 h-12">
+                  <PieChart width={48} height={48}>
+                    <Pie data={[{ value: Number(hireRate) || 3.7 }, { value: 100 - (Number(hireRate) || 3.7) }]} innerRadius={18} outerRadius={24} dataKey="value" startAngle={90} endAngle={-270} stroke="none" isAnimationActive={true} animationDuration={1000}>
+                      <Cell fill="#14b8a6" />
+                      <Cell fill="#f1f5f9" />
+                    </Pie>
+                  </PieChart>
+                  <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-slate-700">
+                    {hireRate}%
+                  </div>
+                </div>
+              </div>
+              <div className="mt-3 flex items-center justify-end text-[11px]">
+                <span className="text-teal-500 font-medium cursor-pointer flex items-center hover:underline" onClick={() => navigate('/superadmin/qualified-candidates')}>
+                  View details <ArrowRight className="w-3 h-3 ml-0.5" />
+                </span>
+              </div>
             </div>
-            <div className="mt-3 flex items-center justify-end text-[11px]">
-              <span className="text-teal-500 font-medium cursor-pointer flex items-center hover:underline" onClick={() => navigate('/superadmin/qualified-candidates')}>
-                View details <ArrowRight className="w-3 h-3 ml-0.5" />
-              </span>
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+        </motion.div>
 
         {/* 7 — Candidates Rejected */}
-        <Card className="bg-rose-100 border-none shadow-sm rounded-2xl relative overflow-hidden flex flex-col justify-between">
-          <CardContent className="p-4 flex flex-col h-full">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded bg-rose-50 flex items-center justify-center">
-                  <XCircle className="w-4 h-4 text-rose-500" />
-                </div>
-                <span className="text-xs font-semibold text-slate-700">Candidates Rejected</span>
-              </div>
-            </div>
-            <div className="mt-4 flex items-end justify-between">
-              <div className="text-3xl font-bold text-slate-900">{formatNum(dbStats?.rejected) || "0"}</div>
-              <div className="text-right">
-                {renderTrend(dbStats?.rejected_trend, false)}
-                <div className="text-[10px] text-slate-400">vs yesterday</div>
-              </div>
-            </div>
-            <div className="mt-3 flex-1 flex items-center gap-4">
-              <div className="relative w-12 h-12">
-                <PieChart width={48} height={48}>
-                  <Pie data={[{ value: Number(rejectionRate) || 0.9 }, { value: 100 - (Number(rejectionRate) || 0.9) }]} innerRadius={18} outerRadius={24} dataKey="value" startAngle={90} endAngle={-270} stroke="none">
-                    <Cell fill="#f43f5e" />
-                    <Cell fill="#f1f5f9" />
-                  </Pie>
-                </PieChart>
-                <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-slate-700">
-                  {rejectionRate}%
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.15, ease: "easeOut", delay: 0.04 }}
+          whileHover={{ y: -4 }}
+          className="relative group rounded-2xl"
+        >
+          <div className="absolute -inset-0.5 bg-gradient-to-br from-transparent to-rose-400/0 group-hover:to-rose-400/10 rounded-2xl blur-md transition-all duration-300 z-0" />
+          <div className="relative z-10 bg-gradient-to-b from-white/80 to-white/40 backdrop-blur-2xl border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.05)] group-hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] rounded-2xl overflow-hidden flex flex-col justify-between h-full transition-all duration-500">
+            <div className="absolute -bottom-6 -right-6 w-32 h-32 bg-rose-400/20 blur-[40px] rounded-full group-hover:bg-rose-400/40 group-hover:scale-110 transition-all duration-500" />
+            <div className="p-4 flex flex-col h-full relative z-10">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded bg-rose-50 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
+                    <XCircle className="w-4 h-4 text-rose-500" />
+                  </div>
+                  <span className="text-xs font-semibold text-slate-700">Candidates Rejected</span>
                 </div>
               </div>
+              <div className="mt-4 flex items-end justify-between">
+                <div className="text-3xl font-bold text-slate-900">
+                  <AnimatedNumber value={dbStats?.rejected || 0} />
+                </div>
+                <div className="text-right">
+                  {renderTrend(dbStats?.rejected_trend, false)}
+                  <div className="text-[10px] text-slate-400">vs yesterday</div>
+                </div>
+              </div>
+              <div className="mt-3 flex-1 flex items-center gap-4">
+                <div className="relative w-12 h-12">
+                  <PieChart width={48} height={48}>
+                    <Pie data={[{ value: Number(rejectionRate) || 0.9 }, { value: 100 - (Number(rejectionRate) || 0.9) }]} innerRadius={18} outerRadius={24} dataKey="value" startAngle={90} endAngle={-270} stroke="none" isAnimationActive={true} animationDuration={1000}>
+                      <Cell fill="#f43f5e" />
+                      <Cell fill="#f1f5f9" />
+                    </Pie>
+                  </PieChart>
+                  <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-slate-700">
+                    {rejectionRate}%
+                  </div>
+                </div>
+              </div>
+              <div className="mt-3 flex items-center justify-end text-[11px]">
+                <span className="text-rose-500 font-medium cursor-pointer flex items-center hover:underline" onClick={() => navigate('/superadmin/rejected-candidates')}>
+                  View details <ArrowRight className="w-3 h-3 ml-0.5" />
+                </span>
+              </div>
             </div>
-            <div className="mt-3 flex items-center justify-end text-[11px]">
-              <span className="text-rose-500 font-medium cursor-pointer flex items-center hover:underline" onClick={() => navigate('/superadmin/rejected-candidates')}>
-                View details <ArrowRight className="w-3 h-3 ml-0.5" />
-              </span>
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+        </motion.div>
 
         {/* 8 — Expired Links */}
-        <Card className="bg-red-100 border-none shadow-sm rounded-2xl relative overflow-hidden flex flex-col justify-between">
-          <CardContent className="p-4 flex flex-col h-full">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded bg-red-50 flex items-center justify-center">
-                  <AlertTriangle className="w-4 h-4 text-red-500" />
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.15, ease: "easeOut", delay: 0.04 }}
+          whileHover={{ y: -4 }}
+          className="relative group rounded-2xl"
+        >
+          <div className="absolute -inset-0.5 bg-gradient-to-br from-transparent to-rose-400/0 group-hover:to-rose-400/10 rounded-2xl blur-md transition-all duration-300 z-0" />
+          <div className="relative z-10 bg-gradient-to-b from-white/80 to-white/40 backdrop-blur-2xl border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.05)] group-hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] rounded-2xl overflow-hidden flex flex-col justify-between h-full transition-all duration-500">
+            <div className="absolute -bottom-6 -right-6 w-32 h-32 bg-rose-400/20 blur-[40px] rounded-full group-hover:bg-rose-400/40 group-hover:scale-110 transition-all duration-500" />
+            <div className="p-4 flex flex-col h-full relative z-10">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded bg-rose-50 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
+                    <AlertTriangle className="w-4 h-4 text-rose-500" />
+                  </div>
+                  <span className="text-xs font-semibold text-slate-700">Expired Links</span>
                 </div>
-                <span className="text-xs font-semibold text-slate-700">Expired Links</span>
+              </div>
+              <div className="mt-4 flex items-end justify-between">
+                <div className="text-3xl font-bold text-slate-900">
+                  <AnimatedNumber value={dbStats?.expired || 0} />
+                </div>
+                <div className="text-right">
+                  {renderTrend(dbStats?.expired_trend, false)}
+                  <div className="text-[10px] text-slate-400">vs yesterday</div>
+                </div>
+              </div>
+              <div className="mt-3 flex-1"></div>
+              <div className="mt-4 flex items-center justify-end text-[11px]">
+                <span className="text-rose-500 font-medium cursor-pointer flex items-center hover:underline" onClick={() => {
+                  dispatch(setStatusFilter('expired'));
+                  navigate('/superadmin/interviews');
+                }}>
+                  Manage <ArrowRight className="w-3 h-3 ml-0.5" />
+                </span>
               </div>
             </div>
-            <div className="mt-4 flex items-end justify-between">
-              <div className="text-3xl font-bold text-slate-900">{formatNum(dbStats?.expired) || "0"}</div>
-              <div className="text-right">
-                {renderTrend(dbStats?.expired_trend, false)}
-                <div className="text-[10px] text-slate-400">vs yesterday</div>
-              </div>
-            </div>
-            <div className="mt-3 flex-1"></div>
-            <div className="mt-4 flex items-center justify-end text-[11px]">
-              <span className="text-rose-500 font-medium cursor-pointer flex items-center hover:underline" onClick={() => {
-                dispatch(setStatusFilter('expired'));
-                navigate('/superadmin/interviews');
-              }}>
-                Manage <ArrowRight className="w-3 h-3 ml-0.5" />
-              </span>
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+        </motion.div>
       </section>
 
       {/* Platform Activity */}
