@@ -1,4 +1,4 @@
-name: Deploy FastAPI to ECS Express Mode
+name: Build and Deploy Backend to ECS
 
 on:
   push:
@@ -11,65 +11,33 @@ permissions:
   id-token: write
 
 concurrency:
-  group: production-express
+  group: backend-production
   cancel-in-progress: false
 
 env:
   AWS_REGION: us-east-1
-  AWS_ACCOUNT_ID: '121592732419'
   ECR_REPOSITORY: simple-docker-service-12cd8c1234bd
-  ECS_CLUSTER: default
-  ECS_SERVICE: simple-docker-service-0ed690619ab5-af7e
-  ECS_EXECUTION_ROLE_ARN: arn:aws:iam::121592732419:role/ecsTaskExecutionRole
-  ECS_INFRASTRUCTURE_ROLE_ARN: arn:aws:iam::121592732419:role/ecsInfrastructureRoleForExpressServices
+  ECS_CLUSTER: arah-backend-cluster
+  ECS_SERVICE: arah-backend-service
+  ECS_TASK_DEFINITION: hire-iq-3:6
+  CONTAINER_NAME: Main
 
 jobs:
-  test:
-    name: Test FastAPI container
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Build Docker image
-        run: docker build -t fastapi-ci:${{ github.sha }} .
-
-      - name: Start container
-        run: docker run -d --name fastapi-ci -p 8000:8000 fastapi-ci:${{ github.sha }}
-
-      - name: Wait for FastAPI health endpoint
-        run: |
-          for i in {1..30}; do
-            if curl --fail --silent http://127.0.0.1:8000/health; then
-              exit 0
-            fi
-            sleep 2
-          done
-          docker logs fastapi-ci
-          exit 1
-
-      - name: Stop test container
-        if: always()
-        run: docker rm --force fastapi-ci
-
-  deploy:
-    name: Build, push, and deploy
-    needs: test
-    if: github.ref == 'refs/heads/main'
+  deploy-backend:
+    name: Build and deploy FastAPI backend
     runs-on: ubuntu-latest
     environment: production
 
     steps:
-      - name: Checkout
+      - name: Checkout backend source
         uses: actions/checkout@v6
 
-      - name: Configure AWS credentials with OIDC
+      - name: Configure AWS credentials with GitHub OIDC
         uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-          role-session-name: github-actions-${{ github.run_id }}
+          role-session-name: github-actions-backend-${{ github.run_id }}
 
       - name: Verify AWS identity
         run: aws sts get-caller-identity
@@ -78,41 +46,49 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build and push image
-        id: image
+      - name: Build and push backend image
+        id: build-image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
           IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-          docker build -t "$IMAGE_URI" .
+          docker build \
+            --file backend/Dockerfile \
+            --tag "$IMAGE_URI" \
+            backend
           docker push "$IMAGE_URI"
-          echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
+          echo "image=$IMAGE_URI" >> "$GITHUB_OUTPUT"
 
-      - name: Deploy to ECS Express Mode
-        id: deploy-express
-        uses: aws-actions/amazon-ecs-deploy-express-service@v1
+      - name: Download current backend task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition "$ECS_TASK_DEFINITION" \
+            --query taskDefinition \
+            --output json > task-definition.json
+
+      - name: Render new backend image into task definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
-          service-name: ${{ env.ECS_SERVICE }}
+          task-definition: task-definition.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ steps.build-image.outputs.image }}
+
+      - name: Deploy backend to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
           cluster: ${{ env.ECS_CLUSTER }}
-          image: ${{ steps.image.outputs.image_uri }}
-          execution-role-arn: ${{ env.ECS_EXECUTION_ROLE_ARN }}
-          infrastructure-role-arn: ${{ env.ECS_INFRASTRUCTURE_ROLE_ARN }}
-          container-port: 8000
-          health-check-path: /health
-          min-task-count: 1
-          max-task-count: 1
-          cpu: '1024'
-          memory: '2048'
+          wait-for-service-stability: true
+          wait-for-minutes: 30
+          propagate-tags: SERVICE
 
-      - name: Print service URL
+      - name: Confirm ECS backend service
         run: |
-          echo "Service ARN: ${{ steps.deploy-express.outputs.service-arn }}"
-          echo "Service URL: ${{ steps.deploy-express.outputs.endpoint }}"
-
-      - name: Validate deployed API
-        env:
-          SERVICE_URL: ${{ steps.deploy-express.outputs.endpoint }}
-        run: |
-          curl --fail --show-error --retry 10 --retry-delay 10 "$SERVICE_URL/health"
+          aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE" \
+            --query 'services[0].{Running:runningCount,Pending:pendingCount,TaskDefinition:taskDefinition,Deployment:deployments[0].rolloutState}' \
+            --output table
