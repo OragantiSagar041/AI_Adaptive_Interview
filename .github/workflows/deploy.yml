@@ -1,59 +1,73 @@
-name: Build and Deploy to ECS
+name: Build and Deploy Backend to ECS
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: backend-production
+  cancel-in-progress: false
 
 env:
   AWS_REGION: us-east-1
-  ECR_REPOSITORY: simple-docker-service-0ed690619ab5
-  ECS_CLUSTER: sunny-wolf-zb88n3
-  ECS_SERVICE: simple-docker-service-0ed690619ab5-a7eb
-  ECS_TASK_DEFINITION_FAMILY: sunny-wolf-zb88n3-simple-docker-service-0ed690619ab5-a7eb
+  ECR_REPOSITORY: simple-docker-service-12cd8c1234bd
+  ECS_CLUSTER: arah-backend-cluster
+  ECS_SERVICE: arah-backend-service
+  ECS_TASK_DEFINITION: hire-iq-3:6
   CONTAINER_NAME: Main
 
 jobs:
-  deploy:
+  deploy-backend:
+    name: Build and deploy FastAPI backend
     runs-on: ubuntu-latest
+    environment: production
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Checkout backend source
+        uses: actions/checkout@v6
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Configure AWS credentials with GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v5
         with:
-          aws-access-key-id: ${{ secrets.AccessKeyId }}
-          aws-secret-access-key: ${{ secrets.SecretAccessKey }}
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-backend-${{ github.run_id }}
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
 
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build, tag, and push image to ECR
+      - name: Build and push backend image
         id: build-image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          SHORT_TAG=$(echo $IMAGE_TAG | cut -c1-7)
+          IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
           docker build \
-            -t $ECR_REGISTRY/$ECR_REPOSITORY:$SHORT_TAG \
-            -f backend/Dockerfile backend
-          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$SHORT_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$SHORT_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$SHORT_TAG" >> $GITHUB_OUTPUT
+            --file backend/Dockerfile \
+            --tag "$IMAGE_URI" \
+            backend
+          docker push "$IMAGE_URI"
+          echo "image=$IMAGE_URI" >> "$GITHUB_OUTPUT"
 
-      - name: Download current task definition
+      - name: Download current backend task definition
         run: |
           aws ecs describe-task-definition \
-            --task-definition ${{ env.ECS_TASK_DEFINITION_FAMILY }} \
+            --task-definition "$ECS_TASK_DEFINITION" \
             --query taskDefinition \
             --output json > task-definition.json
 
-      - name: Fill in new image ID in task definition
+      - name: Render new backend image into task definition
         id: task-def
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
@@ -61,11 +75,20 @@ jobs:
           container-name: ${{ env.CONTAINER_NAME }}
           image: ${{ steps.build-image.outputs.image }}
 
-      - name: Deploy to ECS
+      - name: Deploy backend to ECS
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: ${{ steps.task-def.outputs.task-definition }}
           service: ${{ env.ECS_SERVICE }}
           cluster: ${{ env.ECS_CLUSTER }}
           wait-for-service-stability: true
-          wait-for-minutes: 60
+          wait-for-minutes: 30
+          propagate-tags: SERVICE
+
+      - name: Confirm ECS backend service
+        run: |
+          aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE" \
+            --query 'services[0].{Running:runningCount,Pending:pendingCount,TaskDefinition:taskDefinition,Deployment:deployments[0].rolloutState}' \
+            --output table
