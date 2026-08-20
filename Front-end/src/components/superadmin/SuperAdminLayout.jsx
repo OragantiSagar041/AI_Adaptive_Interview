@@ -75,7 +75,7 @@ export const superAdminNavItems = [
   { id: 'recruiters', label: 'Recruiters', icon: UserCheck, path: '/superadmin/recruiters' },
   { id: 'credit', label: 'Credit Management', icon: Coins, path: '/superadmin/credit' },
   { id: 'subscription', label: 'Subscription Management', icon: CreditCard, path: '/superadmin/subscription' },
-  { id: 'integrations', label: 'Integrations', icon: Link, path: '/superadmin/integrations' },
+  // { id: 'integrations', label: 'Integrations', icon: Link, path: '/superadmin/integrations' },
   // { id: 'audit', label: 'Audit Logs', path: '/superadmin/audit' },
   { id: 'security', label: 'Security', icon: Shield, path: '/superadmin/security' },
 ]
