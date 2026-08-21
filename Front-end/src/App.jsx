@@ -1,5 +1,6 @@
 import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { Analytics } from '@vercel/analytics/react'
 // Protected Route Guard
 import ProtectedRoute from './components/ProtectedRoute'
 
@@ -191,6 +192,7 @@ function App() {
         </Routes>
         </ErrorBoundary>
       </React.Suspense>
+      <Analytics />
     </BrowserRouter>
   )
 }
