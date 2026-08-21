@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useDispatch } from 'react-redux'
-import { Search, X, Download, Trash2, Video, Eye, Calendar, PhoneCall } from 'lucide-react'
+import { Search, X, Download, Trash2, Video, Eye, Calendar, PhoneCall, Phone } from 'lucide-react'
 import Button from '../Button'
 import Badge from '../Badge'
 import { initiateAICall } from '../../store/slices/candidatesSlice'
@@ -225,11 +225,24 @@ export function CandidateTable({
 }) {
   const dispatch = useDispatch()
   const [rescheduleModal, setRescheduleModal] = useState({ isOpen: false, session: null, newStart: '', newEnd: '', isSubmitting: false })
+  const [callModal, setCallModal] = useState({ isOpen: false, session: null, phone: '', isSubmitting: false })
 
   const handleCallClick = (session) => {
-    const phoneNumber = prompt(`Enter phone number for ${session.candidate_name || 'Candidate'} (e.g. +1234567890):`, session.candidate_phone || '')
-    if (phoneNumber) {
-      dispatch(initiateAICall({ sessionId: session.link_id || session.id, phoneNumber }))
+    setCallModal({
+      isOpen: true,
+      session,
+      phone: session.candidate_phone || '',
+      isSubmitting: false
+    })
+  }
+
+  const handleConfirmCall = () => {
+    if (callModal.phone) {
+      setCallModal(prev => ({ ...prev, isSubmitting: true }))
+      dispatch(initiateAICall({ sessionId: callModal.session.link_id || callModal.session.id, phoneNumber: callModal.phone }))
+        .finally(() => {
+          setCallModal({ isOpen: false, session: null, phone: '', isSubmitting: false })
+        })
     }
   }
 
@@ -533,6 +546,58 @@ export function CandidateTable({
                 disabled={rescheduleModal.isSubmitting}
               >
                 {rescheduleModal.isSubmitting ? 'Rescheduling...' : 'Confirm Reschedule'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* CALL MODAL */}
+      {callModal.isOpen && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-5 border-b border-slate-100 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center">
+                <Phone className="w-5 h-5 text-indigo-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-slate-800">Initiate AI Call</h2>
+                <p className="text-sm text-slate-500">
+                  Call {callModal.session?.candidate_name || 'Candidate'}
+                </p>
+              </div>
+            </div>
+            
+            <div className="p-6 bg-white space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1">Phone Number</label>
+                <div className="relative">
+                  <input 
+                    type="text" 
+                    value={callModal.phone}
+                    onChange={(e) => setCallModal(prev => ({ ...prev, phone: e.target.value }))}
+                    placeholder="+1234567890"
+                    className="w-full border border-slate-200 rounded-lg p-2.5 text-sm text-slate-800 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
+              <button 
+                onClick={() => setCallModal(prev => ({ ...prev, isOpen: false }))}
+                className="px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-200 bg-slate-100 border-none cursor-pointer transition-colors"
+                disabled={callModal.isSubmitting}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleConfirmCall}
+                className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 border-none cursor-pointer transition-colors"
+                disabled={callModal.isSubmitting || !callModal.phone}
+              >
+                {callModal.isSubmitting ? 'Calling...' : 'Start AI Call'}
               </button>
             </div>
           </div>

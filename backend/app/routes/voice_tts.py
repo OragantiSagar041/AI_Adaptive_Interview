@@ -233,9 +233,9 @@ async def generate_tts(
     cartesia_api_key = os.getenv("CARTESIA_API_KEY", "").strip()
     session_voice_id = str(candidate_session.get("cloned_voice_id") or "").strip()
     requested_voice_id = str(req.voice_id or "").strip()
-    if requested_voice_id and not (
-        session_voice_id and hmac.compare_digest(requested_voice_id, session_voice_id)
-    ):
+    # Only reject if the session has its own cloned voice AND the requested ID doesn't match it.
+    # If there is no per-session clone, allow the request through to use the global CARTESIA_VOICE_ID.
+    if session_voice_id and requested_voice_id and not hmac.compare_digest(requested_voice_id, session_voice_id):
         raise HTTPException(status_code=403, detail="Voice ID does not belong to this interview session")
     # A per-session clone takes priority over the configured global voice.
     cartesia_voice_id = session_voice_id or os.getenv("CARTESIA_VOICE_ID", "").strip()
@@ -277,7 +277,7 @@ async def generate_tts(
             def _call_cartesia():
                 client = Cartesia(api_key=cartesia_api_key)
                 result = client.tts.generate(
-                    model_id="sonic-english",
+                    model_id="sonic-2",
                     transcript=req.text,
                     voice={"mode": "id", "id": actual_cartesia_voice_id},
                     output_format={

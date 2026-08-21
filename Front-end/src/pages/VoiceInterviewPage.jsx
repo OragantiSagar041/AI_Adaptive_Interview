@@ -304,6 +304,7 @@ export default function VoiceInterviewPage() {
   const questionsRef = useRef([])
   const interviewIdRef = useRef('')
   const sessionDetailRef = useRef(null)
+  const candidateNameRef = useRef('')
   const roundRef = useRef('pre_checks')
   const chatBottomRef = useRef(null)
   const wsRef = useRef(null)
@@ -381,6 +382,7 @@ export default function VoiceInterviewPage() {
   useEffect(() => { questionsRef.current = questions }, [questions])
   useEffect(() => { interviewIdRef.current = interviewId }, [interviewId])
   useEffect(() => { sessionDetailRef.current = sessionDetail }, [sessionDetail])
+  useEffect(() => { candidateNameRef.current = sessionDetail?.candidate_name || '' }, [sessionDetail])
   useEffect(() => { roundRef.current = round }, [round])
   useEffect(() => { languageRef.current = language }, [language])
   useEffect(() => { countdownRef.current = countdown }, [countdown])
@@ -1399,7 +1401,7 @@ export default function VoiceInterviewPage() {
     return getAuthoritativeTranscript()
   }, [getAuthoritativeTranscript])
 
-  const startListening = useCallback((onFinish, preserveTranscript = false) => {
+  const startListening = useCallback(async (onFinish, preserveTranscript = false) => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
     clearInterval(whisperFlushTimerRef.current)
     whisperFlushTimerRef.current = null
@@ -1471,11 +1473,18 @@ export default function VoiceInterviewPage() {
     // ── Continuous 2.5s decodable audio stream recorder for Groq Whisper ──
     if (
       (!whisperRecorderRef.current || whisperRecorderRef.current.state === 'inactive') &&
-      cameraStreamRef.current &&
-      cameraStreamRef.current.getAudioTracks().length > 0
+      cameraStreamRef.current
     ) {
       try {
-        const audioStream = new MediaStream(cameraStreamRef.current.getAudioTracks())
+        // Get live audio tracks — fall back to a fresh mic stream if any are ended
+        let liveAudioTracks = (cameraStreamRef.current.getAudioTracks() || []).filter(t => t.readyState === 'live')
+        if (liveAudioTracks.length === 0) {
+          console.warn('[STT] Audio tracks ended, requesting fresh mic stream for Whisper')
+          const freshMic = await navigator.mediaDevices.getUserMedia({ audio: true })
+          liveAudioTracks = freshMic.getAudioTracks()
+          liveAudioTracks.forEach(t => cameraStreamRef.current.addTrack(t))
+        }
+        const audioStream = new MediaStream(liveAudioTracks)
         const mimeCandidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4']
         const mime = mimeCandidates.find(value => MediaRecorder.isTypeSupported(value)) || ''
         const mr = new MediaRecorder(audioStream, mime ? { mimeType: mime } : undefined)
@@ -1523,7 +1532,6 @@ export default function VoiceInterviewPage() {
           }
         }
         mr.onstop = async () => {
-          // Drop the callback if a newer recorder has already taken over
           if (myGeneration !== whisperRecorderGenerationRef.current) return
           if (rmsAnalyserCleanup) rmsAnalyserCleanup()
           try {
@@ -1532,9 +1540,6 @@ export default function VoiceInterviewPage() {
             })
             whisperChunksRef.current = []
             const peak = chunkPeakRmsRef.current
-            // Skip /stt entirely when the chunk was below the silence threshold.
-            // Whisper WILL hallucinate on silence no matter how we prompt it,
-            // so the only safe option is to not send at all.
             const isSilent = peak < CHUNK_SEND_RMS_THRESHOLD
             if (validAudioBlob.size > 1000 && !isSilent) {
               lastSttHadAudioRef.current = true
