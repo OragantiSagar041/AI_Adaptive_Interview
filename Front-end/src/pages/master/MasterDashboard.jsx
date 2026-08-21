@@ -311,11 +311,10 @@ export default function MasterDashboard() {
               <button
                 key={preset.key}
                 onClick={() => handlePresetSelect(preset.key)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  activePreset === preset.key
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${activePreset === preset.key
                     ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-200'
                     : 'bg-slate-100/80 hover:bg-slate-200/80 text-slate-600 border border-slate-200/60'
-                }`}
+                  }`}
               >
                 {preset.label}
               </button>
@@ -339,7 +338,7 @@ export default function MasterDashboard() {
               <input
                 type="date"
                 value={endDate}
-                min={startDate || undefined}
+                min={startDate}
                 onChange={(e) => handleCustomDateChange('end', e.target.value)}
                 className="bg-transparent text-xs font-medium text-slate-700 focus:outline-none cursor-pointer"
               />

@@ -143,8 +143,12 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
     fetchSpectatorCount()
     violationsPollRef.current = setInterval(() => {
       fetchViolations()
+    }, 15000)
+    // Spectator count changes rarely — poll less aggressively
+    const spectatorPoll = setInterval(() => {
       fetchSpectatorCount()
-    }, 3000)
+    }, 20000)
+    return () => clearInterval(spectatorPoll)
 
     return () => {
       clearInterval(violationsPollRef.current)

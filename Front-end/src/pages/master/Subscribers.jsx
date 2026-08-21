@@ -1,4 +1,4 @@
- 
+
 import React, { useState, useEffect } from 'react'
 import { useSelector } from 'react-redux'
 import { Search, Calendar, Trash2, Power, PowerOff, X, RefreshCw } from 'lucide-react'
@@ -329,8 +329,8 @@ export default function Subscribers() {
           <input
             type="date"
             value={endDate}
-            min={startDate || undefined}
-            onChange={(e) => handleEndDateChange(e.target.value)}
+            min={startDate}
+            onChange={(e) => setEndDate(e.target.value)}
             className="w-full sm:w-auto py-2 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500 cursor-pointer"
           />
         </div>
@@ -404,13 +404,12 @@ export default function Subscribers() {
                         {c.subscription_plan_label || c.subscription_plan || 'Free Trial'}
                       </td>
                       <td className="p-4">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[0.65rem] font-bold uppercase tracking-wider ${
-                          c.status === 'blocked' || c.login_enabled === false || c.is_active === false
+                        <span className={`px-2.5 py-0.5 rounded-full text-[0.65rem] font-bold uppercase tracking-wider ${c.status === 'blocked' || c.login_enabled === false || c.is_active === false
                             ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
                             : c.status === 'expired'
                               ? 'bg-red-500/10 text-red-500 border border-red-500/20'
                               : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
-                        }`}>
+                          }`}>
                           {(c.status === 'blocked' || c.login_enabled === false || c.is_active === false) ? 'Deactivated' : c.status === 'expired' ? 'Expired' : 'Active'}
                         </span>
                       </td>
@@ -435,11 +434,10 @@ export default function Subscribers() {
                           )}
                           <button
                             onClick={() => handleToggleLogin(c.id || c.company_id, c.login_enabled)}
-                            className={`p-2 rounded-lg cursor-pointer transition-all border-none ${
-                              c.login_enabled !== false && c.status !== 'blocked' && c.is_active !== false
+                            className={`p-2 rounded-lg cursor-pointer transition-all border-none ${c.login_enabled !== false && c.status !== 'blocked' && c.is_active !== false
                                 ? 'bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white'
                                 : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white'
-                            }`}
+                              }`}
                             title={c.login_enabled !== false && c.status !== 'blocked' && c.is_active !== false ? 'Deactivate Login' : 'Reactivate Login'}
                           >
                             {c.login_enabled !== false && c.status !== 'blocked' && c.is_active !== false ? <PowerOff size={14} /> : <Power size={14} />}

@@ -1,28 +1,51 @@
-const DEFAULT_STUN_SERVERS = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-]
-
-export function getIceServers() {
-  const env = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : {};
-  const turnUrls = String(env.VITE_TURN_URLS || '')
-    .split(',')
-    .map(value => value.trim())
-    .filter(Boolean)
-
-  if (!turnUrls.length) return DEFAULT_STUN_SERVERS
-
+function getMeteredIceServers(username, credential) {
   return [
-    ...DEFAULT_STUN_SERVERS,
-    {
-      urls: turnUrls,
-      username: env.VITE_TURN_USERNAME || '',
-      credential: env.VITE_TURN_CREDENTIAL || '',
-    },
+    { urls: 'stun:stun.relay.metered.ca:80' },
+    { urls: 'turn:global.relay.metered.ca:80', username, credential },
+    { urls: 'turn:global.relay.metered.ca:80?transport=tcp', username, credential },
+    { urls: 'turn:global.relay.metered.ca:443', username, credential },
+    { urls: 'turns:global.relay.metered.ca:443?transport=tcp', username, credential },
   ]
 }
 
-export function hasTurnServer() {
-  const env = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : {};
-  return String(env.VITE_TURN_URLS || '').trim().length > 0
+// Free public TURN servers as last-resort fallback
+const FREE_TURN_FALLBACK = [
+  {
+    urls: 'turn:openrelay.metered.ca:80',
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
+  {
+    urls: 'turn:openrelay.metered.ca:443',
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
+  {
+    urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
+]
+
+export function getIceServers() {
+  const env = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : {}
+
+  const meteredUsername = env.VITE_METERED_USERNAME || ''
+  const meteredCredential = env.VITE_METERED_CREDENTIAL || ''
+
+  // If Metered.ca credentials are in .env, use private TURN servers
+  if (meteredUsername && meteredCredential) {
+    return [
+      ...getMeteredIceServers(meteredUsername, meteredCredential),
+      ...FREE_TURN_FALLBACK,
+    ]
+  }
+
+  // Fallback to free public TURN servers only
+  return FREE_TURN_FALLBACK
 }
+
+export function hasTurnServer() {
+  return true // We always have TURN configured now
+}
+

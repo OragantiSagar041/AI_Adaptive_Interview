@@ -450,11 +450,10 @@ export default function CompanyRevenue() {
               <button
                 key={p.key}
                 onClick={() => handlePresetChange(p.key)}
-                className={`px-3 py-1 text-xs font-medium rounded-lg transition ${
-                  datePreset === p.key && !startDate && !endDate && p.key === 'all' || (datePreset === p.key && (startDate || endDate || p.key === 'all'))
+                className={`px-3 py-1 text-xs font-medium rounded-lg transition ${datePreset === p.key && !startDate && !endDate && p.key === 'all' || (datePreset === p.key && (startDate || endDate || p.key === 'all'))
                     ? 'bg-indigo-600 text-white shadow-sm'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80'
-                }`}
+                  }`}
               >
                 {p.label}
               </button>
@@ -477,8 +476,11 @@ export default function CompanyRevenue() {
               <input
                 type="date"
                 value={endDate}
-                min={startDate || undefined}
-                onChange={(e) => handleEndDateChange(e.target.value)}
+                min={startDate}
+                onChange={(e) => {
+                  setEndDate(e.target.value)
+                  setDatePreset('custom')
+                }}
                 className="px-2.5 py-1 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-slate-50 text-slate-700"
               />
             </div>
@@ -671,11 +673,10 @@ export default function CompanyRevenue() {
 
                       {/* Total Purchases Count */}
                       <td className="py-3.5 px-4 text-center">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
-                          comp.total_purchases_count > 0
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${comp.total_purchases_count > 0
                             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                             : 'bg-slate-100 text-slate-500'
-                        }`}>
+                          }`}>
                           {comp.total_purchases_count} {comp.total_purchases_count === 1 ? 'order' : 'orders'}
                         </span>
                       </td>

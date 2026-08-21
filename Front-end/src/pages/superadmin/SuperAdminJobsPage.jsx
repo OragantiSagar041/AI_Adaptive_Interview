@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Briefcase, Plus, MapPin, Clock, FileText, X, Target, Trash2, Pencil, 
-  Wallet, Users, LayoutGrid, LayoutList, ArrowRight, ChevronRight, Zap, 
-  Building2, BookOpen, CheckCircle2, Mail, Phone, ExternalLink, RefreshCw, 
+import {
+  Briefcase, Plus, MapPin, Clock, FileText, X, Target, Trash2, Pencil,
+  Wallet, Users, LayoutGrid, LayoutList, ArrowRight, ChevronRight, Zap,
+  Building2, BookOpen, CheckCircle2, Mail, Phone, ExternalLink, RefreshCw,
   ChevronDown, Copy, Calendar, Eye, Download, FileCheck, Check, Sparkles,
   User, UserCheck, History, ShieldCheck
 } from 'lucide-react';
@@ -208,8 +208,8 @@ export default function SuperAdminJobsPage() {
     } finally {
       setJobsLoading(false);
     }
-  // authHeaders is stable (memoized), currentPage is not needed here because
-  // the caller always passes the page explicitly — keep deps minimal.
+    // authHeaders is stable (memoized), currentPage is not needed here because
+    // the caller always passes the page explicitly — keep deps minimal.
   }, [authHeaders]);
 
   // ── Fetch jobs from backend on mount / page change ────────────────────────
@@ -242,12 +242,12 @@ export default function SuperAdminJobsPage() {
     if (jdParsing) return;
     const file = e.target.files[0];
     if (!file) return;
-    
+
     setJdParsing(true);
     const formDataObj = new FormData();
     formDataObj.append('file', file);
     formDataObj.append('source', 'jd');
-    
+
     try {
       // Use the existing parse-resume endpoint since we reverted the other one
       const response = await axios.post(`${API_BASE_URL}/admin/parse-resume`, formDataObj, {
@@ -256,13 +256,13 @@ export default function SuperAdminJobsPage() {
           'Authorization': authHeaders.Authorization
         }
       });
-      
+
       const { text, title, experience, skills, location, salary, bond, workMode, warning } = response.data;
-      
+
       if (warning) {
         alert(warning);
       }
-      
+
       setFormData(prev => ({
         ...prev,
         title: title || prev.title,
@@ -1366,64 +1366,10 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
 
   const resumeFullUrl = getFullUrl(application.resume_url);
   const coverLetterFullUrl = getFullUrl(application.cover_letter_url);
-  // Check PDF: match .pdf anywhere in path (Cloudinary raw URLs may have .pdf before query params)
-  const isPdf = !!((
-    application.resume_url && /\.pdf(\?|$|\/)/i.test(application.resume_url)
-  ) || (
-    application.resume_filename && /\.pdf$/i.test(application.resume_filename)
-  ));
-
-  useEffect(() => {
-    setIframeError(false);
-    setFileAvailable(true);
-  }, [resumeFullUrl]);
-
-  const handleDownloadFile = async (url, fallbackName) => {
-    const targetUrl = url || resumeFullUrl;
-    const filename = application.resume_filename || fallbackName || `${(application.name || 'Candidate').replace(/\s+/g, '_')}_resume`;
-    
-    if (targetUrl) {
-      try {
-        const response = await fetch(targetUrl, { mode: 'cors' });
-        if (response.ok) {
-          const blob = await response.blob();
-          const blobUrl = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = blobUrl;
-          a.download = filename;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
-          return;
-        }
-      } catch (err) {
-        console.warn("Direct blob fetch failed, falling back to text blob download:", err);
-      }
-    }
-
-    if (application.resume_text) {
-      const textBlob = new Blob([application.resume_text], { type: 'text/plain;charset=utf-8' });
-      const blobUrl = window.URL.createObjectURL(textBlob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      const downloadName = filename.toLowerCase().endsWith('.txt') || filename.toLowerCase().endsWith('.pdf') ? filename : `${filename}.txt`;
-      a.download = downloadName;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
-    } else if (targetUrl) {
-      const a = document.createElement('a');
-      a.href = targetUrl;
-      a.download = filename;
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    }
-  };
+  const isPdf = application.resume_url && (
+    application.resume_url.toLowerCase().endsWith('.pdf') ||
+    application.resume_filename?.toLowerCase().endsWith('.pdf')
+  );
 
   const handleCopy = (text) => {
     if (!text) return;
@@ -1443,14 +1389,14 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
   const historyList = application.action_history && application.action_history.length > 0
     ? application.action_history
     : application.last_action_by_name
-    ? [{
+      ? [{
         status: application.status || 'Updated',
         action: `Status changed to ${application.status || 'Updated'}`,
         action_by_name: application.last_action_by_name,
         action_by_role: application.last_action_by_role || 'Admin',
         timestamp: application.last_action_at,
       }]
-    : [];
+      : [];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-fadeIn">
@@ -1498,11 +1444,10 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
               <button
                 type="button"
                 onClick={() => setActiveTab('resume')}
-                className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 ${
-                  activeTab === 'resume'
-                    ? 'border-indigo-600 text-indigo-700 bg-white shadow-sm'
-                    : 'border-transparent text-slate-500 hover:text-slate-800'
-                }`}
+                className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 ${activeTab === 'resume'
+                  ? 'border-indigo-600 text-indigo-700 bg-white shadow-sm'
+                  : 'border-transparent text-slate-500 hover:text-slate-800'
+                  }`}
               >
                 <FileText size={14} /> Resume Document
               </button>
@@ -1511,11 +1456,10 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
               <button
                 type="button"
                 onClick={() => setActiveTab('parsedText')}
-                className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 ${
-                  activeTab === 'parsedText'
-                    ? 'border-indigo-600 text-indigo-700 bg-white shadow-sm'
-                    : 'border-transparent text-slate-500 hover:text-slate-800'
-                }`}
+                className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 ${activeTab === 'parsedText'
+                  ? 'border-indigo-600 text-indigo-700 bg-white shadow-sm'
+                  : 'border-transparent text-slate-500 hover:text-slate-800'
+                  }`}
               >
                 <FileCheck size={14} /> Extracted Text
               </button>
@@ -1524,11 +1468,10 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
               <button
                 type="button"
                 onClick={() => setActiveTab('coverLetter')}
-                className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 ${
-                  activeTab === 'coverLetter'
-                    ? 'border-indigo-600 text-indigo-700 bg-white shadow-sm'
-                    : 'border-transparent text-slate-500 hover:text-slate-800'
-                }`}
+                className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 ${activeTab === 'coverLetter'
+                  ? 'border-indigo-600 text-indigo-700 bg-white shadow-sm'
+                  : 'border-transparent text-slate-500 hover:text-slate-800'
+                  }`}
               >
                 <BookOpen size={14} /> Cover Letter
               </button>
@@ -1536,11 +1479,10 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
             <button
               type="button"
               onClick={() => setActiveTab('history')}
-              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 ${
-                activeTab === 'history'
-                  ? 'border-indigo-600 text-indigo-700 bg-white shadow-sm'
-                  : 'border-transparent text-slate-500 hover:text-slate-800'
-              }`}
+              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 ${activeTab === 'history'
+                ? 'border-indigo-600 text-indigo-700 bg-white shadow-sm'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
             >
               <History size={14} /> Action History
               {historyList.length > 0 && (
@@ -1783,11 +1725,10 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
                 key={s}
                 type="button"
                 onClick={() => onStatusChange && onStatusChange(s)}
-                className={`px-3 py-1.5 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
-                  application.status === s
-                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                }`}
+                className={`px-3 py-1.5 text-xs font-bold rounded-xl border transition-all cursor-pointer ${application.status === s
+                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                  }`}
               >
                 {s}
               </button>

@@ -127,6 +127,17 @@ export default function CreateInterviewPage() {
   const [newBulkQuestion, setNewBulkQuestion] = useState('')
   const [newBulkInstruction, setNewBulkInstruction] = useState('')
 
+  const [editingSingleQuestionIndex, setEditingSingleQuestionIndex] = useState(null)
+  const [editingSingleQuestionText, setEditingSingleQuestionText] = useState('')
+  const [editingSingleInstructionIndex, setEditingSingleInstructionIndex] = useState(null)
+  const [editingSingleInstructionText, setEditingSingleInstructionText] = useState('')
+  
+  const [editingBulkQuestionIndex, setEditingBulkQuestionIndex] = useState(null)
+  const [editingBulkQuestionText, setEditingBulkQuestionText] = useState('')
+  const [editingBulkInstructionIndex, setEditingBulkInstructionIndex] = useState(null)
+  const [editingBulkInstructionText, setEditingBulkInstructionText] = useState('')
+
+
   // Email Preview Modal
   const [emailPreviewModalOpen, setEmailPreviewModalOpen] = useState(false)
   const [emailTemplate, setEmailTemplate] = useState({
@@ -1477,7 +1488,32 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       <ol className="list-decimal pl-5 flex flex-col gap-2 mt-2 max-h-60 overflow-y-auto">
                         {singleCandidate.customQuestions.map((q, idx) => (
                           <li key={idx} className="text-sm text-slate-700 font-medium">
-                            <div className="flex justify-between items-start gap-4 group">
+                            {editingSingleQuestionIndex === idx ? (
+                                <div className="flex gap-2 items-center w-full">
+                                  <input
+                                    type="text"
+                                    className="flex-1 bg-slate-50/95 border border-slate-200 rounded-[5px] px-3 py-1.5 text-slate-900 text-sm outline-none focus:border-primary focus:bg-white"
+                                    value={editingSingleQuestionText}
+                                    onChange={(e) => setEditingSingleQuestionText(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        if (editingSingleQuestionText.trim()) {
+                                          const updated = [...singleCandidate.customQuestions];
+                                          updated[idx] = editingSingleQuestionText.trim();
+                                          handleSingleChange('customQuestions', updated);
+                                        }
+                                        setEditingSingleQuestionIndex(null);
+                                      } else if (e.key === 'Escape') {
+                                        setEditingSingleQuestionIndex(null);
+                                      }
+                                    }}
+                                    autoFocus
+                                    onBlur={() => setEditingSingleQuestionIndex(null)}
+                                  />
+                                </div>
+                              ) : (
+                                <div className="flex justify-between items-start gap-4 group" onDoubleClick={() => { setEditingSingleQuestionIndex(idx); setEditingSingleQuestionText(singleCandidate.customQuestions[idx]); }}>
                               <span className="break-all">{q}</span>
                               <button
                                 type="button"
@@ -1487,6 +1523,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                                 <i className="fas fa-trash"></i>
                               </button>
                             </div>
+                              )}
                           </li>
                         ))}
                       </ol>
@@ -1571,7 +1608,32 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       <ol className="list-decimal pl-5 flex flex-col gap-2 mt-2 max-h-60 overflow-y-auto">
                         {singleCandidate.aiInstructions.map((inst, idx) => (
                           <li key={idx} className="text-sm text-slate-700 font-medium">
-                            <div className="flex justify-between items-start gap-4 group">
+                            {editingSingleInstructionIndex === idx ? (
+                                <div className="flex gap-2 items-center w-full">
+                                  <input
+                                    type="text"
+                                    className="flex-1 bg-slate-50/95 border border-slate-200 rounded-[5px] px-3 py-1.5 text-slate-900 text-sm outline-none focus:border-primary focus:bg-white"
+                                    value={editingSingleInstructionText}
+                                    onChange={(e) => setEditingSingleInstructionText(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        if (editingSingleInstructionText.trim()) {
+                                          const updated = [...singleCandidate.aiInstructions];
+                                          updated[idx] = editingSingleInstructionText.trim();
+                                          handleSingleChange('aiInstructions', updated);
+                                        }
+                                        setEditingSingleInstructionIndex(null);
+                                      } else if (e.key === 'Escape') {
+                                        setEditingSingleInstructionIndex(null);
+                                      }
+                                    }}
+                                    autoFocus
+                                    onBlur={() => setEditingSingleInstructionIndex(null)}
+                                  />
+                                </div>
+                              ) : (
+                                <div className="flex justify-between items-start gap-4 group" onDoubleClick={() => { setEditingSingleInstructionIndex(idx); setEditingSingleInstructionText(singleCandidate.aiInstructions[idx]); }}>
                               <span className="break-all">{inst}</span>
                               <button
                                 type="button"
@@ -1581,6 +1643,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                                 <i className="fas fa-trash"></i>
                               </button>
                             </div>
+                              )}
                           </li>
                         ))}
                       </ol>
@@ -1664,10 +1727,13 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     max="120"
                     value={singleCandidate.duration}
                     onChange={(e) => {
-                      let val = parseInt(e.target.value) || 30
-                      if (val > 120) val = 120
-                      handleSingleChange('duration', val)
-                    }}
+                        let val = e.target.value;
+                        if (val !== '') {
+                          val = parseInt(val);
+                          if (val > 120) val = 120;
+                        }
+                        handleSingleChange('duration', val)
+                                          }}
                   />
 
                   <div className="sm:col-span-2">
@@ -2108,7 +2174,32 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       <ol className="list-decimal pl-5 flex flex-col gap-2 mt-2 max-h-60 overflow-y-auto">
                         {bulkConfig.customQuestions.map((q, idx) => (
                           <li key={idx} className="text-sm text-slate-700 font-medium">
-                            <div className="flex justify-between items-start gap-4 group">
+                            {editingBulkQuestionIndex === idx ? (
+                                <div className="flex gap-2 items-center w-full">
+                                  <input
+                                    type="text"
+                                    className="flex-1 bg-slate-50/95 border border-slate-200 rounded-[5px] px-3 py-1.5 text-slate-900 text-sm outline-none focus:border-primary focus:bg-white"
+                                    value={editingBulkQuestionText}
+                                    onChange={(e) => setEditingBulkQuestionText(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        if (editingBulkQuestionText.trim()) {
+                                          const updated = [...bulkConfig.customQuestions];
+                                          updated[idx] = editingBulkQuestionText.trim();
+                                          handleBulkConfigChange('customQuestions', updated);
+                                        }
+                                        setEditingBulkQuestionIndex(null);
+                                      } else if (e.key === 'Escape') {
+                                        setEditingBulkQuestionIndex(null);
+                                      }
+                                    }}
+                                    autoFocus
+                                    onBlur={() => setEditingBulkQuestionIndex(null)}
+                                  />
+                                </div>
+                              ) : (
+                                <div className="flex justify-between items-start gap-4 group" onDoubleClick={() => { setEditingBulkQuestionIndex(idx); setEditingBulkQuestionText(bulkConfig.customQuestions[idx]); }}>
                               <span className="break-all">{q}</span>
                               <button
                                 type="button"
@@ -2118,6 +2209,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                                 <i className="fas fa-trash"></i>
                               </button>
                             </div>
+                              )}
                           </li>
                         ))}
                       </ol>
@@ -2202,7 +2294,32 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       <ol className="list-decimal pl-5 flex flex-col gap-2 mt-2 max-h-60 overflow-y-auto">
                         {bulkConfig.aiInstructions.map((inst, idx) => (
                           <li key={idx} className="text-sm text-slate-700 font-medium">
-                            <div className="flex justify-between items-start gap-4 group">
+                            {editingBulkInstructionIndex === idx ? (
+                                <div className="flex gap-2 items-center w-full">
+                                  <input
+                                    type="text"
+                                    className="flex-1 bg-slate-50/95 border border-slate-200 rounded-[5px] px-3 py-1.5 text-slate-900 text-sm outline-none focus:border-primary focus:bg-white"
+                                    value={editingBulkInstructionText}
+                                    onChange={(e) => setEditingBulkInstructionText(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        if (editingBulkInstructionText.trim()) {
+                                          const updated = [...bulkConfig.aiInstructions];
+                                          updated[idx] = editingBulkInstructionText.trim();
+                                          handleBulkConfigChange('aiInstructions', updated);
+                                        }
+                                        setEditingBulkInstructionIndex(null);
+                                      } else if (e.key === 'Escape') {
+                                        setEditingBulkInstructionIndex(null);
+                                      }
+                                    }}
+                                    autoFocus
+                                    onBlur={() => setEditingBulkInstructionIndex(null)}
+                                  />
+                                </div>
+                              ) : (
+                                <div className="flex justify-between items-start gap-4 group" onDoubleClick={() => { setEditingBulkInstructionIndex(idx); setEditingBulkInstructionText(bulkConfig.aiInstructions[idx]); }}>
                               <span className="break-all">{inst}</span>
                               <button
                                 type="button"
@@ -2212,6 +2329,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                                 <i className="fas fa-trash"></i>
                               </button>
                             </div>
+                              )}
                           </li>
                         ))}
                       </ol>
@@ -2295,10 +2413,13 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     max="120"
                     value={bulkConfig.duration}
                     onChange={(e) => {
-                      let val = parseInt(e.target.value) || 30
-                      if (val > 120) val = 120
-                      handleBulkConfigChange('duration', val)
-                    }}
+                        let val = e.target.value;
+                        if (val !== '') {
+                          val = parseInt(val);
+                          if (val > 120) val = 120;
+                        }
+                        handleBulkConfigChange('duration', val)
+                                          }}
                   />
 
                   <div className="sm:col-span-2">
