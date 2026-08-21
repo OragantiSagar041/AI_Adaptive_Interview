@@ -56,17 +56,17 @@ class InterviewSummary(BaseModel):
     recommendation: str = "Borderline"
     strengths: str = "Unable to generate."
     weaknesses: str = "Unable to generate."
-    communication_score: int = Field(default=50, ge=0, le=100)
+    communication_score: int = Field(ge=0, le=100)
     communication_reasoning: str = "N/A"
-    skills_score: int = Field(default=50, ge=0, le=100)
+    skills_score: int = Field(ge=0, le=100)
     skills_reasoning: str = "N/A"
-    competencies_score: int = Field(default=50, ge=0, le=100)
+    competencies_score: int = Field(ge=0, le=100)
     competencies_reasoning: str = "N/A"
-    personality_score: int = Field(default=50, ge=0, le=100)
+    personality_score: int = Field(ge=0, le=100)
     personality_reasoning: str = "N/A"
-    culture_fit_score: int = Field(default=50, ge=0, le=100)
+    culture_fit_score: int = Field(ge=0, le=100)
     culture_fit_reasoning: str = "N/A"
-    job_success_score: int = Field(default=50, ge=0, le=100)
+    job_success_score: int = Field(ge=0, le=100)
     job_success_reasoning: str = "N/A"
     detected_accent: str = "Unknown"
 

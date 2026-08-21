@@ -20,7 +20,7 @@ import {
   ClipboardList,
   Palette,
   ChevronDown,
-  Bot
+  User
 } from 'lucide-react'
 import logoImage from '../../assets/logo.png'
 import AdminCopilot from './copilot/AdminCopilot'
@@ -60,6 +60,7 @@ export default function AdminLayout({
 
   const [notifications, setNotifications] = useState([])
   const [notifDropdownOpen, setNotifDropdownOpen] = useState(false)
+  const [dropdownOpen, setDropdownOpen] = useState(false)
   const [themeOpen, setThemeOpen] = useState(false)
   const notifRef = useRef(null)
   const themeRef = useRef(null)
@@ -208,15 +209,14 @@ export default function AdminLayout({
   }
 
   const baseNavItems = [
-    { id: 'dashboard', label: 'Overview Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
-    { id: 'interviews', label: 'Interviews', path: '/admin/interviews', icon: ClipboardList },
-    { id: 'qualified', label: 'Qualified Candidates', path: '/admin/qualified-candidates', icon: UserCheck },
-    { id: 'rejected', label: 'Rejected Candidates', path: '/admin/rejected-candidates', icon: XCircle },
-    { id: 'create', label: 'Create Interview', path: '/admin/create-interview', icon: Plus },
-    { id: 'ai-calling', label: 'AI Calling Agent', path: '/admin/ai-calling', icon: Bot },
-    { id: 'conversational-flow', label: 'Conversational Flow', path: '/admin/conversational-flow', icon: MessageSquare },
-    { id: 'jobs', label: 'Jobs', path: '/admin/jobs', icon: Briefcase },
-    { id: 'settings', label: 'Profile Settings', path: '/admin/profile-settings', icon: Settings },
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/admin/dashboard' },
+    { id: 'interviews', label: 'Interviews', icon: ClipboardList, path: '/admin/interviews' },
+    { id: 'qualified', label: 'Qualified Candidates', icon: CheckCircle, path: '/admin/qualified-candidates' },
+    { id: 'rejected', label: 'Rejected Candidates', icon: XCircle, path: '/admin/rejected-candidates' },
+    { id: 'create', label: 'Create Interview', icon: Plus, path: '/admin/create-interview' },
+    { id: 'ai-calling', label: 'AI Calling Agent', icon: Radio, path: '/admin/ai-calling' },
+
+    { id: 'jobs', label: 'Jobs', icon: Briefcase, path: '/admin/jobs' },
   ]
   const userFeatures = adminUser?.plan_features
   const filteredNavItems = (userFeatures && userFeatures.length > 0)
@@ -562,17 +562,49 @@ export default function AdminLayout({
               )}
             </div>
 
-            {/* User Profile */}
-            <div className="flex items-center gap-4 border-l border-border pl-5">
-              <span className="text-sm text-muted-foreground font-medium">
-                Welcome back, <span className="font-bold text-foreground">{userName}</span>
-              </span>
+            {/* Profile Dropdown */}
+            <div className="relative border-l border-border pl-5">
               <button
-                onClick={onLogout}
-                className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer bg-transparent border-none"
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                className="flex items-center gap-2 p-1.5 px-2 hover:bg-slate-50 rounded-xl shadow-sm transition-all cursor-pointer border border-slate-100 bg-white"
               >
-                <LogOut size={15} /> Logout
+                <img
+                  src={adminUser?.profile_image || adminUser?.avatar || "https://ui-avatars.com/api/?name=Admin&background=random"}
+                  alt="Avatar"
+                  className="w-8 h-8 rounded-full object-cover border border-slate-200"
+                />
+                <div className="text-left hidden sm:block">
+                  <div className="text-[13px] font-semibold text-slate-800 leading-none">{userName}</div>
+                  <span className="text-[10px] text-slate-400 font-medium">Admin</span>
+                </div>
+                <ChevronDown size={14} className="text-slate-400 ml-1" />
               </button>
+
+              {dropdownOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setDropdownOpen(false)} />
+                  <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-lg py-1.5 z-50">
+                    <NavLink
+                      to="/admin/profile-settings"
+                      onClick={() => setDropdownOpen(false)}
+                      className="flex items-center gap-2.5 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 no-underline"
+                    >
+                      <User size={15} /> My Profile
+                    </NavLink>
+
+                    <hr className="border-slate-100 my-1" />
+                    <button
+                      onClick={() => {
+                        setDropdownOpen(false);
+                        if (onLogout) onLogout();
+                      }}
+                      className="w-full text-left flex items-center gap-2.5 px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 font-medium cursor-pointer border-none bg-transparent"
+                    >
+                      <LogOut size={15} /> Logout
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
           </header>

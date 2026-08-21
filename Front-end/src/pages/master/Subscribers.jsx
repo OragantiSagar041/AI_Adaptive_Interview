@@ -298,6 +298,7 @@ export default function Subscribers() {
           <input
             type="date"
             value={endDate}
+            min={startDate}
             onChange={(e) => setEndDate(e.target.value)}
             className="w-full sm:w-auto py-2 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500 cursor-pointer"
           />

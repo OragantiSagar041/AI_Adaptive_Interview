@@ -463,6 +463,7 @@ export default function CompanyRevenue() {
               <input
                 type="date"
                 value={endDate}
+                min={startDate}
                 onChange={(e) => {
                   setEndDate(e.target.value)
                   setDatePreset('custom')
