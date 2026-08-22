@@ -793,33 +793,35 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                 </div>
 
                 {/* Recordings Button */}
-                <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-sm font-black text-slate-800">Recordings</h3>
-                      <p className="text-xs text-slate-400 font-medium mt-0.5">
-                        {recordingUrl || screenRecordingUrl ? 'Camera & screen recording available' : 'No recordings available'}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {(recordingUrl || screenRecordingUrl) && (
+                {c.record_video !== false && (
+                  <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-black text-slate-800">Recordings</h3>
+                        <p className="text-xs text-slate-400 font-medium mt-0.5">
+                          {recordingUrl || screenRecordingUrl ? 'Camera & screen recording available' : 'No recordings available'}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {(recordingUrl || screenRecordingUrl) && (
+                          <button
+                            onClick={handleDownloadRecording}
+                            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors shadow-sm"
+                            title="Download Recording"
+                          >
+                            <Download size={16} /> Download
+                          </button>
+                        )}
                         <button
-                          onClick={handleDownloadRecording}
-                          className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors shadow-sm"
-                          title="Download Recording"
+                          onClick={() => setShowRecordingModal(true)}
+                          className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl hover:bg-emerald-100 transition-colors shadow-sm"
                         >
-                          <Download size={16} /> Download
+                          <Video size={16} /> Recording <ChevronRight size={14} />
                         </button>
-                      )}
-                      <button
-                        onClick={() => setShowRecordingModal(true)}
-                        className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl hover:bg-emerald-100 transition-colors shadow-sm"
-                      >
-                        <Video size={16} /> Recording <ChevronRight size={14} />
-                      </button>
+                      </div>
                     </div>
-                  </div>
-                </section>
+                  </section>
+                )}
 
                 {/* Transcript Button */}
                 {c.answers && c.answers.length > 0 && (
