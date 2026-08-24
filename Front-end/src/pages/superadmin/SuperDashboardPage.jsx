@@ -54,7 +54,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
-import { motion, useSpring, useTransform } from "framer-motion";
+import { motion, useMotionValue, useTransform, animate } from "framer-motion";
 
 function formatNum(n) {
   if (!n && n !== 0) return "0";
@@ -63,23 +63,17 @@ function formatNum(n) {
 
 function AnimatedNumber({ value, suffix = "", isDecimal = false }) {
   const numericValue = typeof value === 'string' ? parseFloat(value.replace(/,/g, '')) : (typeof value === 'number' ? value : 0);
-  const [mounted, setMounted] = useState(false);
   
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  const spring = useSpring(0, { mass: 1, stiffness: 60, damping: 20 });
-  const display = useTransform(spring, (current) => {
-    const val = isDecimal ? current.toFixed(1) : Math.floor(current);
+  const count = useMotionValue(0);
+  const display = useTransform(count, (latest) => {
+    const val = isDecimal ? latest.toFixed(1) : Math.floor(latest);
     return formatNum(val) + suffix;
   });
 
   useEffect(() => {
-    if (mounted) {
-      spring.set(numericValue);
-    }
-  }, [numericValue, mounted, spring]);
+    const controls = animate(count, numericValue, { duration: 0.5, ease: "easeOut" });
+    return controls.stop;
+  }, [numericValue, count]);
 
   return <motion.span>{display}</motion.span>;
 }

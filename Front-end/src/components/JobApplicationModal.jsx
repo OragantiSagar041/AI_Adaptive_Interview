@@ -91,19 +91,23 @@ export default function JobApplicationModal({ job, onClose }) {
         return;
       }
 
-      // Send JSON body matching the backend JobApplicationCreate schema
-      await axios.post(
-        `${API_BASE_URL}/api/public/jobs/${jobIdToUse}/apply`,
-        {
-          name: formData.name,
-          email: formData.email,
-          phone: formData.phone,
-          resume_url: resumeFile ? resumeFile.name : '',
-          linkedin_url: formData.linkedin_url,
-          cover_letter: '',
-        },
-        { headers: { 'Content-Type': 'application/json' } }
-      );
+        const data = new FormData();
+        data.append('name', formData.name);
+        data.append('email', formData.email);
+        data.append('phone', formData.phone || '');
+        data.append('linkedin_url', formData.linkedin_url || '');
+        data.append('resume_url', '');
+        data.append('cover_letter', '');
+        
+        if (resumeFile) {
+          data.append('resume_file', resumeFile);
+        }
+
+        await axios.post(
+          `${API_BASE_URL}/api/public/jobs/${jobIdToUse}/apply`,
+          data,
+          { headers: { 'Content-Type': 'multipart/form-data' } }
+        );
       setSubmitted(true);
     } catch (err) {
       console.error("Application error:", err);

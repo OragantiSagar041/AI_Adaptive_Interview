@@ -349,7 +349,8 @@ def get_uploaded_cover_letter_file(filename: str, current_admin: dict = Depends(
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Cover letter file not found")
     media_type = "application/pdf" if safe_filename.lower().endswith(".pdf") else "application/octet-stream"
-    return FileResponse(file_path, media_type=media_type, filename=safe_filename)
+    return FileResponse(file_path, media_type=media_type, filename=safe_filename, content_disposition_type="inline")
+
 
 @router.post("/api/public/jobs/{job_id}/apply")
 async def apply_for_job(
@@ -459,25 +460,38 @@ async def apply_for_job(
                     upload_res = cloudinary.uploader.upload(
                         file_bytes,
                         folder="job_resumes",
-                        resource_type="raw",
-                        use_filename=True,
-                        unique_filename=True
+                        resource_type="raw"
                     )
                     if upload_res and upload_res.get("secure_url"):
                         saved_resume_url = upload_res.get("secure_url")
                         cloud_uploaded = True
+                        logger.info(f"[JobApply] Resume uploaded to Cloudinary: {saved_resume_url}")
                 except Exception as cloud_err:
                     logger.error(f"Cloudinary raw upload failed: {cloud_err}")
 
                 if not cloud_uploaded:
-                    unique_id = uuid.uuid4().hex[:10]
-                    safe_name = f"{unique_id}_{os.path.basename(resume_filename)}"
-                    local_path = os.path.join(UPLOAD_RESUMES_DIR, safe_name)
-                    with open(local_path, "wb") as f:
-                        f.write(file_bytes)
-                    saved_resume_url = f"/api/public/resumes/{safe_name}"
+                    try:
+                        unique_id = uuid.uuid4().hex[:10]
+                        safe_name = f"{unique_id}_{os.path.basename(resume_filename)}"
+                        local_path = os.path.join(UPLOAD_RESUMES_DIR, safe_name)
+                        logger.info(f"[JobApply] Saving resume locally to: {local_path}")
+                        with open(local_path, "wb") as f:
+                            f.write(file_bytes)
+                        saved_resume_url = f"/api/public/resumes/{safe_name}"
+                        logger.info(f"[JobApply] Resume saved locally. URL: {saved_resume_url}")
+                    except Exception as local_err:
+                        logger.error(f"[JobApply] Local resume save FAILED: {local_err}", exc_info=True)
+                        saved_resume_url = ""
+        except HTTPException:
+            raise
         except Exception as e:
-            logger.error(f"Error processing uploaded resume file: {e}")
+            logger.error(f"Error processing uploaded resume file: {e}", exc_info=True)
+            saved_resume_url = ""
+
+    # If saved_resume_url is a bare filename (not a URL or path), clear it
+    if saved_resume_url and not saved_resume_url.startswith(('http://', 'https://', '/')):
+        logger.warning(f"[JobApply] Clearing invalid resume_url (bare filename): '{saved_resume_url}'")
+        saved_resume_url = ""
 
     # Process resume link if no file was uploaded
     if not resume_text and saved_resume_url and (saved_resume_url.startswith("http://") or saved_resume_url.startswith("https://")):

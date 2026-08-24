@@ -1783,7 +1783,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         }
       }
 
-      let screenStream
+      const shouldRecordVideo = sessionDetailRef.current?.record_video !== false;
+
+      let screenStream = null;
       try {
         screenStream = await navigator.mediaDevices.getDisplayMedia({
           video: { displaySurface: "monitor", frameRate: 15 },
@@ -1816,34 +1818,36 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       previewVideo.playsInline = true
       previewVideo.play().catch(e => console.log(e))
 
-      const track = screenStream.getVideoTracks()[0]
-      track.onended = () => {
-        handleScreenShareStop()
-      }
+      if (shouldRecordVideo) {
+        const track = screenStream.getVideoTracks()[0]
+        track.onended = () => {
+          handleScreenShareStop()
+        }
 
-      // Web Audio Mixer setup
-      if (!audioMixerCtxRef.current) {
-        const AudioCtx = window.AudioContext || window.webkitAudioContext
-        audioMixerCtxRef.current = new AudioCtx()
-        audioMixerDestRef.current = audioMixerCtxRef.current.createMediaStreamDestination()
-      }
+        // Web Audio Mixer setup
+        if (!audioMixerCtxRef.current) {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext
+          audioMixerCtxRef.current = new AudioCtx()
+          audioMixerDestRef.current = audioMixerCtxRef.current.createMediaStreamDestination()
+        }
 
-      const audioTracks = stream.getAudioTracks()
-      if (audioTracks.length > 0) {
-        // Mix candidate mic into destination
-        const micSource = audioMixerCtxRef.current.createMediaStreamSource(new MediaStream([audioTracks[0]]))
-        micSource.connect(audioMixerDestRef.current)
-      }
+        const audioTracks = stream.getAudioTracks()
+        if (audioTracks.length > 0) {
+          // Mix candidate mic into destination
+          const micSource = audioMixerCtxRef.current.createMediaStreamSource(new MediaStream([audioTracks[0]]))
+          micSource.connect(audioMixerDestRef.current)
+        }
 
-      // Add the master mixed track to the screen stream
-      const mixedTrack = audioMixerDestRef.current.stream.getAudioTracks()[0]
-      if (mixedTrack) {
-        screenStream.addTrack(mixedTrack)
-      }
+        // Add the master mixed track to the screen stream
+        const mixedTrack = audioMixerDestRef.current.stream.getAudioTracks()[0]
+        if (mixedTrack) {
+          screenStream.addTrack(mixedTrack)
+        }
 
-      // Resume AudioContext if suspended (browser autoplay policy)
-      if (audioMixerCtxRef.current && audioMixerCtxRef.current.state === 'suspended') {
-        try { await audioMixerCtxRef.current.resume() } catch (_) { }
+        // Resume AudioContext if suspended (browser autoplay policy)
+        if (audioMixerCtxRef.current && audioMixerCtxRef.current.state === 'suspended') {
+          try { await audioMixerCtxRef.current.resume() } catch (_) { }
+        }
       }
 
       // Determine cross-browser supported video MIME type
@@ -1866,9 +1870,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
       const mimeType = getSupportedMimeType()
       recordedMimeTypeRef.current = mimeType
-      console.log(`[REC_TRACE] Stream initialized. Video tracks: ${stream.getVideoTracks().length}, Audio tracks: ${stream.getAudioTracks().length}. Screen video tracks: ${screenStream.getVideoTracks().length}. Selected mimeType: ${mimeType}`)
-
-      const shouldRecordVideo = sessionDetailRef.current?.record_video !== false;
+      console.log(`[REC_TRACE] Stream initialized. Video tracks: ${stream.getVideoTracks().length}, Audio tracks: ${stream.getAudioTracks().length}. Screen video tracks: ${screenStream ? screenStream.getVideoTracks().length : 0}. Selected mimeType: ${mimeType}`)
 
       if (shouldRecordVideo) {
         let options = { mimeType, videoBitsPerSecond: 800000, audioBitsPerSecond: 64000 }

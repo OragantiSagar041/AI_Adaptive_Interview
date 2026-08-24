@@ -220,6 +220,7 @@ export default function VoiceInterviewPage() {
   const [securityAlert, setSecurityAlert] = useState('')
   const securityAlertTimerRef = useRef(null)
   const [interimText, setInterimText] = useState('')
+  const hasSpokenThisSessionRef = useRef(false)
   const [countdown, setCountdown] = useState(0)
   const countdownRef = useRef(0)
   const [roundDuration, setRoundDuration] = useState(900)
@@ -304,6 +305,7 @@ export default function VoiceInterviewPage() {
   const questionsRef = useRef([])
   const interviewIdRef = useRef('')
   const sessionDetailRef = useRef(null)
+  const candidateNameRef = useRef('')
   const roundRef = useRef('pre_checks')
   const chatBottomRef = useRef(null)
   const wsRef = useRef(null)
@@ -381,6 +383,7 @@ export default function VoiceInterviewPage() {
   useEffect(() => { questionsRef.current = questions }, [questions])
   useEffect(() => { interviewIdRef.current = interviewId }, [interviewId])
   useEffect(() => { sessionDetailRef.current = sessionDetail }, [sessionDetail])
+  useEffect(() => { candidateNameRef.current = sessionDetail?.candidate_name || '' }, [sessionDetail])
   useEffect(() => { roundRef.current = round }, [round])
   useEffect(() => { languageRef.current = language }, [language])
   useEffect(() => { countdownRef.current = countdown }, [countdown])
@@ -848,8 +851,10 @@ export default function VoiceInterviewPage() {
         await document.documentElement.requestFullscreen().catch(() => { })
       }
 
+      const shouldRecord = sessionDetailRef.current?.record_video !== false
+
       // 1. Get Screen Stream - Always prompt candidate to share their screen
-      let screenStream
+      let screenStream = null
       try {
         screenStream = await navigator.mediaDevices.getDisplayMedia({
           video: { displaySurface: 'monitor', frameRate: 15, width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -895,27 +900,29 @@ export default function VoiceInterviewPage() {
           cameraStreamRef.current = micStream
         }
 
-        // Start Camera Recorder
-        const cameraMr = createVideoRecorder(micStream, [
-          'video/webm;codecs=vp8,opus',
-          'video/webm',
-          'video/mp4',
-        ])
-        cameraChunksRef.current = []
-        cameraBytesRef.current = 0
-        cameraRecordingTruncatedRef.current = false
-        cameraMr.ondataavailable = e => {
-          if (e.data.size <= 0) return
-          if (cameraBytesRef.current + e.data.size > MAX_RECORDING_BYTES_PER_STREAM) {
-            cameraRecordingTruncatedRef.current = true
-            if (cameraMr.state === 'recording') cameraMr.stop()
-            return
+        if (shouldRecord) {
+          // Start Camera Recorder
+          const cameraMr = createVideoRecorder(micStream, [
+            'video/webm;codecs=vp8,opus',
+            'video/webm',
+            'video/mp4',
+          ])
+          cameraChunksRef.current = []
+          cameraBytesRef.current = 0
+          cameraRecordingTruncatedRef.current = false
+          cameraMr.ondataavailable = e => {
+            if (e.data.size <= 0) return
+            if (cameraBytesRef.current + e.data.size > MAX_RECORDING_BYTES_PER_STREAM) {
+              cameraRecordingTruncatedRef.current = true
+              if (cameraMr.state === 'recording') cameraMr.stop()
+              return
+            }
+            cameraBytesRef.current += e.data.size
+            cameraChunksRef.current.push(e.data)
           }
-          cameraBytesRef.current += e.data.size
-          cameraChunksRef.current.push(e.data)
+          cameraMr.start(5000)
+          cameraRecorderRef.current = cameraMr
         }
-        cameraMr.start(5000)
-        cameraRecorderRef.current = cameraMr
 
         // Attach for Proctoring
         if (candidateVideoRef.current) {
@@ -927,72 +934,74 @@ export default function VoiceInterviewPage() {
         console.warn("Could not get camera/mic stream for recording:", err)
       }
 
-      // 3. Mix audio for Screen Recording (so screen has mic audio too)
-      if (micStream) {
-        const ctx = new AudioContext()
-        const dest = ctx.createMediaStreamDestination()
-        micStream.getAudioTracks().forEach(t => {
-          const src = ctx.createMediaStreamSource(new MediaStream([t]))
-          src.connect(dest)
-        })
-        screenStream.getAudioTracks().forEach(t => {
-          const src = ctx.createMediaStreamSource(new MediaStream([t]))
-          src.connect(dest)
-        })
-        const combinedScreen = new MediaStream([...screenStream.getVideoTracks(), ...dest.stream.getAudioTracks()])
-        mediaStreamRef.current = combinedScreen
+      if (shouldRecord) {
+        // 3. Mix audio for Screen Recording (so screen has mic audio too)
+        if (micStream) {
+          const ctx = new AudioContext()
+          const dest = ctx.createMediaStreamDestination()
+          micStream.getAudioTracks().forEach(t => {
+            const src = ctx.createMediaStreamSource(new MediaStream([t]))
+            src.connect(dest)
+          })
+          screenStream.getAudioTracks().forEach(t => {
+            const src = ctx.createMediaStreamSource(new MediaStream([t]))
+            src.connect(dest)
+          })
+          const combinedScreen = new MediaStream([...screenStream.getVideoTracks(), ...dest.stream.getAudioTracks()])
+          mediaStreamRef.current = combinedScreen
 
-        const mr = createVideoRecorder(combinedScreen, [
-          'video/webm;codecs=vp8,opus',
-          'video/webm',
-          'video/mp4',
-        ])
-        recordedChunksRef.current = []
-        recordedBytesRef.current = 0
-        screenRecordingTruncatedRef.current = false
-        mr.ondataavailable = e => {
-          if (e.data.size <= 0) return
-          if (recordedBytesRef.current + e.data.size > MAX_RECORDING_BYTES_PER_STREAM) {
-            screenRecordingTruncatedRef.current = true
-            if (mr.state === 'recording') mr.stop()
-            return
+          const mr = createVideoRecorder(combinedScreen, [
+            'video/webm;codecs=vp8,opus',
+            'video/webm',
+            'video/mp4',
+          ])
+          recordedChunksRef.current = []
+          recordedBytesRef.current = 0
+          screenRecordingTruncatedRef.current = false
+          mr.ondataavailable = e => {
+            if (e.data.size <= 0) return
+            if (recordedBytesRef.current + e.data.size > MAX_RECORDING_BYTES_PER_STREAM) {
+              screenRecordingTruncatedRef.current = true
+              if (mr.state === 'recording') mr.stop()
+              return
+            }
+            recordedBytesRef.current += e.data.size
+            recordedChunksRef.current.push(e.data)
           }
-          recordedBytesRef.current += e.data.size
-          recordedChunksRef.current.push(e.data)
-        }
-        mr.start(5000)
-        mediaRecorderRef.current = mr
-      } else {
-        mediaStreamRef.current = screenStream
-        const mr = createVideoRecorder(screenStream, [
-          'video/webm;codecs=vp8',
-          'video/webm',
-          'video/mp4',
-        ])
-        recordedChunksRef.current = []
-        recordedBytesRef.current = 0
-        screenRecordingTruncatedRef.current = false
-        mr.ondataavailable = e => {
-          if (e.data.size <= 0) return
-          if (recordedBytesRef.current + e.data.size > MAX_RECORDING_BYTES_PER_STREAM) {
-            screenRecordingTruncatedRef.current = true
-            if (mr.state === 'recording') mr.stop()
-            return
+          mr.start(5000)
+          mediaRecorderRef.current = mr
+        } else {
+          mediaStreamRef.current = screenStream
+          const mr = createVideoRecorder(screenStream, [
+            'video/webm;codecs=vp8',
+            'video/webm',
+            'video/mp4',
+          ])
+          recordedChunksRef.current = []
+          recordedBytesRef.current = 0
+          screenRecordingTruncatedRef.current = false
+          mr.ondataavailable = e => {
+            if (e.data.size <= 0) return
+            if (recordedBytesRef.current + e.data.size > MAX_RECORDING_BYTES_PER_STREAM) {
+              screenRecordingTruncatedRef.current = true
+              if (mr.state === 'recording') mr.stop()
+              return
+            }
+            recordedBytesRef.current += e.data.size
+            recordedChunksRef.current.push(e.data)
           }
-          recordedBytesRef.current += e.data.size
-          recordedChunksRef.current.push(e.data)
+          mr.start(5000)
+          mediaRecorderRef.current = mr
         }
-        mr.start(5000)
-        mediaRecorderRef.current = mr
       }
 
       setIsRecording(true)
       return true
     } catch (e) {
-      console.warn('Screen recording not available or denied:', e)
+      console.warn('Screen/Camera setup failed or denied:', e)
       await Swal.fire({
-        title: 'Screen Sharing Required',
-        text: e?.message || 'Share your entire screen to start this proctored interview.',
+        title: sessionDetailRef.current?.record_video !== false ? 'Screen Sharing Required' : 'Permissions Required',
+        text: e?.message || 'Please grant the required permissions to start this proctored interview.',
         icon: 'warning',
         background: '#161c2d',
         color: '#fff',
@@ -1182,7 +1191,7 @@ export default function VoiceInterviewPage() {
 
     try {
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 15000)
+      const timeoutId = setTimeout(() => controller.abort(), 25000)
       let res
       try {
         res = await candidateFetch(
@@ -1215,6 +1224,13 @@ export default function VoiceInterviewPage() {
 
         if (data && data.transcript && data.transcript.trim()) {
           const freshWhisper = data.transcript.trim()
+          
+          const isHallucination = /^(transcribe verbatim\.?|thank you(?:\s+for\s+(?:watching|listening))?\.?|amara\.org\.?|subtitles by\s.*)$/i.test(freshWhisper)
+          if (isHallucination) {
+            console.debug(`[STT HALLUCINATION GATE] Ignored: "${freshWhisper}"`)
+            return ''
+          }
+
           // Each Whisper chunk is a 12-second audio slice — consecutive slices
           // OVERLAP at the boundary. We must APPEND only the new tail rather
           // than replace the whole transcript, otherwise every chunk wipes out
@@ -1399,7 +1415,7 @@ export default function VoiceInterviewPage() {
     return getAuthoritativeTranscript()
   }, [getAuthoritativeTranscript])
 
-  const startListening = useCallback((onFinish, preserveTranscript = false) => {
+  const startListening = useCallback(async (onFinish, preserveTranscript = false) => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
     clearInterval(whisperFlushTimerRef.current)
     whisperFlushTimerRef.current = null
@@ -1451,6 +1467,7 @@ export default function VoiceInterviewPage() {
     }
     isListeningRef.current = true
     if (!preserveTranscript) {
+      hasSpokenThisSessionRef.current = false
       accumulatedTranscriptRef.current = ''
       currentSessionFinalRef.current = ''
       currentTxRef.current = ''
@@ -1471,11 +1488,18 @@ export default function VoiceInterviewPage() {
     // ── Continuous 2.5s decodable audio stream recorder for Groq Whisper ──
     if (
       (!whisperRecorderRef.current || whisperRecorderRef.current.state === 'inactive') &&
-      cameraStreamRef.current &&
-      cameraStreamRef.current.getAudioTracks().length > 0
+      cameraStreamRef.current
     ) {
       try {
-        const audioStream = new MediaStream(cameraStreamRef.current.getAudioTracks())
+        // Get live audio tracks — fall back to a fresh mic stream if any are ended
+        let liveAudioTracks = (cameraStreamRef.current.getAudioTracks() || []).filter(t => t.readyState === 'live')
+        if (liveAudioTracks.length === 0) {
+          console.warn('[STT] Audio tracks ended, requesting fresh mic stream for Whisper')
+          const freshMic = await navigator.mediaDevices.getUserMedia({ audio: true })
+          liveAudioTracks = freshMic.getAudioTracks()
+          liveAudioTracks.forEach(t => cameraStreamRef.current.addTrack(t))
+        }
+        const audioStream = new MediaStream(liveAudioTracks)
         const mimeCandidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4']
         const mime = mimeCandidates.find(value => MediaRecorder.isTypeSupported(value)) || ''
         const mr = new MediaRecorder(audioStream, mime ? { mimeType: mime } : undefined)
@@ -1498,12 +1522,26 @@ export default function VoiceInterviewPage() {
           src.connect(analyser)
           const buf = new Float32Array(analyser.fftSize)
           let rafId = 0
+          let lastSilenceReset = 0
           const tickRms = () => {
             analyser.getFloatTimeDomainData(buf)
             let sumSq = 0
             for (let i = 0; i < buf.length; i++) sumSq += buf[i] * buf[i]
             const rms = Math.sqrt(sumSq / buf.length)
             if (rms > chunkPeakRmsRef.current) chunkPeakRmsRef.current = rms
+
+            const now = Date.now()
+            if (rms > CHUNK_SEND_RMS_THRESHOLD && now - lastSilenceReset > 500) {
+              hasSpokenThisSessionRef.current = true
+              lastSilenceReset = now
+              clearTimeout(silenceTimerRef.current)
+              silenceTimerRef.current = setTimeout(() => {
+                if (isListeningRef.current) {
+                  finishListening().then(fullAns => onFinish?.(fullAns))
+                }
+              }, 8000)
+            }
+
             rafId = requestAnimationFrame(tickRms)
           }
           tickRms()
@@ -1523,18 +1561,15 @@ export default function VoiceInterviewPage() {
           }
         }
         mr.onstop = async () => {
-          // Drop the callback if a newer recorder has already taken over
           if (myGeneration !== whisperRecorderGenerationRef.current) return
           if (rmsAnalyserCleanup) rmsAnalyserCleanup()
+          const stillListening = isListeningRef.current
           try {
             const validAudioBlob = new Blob(whisperChunksRef.current, {
               type: mr.mimeType || mime || 'audio/webm',
             })
             whisperChunksRef.current = []
             const peak = chunkPeakRmsRef.current
-            // Skip /stt entirely when the chunk was below the silence threshold.
-            // Whisper WILL hallucinate on silence no matter how we prompt it,
-            // so the only safe option is to not send at all.
             const isSilent = peak < CHUNK_SEND_RMS_THRESHOLD
             if (validAudioBlob.size > 1000 && !isSilent) {
               lastSttHadAudioRef.current = true
@@ -1554,7 +1589,8 @@ export default function VoiceInterviewPage() {
               whisperRecorderRef.current = null
               resolveWhisperStopRef.current?.()
               resolveWhisperStopRef.current = null
-              if (isListeningRef.current && whisperRecorderRef.current === null) {
+              // Only restart the recording loop if we are still actively listening
+              if (stillListening && isListeningRef.current) {
                 startListening(onFinish, true)
               }
             }
@@ -1574,13 +1610,15 @@ export default function VoiceInterviewPage() {
       }
     }
 
-    // Grace period: if nothing heard in 12s, auto-submit
-    clearTimeout(silenceTimerRef.current)
-    silenceTimerRef.current = setTimeout(() => {
-      if (isListeningRef.current) {
-        finishListening().then(fullAns => onFinish?.(fullAns))
-      }
-    }, rec ? 12000 : 30000)
+    // Grace period: if nothing heard initially, wait 20-30s before auto-submit
+    if (!preserveTranscript) {
+      clearTimeout(silenceTimerRef.current)
+      silenceTimerRef.current = setTimeout(() => {
+        if (isListeningRef.current) {
+          finishListening().then(fullAns => onFinish?.(fullAns))
+        }
+      }, rec ? 20000 : 30000)
+    }
 
     const mergeTranscripts = (accumulated, sessionFinal, sessionInterim) => {
       const acc = (accumulated || '').trim()
@@ -1682,13 +1720,14 @@ export default function VoiceInterviewPage() {
       // Always update the interim ghost text for live feedback
       setInterimText(formattedInterim || '')
 
-      // Reset silence timer whenever speech is heard (45s of silence before auto-advance)
+      // Reset silence timer whenever speech is heard (8s of silence before auto-advance)
+      hasSpokenThisSessionRef.current = true
       clearTimeout(silenceTimerRef.current)
       silenceTimerRef.current = setTimeout(() => {
         if (isListeningRef.current) {
           finishListening().then(fullAns => onFinish?.(fullAns))
         }
-      }, 45000)
+      }, 8000)
 
       clearTimeout(webSpeechWatchdogRef.current)
       // Chrome's continuous-recognition timer is approximately 60 seconds —
@@ -2453,7 +2492,7 @@ export default function VoiceInterviewPage() {
   const proctoring = useProctoring({
     videoRef: candidateVideoRef,
     enabled: round !== 'done' && round !== 'pre_checks' && round !== 'intro' && round !== 'submitting',
-    maxAlerts: 10,
+    maxAlerts: 30,
     onViolation: (v) => {
       logProctoringAlert(v.type, v.message)
     },
@@ -2605,7 +2644,7 @@ export default function VoiceInterviewPage() {
       <>
         <ErrorBoundary>
           <React.Suspense fallback={<div className="flex h-screen items-center justify-center text-white text-xl bg-[#0a0f1e]">Loading coding environment...</div>}>
-            <VoiceCodingRound question={codingQuestion} interviewId={interviewId} linkId={linkId} duration={roundDuration}
+            <VoiceCodingRound question={codingQuestion} interviewId={interviewId} linkId={linkId} duration={roundDuration} warningsCount={warningsCount}
               sessionDetail={sessionDetail} language={language} wsRef={wsRef} onComplete={() => {
                 const type = interviewType
                 if (type === 'Non-Technical') {
@@ -2735,6 +2774,11 @@ export default function VoiceInterviewPage() {
           <div className={`text-sm font-mono font-bold px-4 py-1.5 rounded-full border ${countdown < 300 ? 'border-rose-500/50 text-rose-400 bg-rose-500/10' : 'border-indigo-500/30 text-indigo-300 bg-indigo-500/10'}`}>
             <i className="fas fa-clock mr-2" />{fmt(countdown)}
           </div>
+          {warningsCount > 0 && (
+            <div className="flex items-center gap-1 px-3 py-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-400 text-xs font-bold" title={`${warningsCount} proctoring alert${warningsCount > 1 ? 's' : ''} detected`}>
+              <i className="fas fa-exclamation-triangle text-[10px]" />{warningsCount}
+            </div>
+          )}
         </div>
       </header>
 
@@ -3240,7 +3284,12 @@ export default function VoiceInterviewPage() {
           <div className={`text-sm font-mono font-bold px-4 py-1.5 rounded-full border ${countdown < 300 ? 'border-rose-500/50 text-rose-400 bg-rose-500/10' : 'border-indigo-500/30 text-indigo-300 bg-indigo-500/10'}`}>
             <i className="fas fa-clock mr-2" />{fmt(countdown)}
           </div>
-          <span className="text-sm text-slate-400">Q <span className="text-white font-bold">{currentQIdx + 1}</span>/{questions.length}</span>
+          {warningsCount > 0 && (
+            <div className="flex items-center gap-1 px-3 py-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-400 text-xs font-bold" title={`${warningsCount} proctoring alert${warningsCount > 1 ? 's' : ''} detected`}>
+              <i className="fas fa-exclamation-triangle text-[10px]" />{warningsCount}
+            </div>
+          )}
+t a          <span className="text-sm text-slate-400">Q <span className="text-white font-bold">{currentQIdx + 1}</span>/{questions.length}</span>
         </div>
       </header>
 

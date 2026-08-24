@@ -562,7 +562,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                   <InfoRow icon={IndianRupee} label="Expected CTC" value={c.expected_ctc} />
                   <InfoRow icon={Clock} label="Notice Period" value={c.notice_period} />
                   <InfoRow icon={MapPin} label="Location" value={c.location} />
-                  
+
                   {/* Alerts Column */}
                   <div className="flex items-start gap-3 sm:col-span-2 lg:col-span-4 mt-2 pt-4 border-t border-slate-100">
                     <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
@@ -721,67 +721,52 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
               </div>
 
               {/* Recordings */}
-              <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="text-sm font-black text-slate-800">Recordings</h3>
-                    <p className="text-xs text-slate-400 font-medium mt-0.5">
-                      {recordingUrl || screenRecordingUrl ? 'Camera & screen recording available' : 'No recordings available'}
-                    </p>
-                  </div>
-                  {(recordingUrl || screenRecordingUrl) && (
-                    <button
-                      type="button"
-                      onClick={handleDownloadRecording}
-                      className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-xl hover:bg-indigo-100 transition-colors shadow-sm cursor-pointer"
-                      title="Download Recording File"
-                    >
-                      <Download size={16} /> Download Recording
-                    </button>
-                  )}
-                </div>
-                <div className="grid sm:grid-cols-2 gap-4">
-                  {/* Camera Recording */}
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><Video size={18} /></div>
-                      <div>
-                        <div className="text-sm font-black text-slate-800">Camera Recording</div>
-                        <div className="text-xs text-slate-400 font-medium">Interview video feed</div>
+              {c.record_video !== false && (
+                <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
+                  <h3 className="text-sm font-black text-slate-800 mb-4">Recordings</h3>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    {/* Camera Recording */}
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><Video size={18} /></div>
+                        <div>
+                          <div className="text-sm font-black text-slate-800">Camera Recording</div>
+                          <div className="text-xs text-slate-400 font-medium">Interview video feed</div>
+                        </div>
                       </div>
+                      {recordingUrl ? (
+                        <video controls className="w-full rounded-lg border border-slate-200 bg-black max-h-48" src={recordingUrl}>
+                          Your browser does not support video.
+                        </video>
+                      ) : (
+                        <div className="h-28 flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
+                          No camera recording available
+                        </div>
+                      )}
                     </div>
-                    {recordingUrl ? (
-                      <video controls className="w-full rounded-lg border border-slate-200 bg-black max-h-48" src={recordingUrl}>
-                        Your browser does not support video.
-                      </video>
-                    ) : (
-                      <div className="h-28 flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
-                        No camera recording available
-                      </div>
-                    )}
-                  </div>
 
-                  {/* Screen Recording */}
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg"><Monitor size={18} /></div>
-                      <div>
-                        <div className="text-sm font-black text-slate-800">Screen Recording</div>
-                        <div className="text-xs text-slate-400 font-medium">Screen share capture</div>
+                    {/* Screen Recording */}
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg"><Monitor size={18} /></div>
+                        <div>
+                          <div className="text-sm font-black text-slate-800">Screen Recording</div>
+                          <div className="text-xs text-slate-400 font-medium">Screen share capture</div>
+                        </div>
                       </div>
+                      {screenRecordingUrl ? (
+                        <video controls className="w-full rounded-lg border border-slate-200 bg-black max-h-48" src={screenRecordingUrl}>
+                          Your browser does not support video.
+                        </video>
+                      ) : (
+                        <div className="h-28 flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
+                          No screen recording available
+                        </div>
+                      )}
                     </div>
-                    {screenRecordingUrl ? (
-                      <video controls className="w-full rounded-lg border border-slate-200 bg-black max-h-48" src={screenRecordingUrl}>
-                        Your browser does not support video.
-                      </video>
-                    ) : (
-                      <div className="h-28 flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
-                        No screen recording available
-                      </div>
-                    )}
                   </div>
-                </div>
-              </section>
+                </section>
+              )}
 
               {/* Q&A Answers */}
               {c.answers && c.answers.length > 0 && (

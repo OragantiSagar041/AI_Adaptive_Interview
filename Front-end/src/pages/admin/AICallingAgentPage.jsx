@@ -1939,9 +1939,14 @@ export default function AICallingAgentPage() {
     }
 
     if (invalidPhones.length > 0) {
-      setPhoneError(`Invalid number(s): ${invalidPhones.join(', ')}`)
-      alert(`Invalid phone number(s): ${invalidPhones.join(', ')}. Must be 10-15 digits.`)
-      return
+      const proceed = window.confirm(`The following phone number(s) are invalid and will be skipped:\n${invalidPhones.join(', ')}\n\nDo you want to continue calling the ${validPhones.length} valid number(s)?`);
+      if (!proceed) return;
+    }
+
+    if (validPhones.length === 0) {
+      setPhoneError('No valid phone numbers to call.');
+      alert('No valid phone numbers found. Please enter at least one valid 10-15 digit number.');
+      return;
     }
     setPhoneError('')
     setIsCalling(true)

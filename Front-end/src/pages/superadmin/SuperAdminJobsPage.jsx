@@ -1348,24 +1348,26 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
   const [iframeError, setIframeError] = useState(false);
   const [fileAvailable, setFileAvailable] = useState(true);
 
-  const getFullUrl = (rawUrl) => {
+  const getFullUrl = (rawUrl, type = 'resume') => {
     if (!rawUrl) return '';
-    const str = String(rawUrl).trim();
-    if (str.startsWith('http://') || str.startsWith('https://') || str.startsWith('blob:')) {
-      return str;
+
+    // If it's a Cloudinary raw URL, wrap it in Google Docs Viewer so it renders inline instead of downloading
+    if (rawUrl.includes('res.cloudinary.com') && rawUrl.includes('/raw/upload/')) {
+      return `https://docs.google.com/viewer?url=${encodeURIComponent(rawUrl)}&embedded=true`;
     }
-    const cleanPath = str.replace(/^\/+/, '');
-    let filename = cleanPath;
-    if (filename.includes('resumes/')) {
-      filename = filename.split('resumes/').pop();
-    } else if (filename.includes('/')) {
-      filename = filename.split('/').pop();
+
+    if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://') || rawUrl.startsWith('blob:')) {
+      return rawUrl;
     }
-    return `${API_BASE_URL}/api/public/resumes/${encodeURIComponent(filename)}`;
+    const cleanPath = rawUrl.replace(/^\/+/, '');
+    if (!cleanPath.includes('/')) {
+      return `${API_BASE_URL}/api/public/${type === 'resume' ? 'resumes' : 'cover_letters'}/${cleanPath}`;
+    }
+    return `${API_BASE_URL}/${cleanPath}`;
   };
 
-  const resumeFullUrl = getFullUrl(application.resume_url);
-  const coverLetterFullUrl = getFullUrl(application.cover_letter_url);
+  const resumeFullUrl = getFullUrl(application.resume_url, 'resume');
+  const coverLetterFullUrl = getFullUrl(application.cover_letter_url, 'cover_letter');
   const isPdf = application.resume_url && (
     application.resume_url.toLowerCase().endsWith('.pdf') ||
     application.resume_filename?.toLowerCase().endsWith('.pdf')
