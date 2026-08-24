@@ -266,10 +266,16 @@ export default function RejectedCandidatesPage() {
                       {c.ats_score != null ? `${c.ats_score}%` : (c.skills_match || '--')}
                     </td>
                     <td className="px-5 py-4">
-                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-700 bg-rose-50 px-2.5 py-1 rounded-md border border-rose-100">
-                        <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
-                        Rejected
-                      </span>
+                      {(() => {
+                        const isCompleted = c.session_status === 'completed' || c.interview_status === 'Completed' || c.status === 'completed'
+                        const statusLabel = isCompleted ? 'Completed' : 'Not Completed'
+                        return (
+                          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600">
+                            <span className={`h-1.5 w-1.5 rounded-full ${isCompleted ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                            {statusLabel}
+                          </span>
+                        )
+                      })()}
                     </td>
                     <td className="px-5 py-4">
                       <span className="inline-flex items-center text-xs font-semibold text-rose-700 bg-rose-100 px-2.5 py-1 rounded-full border border-rose-200">
