@@ -64,12 +64,19 @@ export default function AdminLayout({
   const [themeOpen, setThemeOpen] = useState(false)
   const notifRef = useRef(null)
   const themeRef = useRef(null)
+  const profileRef = useRef(null)
 
-  // Close theme popover on outside click
+  // Close popovers and dropdowns on outside click
   useEffect(() => {
     function handleClickOutside(event) {
       if (themeRef.current && !themeRef.current.contains(event.target)) {
         setThemeOpen(false)
+      }
+      if (notifRef.current && !notifRef.current.contains(event.target)) {
+        setNotifDropdownOpen(false)
+      }
+      if (profileRef.current && !profileRef.current.contains(event.target)) {
+        setDropdownOpen(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -563,7 +570,7 @@ export default function AdminLayout({
             </div>
 
             {/* Profile Dropdown */}
-            <div className="relative border-l border-border pl-5">
+            <div ref={profileRef} className="relative border-l border-border pl-5">
               <button
                 onClick={() => setDropdownOpen(!dropdownOpen)}
                 className="flex items-center gap-2 p-1.5 px-2 hover:bg-slate-50 rounded-xl shadow-sm transition-all cursor-pointer border border-slate-100 bg-white"
@@ -607,7 +614,7 @@ export default function AdminLayout({
               )}
             </div>
           </div>
-          </header>
+        </header>
           
           {/* Horizontal Navbar (Navbar Layout) */}
           {layoutConfig?.layout_type === "navbar" && (

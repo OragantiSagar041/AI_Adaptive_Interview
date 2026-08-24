@@ -74,18 +74,29 @@ export default function MasterLayout() {
   }
   const [themeOpen, setThemeOpen] = useState(false)
   const themeRef = useRef(null)
+  const profileRef = useRef(null)
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [notifications, setNotifications] = useState([])
+  const [notifDropdownOpen, setNotifDropdownOpen] = useState(false)
+  const notifRef = useRef(null)
   
-  // Close theme popover when clicking outside
+  // Close theme popover, notifications, and profile dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event) {
       if (themeRef.current && !themeRef.current.contains(event.target)) {
         setThemeOpen(false)
       }
+      if (notifRef.current && !notifRef.current.contains(event.target)) {
+        setNotifDropdownOpen(false)
+      }
+      if (profileRef.current && !profileRef.current.contains(event.target)) {
+        setDropdownOpen(false)
+      }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
   const hexToRgba = (hex, alpha = 1) => {
     let r = 0, g = 0, b = 0;
     if (hex.length === 4) {
@@ -99,9 +110,6 @@ export default function MasterLayout() {
     }
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   }
-  const [notifications, setNotifications] = useState([])
-  const [notifDropdownOpen, setNotifDropdownOpen] = useState(false)
-  const notifRef = useRef(null)
 
   const fetchNotifications = async () => {
     try {
@@ -472,7 +480,7 @@ teal: { primary: '#2dd4bf', hover: '#14b8a6', glow: 'rgba(45, 212, 191, 0.30)' }
             </div>
 
             {/* Profile Dropdown */}
-            <div className="relative">
+            <div ref={profileRef} className="relative">
               <button
                 onClick={() => setDropdownOpen(!dropdownOpen)}
                 className="flex items-center gap-2 p-1.5 px-2 hover:bg-slate-50 rounded-xl shadow-sm transition-all cursor-pointer border border-slate-100 bg-white"
@@ -490,9 +498,7 @@ teal: { primary: '#2dd4bf', hover: '#14b8a6', glow: 'rgba(45, 212, 191, 0.30)' }
               </button>
 
               {dropdownOpen && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setDropdownOpen(false)} />
-                  <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-lg py-1.5 z-50">
+                <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-lg py-1.5 z-50">
                     <NavLink
                       to="/master/profile"
                       onClick={() => setDropdownOpen(false)}
@@ -512,7 +518,6 @@ teal: { primary: '#2dd4bf', hover: '#14b8a6', glow: 'rgba(45, 212, 191, 0.30)' }
                       <LogOut size={15} /> Logout
                     </button>
                   </div>
-                </>
               )}
             </div>
           </div>

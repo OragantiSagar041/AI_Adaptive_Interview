@@ -26,6 +26,159 @@ RULES:
 - Return VALID JSON ONLY."""
 
 
+def _dynamic_offline_evaluation(
+    question: str,
+    answer: str,
+    context: str = "",
+    time_spent_seconds: int = 0,
+    time_limit_seconds: int = 120,
+) -> dict:
+    import re
+    
+    stop_words = {
+        "a", "an", "the", "and", "or", "but", "if", "because", "as", "what", "which",
+        "who", "whom", "this", "that", "these", "those", "am", "is", "are", "was", "were",
+        "be", "been", "being", "have", "has", "had", "having", "do", "does", "did", "doing",
+        "how", "why", "when", "where", "can", "could", "should", "would", "may", "might",
+        "must", "shall", "to", "of", "in", "for", "on", "with", "at", "by", "from", "up",
+        "about", "into", "over", "after", "your", "my", "our", "you", "me", "we", "us",
+        "explain", "describe", "tell", "candidate", "question", "answer", "role", "using"
+    }
+
+    def tokenize(text: str):
+        words = re.findall(r'\b[a-zA-Z0-9_+#\.-]+\b', (text or "").lower())
+        return [w for w in words if w not in stop_words and len(w) > 1]
+
+    q_tokens = set(tokenize(question))
+    c_tokens = set(tokenize(context))
+    words_list = (answer or "").split()
+    a_tokens = tokenize(answer)
+    a_token_set = set(a_tokens)
+    word_count = len(words_list)
+
+    if word_count == 0:
+        return {
+            "content_score": 0,
+            "relevance_score": 0,
+            "time_score": 0,
+            "clarity_score": 0,
+            "confidence_score": 0,
+            "technical_depth_score": 0,
+            "feedback": "No answer recorded.",
+            "keywords": []
+        }
+
+    # 1. RELEVANCE SCORE (0–30 pts): Measures how directly the answer addresses question terms
+    q_matches = q_tokens.intersection(a_token_set)
+    q_overlap_ratio = len(q_matches) / len(q_tokens) if q_tokens else 0.5
+    c_matches = c_tokens.intersection(a_token_set)
+    c_overlap_ratio = len(c_matches) / len(c_tokens) if c_tokens else 0.0
+
+    if q_tokens:
+        if q_overlap_ratio >= 0.60:
+            relevance_s = int(24 + (q_overlap_ratio - 0.60) * 15)
+        elif q_overlap_ratio >= 0.30:
+            relevance_s = int(16 + (q_overlap_ratio - 0.30) * 26.6)
+        elif q_overlap_ratio >= 0.10:
+            relevance_s = int(8 + (q_overlap_ratio - 0.10) * 40)
+        else:
+            relevance_s = int(q_overlap_ratio * 80)
+    else:
+        relevance_s = 15
+    relevance_s = max(0, min(30, relevance_s))
+
+    # 2. CONTENT SCORE (0–50 pts): Concept coverage, structural reasoning, and response depth
+    explanation_indicators = {
+        "because", "therefore", "thus", "for example", "for instance", "such as",
+        "however", "although", "consequently", "result", "firstly", "secondly",
+        "finally", "specifically", "implemented", "solved", "process", "approach",
+        "using", "method", "solution", "advantage", "benefit", "impact", "designed"
+    }
+    lower_ans = answer.lower()
+    exp_count = sum(1 for exp in explanation_indicators if exp in lower_ans)
+
+    coverage_score = min(25, int(len(q_matches) * 5))
+    structure_score = min(15, exp_count * 4)
+    length_depth_score = min(10, int(word_count / 15))
+
+    content_s = coverage_score + structure_score + length_depth_score
+    content_s = max(0, min(50, content_s))
+
+    # 3. TIME SCORE (0–20 pts)
+    time_s = 12
+    if time_spent_seconds > 0 and time_limit_seconds > 0:
+        pct = time_spent_seconds / time_limit_seconds
+        if 0.35 <= pct <= 0.85:
+            time_s = 18
+        elif 0.20 <= pct < 0.35:
+            time_s = 14
+        elif pct < 0.20:
+            time_s = 5
+        elif pct > 1.10:
+            time_s = 8
+
+    # 4. TECHNICAL DEPTH SCORE (0–100 pts)
+    domain_vocab = {
+        "code", "data", "system", "algorithm", "database", "api", "function", "method",
+        "class", "object", "interface", "server", "client", "network", "security",
+        "performance", "optimiz", "framework", "architecture", "component", "state",
+        "testing", "deploy", "pipeline", "async", "sync", "thread", "process", "logic",
+        "model", "schema", "query", "index", "cache", "frontend", "backend", "fullstack",
+        "design", "management", "lead", "team", "project", "strategy", "deliver", "scale"
+    }
+    matched_domain_terms = set()
+    for word in a_token_set:
+        for term in domain_vocab:
+            if term in word:
+                matched_domain_terms.add(word)
+
+    tech_ratio = len(matched_domain_terms) / len(a_token_set) if a_token_set else 0
+    if tech_ratio > 0.15 or len(matched_domain_terms) >= 4:
+        technical_depth_score = 85
+    elif tech_ratio > 0.08 or len(matched_domain_terms) >= 2:
+        technical_depth_score = 65
+    elif len(matched_domain_terms) >= 1:
+        technical_depth_score = 50
+    else:
+        technical_depth_score = 35
+
+    # 5. CLARITY SCORE (0–100 pts)
+    clarity_score = 50
+    if time_spent_seconds > 0 and word_count > 0:
+        wpm = (word_count / time_spent_seconds) * 60
+        if 110 <= wpm <= 160:
+            clarity_score = 85
+        elif 80 <= wpm < 110 or 160 < wpm <= 190:
+            clarity_score = 65
+        else:
+            clarity_score = 45
+    elif word_count >= 15:
+        clarity_score = 70
+
+    # 6. CONFIDENCE SCORE (0–100 pts)
+    hedging_words = [" um ", " uh ", " like ", " i mean ", " sort of ", " kind of ", " maybe ", " probably ", " i guess ", " not sure "]
+    padded_ans = " " + lower_ans + " "
+    hedge_count = sum(padded_ans.count(h) for h in hedging_words)
+    confidence_score = max(20, 90 - (hedge_count * 5))
+
+    extracted_keywords = list(q_matches)[:5] if q_matches else list(a_token_set)[:5]
+    feedback = (
+        f"Offline Analysis: Evaluated dynamically against question concepts. "
+        f"Matched {len(q_matches)} key concept(s) from the question."
+    )
+
+    return {
+        "content_score": content_s,
+        "relevance_score": relevance_s,
+        "time_score": time_s,
+        "clarity_score": clarity_score,
+        "technical_depth_score": technical_depth_score,
+        "confidence_score": confidence_score,
+        "feedback": feedback,
+        "keywords": extracted_keywords if extracted_keywords else ["Offline"],
+    }
+
+
 def analyze_answer(
     question: str,
     answer: str,
@@ -157,85 +310,14 @@ Return VALID JSON ONLY:
     except Exception as e:
         print(f"⚠️ Analysis API Failed: {e}")
 
-        # ── FALLBACK: Heuristic scoring (offline mode) ─────────────────────
-        word_count = len(answer.split())
-
-        # Content score heuristic
-        if word_count < 10:
-            content_s = 8
-            feedback = f"⚠️ AI Offline. Answer too short ({word_count} words). Provide more detail."
-        elif word_count < 30:
-            content_s = 18
-            feedback = f"⚠️ AI Offline. Short answer ({word_count} words). More depth expected."
-        else:
-            content_s = min(int(word_count * 0.8), 40)
-            feedback = f"⚠️ AI Offline. Your answer was recorded ({word_count} words). Check API credits for real analysis."
-
-        # Relevance heuristic (neutral when offline)
-        relevance_s = 15
-
-        # Time score heuristic
-        time_s = 12  # neutral default
-        if time_spent_seconds > 0 and time_limit_seconds > 0:
-            pct = time_spent_seconds / time_limit_seconds
-            if 0.40 <= pct <= 0.85:
-                time_s = 18
-            elif pct < 0.20:
-                time_s = 5
-            elif pct > 1.10:
-                time_s = 8
-
-        # ── DYNAMIC INSIGHTS HEURISTICS (Offline Mode) ─────────────────
-        # 1. Clarity (Based on WPM)
-        wpm = 0
-        clarity_score = 50
-        if time_spent_seconds > 0:
-            wpm = (word_count / time_spent_seconds) * 60
-            if 110 <= wpm <= 160:
-                clarity_score = 85  # Good conversational pace
-            elif 80 <= wpm < 110 or 160 < wpm <= 190:
-                clarity_score = 65  # A bit slow or fast
-            else:
-                clarity_score = 45  # Too slow or too fast
-                
-        # 2. Confidence (Based on hedging words)
-        hedging_words = [" um ", " uh ", " like ", " i mean ", " sort of ", " kind of ", " maybe ", " probably ", " i guess ", " not sure "]
-        lower_ans = " " + answer.lower() + " "
-        hedge_count = sum(lower_ans.count(h) for h in hedging_words)
-        confidence_score = max(20, 90 - (hedge_count * 5))
-        if word_count < 20: 
-            confidence_score = min(confidence_score, 40)
-            
-        # 3. Technical Depth (Based on vocabulary richness / long words)
-        words = answer.split()
-        long_words = [w for w in words if len(w) > 7]
-        richness_ratio = len(long_words) / word_count if word_count > 0 else 0
-        if richness_ratio > 0.30:
-            technical_depth_score = 85
-        elif richness_ratio > 0.15:
-            technical_depth_score = 65
-        else:
-            technical_depth_score = 45
-        if word_count < 20:
-            technical_depth_score = min(technical_depth_score, 40)
-            
-        # Hard fail if no words spoken
-        if word_count == 0:
-            clarity_score = 0
-            confidence_score = 0
-            technical_depth_score = 0
-
-        result_dict = {
-            "corrected_answer": "Analysis unavailable (Offline Mode)",
-            "content_score": content_s,
-            "relevance_score": relevance_s,
-            "time_score": time_s,
-            "clarity_score": clarity_score,
-            "technical_depth_score": technical_depth_score,
-            "confidence_score": confidence_score,
-            "feedback": feedback,
-            "keywords": ["Offline"],
-        }
+        # ── FALLBACK: Dynamic offline scoring (evaluate answer against actual question) ──
+        result_dict = _dynamic_offline_evaluation(
+            question=question,
+            answer=answer,
+            context=context,
+            time_spent_seconds=time_spent_seconds,
+            time_limit_seconds=time_limit_seconds,
+        )
 
     # ── COMMON PROCESSING: Enforce Math & Guardrails ──
     content_s = int(result_dict.get("content_score", 0))

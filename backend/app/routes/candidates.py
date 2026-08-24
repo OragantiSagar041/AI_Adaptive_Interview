@@ -1284,9 +1284,8 @@ async def start_session_interview(link_id: str = Form(...)):
             ),
         }
     
-    # Always generate a full pool of questions — interview is time-based,
-    # candidates answer as many as they can within the interview_duration timer
-    num_questions_to_generate = 20
+    # Always generate a full pool of questions — exactly 22 questions for the interview
+    num_questions_to_generate = 22
     
     # Generate Questions
     source = "job_description" if job_description and len(job_description) > 50 else "resume"

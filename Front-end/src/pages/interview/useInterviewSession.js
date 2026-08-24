@@ -788,7 +788,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         if (qList.length === 0) {
           throw new Error("No interview questions are available for this session. Please contact the recruiter.")
         }
-        setQuestions(qList)
+        setQuestions(qList.slice(0, 22))
         setInterviewId(startPayload.interview_id || '')
         setMonitoringToken(startPayload.monitoring_token || '')
         if (startPayload.monitoring_token) {
@@ -2663,7 +2663,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       } else {
         // ── Pre-fetch next batch when on second-to-last question ──
         const qsLen = questions.length
-        if (!isPrefetchingRef.current && qsLen - currentQuestionIndex <= 2 && prefetchedQuestionsRef.current.length === 0) {
+        if (qsLen < 22 && !isPrefetchingRef.current && qsLen - currentQuestionIndex <= 2 && prefetchedQuestionsRef.current.length === 0) {
           isPrefetchingRef.current = true
           const alreadyAskedIds = questions.map(q => String(q.id || '')).join(',')
           const fd = new FormData()
