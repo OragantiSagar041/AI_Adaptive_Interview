@@ -1224,6 +1224,13 @@ export default function VoiceInterviewPage() {
 
         if (data && data.transcript && data.transcript.trim()) {
           const freshWhisper = data.transcript.trim()
+          
+          const isHallucination = /^(transcribe verbatim\.?|thank you(?:\s+for\s+(?:watching|listening))?\.?|amara\.org\.?|subtitles by\s.*)$/i.test(freshWhisper)
+          if (isHallucination) {
+            console.debug(`[STT HALLUCINATION GATE] Ignored: "${freshWhisper}"`)
+            return ''
+          }
+
           // Each Whisper chunk is a 12-second audio slice — consecutive slices
           // OVERLAP at the boundary. We must APPEND only the new tail rather
           // than replace the whole transcript, otherwise every chunk wipes out
@@ -2637,7 +2644,7 @@ export default function VoiceInterviewPage() {
       <>
         <ErrorBoundary>
           <React.Suspense fallback={<div className="flex h-screen items-center justify-center text-white text-xl bg-[#0a0f1e]">Loading coding environment...</div>}>
-            <VoiceCodingRound question={codingQuestion} interviewId={interviewId} linkId={linkId} duration={roundDuration}
+            <VoiceCodingRound question={codingQuestion} interviewId={interviewId} linkId={linkId} duration={roundDuration} warningsCount={warningsCount}
               sessionDetail={sessionDetail} language={language} wsRef={wsRef} onComplete={() => {
                 const type = interviewType
                 if (type === 'Non-Technical') {
@@ -3282,7 +3289,7 @@ export default function VoiceInterviewPage() {
               <i className="fas fa-exclamation-triangle text-[10px]" />{warningsCount}
             </div>
           )}
-          <span className="text-sm text-slate-400">Q <span className="text-white font-bold">{currentQIdx + 1}</span>/{questions.length}</span>
+t a          <span className="text-sm text-slate-400">Q <span className="text-white font-bold">{currentQIdx + 1}</span>/{questions.length}</span>
         </div>
       </header>
 
