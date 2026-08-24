@@ -64,12 +64,19 @@ export default function AdminLayout({
   const [themeOpen, setThemeOpen] = useState(false)
   const notifRef = useRef(null)
   const themeRef = useRef(null)
+  const profileRef = useRef(null)
 
-  // Close theme popover on outside click
+  // Close popovers and dropdowns on outside click
   useEffect(() => {
     function handleClickOutside(event) {
       if (themeRef.current && !themeRef.current.contains(event.target)) {
         setThemeOpen(false)
+      }
+      if (notifRef.current && !notifRef.current.contains(event.target)) {
+        setNotifDropdownOpen(false)
+      }
+      if (profileRef.current && !profileRef.current.contains(event.target)) {
+        setDropdownOpen(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -562,7 +569,7 @@ export default function AdminLayout({
               </div>
 
               {/* Profile Dropdown */}
-              <div className="relative border-l border-border pl-5">
+              <div ref={profileRef} className="relative border-l border-border pl-5">
                 <button
                   onClick={() => setDropdownOpen(!dropdownOpen)}
                   className="flex items-center gap-2 p-1.5 px-2 hover:bg-slate-50 rounded-xl shadow-sm transition-all cursor-pointer border border-slate-100 bg-white"
@@ -580,31 +587,28 @@ export default function AdminLayout({
                 </button>
 
                 {dropdownOpen && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setDropdownOpen(false)} />
-                    <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-lg py-1.5 z-50">
-                      <NavLink
-                        to="/admin/profile-settings"
-                        onClick={() => setDropdownOpen(false)}
-                        className="flex items-center gap-2.5 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 no-underline"
-                      >
-                        <User size={15} /> My Profile
-                      </NavLink>
+                  <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-lg py-1.5 z-50">
+                    <NavLink
+                      to="/admin/profile-settings"
+                      onClick={() => setDropdownOpen(false)}
+                      className="flex items-center gap-2.5 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 no-underline"
+                    >
+                      <User size={15} /> My Profile
+                    </NavLink>
 
-                      <hr className="border-slate-100 my-1" />
-                      <button
-                        onClick={() => {
-                          setDropdownOpen(false);
-                          if (onLogout) onLogout();
-                        }}
-                        className="w-full text-left flex items-center gap-2.5 px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 font-medium cursor-pointer border-none bg-transparent"
-                      >
-                        <LogOut size={15} /> Logout
-                      </button>
-                    </div>
-                  </>
+                    <hr className="border-slate-100 my-1" />
+                    <button
+                      onClick={() => {
+                        setDropdownOpen(false);
+                        if (onLogout) onLogout();
+                      }}
+                      className="w-full text-left flex items-center gap-2.5 px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 font-medium cursor-pointer border-none bg-transparent"
+                    >
+                      <LogOut size={15} /> Logout
+                  </div>
                 )}
               </div>
+            </div>
           </header>
 
           {/* Horizontal Navbar (Navbar Layout) */}
