@@ -414,6 +414,8 @@ def create_session(data: CreateSession, current_admin: dict = Depends(get_curren
         "current_company": data.current_company,
         "notice_period": data.notice_period,
         "resume_text": data.resume_text,
+        "resume_url": data.resume_url,
+        "resume_filename": data.resume_filename,
         "job_description": data.job_description,
         "custom_email_html": data.custom_email_html,
         "jd_file_url": data.jd_file_url,

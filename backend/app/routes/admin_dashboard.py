@@ -732,6 +732,19 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
         except Exception as nlp_err:
             print(f"⚠️ Resume NLP extraction error in get_candidate_detail: {nlp_err}")
 
+    resume_url_val = session_data.get("resume_url", "")
+    resume_filename_val = session_data.get("resume_filename", "")
+    app_id = session_data.get("application_id")
+    if app_id:
+        from bson import ObjectId
+        try:
+            app_record = job_applications_collection.find_one({"_id": ObjectId(app_id)})
+            if app_record:
+                resume_url_val = app_record.get("resume_url") or resume_url_val
+                resume_filename_val = app_record.get("resume_filename") or resume_filename_val
+        except:
+            pass
+
     response_payload = {
         "interview_id": link_id,
         "actual_interview_id": actual_interview_id,
@@ -748,6 +761,8 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
         "current_company": comp_val,
         "status": sync_session_status(session_data),
         "decision": session_data.get("decision", ""),
+        "resume_url": resume_url_val,
+        "resume_filename": resume_filename_val,
         "resume_text": session_data.get("resume_text", ""),
         "job_description_text": session_data.get("job_description", ""),
         "date": created_at,

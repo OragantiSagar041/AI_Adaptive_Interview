@@ -95,6 +95,8 @@ class CreateSession(BaseModel):
     candidate_name: str
     candidate_email: str
     resume_text: str
+    resume_url: str = ""
+    resume_filename: str = ""
     job_description: str
     admin_id: str
     interview_duration: int = 30  # minutes
