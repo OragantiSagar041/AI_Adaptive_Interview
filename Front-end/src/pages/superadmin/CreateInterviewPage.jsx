@@ -731,6 +731,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
         candidate_name: name,
         candidate_email: email,
         resume_text: resumeText,
+        resume_url: singleCandidate.resumeFileUrl || '',
+        resume_filename: singleCandidate.resumeFileName || '',
         job_description: jobDescription,
         admin_id: adminUser?.admin_id || adminUser?.id || adminUser?._id || 'admin',
         interview_duration: Number(duration),
@@ -1215,6 +1217,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                             email: data.email || prev.email,
                             resumeText: data.text || '',
                             resumeFileName: file.name,
+                            resumeFileUrl: data.file_url || '',
                             phone: data.phone || prev.phone,
                             experience: data.experience || prev.experience,
                             location: data.location || prev.location,
@@ -1227,7 +1230,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                             handleCheckCandidate(data.email, true)
                           }
                         }
-                      }, setResumeParsing)
+                      }, setResumeParsing, 'resume', true)
                     }}
                   />
                   {resumeParsing && <span className="text-xs text-warning font-semibold mt-1"><i className="fas fa-spinner fa-spin mr-1"></i> Parsing resume...</span>}
