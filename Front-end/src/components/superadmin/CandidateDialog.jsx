@@ -715,7 +715,6 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                       )}
                     </div>
                   </section>
-
                   {/* Integrity */}
                   {c.integrity && (
                     <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
@@ -733,25 +732,107 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                 </div>
               )}
 
-              {/* ─ Resume Tab ─ */}
-              {activeTab === 'resume' && (
-                <div className="space-y-6">
-                  {/* Resume Button */}
-                  {resumeText && (
-                    <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="text-sm font-black text-slate-800">Resume / Profile Text</h3>
-                          <p className="text-xs text-slate-400 font-medium mt-0.5">Candidate's submitted resume</p>
-                        </div>
-                        <button
-                          onClick={() => setShowResumeModal(true)}
-                          className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-xl hover:bg-indigo-100 transition-colors shadow-sm"
-                        >
-                          <FileText size={16} /> Resume <ChevronRight size={14} />
-                        </button>
+            {/* ─ Resume Tab ─ */}
+            {activeTab === 'resume' && (
+              <div className="space-y-6">
+
+                {/* Resume / Profile Text Card — compact header with expandable content */}
+                {(resumeUrl || resumeText) && (
+                  <section className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
+
+                    {/* Header row — always visible */}
+                    <div className="flex items-center justify-between px-5 py-4">
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-800">Resume / Profile Text</h3>
+                        <p className="text-xs text-slate-400 mt-0.5">Candidate's submitted resume</p>
                       </div>
-                    </section>
+                      <button
+                        type="button"
+                        onClick={() => setShowResumeContent(prev => !prev)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-100 transition-all shadow-sm hover:scale-[1.02] cursor-pointer"
+                        title="View Candidate Resume"
+                      >
+                        <FileText size={13} className="text-indigo-600" />
+                        Resume
+                        <ChevronRight size={13} className={`text-indigo-500 transition-transform ${showResumeContent ? 'rotate-90' : ''}`} />
+                      </button>
+                    </div>
+
+                    {/* Expandable content — shown when Resume > is clicked */}
+                    {showResumeContent && (
+                      <div className="border-t border-slate-100">
+
+                        {/* Sub-tabs — only show if both url and text exist */}
+                        {resumeUrl && resumeText && (
+                          <div className="flex items-center gap-2 px-4 pt-3 bg-slate-50/50 border-b border-slate-100">
+                            <button
+                              type="button"
+                              onClick={() => setResumeSubTab('document')}
+                              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 ${resumeSubTab === 'document'
+                                  ? 'border-indigo-600 text-indigo-700 bg-white shadow-sm'
+                                  : 'border-transparent text-slate-500 hover:text-slate-800'
+                                }`}
+                            >
+                              <FileText size={13} /> Resume Document
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setResumeSubTab('parsedText')}
+                              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 ${resumeSubTab === 'parsedText'
+                                  ? 'border-indigo-600 text-indigo-700 bg-white shadow-sm'
+                                  : 'border-transparent text-slate-500 hover:text-slate-800'
+                                }`}
+                            >
+                              <Check size={13} /> Extracted Text
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Content area */}
+                        <div>
+                          {/* Show document/PDF when: tab is 'document' OR only resumeUrl exists (no text) */}
+                          {(resumeSubTab === 'document' || (!resumeText && resumeUrl)) && resumeUrl && (
+                            <div>
+                              {resumeFullUrl && isPdf ? (
+                                <iframe
+                                  src={resumeFullUrl}
+                                  title="Candidate Resume"
+                                  className="w-full h-[600px] border-none bg-white"
+                                />
+                              ) : (
+                                <div className="p-8 text-center bg-white space-y-4">
+                                  <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto shadow-inner">
+                                    <FileText size={32} />
+                                  </div>
+                                  <div>
+                                    <h4 className="font-extrabold text-slate-800 text-base">Resume File Attached</h4>
+                                    <p className="text-xs text-slate-500 mt-1 font-mono">{resumeFilename || resumeUrl}</p>
+                                  </div>
+                                  <a
+                                    href={resumeFullUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl transition-all shadow-md shadow-indigo-200"
+                                  >
+                                    <Download size={16} /> Download File
+                                  </a>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Show extracted text when: tab is 'parsedText' OR only resumeText exists (no url) */}
+                          {(resumeSubTab === 'parsedText' || (!resumeUrl && resumeText)) && resumeText && (
+                            <div className="p-6">
+                              <pre className="text-sm text-slate-700 bg-slate-50 rounded-xl p-5 whitespace-pre-wrap font-sans border border-slate-200 leading-relaxed max-h-[500px] overflow-y-auto">
+                                {resumeText}
+                              </pre>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </section>
                   )}
 
                   {/* ATS Score */}
