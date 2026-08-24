@@ -2421,7 +2421,7 @@ def should_attach_job_description_pdf(job_description: str) -> bool:
     return len(text) > 0
 
 def generate_job_description_pdf_base64(job_description: str) -> str:
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, KeepTogether
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.enums import TA_LEFT
@@ -2440,7 +2440,8 @@ def generate_job_description_pdf_base64(job_description: str) -> str:
         fontSize=22,
         alignment=TA_LEFT,
         spaceAfter=24,
-        textColor="#0f172a"
+        textColor="#0f172a",
+        keepWithNext=True
     )
     
     body_style = ParagraphStyle(
@@ -2468,7 +2469,8 @@ def generate_job_description_pdf_base64(job_description: str) -> str:
         fontSize=14,
         spaceBefore=16,
         spaceAfter=8,
-        textColor="#0f172a"
+        textColor="#0f172a",
+        keepWithNext=True
     )
 
     h3_style = ParagraphStyle(
@@ -2478,15 +2480,10 @@ def generate_job_description_pdf_base64(job_description: str) -> str:
         fontSize=12,
         spaceBefore=12,
         spaceAfter=6,
-        textColor="#334155"
+        textColor="#334155",
+        keepWithNext=True
     )
     elements = []
-    current_group = []
-
-    def flush_group():
-        if current_group:
-            elements.append(KeepTogether(list(current_group)))
-            current_group.clear()
 
     def format_text(text):
         # Escape XML symbols first
@@ -2521,22 +2518,17 @@ def generate_job_description_pdf_base64(job_description: str) -> str:
             continue
         clean_line = line.strip()
         if not clean_line:
-            current_group.append(Spacer(1, 8))
+            elements.append(Spacer(1, 8))
             continue
-            
-        is_explicit_heading = False
         is_heading = False
         p_element = None
 
         # Headers
         if clean_line.startswith('### '):
-            is_explicit_heading = True
             p_element = Paragraph(f"<b>{format_text(clean_line[4:])}</b>", h3_style)
         elif clean_line.startswith('## '):
-            is_explicit_heading = True
             p_element = Paragraph(f"<b>{format_text(clean_line[3:])}</b>", h2_style)
         elif clean_line.startswith('# '):
-            is_explicit_heading = True
             p_element = Paragraph(f"<b>{format_text(clean_line[2:])}</b>", h2_style)
             
         # Bullet points (- or * or •)
@@ -2588,14 +2580,9 @@ def generate_job_description_pdf_base64(job_description: str) -> str:
                     p_element = Paragraph(f"<b>{format_text(clean_line)}</b>", h3_style)
                 else:
                     p_element = Paragraph(format_text(clean_line), body_style)
-
-        if is_explicit_heading or is_heading:
-            flush_group()
-        
         if p_element:
-            current_group.append(p_element)
+            elements.append(p_element)
 
-    flush_group()
     doc.build(elements)
     buffer.seek(0)
     pdf_base64 = base64.b64encode(buffer.read()).decode("utf-8")
@@ -2645,85 +2632,119 @@ def build_schedule_block(scheduled_start: str = "", scheduled_end: str = "") -> 
     )
     return schedule_block
 
-def build_default_interview_email_html(candidate_name: str, duration: int, job_description: str, full_link: str, scheduled_start: str = "", scheduled_end: str = "") -> str:
+def build_default_interview_email_html(candidate_name: str, duration: int, job_description: str, full_link: str, scheduled_start: str = "", scheduled_end: str = "", company_name: str = "HireIQ") -> str:
+    import os
+    import html
+    
+    # Use the public image URL so Gmail can load it properly
+    logo_url = "https://raw.githubusercontent.com/OragantiSagar041/AI_Adaptive_Interview/pavan/Front-end/public/hireiq_new_logo.png"
+
+    safe_company = company_name.strip().title() if company_name else "HireIQ"
+    # The platform is ALWAYS HireIQ, so the header banner must always show the HireIQ logo
+    header_content = f'<img src="{logo_url}" alt="HireIQ" style="height: 110px; max-width: 100%; display: inline-block; object-fit: contain;" />'
+
+
     schedule_block = build_schedule_block(scheduled_start, scheduled_end)
     job_description_block = build_job_description_block(job_description)
-
-    expiry_message = ""
-    if not scheduled_start:
-        expiry_message = (
-            '<div style="background-color: #f9fafb; border-left: 3px solid #6b7280; padding: 12px 16px; margin-top: 12px;">'
-            '<p style="margin: 0; color: #374151; font-size: 13px; line-height: 1.5;">'
-            '<b>Note:</b> This assessment link is valid for exactly <b>24 hours</b> from the time of this email.'
-            '</p>'
-            '</div>'
-        )
 
     return f"""
     <!DOCTYPE html>
     <html>
-    <body style="font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 40px 20px; background-color: #f3f4f6; min-height: 100%;">
-        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e5e7eb; border-top: 4px solid #1e3a8a; overflow: hidden;">
-            
-            <!-- Header -->
-            <div style="padding: 40px 40px 20px 40px;">
-                <h1 style="color: #111827; margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.01em;">Interview Invitation</h1>
-            </div>
-
-            <!-- Body -->
-            <div style="padding: 0 40px 40px 40px; background-color: #ffffff;">
-                <p style="font-size: 15px; color: #374151; text-align: left; margin: 0 0 20px 0; line-height: 1.6;">Dear {html.escape(candidate_name)},</p>
-                <p style="color: #4b5563; line-height: 1.6; font-size: 14px; margin: 0 0 24px 0; text-align: left;">We are pleased to invite you to an online assessment as part of our interview process. This assessment is designed to give you an opportunity to showcase your skills and experience.</p>
-                
-                <!-- Role Details Box -->
-                <div style="border: 1px solid #e5e7eb; padding: 20px; margin: 0 0 24px 0; background-color: #ffffff;">
-                    <h3 style="margin: 0 0 12px 0; font-size: 13px; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Role Information</h3>
-                    {job_description_block}
-                </div>
-                
-                <!-- Details grid -->
-                <div style="margin: 0 0 32px 0;">
-                    <p style="color: #4b5563; line-height: 1.6; font-size: 14px; margin: 0 0 8px 0;">
-                        <strong style="color: #111827;">Assessment Duration:</strong> {duration} minutes
-                    </p>
-                    {schedule_block}
-                    {expiry_message}
-                </div>
-                
-                <!-- Recommended Browser Notice -->
-                <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-left: 4px solid #3b82f6; border-radius: 8px; padding: 14px 18px; margin: 24px 0 20px 0; text-align: left;">
-                    <p style="margin: 0; color: #1e40af; font-size: 14px; line-height: 1.5;">
-                        🌐 <b>Recommended Browser:</b> Kindly use <b>Google Chrome</b> (on a laptop or desktop) for the best interview experience, smooth live speech transcription, and camera proctoring.
-                    </p>
-                </div>
-
-                <!-- CTA Button -->
-                <div style="text-align: center; margin: 36px 0;">
-                    <a href="{full_link}" style="background-color: #4f46e5; background-image: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%); color: #ffffff; padding: 16px 40px; text-decoration: none; border-radius: 50px; font-weight: 700; font-size: 16px; display: inline-block; box-shadow: 0 4px 15px rgba(79, 70, 229, 0.3); text-transform: uppercase; letter-spacing: 0.02em;">
-                        Start Interview
-                    </a>
-                </div>
-                
-                <!-- Guidelines -->
-                <div style="background-color: #fff1f2; border-radius: 12px; padding: 24px; margin: 30px 0 0 0; border: 1px solid #fecaca; border-left: 5px solid #e11d48;">
-                    <h3 style="margin: 0 0 16px; font-size: 15px; color: #9f1239; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">⚠️ Important Guidelines</h3>
-                    <ul style="margin: 0; padding-left: 20px; color: #be123c; font-size: 14px; line-height: 1.6;">
-                        <li style="margin-bottom: 8px;"><b>Browser Requirement:</b> Kindly use <b>Google Chrome</b> (or Microsoft Edge) on a desktop/laptop with a working camera and microphone.</li>
-                        <li style="margin-bottom: 8px;"><b>Full-Screen Mode:</b> Must be maintained at all times. Tab switching is recorded as a violation.</li>
-                        <li style="margin-bottom: 8px;"><b>Video Proctoring:</b> Your camera remains active for face tracking and integrity checks.</li>
-                        <li style="margin-bottom: 8px;"><b>Environment:</b> Join from a quiet, well-lit room. Background noise or voices may affect your evaluation.</li>
-                        <li><b>Screen Sharing:</b> You must share your entire screen during the session.</li>
-                    </ul>
-                </div>
-
-                <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px; margin: 24px 0; text-align: left;">
-                    <p style="margin: 0; color: #b91c1c; font-size: 14px; font-weight: 500;">⚠️ <b>Important:</b> Please join only during the scheduled time window. If no schedule is set, the link remains valid for 24 hours.</p>
-                </div>
-                
-                <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 32px 0 24px 0;">
-                <p style="color: #64748b; font-size: 14px; margin: 0; text-align: left; line-height: 1.6;">Best regards,<br/><b style="color: #4f46e5;">Hire IQ Recruiting</b></p>
-            </div>
-        </div>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; background-color: #f1f5f9;">
+        <table width="100%" border="0" cellpadding="0" cellspacing="0" bgcolor="#e5e7eb" style="background-color: #f1f5f9; width: 100%;">
+            <tr>
+                <td align="center" valign="top" style="padding: 40px 20px; background-color: #f1f5f9;">
+                    <!-- Spacer for strict email clients like Gmail that strip padding -->
+                    <table width="100%" border="0" cellpadding="0" cellspacing="0"><tr><td height="40" style="font-size: 40px; line-height: 40px;">&nbsp;</td></tr></table>
+                    
+                    <table width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width: 600px; background-color: #ffffff; border: 1px solid #d1d5db; border-radius: 8px; overflow: hidden; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);">
+                        <!-- Header -->
+                        <tr>
+                            <td style="padding: 40px 40px; text-align: left; background: #000033 linear-gradient(90deg, #000033 40%, #003380 80%, #0059b3 100%); background-color: #000033;">
+                                {header_content}
+                            </td>
+                        </tr>
+                        
+                        <!-- Content -->
+                        <tr>
+                            <td style="padding: 40px;">
+                                <h2 style="color: #111827; font-size: 24px; font-weight: 400; margin: 0 0 24px 0;">Interview Invitation – <strong style="font-weight: 800;">{html.escape(safe_company)}</strong></h2>
+                                
+                                <p style="color: #4b5563; font-size: 16px; margin: 0 0 24px 0;">Dear {html.escape(candidate_name)},</p>
+                                
+                                <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 32px 0;">
+                                    We are pleased to invite you to complete an online AI-proctored assessment. This is the next critical step in our recruitment process.
+                                </p>
+                                
+                                <!-- Assessment Structure Box -->
+                                <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 24px; margin-bottom: 32px;">
+                                    <h3 style="color: #111827; font-size: 16px; font-weight: 600; margin: 0 0 16px 0;">Assessment Structure</h3>
+                                    <p style="color: #4b5563; font-size: 15px; line-height: 1.6; margin: 0 0 16px 0;">
+                                        This assessment evaluates both your theoretical knowledge and practical abilities. It typically contains multiple rounds:
+                                    </p>
+                                    <ul style="margin: 0; padding-left: 20px; color: #4b5563; font-size: 15px; line-height: 1.6;">
+                                        <li style="margin-bottom: 12px;"><strong>Technical & Behavioral Questions:</strong> Verbal or written responses to scenario-based questions.</li>
+                                        <li><strong>Coding/Case Study Round:</strong> Practical tasks or programming challenges (if applicable to your role).</li>
+                                    </ul>
+                                </div>
+                                
+                                <h3 style="color: #374151; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 12px 0;">ROLE INFORMATION</h3>
+                                <div style="color: #374151; font-size: 15px; line-height: 1.6; margin-bottom: 32px;">
+                                    {job_description_block}
+                                </div>
+                                
+                                <div style="border-left: 4px solid #3b82f6; padding-left: 16px; margin-bottom: 32px;">
+                                    <p style="color: #1e3a8a; font-size: 16px; margin: 0;">
+                                        <strong style="color: #1e3a8a;">Total Duration:</strong> {duration} minutes
+                                    </p>
+                                </div>
+                                
+                                {schedule_block}
+                                
+                                <!-- CTA -->
+                                <div style="text-align: center; margin: 40px 0;">
+                                    <a href="{full_link}" style="background-color: #10b981; color: #ffffff; padding: 14px 36px; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600; display: inline-block; box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.2);">Start Assessment</a>
+                                </div>
+                                
+                                <!-- Guidelines -->
+                                <h3 style="color: #111827; font-size: 18px; font-weight: 600; margin: 0 0 16px 0;">Technical Guidelines</h3>
+                                <ul style="margin: 0 0 32px 0; padding-left: 20px; color: #4b5563; font-size: 15px; line-height: 1.6;">
+                                    <li style="margin-bottom: 16px;"><strong>Browser:</strong> Please use the latest version of Google Chrome or Microsoft Edge on a desktop or laptop.</li>
+                                    <li style="margin-bottom: 16px;"><strong>Hardware:</strong> Ensure your webcam and microphone are fully functional before starting.</li>
+                                    <li style="margin-bottom: 16px;"><strong>Proctoring:</strong> You will be required to share your entire screen. Navigating away from the assessment window will be recorded.</li>
+                                    <li><strong>Environment:</strong> Take the assessment in a quiet, well-lit room to ensure accurate evaluation.</li>
+                                </ul>
+                                
+                                <div style="border-left: 4px solid #fbbf24; padding-left: 16px; margin-bottom: 32px;">
+                                    <p style="color: #374151; font-size: 15px; line-height: 1.6; margin: 0;">
+                                        <strong>Important:</strong> This assessment link is valid for exactly <strong>24 hours</strong> from the time of this email.
+                                    </p>
+                                </div>
+                                
+                                <p style="color: #4b5563; font-size: 15px; margin: 0 0 8px 0;">Best regards,</p>
+                                <p style="color: #4b5563; font-size: 16px; font-weight: 600; margin: 0;">HIREIQ Recruiting Team</p>
+                            </td>
+                        </tr>
+                        
+                        <!-- Footer -->
+                        <tr>
+                            <td style="padding: 24px; text-align: center; background-color: #f9fafb; border-top: 1px solid #e5e7eb;">
+                                <p style="color: #6b7280; font-size: 12px; margin: 0;">
+                                    This is an automated message generated securely via the HireIQ platform.
+                                </p>
+                            </td>
+                        </tr>
+                    </table>
+                    
+                    <!-- Bottom Spacer -->
+                    <table width="100%" border="0" cellpadding="0" cellspacing="0"><tr><td height="40" style="font-size: 40px; line-height: 40px;">&nbsp;</td></tr></table>
+                </td>
+            </tr>
+        </table>
     </body>
     </html>
     """
@@ -2735,6 +2756,18 @@ def compute_invite_send_at(scheduled_start: str = "") -> Optional[datetime]:
     return start_dt - timedelta(minutes=15)
 
 def queue_or_send_interview_email(session_doc: Dict[str, Any], link_url: str, skip_db_update: bool = False) -> Dict[str, Any]:
+    company_name = "HireIQ"
+    admin_id = session_doc.get("created_by")
+    if admin_id:
+        try:
+            from bson import ObjectId
+            from app.db.mongo_db import admins_collection
+            admin_doc = admins_collection.find_one({"_id": ObjectId(admin_id)})
+            if admin_doc:
+                company_name = admin_doc.get("company_name") or admin_doc.get("name") or "HireIQ"
+        except Exception:
+            pass
+
     scheduled_start = session_doc.get("scheduled_start", "")
     send_at = compute_invite_send_at(scheduled_start)
     now = datetime.now(timezone.utc)
@@ -2757,6 +2790,7 @@ def queue_or_send_interview_email(session_doc: Dict[str, Any], link_url: str, sk
 
     # Celery: Push email sending to background
     from app import tasks  # local import to avoid circular imports
+    email_sent = False
     try:
         tasks.send_email_task.delay(
             candidate_email=session_doc.get("candidate_email", ""),
@@ -2767,11 +2801,30 @@ def queue_or_send_interview_email(session_doc: Dict[str, Any], link_url: str, sk
             custom_html=session_doc.get("custom_email_html", ""),
             scheduled_start=session_doc.get("scheduled_start", ""),
             scheduled_end=session_doc.get("scheduled_end", ""),
-            jd_file_url=session_doc.get("jd_file_url")
+            jd_file_url=session_doc.get("jd_file_url"),
+            company_name=company_name
         )
+        email_sent = True
     except Exception as e:
-        print(f"Warning: Failed to queue email task for {session_doc.get('candidate_email')}: {e}")
-    email_sent = True # Async operation queued successfully
+        print(f"Warning: Failed to queue email task (Redis down?), falling back to Thread: {e}")
+        try:
+            import threading
+            from app.services.services import send_interview_email
+            threading.Thread(target=send_interview_email, args=(
+                session_doc.get("candidate_email", ""),
+                session_doc.get("candidate_name", ""),
+                link_url,
+                session_doc.get("interview_duration", 30),
+                session_doc.get("job_description", ""),
+                session_doc.get("custom_email_html", ""),
+                session_doc.get("scheduled_start", ""),
+                session_doc.get("scheduled_end", ""),
+                session_doc.get("jd_file_url"),
+                company_name
+            )).start()
+            email_sent = True
+        except Exception as th_e:
+            print(f"Error falling back to Thread for email: {th_e}")
 
     if not skip_db_update:
         interview_sessions_collection.update_one(
@@ -2788,7 +2841,7 @@ def queue_or_send_interview_email(session_doc: Dict[str, Any], link_url: str, sk
         "email_send_at": (send_at.isoformat() if send_at else now.isoformat())
     }
 
-def send_interview_email(candidate_email: str, candidate_name: str, link_url: str, duration: int, job_description: str, custom_html: str = "", scheduled_start: str = "", scheduled_end: str = "", jd_file_url: str = None):
+def send_interview_email(candidate_email: str, candidate_name: str, link_url: str, duration: int, job_description: str, custom_html: str = "", scheduled_start: str = "", scheduled_end: str = "", jd_file_url: str = None, company_name: str = "HireIQ"):
     import os
     import requests
     from dotenv import load_dotenv
@@ -2811,13 +2864,14 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
         job_description=job_description,
         full_link=full_link,
         scheduled_start=scheduled_start,
-        scheduled_end=scheduled_end
+        scheduled_end=scheduled_end,
+        company_name=company_name
     )
 
     payload = {
         "sender": {"name": sender_name, "email": sender_email},
         "to": [{"email": candidate_email, "name": candidate_name}],
-        "subject": "Interview Invitation by HireIQ",
+        "subject": f"Interview Invitation from {company_name.title()}",
         "htmlContent": html_content
     }
 
@@ -2860,7 +2914,7 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
             from email.mime.text import MIMEText
 
             msg = MIMEMultipart("alternative")
-            msg["Subject"] = "Interview Invitation by HireIQ"
+            msg["Subject"] = f"Interview Invitation from {company_name.title()}"
             msg["From"] = f"{sender_name} <{smtp_user}>"
             msg["To"] = candidate_email
 

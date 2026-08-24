@@ -273,18 +273,12 @@ export default function AdminLayout({
               ) : layoutConfig?.favicon ? (
                 <img src={layoutConfig.favicon} alt="Logo" className="h-full w-full object-contain" />
               ) : (
-                <Zap className="h-4 w-4" />
+                <img src="/hireiq_new_logo.png" alt="HireIQ" className="h-8 w-auto object-contain drop-shadow-sm group-data-[collapsible=icon]:hidden" />
               )}
             </div>
-            <div className="leading-tight truncate">
-              <div className="text-sm font-semibold text-slate-800 truncate" title={adminUser?.company_name || 'HireIQ'}>
+            <div className="leading-tight group-data-[collapsible=icon]:hidden truncate pt-1">
+              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest truncate" title={adminUser?.company_name || 'HireIQ'}>
                 {adminUser?.company_name || 'HireIQ'}
-              </div>
-              <div
-                className="text-[11px] font-medium transition-colors duration-500"
-                style={{ color: currentAccent.primary }}
-              >
-                Recruiter
               </div>
             </div>
           </div>
@@ -403,14 +397,13 @@ export default function AdminLayout({
                     ) : layoutConfig?.favicon ? (
                       <img src={layoutConfig.favicon} alt="Logo" className="h-full w-full object-contain" />
                     ) : (
-                      <Zap className="h-4 w-4" />
+                      <img src="/hireiq_new_logo.png" alt="HireIQ" className="h-8 w-auto object-contain drop-shadow-sm" />
                     )}
                   </div>
-                  <div className="leading-tight hidden sm:block truncate max-w-[150px]">
-                    <div className="text-sm font-semibold text-slate-800 truncate" title={adminUser?.company_name || 'HireIQ'}>
+                  <div className="leading-tight hidden sm:block truncate max-w-[150px] pt-1">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest truncate" title={adminUser?.company_name || 'HireIQ'}>
                       {adminUser?.company_name || 'HireIQ'}
                     </div>
-                    <div className="text-[11px] font-medium" style={{ color: currentAccent.primary }}>Recruiter</div>
                   </div>
                 </div>
               )}
