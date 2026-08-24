@@ -347,6 +347,117 @@ async def initiate_manual_ai_call(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class CandidateBulkCallItem(BaseModel):
+    phone_number: str
+    candidate_name: Optional[str] = "Candidate"
+    job_description: Optional[str] = ""
+    job_id: Optional[str] = None
+    application_id: Optional[str] = None
+
+class BulkAICallRequest(BaseModel):
+    candidates: List[CandidateBulkCallItem]
+    default_job_description: Optional[str] = ""
+
+@router.post("/api/calls/initiate-bulk-manual")
+async def initiate_bulk_manual_ai_calls(
+    req: BulkAICallRequest,
+    current_admin: dict = Depends(get_current_admin_details)
+):
+    """
+    Initiates outbound AI calls in bulk for a list of candidates parsed from Excel/CSV or form data.
+    """
+    import re
+    if not req.candidates:
+        raise HTTPException(status_code=400, detail="Candidate list cannot be empty")
+
+    results = []
+    success_count = 0
+    fail_count = 0
+
+    from app.ai import omni_dimension_client
+
+    for item in req.candidates:
+        raw_phone = (item.phone_number or "").strip()
+        digits_only = re.sub(r'\D', '', raw_phone)
+        if len(digits_only) == 12 and digits_only.startswith("91"):
+            digits_only = digits_only[2:]
+        elif len(digits_only) == 11 and digits_only.startswith("0"):
+            digits_only = digits_only[1:]
+
+        c_name = item.candidate_name or "Candidate"
+        c_jd = (item.job_description or "").strip() or (req.default_job_description or "").strip()
+
+        if not digits_only or len(digits_only) < 10 or len(digits_only) > 15:
+            fail_count += 1
+            results.append({
+                "phone_number": raw_phone,
+                "candidate_name": c_name,
+                "status": "failed",
+                "detail": "Invalid phone number length"
+            })
+            continue
+
+        phone_number = digits_only
+
+        try:
+            response = omni_dimension_client.start_omni_call(
+                phone_number=phone_number,
+                candidate_name=c_name,
+                job_description=c_jd,
+                resume_text="",
+                duration=30,
+                skills=""
+            )
+
+            call_id = ""
+            if isinstance(response, dict):
+                if "json" in response and isinstance(response["json"], dict):
+                    call_id = str(response["json"].get("requestId") or response["json"].get("call_id") or "")
+                if not call_id:
+                    call_id = str(response.get("requestId") or response.get("call_id") or "")
+            else:
+                call_id = str(response)
+
+            omni_call_logs_collection.insert_one({
+                "call_id": call_id,
+                "candidate_name": c_name,
+                "phone_number": phone_number,
+                "status": "initiated",
+                "duration": "0m 0s",
+                "recording_url": None,
+                "job_id": item.job_id,
+                "application_id": item.application_id,
+                "admin_id": current_admin.get("admin_id"),
+                "company_id": current_admin.get("company_id"),
+                "created_at": datetime.now(timezone.utc).isoformat()
+            })
+
+            success_count += 1
+            results.append({
+                "phone_number": phone_number,
+                "candidate_name": c_name,
+                "call_id": call_id,
+                "status": "success",
+                "detail": f"AI Call initiated to {phone_number}"
+            })
+        except Exception as e:
+            fail_count += 1
+            results.append({
+                "phone_number": phone_number,
+                "candidate_name": c_name,
+                "status": "failed",
+                "detail": str(e)
+            })
+
+    return {
+        "status": "success",
+        "total": len(req.candidates),
+        "success_count": success_count,
+        "fail_count": fail_count,
+        "results": results
+    }
+
+
 # ─── Omni Dimension Agent Data Routes ─────────────────────────────────────────
 
 @router.get("/api/calls/agent-settings")

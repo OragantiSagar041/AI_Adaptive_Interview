@@ -5,7 +5,7 @@ import {
   Wallet, Users, LayoutGrid, LayoutList, ArrowRight, ChevronRight, Zap,
   Building2, BookOpen, CheckCircle2, Mail, Phone, ExternalLink, RefreshCw,
   ChevronDown, Copy, Calendar, Eye, Download, FileCheck, Check, Sparkles,
-  User, UserCheck, History, ShieldCheck
+  User, UserCheck, History, ShieldCheck, Share2
 } from 'lucide-react';
 import Card from '../../components/Card';
 import Button from '../../components/Button';
@@ -38,6 +38,7 @@ export default function SuperAdminJobsPage() {
   // Login stores it in Redux (auth.token) + sessionStorage('adminToken').
   // sessionStorage is never written, so reading from there always returns null.
   const token = useSelector((state) => state.auth.token);
+  const adminUser = useSelector((state) => state.auth.adminUser);
   const candidates = useSelector((state) => state.candidates?.candidates || []);
 
   // Builds the Authorization header — memoized so identity is stable across renders
@@ -462,6 +463,23 @@ export default function SuperAdminJobsPage() {
                 <LayoutList size={18} />
               </button>
             </div>
+
+            <button
+              onClick={() => {
+                const companyId = adminUser?.company_id || adminUser?.admin_id;
+                if (!companyId) {
+                  alert("Company ID not found.");
+                  return;
+                }
+                const url = `${window.location.origin}/careers/${companyId}`;
+                navigator.clipboard.writeText(url);
+                alert(`Job portal link copied to clipboard:\n${url}`);
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm cursor-pointer border border-slate-200 transition-all active:scale-95"
+            >
+              <Share2 size={18} />
+              Share Job Portal
+            </button>
 
             <button
               onClick={() => { resetForm(); setShowModal(true); }}

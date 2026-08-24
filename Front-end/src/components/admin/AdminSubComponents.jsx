@@ -306,8 +306,8 @@ export function CandidateTable({
                         {c.candidate_id && <span className="text-[0.65rem] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold mr-1">{c.candidate_id}</span>}
                         {c.candidate_name}
                         {c.recording_url && <Video size={14} className="text-primary" />}
-                        {c.decision === 'selected' && (
-                          <span className="text-[0.65rem] bg-success text-white px-1.5 py-0.5 rounded font-extrabold">SELECTED</span>
+                        {(c.decision === 'selected' || c.decision === 'hired' || c.status === 'qualified') && (
+                          <span className="text-[0.65rem] bg-emerald-500 text-white px-1.5 py-0.5 rounded font-extrabold">SELECTED</span>
                         )}
                         {c.decision === 'rejected' && (
                           <span className="text-[0.65rem] bg-rose-500 text-white px-1.5 py-0.5 rounded font-extrabold">REJECTED</span>

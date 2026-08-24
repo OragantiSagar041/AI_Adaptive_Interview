@@ -104,6 +104,10 @@ def api_gen_next_question(
     interview = get_session(req.interview_id)
     followup_streak = interview.get("followup_streak", 0)
 
+    # ── Strict 22-question maximum limit check ──
+    if len(interview.get("questions", [])) >= 22:
+        return {"skip_followup": True, "reason": "Maximum limit of 22 questions reached"}
+
     # ── BUGFIX: Prevent Follow-ups from hijacking the interview ──
     # Find current question and evaluate skip conditions BEFORE calling the AI
     current_idx = -1
@@ -400,6 +404,8 @@ async def generate_more_questions_endpoint(
             profile_text = session.get("profile_text", "")
             source = session.get("source", "resume")
             existing_questions = session.get("questions", [])
+            if len(existing_questions) >= 22:
+                return {"questions": []}
 
             # Parse IDs of already-asked questions to avoid repeats
             asked_ids = set()
