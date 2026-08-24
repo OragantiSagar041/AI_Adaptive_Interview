@@ -697,15 +697,24 @@ export default function SuperAdminLayout() {
               
               {layoutConfig?.layout_type === "navbar" && (
                 <div className="flex items-center gap-3 border-r border-slate-200/60 pr-6 mr-2">
-                  <div
-                    className="grid h-8 w-8 place-items-center rounded-lg text-white shadow-sm transition-all duration-500"
-                    style={{ background: `linear-gradient(135deg, ${currentAccent.primary}, ${currentAccent.hover})` }}
-                  >
-                    <Zap className="h-4 w-4" />
-                  </div>
-                  <div className="leading-tight hidden sm:block">
-                    <div className="text-sm font-semibold text-slate-800">HireIQ</div>
-                    <div className="text-[11px] font-medium" style={{ color: currentAccent.primary }}>Super Admin</div>
+                  <div className="flex items-center gap-3 w-full overflow-hidden">
+                    <div className="shrink-0 flex items-center justify-center group-data-[collapsible=icon]:w-full">
+                      <img src="/hireiq_new_logo.png" alt="HireIQ" className="h-10 w-auto object-contain drop-shadow-sm group-data-[collapsible=icon]:hidden" />
+                      <div
+                        className="hidden group-data-[collapsible=icon]:flex h-8 w-8 place-items-center rounded-lg text-white shadow-sm transition-all duration-500 mx-auto"
+                        style={{ background: `linear-gradient(135deg, ${currentAccent.primary}, ${currentAccent.hover})` }}
+                      >
+                        <Zap className="h-4 w-4" />
+                      </div>
+                    </div>
+                    <div className="leading-tight group-data-[collapsible=icon]:hidden truncate pt-1">
+                      <div
+                        className="text-[10px] font-bold uppercase tracking-widest truncate transition-colors duration-500"
+                        style={{ color: currentAccent.primary }}
+                      >
+                        Super Admin
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}

@@ -350,6 +350,7 @@ def send_email_task(
     scheduled_start: str = "",
     scheduled_end: str = "",
     jd_file_url: str = None,
+    company_name: str = "HireIQ",
 ):
     logger.info(f"Sending email via Celery to {candidate_email} (Attempt {self.request.retries + 1})")
 
@@ -366,7 +367,7 @@ def send_email_task(
             custom_html.strip()
             if custom_html and custom_html.strip()
             else build_default_interview_email_html(
-                candidate_name, duration, job_description, link_url, scheduled_start, scheduled_end
+                candidate_name, duration, job_description, link_url, scheduled_start, scheduled_end, company_name
             )
         )
 

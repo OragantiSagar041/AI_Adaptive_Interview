@@ -283,12 +283,9 @@ teal: { primary: '#2dd4bf', hover: '#14b8a6', glow: 'rgba(45, 212, 191, 0.30)' }
       <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-white/80 backdrop-blur-md md:flex flex-col h-screen relative z-10">
         {/* Brand / Logo */}
         <div className="flex items-center gap-3 px-6 h-16 border-b border-slate-200 shrink-0">
-          <div className="grid h-8 w-8 place-items-center rounded-lg bg-indigo-600 text-white shadow-sm">
-            <Zap className="h-4 w-4" />
-          </div>
-          <div className="leading-tight">
-            <div className="text-sm font-semibold">HireIQ</div>
-            <div className="text-[11px] text-slate-500">Master Admin</div>
+          <img src="/hireiq_new_logo.png" alt="HireIQ" className="h-10 w-auto object-contain drop-shadow-sm" />
+          <div className="leading-tight pt-1">
+            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Master Admin</div>
           </div>
         </div>
 
