@@ -21,6 +21,7 @@ const CaseStudyPage = React.lazy(() => import('./pages/CaseStudyPage'))
 const VoiceInterviewPage = React.lazy(() => import('./pages/VoiceInterviewPage'))
 const HireIQCaseStudyPage = React.lazy(() => import('./pages/HireIQCaseStudyPage'))
 const JobApplicationPage = React.lazy(() => import('./pages/JobApplicationPage'))
+const JobPortalPage = React.lazy(() => import('./pages/JobPortalPage'))
 const SpectatorPage = React.lazy(() => import('./pages/SpectatorPage'))
 
 // Admin / master routes (were already lazy — keep them)
@@ -93,6 +94,7 @@ function App() {
           <Route path="/customer-story/:id" element={<HireIQCaseStudyPage />} />
           <Route path="/voice-interview/:linkId" element={<VoiceInterviewPage />} />
           <Route path="/apply/:jobId" element={<JobApplicationPage />} />
+          <Route path="/careers/:companyId" element={<JobPortalPage />} />
           <Route path="/spectate/:linkId" element={<SpectatorPage />} />
           {/* Master routes */}
           <Route
