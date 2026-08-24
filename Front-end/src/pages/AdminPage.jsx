@@ -202,18 +202,6 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
 
   const layoutConfig = adminUser?.layout_config;
 
-  const currentAccent = layoutConfig?.primary_color 
-    ? { primary: layoutConfig.primary_color, hover: layoutConfig.primary_color, glow: 'rgba(0, 0, 0, 0.15)' } 
-    : (accentColors[accentName] || accentColors.indigo);
-
-  // Inject CSS variables so the entire Recruiter layout reflects the chosen accent color
-  useEffect(() => {
-    document.documentElement.style.setProperty('--accent-theme-color', currentAccent.primary)
-    document.documentElement.style.setProperty('--primary-color', currentAccent.primary)
-    document.documentElement.style.setProperty('--primary-hover', currentAccent.hover)
-    document.documentElement.style.setProperty('--primary-glow', currentAccent.glow)
-  }, [accentName])
-
   // Live Stream WebRTC State
   const [isLiveStreamOpen, setIsLiveStreamOpen] = useState(false)
   const [liveStreamSession, setLiveStreamSession] = useState(null)
@@ -328,13 +316,8 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
   const [bulkResultsModalOpen, setBulkResultsModalOpen] = useState(false)
   const [bulkResultsData, setBulkResultsData] = useState(null)
 
-  // Inject CSS override variables
+  // Favicon update
   useEffect(() => {
-    document.documentElement.style.setProperty('--accent-theme-color', currentAccent.primary)
-    document.documentElement.style.setProperty('--primary-color', currentAccent.primary)
-    document.documentElement.style.setProperty('--primary-hover', currentAccent.hover)
-    document.documentElement.style.setProperty('--primary-glow', currentAccent.glow)
-
     let link = document.querySelector("link[rel~='icon']");
     if (!link) {
       link = document.createElement('link');
@@ -347,7 +330,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     } else {
       link.href = '/hireiq.png';
     }
-  }, [accentName, currentAccent, layoutConfig])
+  }, [layoutConfig])
 
   // Polling Effect for dashboard stats and ongoing interviews.
   // - Interval raised from 12s → 60s to reduce backend load.
@@ -1215,11 +1198,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
       <AdminLayout
         role={role}
         activeTab={liveResultsModalOpen ? 'live' : activeTab}
-        accentColors={accentColors}
-        accentName={accentName}
-        currentAccent={currentAccent}
         adminUser={adminUser}
-        onAccentChange={setAccentName}
         onLogout={handleLogout}
         onAddCredits={handleAddCreditsClick}
         onTabChange={(tab) => {

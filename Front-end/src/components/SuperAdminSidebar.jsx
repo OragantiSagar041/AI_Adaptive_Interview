@@ -22,7 +22,6 @@ export default function SuperAdminSidebar({
   activeTab,
   onTabChange,
   onLogout,
-  currentAccent,
   isCollapsed,
   setIsCollapsed,
 }) {
@@ -48,26 +47,19 @@ export default function SuperAdminSidebar({
 
   return (
     <aside
-      className={`text-white flex flex-col z-50 shadow-lg shrink-0 overflow-hidden transition-all duration-300 ${isCollapsed ? 'w-[80px] p-4 items-center gap-4 h-screen' : 'w-[260px] p-5 gap-5 h-screen'
+      className={`bg-white dark:bg-[#0b1120] border-r border-slate-200/80 dark:border-slate-800 text-slate-800 dark:text-slate-100 flex flex-col z-50 shrink-0 overflow-hidden transition-all duration-300 sticky top-0 h-screen ${isCollapsed ? 'w-[80px] p-4 items-center gap-4' : 'w-[260px] p-5 gap-5'
         }`}
-      style={{
-        background: `
-          radial-gradient(circle at 20% 18%, rgba(255, 255, 255, 0.12), transparent 24%),
-          linear-gradient(180deg, rgba(20, 37, 91, 0.96) 0%, rgba(30, 58, 138, 0.94) 46%, rgba(37, 99, 235, 0.9) 100%)
-        `,
-        boxShadow: `0 20px 60px rgba(15, 23, 42, 0.12)`
-      }}
     >
       <div className={`flex w-full ${isCollapsed ? 'flex-col items-center gap-4' : 'items-center justify-between gap-2.5'}`}>
         <div className="flex items-center gap-2.5 overflow-hidden">
           <img src={logoImage} alt="Hire IQ Logo" className="w-8 h-8 object-contain" />
           {!isCollapsed && (
-            <strong className="text-xl font-bold tracking-tight text-white font-title truncate">Hire IQ</strong>
+            <strong className="text-xl font-bold tracking-tight text-slate-900 dark:text-white font-title truncate">Hire IQ</strong>
           )}
         </div>
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="p-1 rounded-lg hover:bg-white/10 text-white/80 hover:text-white border-none cursor-pointer outline-none transition-colors shrink-0"
+          className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border-none cursor-pointer outline-none transition-colors shrink-0"
           title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
         >
           {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
@@ -76,7 +68,7 @@ export default function SuperAdminSidebar({
 
       <nav className="flex flex-col gap-1.5 flex-grow overflow-y-auto w-full scrollbar-none">
         {!isCollapsed && (
-          <div className="text-[0.62rem] font-bold text-white/50 uppercase tracking-widest px-3 mb-1">
+          <div className="text-[0.62rem] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest px-3 mb-1">
             Super Admin Control
           </div>
         )}
@@ -90,8 +82,8 @@ export default function SuperAdminSidebar({
               title={isCollapsed ? label : ""}
               className={`w-full text-left flex items-center rounded-lg text-sm font-semibold transition-all border-none outline-none cursor-pointer ${isCollapsed ? 'justify-center p-2' : 'px-3.5 py-2 gap-3'
                 } ${isActive
-                  ? 'bg-white text-indigo-700 shadow-sm'
-                  : 'bg-transparent text-white/80 hover:bg-white/10 hover:text-white'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20'
+                  : 'bg-transparent text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-800/80 hover:text-indigo-600 dark:hover:text-indigo-400'
                 }`}
             >
               <Icon size={16} className="shrink-0" />
@@ -100,15 +92,14 @@ export default function SuperAdminSidebar({
           )
         })}
 
-
-        <div className="border-t border-white/10 my-2 w-full" />
+        <div className="border-t border-slate-200 dark:border-slate-800 my-2 w-full" />
         <button
           onClick={() => handleTabClick('live')}
           title={isCollapsed ? "Live Results" : ""}
           className={`text-left flex items-center rounded-lg text-sm font-semibold transition-all border-none outline-none cursor-pointer ${isCollapsed ? 'justify-center p-2' : 'px-3.5 py-2 gap-3 w-full'
             } ${activeTab === 'live'
-              ? 'bg-white text-indigo-700 shadow-sm'
-              : 'bg-transparent text-white/80 hover:bg-white/10 hover:text-white'
+              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20'
+              : 'bg-transparent text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-800/80 hover:text-indigo-600 dark:hover:text-indigo-400'
             }`}
         >
           <Radio size={16} className="shrink-0" />
@@ -119,7 +110,7 @@ export default function SuperAdminSidebar({
       <button
         onClick={onLogout}
         title={isCollapsed ? "Logout" : ""}
-        className={`text-left flex items-center border border-white/20 hover:bg-white/10 text-white outline-none cursor-pointer transition-all ${isCollapsed ? 'justify-center p-2 rounded-xl' : 'px-3.5 py-2 rounded-lg gap-3 w-full'
+        className={`text-left flex items-center border border-slate-200 dark:border-slate-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-600 dark:text-slate-300 hover:text-rose-600 dark:hover:text-rose-400 outline-none cursor-pointer transition-all ${isCollapsed ? 'justify-center p-2 rounded-xl' : 'px-3.5 py-2 rounded-lg gap-3 w-full'
           }`}
       >
         <LogOut size={16} className="shrink-0" />

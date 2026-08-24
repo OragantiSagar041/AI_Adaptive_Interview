@@ -74,124 +74,127 @@ const AuditLogsPage = React.lazy(() => import('./pages/superadmin/AuditLogsPage'
 const SecurityPage = React.lazy(() => import('./pages/superadmin/SecurityPage'))
 
 import ErrorBoundary from './components/ErrorBoundary'
+import { ThemeProvider } from './context/ThemeContext'
 
 function App() {
   return (
-    <BrowserRouter>
-      <React.Suspense fallback={<div className="flex h-screen items-center justify-center bg-slate-50 text-slate-900 font-semibold text-lg tracking-wide">Loading Interface...</div>}>
-        <ErrorBoundary>
-          <Routes>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/voice-recruiter" element={<AiRecruiterLandingPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/interview" element={<Interview />} />
-          <Route path="/interview/technical" element={<InterviewTechnical />} />
-          <Route path="/interview/normal" element={<InterviewNormal />} />
-          <Route path="/interview/non-technical" element={<InterviewNonTechnical />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/case-study" element={<CaseStudyPage />} />
-          <Route path="/customer-story/:id" element={<HireIQCaseStudyPage />} />
-          <Route path="/voice-interview/:linkId" element={<VoiceInterviewPage />} />
-          <Route path="/apply/:jobId" element={<JobApplicationPage />} />
-          <Route path="/spectate/:linkId" element={<SpectatorPage />} />
-          {/* Master routes */}
-          <Route
-            path="/master"
-            element={
-              <ProtectedRoute allowedRoles={['master']}>
-                <MasterLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<Navigate to="dashboard" replace />} />
-            <Route path="dashboard" element={<MasterDashboard />} />
-            <Route path="company-revenue" element={<CompanyRevenue />} />
-            <Route path="plans" element={<Plans />} />
-            <Route path="subscribers" element={<Subscribers />} />
-            <Route path="create-tenant" element={<CreateTenant />} />
-            <Route path="demo-requests" element={<DemoRequests />} />
-            <Route path="customize" element={<Customize />} />
-            <Route path="customizing-admin/:id" element={<CustomizingAdmin />} />
-            <Route path="profile" element={<MasterProfile />} />
-            <Route path="notifications" element={<MasterNotifications />} />
-          </Route>
+    <ThemeProvider>
+      <BrowserRouter>
+        <React.Suspense fallback={<div className="flex h-screen items-center justify-center bg-slate-50 text-slate-900 font-semibold text-lg tracking-wide">Loading Interface...</div>}>
+          <ErrorBoundary>
+            <Routes>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/voice-recruiter" element={<AiRecruiterLandingPage />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/interview" element={<Interview />} />
+            <Route path="/interview/technical" element={<InterviewTechnical />} />
+            <Route path="/interview/normal" element={<InterviewNormal />} />
+            <Route path="/interview/non-technical" element={<InterviewNonTechnical />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route path="/case-study" element={<CaseStudyPage />} />
+            <Route path="/customer-story/:id" element={<HireIQCaseStudyPage />} />
+            <Route path="/voice-interview/:linkId" element={<VoiceInterviewPage />} />
+            <Route path="/apply/:jobId" element={<JobApplicationPage />} />
+            <Route path="/spectate/:linkId" element={<SpectatorPage />} />
+            {/* Master routes */}
+            <Route
+              path="/master"
+              element={
+                <ProtectedRoute allowedRoles={['master']}>
+                  <MasterLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<Navigate to="dashboard" replace />} />
+              <Route path="dashboard" element={<MasterDashboard />} />
+              <Route path="company-revenue" element={<CompanyRevenue />} />
+              <Route path="plans" element={<Plans />} />
+              <Route path="subscribers" element={<Subscribers />} />
+              <Route path="create-tenant" element={<CreateTenant />} />
+              <Route path="demo-requests" element={<DemoRequests />} />
+              <Route path="customize" element={<Customize />} />
+              <Route path="customizing-admin/:id" element={<CustomizingAdmin />} />
+              <Route path="profile" element={<MasterProfile />} />
+              <Route path="notifications" element={<MasterNotifications />} />
+            </Route>
 
-          {/* SuperAdmin routes — must be above admin routes */}
-          <Route
-            path="/superadmin"
-            element={
-              <ProtectedRoute allowedRoles={['superadmin']}>
-                <SuperAdminLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<Navigate to="new-dashboard" replace />} />
-            <Route path="new-dashboard" element={<NewSuperDashboardPage />} />
-            <Route path="team" element={<TeamManagementPage />} />
-            <Route path="dashboard" element={<SuperDashboardPage />} />
-            <Route path="interviews" element={<SuperAdminInterviewsPage />} />
-            <Route path="qualified-candidates" element={<SuperAdminQualifiedCandidatesPage />} />
-            <Route path="rejected-candidates" element={<SuperAdminRejectedCandidatesPage />} />
-            <Route path="create-interview" element={<SuperAdminCreateInterviewPage />} />
-            <Route path="ai-calling" element={<AICallingAgentPage />} />
-            <Route path="conversational-flow" element={<ConversationalFlowPage />} />
-            <Route path="jobs" element={<SuperAdminJobsPage />} />
-            <Route path="candidate/profile/:id" element={<ProfileViewPage />} />
-            <Route path="profile-settings" element={<SuperAdminProfileSettings />} />
-            <Route path="notifications" element={<SuperAdminNotifications />} />
-            <Route path="organizations" element={<OrganizationsPage />} />
-            <Route path="recruiters" element={<RecruitersPage />} />
-            <Route path="credit" element={<CreditManagementPage />} />
-            <Route path="subscription" element={<SubscriptionManagementPage />} />
-            <Route path="integrations" element={<IntegrationsPage />} />
-            <Route path="audit" element={<AuditLogsPage />} />
-            <Route path="security" element={<SecurityPage />} />
-          </Route>
+            {/* SuperAdmin routes — must be above admin routes */}
+            <Route
+              path="/superadmin"
+              element={
+                <ProtectedRoute allowedRoles={['superadmin']}>
+                  <SuperAdminLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<Navigate to="new-dashboard" replace />} />
+              <Route path="new-dashboard" element={<NewSuperDashboardPage />} />
+              <Route path="team" element={<TeamManagementPage />} />
+              <Route path="dashboard" element={<SuperDashboardPage />} />
+              <Route path="interviews" element={<SuperAdminInterviewsPage />} />
+              <Route path="qualified-candidates" element={<SuperAdminQualifiedCandidatesPage />} />
+              <Route path="rejected-candidates" element={<SuperAdminRejectedCandidatesPage />} />
+              <Route path="create-interview" element={<SuperAdminCreateInterviewPage />} />
+              <Route path="ai-calling" element={<AICallingAgentPage />} />
+              <Route path="conversational-flow" element={<ConversationalFlowPage />} />
+              <Route path="jobs" element={<SuperAdminJobsPage />} />
+              <Route path="candidate/profile/:id" element={<ProfileViewPage />} />
+              <Route path="profile-settings" element={<SuperAdminProfileSettings />} />
+              <Route path="notifications" element={<SuperAdminNotifications />} />
+              <Route path="organizations" element={<OrganizationsPage />} />
+              <Route path="recruiters" element={<RecruitersPage />} />
+              <Route path="credit" element={<CreditManagementPage />} />
+              <Route path="subscription" element={<SubscriptionManagementPage />} />
+              <Route path="integrations" element={<IntegrationsPage />} />
+              <Route path="audit" element={<AuditLogsPage />} />
+              <Route path="security" element={<SecurityPage />} />
+            </Route>
 
-          {/* Legacy URL aliases */}
-          <Route path="/super-admin" element={<Navigate to="/superadmin/new-dashboard" replace />} />
-          <Route path="/super_admin" element={<Navigate to="/superadmin/new-dashboard" replace />} />
+            {/* Legacy URL aliases */}
+            <Route path="/super-admin" element={<Navigate to="/superadmin/new-dashboard" replace />} />
+            <Route path="/super_admin" element={<Navigate to="/superadmin/new-dashboard" replace />} />
 
-          {/* Admin route — with nested sub-routes */}
-          <Route
-            path="/admin"
-            element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <AdminPage />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<Navigate to="dashboard" replace />} />
-            <Route path="dashboard" element={<OverviewDashboardPage />} />
-            <Route path="interviews" element={<AdminInterviewsPage />} />
-            <Route path="qualified-candidates" element={<QualifiedCandidatesPage />} />
-            <Route path="rejected-candidates" element={<RejectedCandidatesPage />} />
-            <Route path="create-interview" element={<CreateInterviewPage />} />
-            <Route path="ai-calling" element={<AICallingAgentPage />} />
-            <Route path="conversational-flow" element={<ConversationalFlowPage />} />
-            <Route path="jobs" element={<SuperAdminJobsPage />} />
-            <Route path="candidate/profile/:id" element={<ProfileViewPage />} />
-            <Route path="profile-settings" element={<ProfileSettings />} />
-            <Route path="notifications" element={<AdminNotifications />} />
-          </Route>
+            {/* Admin route — with nested sub-routes */}
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminPage />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<Navigate to="dashboard" replace />} />
+              <Route path="dashboard" element={<OverviewDashboardPage />} />
+              <Route path="interviews" element={<AdminInterviewsPage />} />
+              <Route path="qualified-candidates" element={<QualifiedCandidatesPage />} />
+              <Route path="rejected-candidates" element={<RejectedCandidatesPage />} />
+              <Route path="create-interview" element={<CreateInterviewPage />} />
+              <Route path="ai-calling" element={<AICallingAgentPage />} />
+              <Route path="conversational-flow" element={<ConversationalFlowPage />} />
+              <Route path="jobs" element={<SuperAdminJobsPage />} />
+              <Route path="candidate/profile/:id" element={<ProfileViewPage />} />
+              <Route path="profile-settings" element={<ProfileSettings />} />
+              <Route path="notifications" element={<AdminNotifications />} />
+            </Route>
 
-          {/* Unauthorized Route */}
-          <Route path="/unauthorized" element={
-            <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 text-slate-800">
-              <h1 className="text-4xl font-bold mb-4">403 - Unauthorized</h1>
-              <p className="text-lg mb-6">You don't have permission to access this page.</p>
-              <a href="/" className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
-                Go to Homepage
-              </a>
-            </div>
-          } />
+            {/* Unauthorized Route */}
+            <Route path="/unauthorized" element={
+              <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 text-slate-800">
+                <h1 className="text-4xl font-bold mb-4">403 - Unauthorized</h1>
+                <p className="text-lg mb-6">You don't have permission to access this page.</p>
+                <a href="/" className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
+                  Go to Homepage
+                </a>
+              </div>
+            } />
 
-          {/* Fallback route */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-        </ErrorBoundary>
-      </React.Suspense>
-    </BrowserRouter>
+            {/* Fallback route */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+          </ErrorBoundary>
+        </React.Suspense>
+      </BrowserRouter>
+    </ThemeProvider>
   )
 }
 

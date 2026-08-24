@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { API_BASE_URL } from '../apiConfig'
 import { User, Building2, Mail, Phone, Lock, ShieldCheck, ArrowLeft } from 'lucide-react'
+import ThemeToggle from '../components/ThemeToggle'
 import logo from '../assets/logo.png'
 
 function RegisterPage() {
@@ -27,10 +28,7 @@ function RegisterPage() {
     "Advance": 2,
   }
 
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', 'dark')
-    document.documentElement.classList.add('dark')
-  }, [])
+
 
   useEffect(() => {
     async function loadPlans() {
@@ -214,7 +212,7 @@ function RegisterPage() {
   }
 
   return (
-    <main className="relative min-h-screen bg-[#0f172a] text-slate-100 font-sans overflow-x-hidden px-4 py-8 md:px-8">
+    <main className="relative min-h-screen bg-slate-50 dark:bg-[#0f172a] text-slate-900 dark:text-slate-100 font-sans overflow-x-hidden px-4 py-8 md:px-8 transition-colors duration-300">
       {/* Background Soft Glows */}
       <div 
         aria-hidden="true" 
@@ -223,41 +221,44 @@ function RegisterPage() {
       {/* Soft Dot Grid Pattern */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 opacity-[0.12]"
+        className="pointer-events-none absolute inset-0 opacity-[0.12] dark:opacity-[0.12] opacity-[0.06]"
         style={{
-          backgroundImage: "radial-gradient(rgba(255, 255, 255, 0.2) 1px, transparent 1px)",
+          backgroundImage: "radial-gradient(currentColor 1px, transparent 1px)",
           backgroundSize: "28px 28px"
         }}
       />
 
       <div className="relative z-10 mx-auto max-w-7xl">
         {/* Top Navigation Header */}
-        <header className="mb-10 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-700/60 bg-[#1e293b]/70 px-6 py-4 shadow-lg backdrop-blur-xl">
+        <header className="mb-10 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 bg-white/80 dark:bg-[#1e293b]/70 px-6 py-4 shadow-lg backdrop-blur-xl">
           <Link to="/" className="flex items-center gap-3 no-underline">
-            <img src={logo} alt="Hire IQ Logo" className="h-10 w-auto object-contain brightness-110" />
-            <span className="text-xs leading-snug text-slate-400 hidden sm:inline-block">
+            <img src={logo} alt="Hire IQ Logo" className="h-10 w-auto object-contain" />
+            <span className="text-xs leading-snug text-slate-500 dark:text-slate-400 hidden sm:inline-block">
               AI interview infrastructure<br />for modern hiring teams
             </span>
           </Link>
-          <Link 
-            to="/" 
-            className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-300 hover:text-white px-4 py-2 rounded-full border border-slate-700 bg-slate-800/80 hover:bg-slate-700 transition-all shadow-sm"
-          >
-            <ArrowLeft size={14} /> Back to platform
-          </Link>
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            <Link 
+              to="/" 
+              className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all shadow-xs"
+            >
+              <ArrowLeft size={14} /> Back to platform
+            </Link>
+          </div>
         </header>
 
         <div className="grid grid-cols-1 gap-12 lg:grid-cols-[1.15fr_0.85fr] items-start">
           {/* Left Column: Registration Form & Plan Selector */}
           <div className="flex flex-col gap-8">
             <div>
-              <span className="inline-flex items-center gap-2 rounded-full border border-indigo-500/30 bg-indigo-500/15 px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-indigo-300">
+              <span className="inline-flex items-center gap-2 rounded-full border border-indigo-500/30 bg-indigo-500/15 px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-300">
                 <ShieldCheck size={14} /> Workspace Registration
               </span>
-              <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-slate-100 sm:text-5xl lg:text-5xl">
-                Set up your <span className="bg-gradient-to-r from-slate-100 via-indigo-200 to-purple-300 bg-clip-text text-transparent">company workspace.</span>
+              <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100 sm:text-5xl lg:text-5xl">
+                Set up your <span className="bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-500 dark:from-slate-100 dark:via-indigo-200 dark:to-purple-300 bg-clip-text text-transparent">company workspace.</span>
               </h1>
-              <p className="mt-3 max-w-2xl text-sm md:text-base text-slate-400 leading-relaxed">
+              <p className="mt-3 max-w-2xl text-sm md:text-base text-slate-600 dark:text-slate-400 leading-relaxed">
                 Choose a plan, create your admin account, and activate the interview console for your hiring team.
               </p>
             </div>
@@ -265,23 +266,23 @@ function RegisterPage() {
             {status.message && (
               <div className={`rounded-xl border p-4 text-sm font-medium backdrop-blur-md ${
                 status.type === 'error'
-                  ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                  ? 'bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-500/30'
                   : status.type === 'success'
-                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                  : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                  ? 'bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/30'
+                  : 'bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/30'
               }`}>
                 {status.message}
               </div>
             )}
 
             {loadingPlans ? (
-              <div className="py-12 text-center text-slate-400 text-sm">Loading subscription plans...</div>
+              <div className="py-12 text-center text-slate-500 dark:text-slate-400 text-sm">Loading subscription plans...</div>
             ) : (
-              <form onSubmit={handleSubmit} className="flex flex-col gap-6 rounded-2xl border border-slate-700/60 bg-[#1e293b]/70 p-7 md:p-8 shadow-xl backdrop-blur-xl">
+              <form onSubmit={handleSubmit} className="flex flex-col gap-6 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 bg-white/90 dark:bg-[#1e293b]/70 p-7 md:p-8 shadow-xl backdrop-blur-xl transition-colors">
                 <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                   <div className="flex flex-col gap-2">
-                    <label className="text-xs font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-                      <User size={14} className="text-indigo-400" /> Full Name <span className="text-rose-400">*</span>
+                    <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                      <User size={14} className="text-indigo-600 dark:text-indigo-400" /> Full Name <span className="text-rose-500">*</span>
                     </label>
                     <input
                       type="text"
@@ -290,13 +291,13 @@ function RegisterPage() {
                       onChange={handleInputChange}
                       placeholder="e.g. John Doe"
                       required
-                      className="w-full bg-[#0f172a]/70 border border-slate-700 rounded-xl px-4 py-3 text-slate-100 text-sm placeholder:text-slate-500 outline-none transition-all focus:border-indigo-500 focus:bg-[#0f172a] focus:ring-2 focus:ring-indigo-500/20"
+                      className="w-full bg-slate-50 dark:bg-[#0f172a]/70 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-slate-100 text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none transition-all focus:border-indigo-500 focus:bg-white dark:focus:bg-[#0f172a] focus:ring-2 focus:ring-indigo-500/20"
                     />
                   </div>
 
                   <div className="flex flex-col gap-2">
-                    <label className="text-xs font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-                      <Building2 size={14} className="text-indigo-400" /> Company Name
+                    <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                      <Building2 size={14} className="text-indigo-600 dark:text-indigo-400" /> Company Name
                     </label>
                     <input
                       type="text"
@@ -304,15 +305,15 @@ function RegisterPage() {
                       value={form.company_name}
                       onChange={handleInputChange}
                       placeholder="e.g. Acme Inc."
-                      className="w-full bg-[#0f172a]/70 border border-slate-700 rounded-xl px-4 py-3 text-slate-100 text-sm placeholder:text-slate-500 outline-none transition-all focus:border-indigo-500 focus:bg-[#0f172a] focus:ring-2 focus:ring-indigo-500/20"
+                      className="w-full bg-slate-50 dark:bg-[#0f172a]/70 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-slate-100 text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none transition-all focus:border-indigo-500 focus:bg-white dark:focus:bg-[#0f172a] focus:ring-2 focus:ring-indigo-500/20"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                   <div className="flex flex-col gap-2">
-                    <label className="text-xs font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-                      <Mail size={14} className="text-indigo-400" /> Work Email <span className="text-rose-400">*</span>
+                    <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                      <Mail size={14} className="text-indigo-600 dark:text-indigo-400" /> Work Email <span className="text-rose-500">*</span>
                     </label>
                     <input
                       type="email"
@@ -321,15 +322,15 @@ function RegisterPage() {
                       onChange={handleInputChange}
                       placeholder="e.g. you@company.com"
                       required
-                      className="w-full bg-[#0f172a]/70 border border-slate-700 rounded-xl px-4 py-3 text-slate-100 text-sm placeholder:text-slate-500 outline-none transition-all focus:border-indigo-500 focus:bg-[#0f172a] focus:ring-2 focus:ring-indigo-500/20"
+                      className="w-full bg-slate-50 dark:bg-[#0f172a]/70 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-slate-100 text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none transition-all focus:border-indigo-500 focus:bg-white dark:focus:bg-[#0f172a] focus:ring-2 focus:ring-indigo-500/20"
                     />
                   </div>
 
                   <div className="flex flex-col gap-2">
-                    <label className="text-xs font-semibold uppercase tracking-wider text-slate-300 flex items-between justify-between">
-                      <span className="flex items-center gap-2"><Phone size={14} className="text-indigo-400" /> Phone Number</span>
+                    <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-between justify-between">
+                      <span className="flex items-center gap-2"><Phone size={14} className="text-indigo-600 dark:text-indigo-400" /> Phone Number</span>
                       {form.phone.length > 0 && (
-                        <span className={`text-[0.75rem] font-semibold lowercase ${form.phone.length === 10 ? 'text-emerald-400' : 'text-slate-400'}`}>
+                        <span className={`text-[0.75rem] font-semibold lowercase ${form.phone.length === 10 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
                           {form.phone.length}/10 digits
                         </span>
                       )}
@@ -340,14 +341,14 @@ function RegisterPage() {
                       value={form.phone}
                       onChange={handleInputChange}
                       placeholder="e.g. 9876543210"
-                      className="w-full bg-[#0f172a]/70 border border-slate-700 rounded-xl px-4 py-3 text-slate-100 text-sm placeholder:text-slate-500 outline-none transition-all focus:border-indigo-500 focus:bg-[#0f172a] focus:ring-2 focus:ring-indigo-500/20"
+                      className="w-full bg-slate-50 dark:bg-[#0f172a]/70 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-slate-100 text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none transition-all focus:border-indigo-500 focus:bg-white dark:focus:bg-[#0f172a] focus:ring-2 focus:ring-indigo-500/20"
                     />
                   </div>
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-                    <Lock size={14} className="text-indigo-400" /> Password <span className="text-rose-400">*</span>
+                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                    <Lock size={14} className="text-indigo-600 dark:text-indigo-400" /> Password <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="password"
@@ -356,13 +357,13 @@ function RegisterPage() {
                     onChange={handleInputChange}
                     placeholder="Create a secure password"
                     required
-                    className="w-full bg-[#0f172a]/70 border border-slate-700 rounded-xl px-4 py-3 text-slate-100 text-sm placeholder:text-slate-500 outline-none transition-all focus:border-indigo-500 focus:bg-[#0f172a] focus:ring-2 focus:ring-indigo-500/20"
+                    className="w-full bg-slate-50 dark:bg-[#0f172a]/70 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-slate-100 text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none transition-all focus:border-indigo-500 focus:bg-white dark:focus:bg-[#0f172a] focus:ring-2 focus:ring-indigo-500/20"
                   />
                 </div>
 
                 {/* Plan Selection Buttons */}
                 <div className="flex flex-col gap-3 pt-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-indigo-300">Select Subscription Plan</label>
+                  <label className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-300">Select Subscription Plan</label>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     {plans.map((p, idx) => {
                       const isSelected = selectedPlan?.id === p.id
@@ -373,8 +374,8 @@ function RegisterPage() {
                           onClick={() => setSelectedPlan(p)}
                           className={`flex cursor-pointer flex-col justify-between rounded-xl border p-4 text-left transition-all duration-200 relative overflow-hidden ${
                             isSelected
-                              ? 'border-2 border-indigo-500 bg-indigo-500/15 shadow-[0_0_20px_rgba(99,102,241,0.2)] ring-1 ring-indigo-500'
-                              : 'border-slate-700/60 bg-[#0f172a]/40 hover:border-slate-600 hover:bg-[#0f172a]/70'
+                              ? 'border-2 border-indigo-600 dark:border-indigo-500 bg-indigo-50 dark:bg-indigo-500/15 shadow-[0_0_20px_rgba(99,102,241,0.2)] ring-1 ring-indigo-500'
+                              : 'border-slate-200 dark:border-slate-700/60 bg-slate-50/50 dark:bg-[#0f172a]/40 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-100 dark:hover:bg-[#0f172a]/70'
                           }`}
                         >
                           {isSelected && (
@@ -382,16 +383,16 @@ function RegisterPage() {
                           )}
                           <div>
                             <div className="flex items-center justify-between gap-1 mb-1">
-                              <strong className="font-bold text-slate-100 text-sm uppercase tracking-wide">{p.plan_name}</strong>
+                              <strong className="font-bold text-slate-900 dark:text-slate-100 text-sm uppercase tracking-wide">{p.plan_name}</strong>
                               {p.price > 0 && idx === 1 && (
                                 <span className="rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 px-2 py-0.5 text-[0.6rem] font-extrabold uppercase tracking-wider text-white">Popular</span>
                               )}
                             </div>
-                            <span className="text-xs text-slate-400">{p.credits === 0 ? 'Trial access' : `${p.credits} credits`}</span>
+                            <span className="text-xs text-slate-500 dark:text-slate-400">{p.credits === 0 ? 'Trial access' : `${p.credits} credits`}</span>
                           </div>
                           <div className="mt-3">
-                            <strong className="text-xl font-bold text-slate-100">{formatPrice(p.price)}</strong>
-                            {p.price > 0 && <span className="text-xs text-slate-400 ml-1">/mo</span>}
+                            <strong className="text-xl font-bold text-slate-900 dark:text-slate-100">{formatPrice(p.price)}</strong>
+                            {p.price > 0 && <span className="text-xs text-slate-500 dark:text-slate-400 ml-1">/mo</span>}
                           </div>
                         </button>
                       )
@@ -407,9 +408,9 @@ function RegisterPage() {
                   {submitting ? "Processing..." : selectedPlan?.price === 0 ? "Start Free Trial Workspace" : `Pay ${formatPrice(selectedPlan?.price)} with Razorpay`}
                 </button>
 
-                <div className="text-center text-xs text-slate-400 pt-1">
+                <div className="text-center text-xs text-slate-500 dark:text-slate-400 pt-1">
                   Secure checkout powered by Razorpay. Already have an admin account?{' '}
-                  <Link to="/admin" className="text-indigo-400 hover:text-indigo-300 font-semibold underline underline-offset-4">
+                  <Link to="/admin" className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 font-semibold underline underline-offset-4">
                     Sign in here
                   </Link>
                 </div>
@@ -420,15 +421,15 @@ function RegisterPage() {
           {/* Right Column: Selected Plan Overview Card */}
           <div className="lg:sticky lg:top-8">
             {selectedPlan && (
-              <div className="relative overflow-hidden rounded-2xl border border-slate-700/60 bg-[#1e293b]/70 p-7 md:p-8 shadow-xl backdrop-blur-xl flex flex-col gap-6">
+              <div className="relative overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-700/60 bg-white/90 dark:bg-[#1e293b]/70 p-7 md:p-8 shadow-xl backdrop-blur-xl flex flex-col gap-6 transition-colors">
                 <div className="absolute top-0 right-0 w-36 h-36 bg-indigo-500/10 blur-[50px] -mr-16 -mt-16 rounded-full pointer-events-none" />
 
-                <div className="border-b border-slate-700/60 pb-5">
-                  <span className="mb-3 inline-block rounded-full border border-indigo-500/30 bg-indigo-500/15 px-3 py-1 text-[0.7rem] font-bold uppercase tracking-wider text-indigo-300">
+                <div className="border-b border-slate-200 dark:border-slate-700/60 pb-5">
+                  <span className="mb-3 inline-block rounded-full border border-indigo-500/30 bg-indigo-500/15 px-3 py-1 text-[0.7rem] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-300">
                     {selectedPlan.price === 0 ? "Free Trial Selected" : "Selected Subscription"}
                   </span>
-                  <h3 className="text-2xl font-bold uppercase tracking-wide text-slate-100">{selectedPlan.plan_name} Workspace</h3>
-                  <p className="mt-2 text-xs md:text-sm leading-relaxed text-slate-400">
+                  <h3 className="text-2xl font-bold uppercase tracking-wide text-slate-900 dark:text-slate-100">{selectedPlan.plan_name} Workspace</h3>
+                  <p className="mt-2 text-xs md:text-sm leading-relaxed text-slate-600 dark:text-slate-400">
                     {selectedPlan.price === 0
                       ? "Explore AI candidate screening and automated interview operations before committing."
                       : "Designed for high-growth hiring teams requiring automated candidate evaluation and full workspace control."}
@@ -436,26 +437,26 @@ function RegisterPage() {
                 </div>
 
                 <div className="flex justify-between items-baseline text-sm">
-                  <span className="text-slate-400">Subscription Price</span>
+                  <span className="text-slate-500 dark:text-slate-400">Subscription Price</span>
                   <div className="text-right">
-                    <span className="text-2xl font-bold text-slate-100">{formatPrice(selectedPlan.price)}</span>
-                    {selectedPlan.price > 0 && <span className="text-xs text-slate-400 ml-1">/ month</span>}
+                    <span className="text-2xl font-bold text-slate-900 dark:text-slate-100">{formatPrice(selectedPlan.price)}</span>
+                    {selectedPlan.price > 0 && <span className="text-xs text-slate-500 dark:text-slate-400 ml-1">/ month</span>}
                   </div>
                 </div>
 
-                <div className="flex justify-between items-center text-sm border-t border-slate-700/40 pt-4">
-                  <span className="text-slate-400">Candidate Evaluation Credits</span>
-                  <span className="font-semibold text-indigo-300 bg-indigo-500/15 px-3 py-1 rounded-full border border-indigo-500/20 text-xs">
+                <div className="flex justify-between items-center text-sm border-t border-slate-200 dark:border-slate-700/40 pt-4">
+                  <span className="text-slate-500 dark:text-slate-400">Candidate Evaluation Credits</span>
+                  <span className="font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-500/15 px-3 py-1 rounded-full border border-indigo-200 dark:border-indigo-500/20 text-xs">
                     {selectedPlan.credits === 0 ? 'Trial Credits' : `${selectedPlan.credits} Candidates`}
                   </span>
                 </div>
 
-                <div className="border-t border-slate-700/60 pt-5">
-                  <h4 className="mb-4 text-xs font-bold uppercase tracking-wider text-slate-300">Included Workspace Features</h4>
+                <div className="border-t border-slate-200 dark:border-slate-700/60 pt-5">
+                  <h4 className="mb-4 text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Included Workspace Features</h4>
                   <div className="flex flex-col gap-3.5">
                     {(selectedPlan.features || []).map((feat, idx) => (
-                      <div key={idx} className="flex gap-3 text-xs md:text-sm text-slate-300 items-start">
-                        <ShieldCheck className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+                      <div key={idx} className="flex gap-3 text-xs md:text-sm text-slate-600 dark:text-slate-300 items-start">
+                        <ShieldCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
                         <span>{feat}</span>
                       </div>
                     ))}

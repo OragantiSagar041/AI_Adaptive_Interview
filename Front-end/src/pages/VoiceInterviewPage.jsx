@@ -177,11 +177,7 @@ export default function VoiceInterviewPage() {
     ? _savedRound
     : 'pre_checks'
 
-  // Enforce Light Theme for Voice Interview
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', 'light')
-    document.documentElement.classList.remove('dark')
-  }, [])
+
 
   // Session
   const [loading, setLoading] = useState(true)
