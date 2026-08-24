@@ -14,6 +14,7 @@ const WORK_MODE_STYLES = {
   'On-site': 'bg-amber-50 text-amber-700 border-amber-200',
 };
 
+
 export default function JobPortalPage() {
   const { companyId } = useParams();
   const [jobs, setJobs] = useState([]);
