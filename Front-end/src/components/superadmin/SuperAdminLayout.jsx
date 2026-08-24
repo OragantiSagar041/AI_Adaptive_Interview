@@ -34,6 +34,8 @@ import {
   ClipboardList,
   User
 } from 'lucide-react'
+import ThemeToggle from '../ThemeToggle'
+import { useTheme } from '../../context/ThemeContext'
 import {
   SidebarProvider,
   Sidebar,
@@ -180,11 +182,7 @@ export default function SuperAdminLayout() {
     }
   }, [token])
 
-  // Enforce Light Theme for SuperAdmin
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', 'light')
-    document.documentElement.classList.remove('dark')
-  }, [])
+
 
   // Lock document-level scroll so only the inner <main> scrolls, not the page
   useEffect(() => {
@@ -333,31 +331,12 @@ export default function SuperAdminLayout() {
     })
   }
 
-  const accentColors = {
-    teal: { primary: '#0d9488', hover: '#0f766e', glow: 'rgba(13, 148, 136, 0.15)' },
-    indigo: { primary: '#6366f1', hover: '#4f46e5', glow: 'rgba(99, 102, 241, 0.15)' },
-    purple: { primary: '#9333ea', hover: '#7e22ce', glow: 'rgba(147, 51, 234, 0.15)' },
-    red: { primary: '#e11d48', hover: '#be123c', glow: 'rgba(225, 29, 72, 0.15)' },
-    green: { primary: '#16a34a', hover: '#15803d', glow: 'rgba(22, 163, 74, 0.15)' },
-    blue: { primary: '#2563eb', hover: '#1d4ed8', glow: 'rgba(37, 99, 237, 0.15)' }
-  }
-
   const layoutConfig = adminUser?.layout_config;
 
-  const currentAccent = layoutConfig?.primary_color 
-    ? { primary: layoutConfig.primary_color, hover: layoutConfig.primary_color, glow: 'rgba(0, 0, 0, 0.15)' } 
-    : (accentColors[accentName] || accentColors.indigo);
-
-  const sidebarBg = layoutConfig?.sidebar_bg_color 
-    ? layoutConfig.sidebar_bg_color 
-    : `linear-gradient(180deg, ${hexToRgba(currentAccent.primary, 0.22)} 0%, white 30%, ${hexToRgba(currentAccent.primary, 0.12)} 100%)`;
+  const { theme } = useTheme()
+  const isDark = theme === 'dark'
 
   useEffect(() => {
-    document.documentElement.style.setProperty('--accent-theme-color', currentAccent.primary)
-    document.documentElement.style.setProperty('--primary-color', currentAccent.primary)
-    document.documentElement.style.setProperty('--primary-hover', currentAccent.hover)
-    document.documentElement.style.setProperty('--primary-glow', currentAccent.glow)
-
     let link = document.querySelector("link[rel~='icon']");
     if (!link) {
       link = document.createElement('link');
@@ -370,7 +349,7 @@ export default function SuperAdminLayout() {
     } else {
       link.href = '/hireiq.png';
     }
-  }, [accentName, layoutConfig])
+  }, [layoutConfig])
 
   // Initial load and WebSocket setup
   useEffect(() => {
@@ -518,11 +497,6 @@ export default function SuperAdminLayout() {
     }
   }
 
-  const accentWash = hexToRgba(currentAccent.primary, 0.16)
-  const accentWashStrong = hexToRgba(currentAccent.primary, 0.26)
-  const accentPage = hexToRgba(currentAccent.primary, 0.12)
-  const accentPageStrong = hexToRgba(currentAccent.primary, 0.20)
-
   const userRole = (role || adminUser?.role || '').toLowerCase()
   const isMaster = userRole === 'master'
   const userFeatures = adminUser?.plan_features || []
@@ -533,52 +507,24 @@ export default function SuperAdminLayout() {
 
   return (
     <SidebarProvider>
-      <div className="superadmin-theme h-screen bg-slate-50 text-slate-900 flex font-sans w-full overflow-hidden relative">
-        {/* Global Premium Background Grid & Dynamic Accent Gradient */}
-        <div className="absolute inset-0 z-0 pointer-events-none">
-          {/* Full-page soft color wash that changes with the theme */}
-          <div
-            className="absolute inset-0 transition-colors duration-700"
-            style={{
-              background: `linear-gradient(135deg, ${currentAccent.primary}38 0%, transparent 50%, ${currentAccent.primary}28 100%)`
-            }}
-          />
-          {/* Grid overlay */}
-          <div className="absolute inset-0 bg-grid-fine opacity-60" />
-        </div>
+      <div className="h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex font-sans w-full overflow-hidden relative">
+        {/* Grid overlay */}
+        <div className="absolute inset-0 bg-grid-fine opacity-60 pointer-events-none" />
 
         {/* NEW SHADCN SIDEBAR */}
         {layoutConfig?.layout_type !== "navbar" && (
           <Sidebar
-            className="border-r border-slate-200/50 z-20 overflow-hidden"
-            style={{
-              background: sidebarBg
-            }}
+            className="border-r border-slate-200/80 dark:border-slate-800 z-20 overflow-hidden bg-white dark:bg-[#0b1120]"
             collapsible="icon"
           >
-          {/* Accent top strip */}
-          <div
-            className="absolute top-0 left-0 right-0 h-0.5 z-10 transition-all duration-700"
-            style={{ background: `linear-gradient(90deg, ${currentAccent.primary}, ${currentAccent.hover})` }}
-          />
-
-          <SidebarHeader
-            className="h-16 px-6 py-0 flex items-center justify-center shrink-0 border-b transition-all duration-700"
-            style={{ borderColor: hexToRgba(currentAccent.primary, 0.25) }}
-          >
+          <SidebarHeader className="h-16 px-6 py-0 flex items-center justify-center shrink-0 border-b border-slate-200/80 dark:border-slate-800 transition-colors">
             <div className="flex items-center gap-3 w-full overflow-hidden">
-              <div
-                className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-white shadow-sm transition-all duration-500"
-                style={{ background: `linear-gradient(135deg, ${currentAccent.primary}, ${currentAccent.hover})` }}
-              >
-                <Zap className="h-4 w-4" />
+              <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-white shadow-sm bg-indigo-600">
+                <Zap className="h-4 w-4 text-white" />
               </div>
               <div className="leading-tight group-data-[collapsible=icon]:hidden truncate">
-                <div className="text-sm font-semibold truncate">HireIQ</div>
-                <div
-                  className="text-[11px] font-medium truncate transition-colors duration-500"
-                  style={{ color: currentAccent.primary }}
-                >
+                <div className="text-sm font-semibold truncate text-slate-800 dark:text-slate-100">HireIQ</div>
+                <div className="text-[11px] font-medium truncate text-indigo-600 dark:text-indigo-400">
                   Super Admin
                 </div>
               </div>
@@ -598,36 +544,13 @@ export default function SuperAdminLayout() {
                           isActive={isActive}
                           tooltip={item.label}
                           className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${isActive
-                              ? '!text-white text-white font-semibold'
-                              : 'text-slate-600 hover:text-slate-900'
+                              ? '!bg-indigo-600 !text-white font-semibold shadow-md shadow-indigo-500/20'
+                              : 'text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-800/80 hover:text-indigo-600 dark:hover:text-indigo-400'
                             }`}
-                          style={{
-                            background: isActive ? `linear-gradient(135deg, ${currentAccent.primary} 0%, ${currentAccent.hover} 100%)` : 'transparent',
-                            boxShadow: isActive ? `0 4px 14px ${hexToRgba(currentAccent.primary, 0.35)}` : 'none',
-                            color: isActive ? '#ffffff' : undefined,
-                            height: 'auto'
-                          }}
-                          onMouseEnter={(e) => {
-                            if (!isActive) {
-                              e.currentTarget.style.background = hexToRgba(currentAccent.primary, 0.10);
-                              e.currentTarget.style.color = currentAccent.primary;
-                            } else {
-                              e.currentTarget.style.color = '#ffffff';
-                            }
-                          }}
-                          onMouseLeave={(e) => {
-                            if (!isActive) {
-                              e.currentTarget.style.background = 'transparent';
-                              e.currentTarget.style.color = '';
-                            } else {
-                              e.currentTarget.style.color = '#ffffff';
-                            }
-                          }}
                         >
                           <NavLink
                             to={item.path}
-                            className={`flex items-center w-full min-w-0 ${isActive ? '!text-white' : ''}`}
-                            style={{ color: isActive ? '#ffffff' : undefined }}
+                            className={`flex items-center w-full min-w-0 ${isActive ? 'text-white font-semibold' : ''}`}
                           >
                             {item.icon ? (
                               <item.icon size={16} className={`shrink-0 group-data-[collapsible=icon]:mr-0 mr-3 ${isActive ? '!text-white text-white' : ''}`} />
@@ -645,38 +568,19 @@ export default function SuperAdminLayout() {
             </SidebarGroup>
           </SidebarContent>
 
-          <SidebarFooter
-            className="p-3 border-t space-y-0.5 shrink-0 transition-all duration-700"
-            style={{ borderColor: hexToRgba(currentAccent.primary, 0.15) }}
-          >
+          <SidebarFooter className="p-3 border-t border-slate-200/80 dark:border-slate-800 space-y-0.5 shrink-0 transition-colors">
             <button
               onClick={() => dispatch(setLiveResultsModalOpen(true))}
-              className="flex items-center justify-center md:justify-start gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 text-slate-500 border-none bg-transparent cursor-pointer text-left overflow-hidden"
+              className="flex items-center justify-center md:justify-start gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 text-slate-600 dark:text-slate-400 hover:bg-indigo-50 dark:hover:bg-slate-800/80 hover:text-indigo-600 dark:hover:text-indigo-400 border-none bg-transparent cursor-pointer text-left overflow-hidden"
               title="Live Results"
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = hexToRgba(currentAccent.primary, 0.10)
-                e.currentTarget.style.color = currentAccent.primary
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent'
-                e.currentTarget.style.color = ''
-              }}
             >
               <Radio size={16} className="shrink-0" />
               <span className="group-data-[collapsible=icon]:hidden truncate">Live Results</span>
             </button>
             <button
               onClick={() => setShowCreditsModal(true)}
-              className="flex items-center justify-center md:justify-start gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 text-slate-500 border-none bg-transparent cursor-pointer text-left overflow-hidden"
+              className="flex items-center justify-center md:justify-start gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 text-slate-600 dark:text-slate-400 hover:bg-indigo-50 dark:hover:bg-slate-800/80 hover:text-indigo-600 dark:hover:text-indigo-400 border-none bg-transparent cursor-pointer text-left overflow-hidden"
               title="Available Credits"
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = hexToRgba(currentAccent.primary, 0.10)
-                e.currentTarget.style.color = currentAccent.primary
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent'
-                e.currentTarget.style.color = ''
-              }}
             >
               <Coins size={16} className="shrink-0" />
               <span className="group-data-[collapsible=icon]:hidden truncate">Available Credits</span>
@@ -688,7 +592,7 @@ export default function SuperAdminLayout() {
         {/* Main Content Wrapper */}
         <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative z-10">
           {/* Top bar */}
-          <header className="sticky top-0 z-30 border-b border-slate-200/60 bg-white/60 backdrop-blur-xl flex items-center justify-between px-6 h-16 shadow-sm shrink-0">
+          <header className="sticky top-0 z-30 border-b border-slate-200/60 dark:border-slate-800 bg-white/60 dark:bg-slate-900/80 backdrop-blur-xl flex items-center justify-between px-6 h-16 shadow-sm shrink-0">
             {/* Left Side: Brand & Toggles */}
             <div className="flex items-center gap-6">
               {layoutConfig?.layout_type !== "navbar" && (
@@ -696,99 +600,18 @@ export default function SuperAdminLayout() {
               )}
               
               {layoutConfig?.layout_type === "navbar" && (
-                <div className="flex items-center gap-3 border-r border-slate-200/60 pr-6 mr-2">
-                  <div className="flex items-center gap-3 w-full overflow-hidden">
-                    <div className="shrink-0 flex items-center justify-center group-data-[collapsible=icon]:w-full">
-                      <img src="/hireiq_new_logo.png" alt="HireIQ" className="h-10 w-auto object-contain drop-shadow-sm group-data-[collapsible=icon]:hidden" />
-                      <div
-                        className="hidden group-data-[collapsible=icon]:flex h-8 w-8 place-items-center rounded-lg text-white shadow-sm transition-all duration-500 mx-auto"
-                        style={{ background: `linear-gradient(135deg, ${currentAccent.primary}, ${currentAccent.hover})` }}
-                      >
-                        <Zap className="h-4 w-4" />
-                      </div>
-                    </div>
-                    <div className="leading-tight group-data-[collapsible=icon]:hidden truncate pt-1">
-                      <div
-                        className="text-[10px] font-bold uppercase tracking-widest truncate transition-colors duration-500"
-                        style={{ color: currentAccent.primary }}
-                      >
-                        Super Admin
-                      </div>
-                    </div>
+                <div className="flex items-center gap-3 border-r border-slate-200/60 dark:border-slate-800 pr-6 mr-2">
+                  <div className="grid h-8 w-8 place-items-center rounded-lg text-white shadow-sm bg-indigo-600">
+                    <Zap className="h-4 w-4 text-white" />
+                  </div>
+                  <div className="leading-tight hidden sm:block">
+                    <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">HireIQ</div>
+                    <div className="text-[11px] font-medium text-indigo-600 dark:text-indigo-400">Super Admin</div>
                   </div>
                 </div>
               )}
 
               <h2 className="text-[17px] font-bold text-slate-800 hidden sm:block">SuperAdmin Management</h2>
-
-              {/* Theme Toggle — single button + popover */}
-              <div ref={themeRef} className="relative">
-                <button
-                  onClick={() => setThemeOpen(prev => !prev)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border cursor-pointer transition-all duration-200 text-sm font-semibold"
-                  style={{
-                    background: hexToRgba(currentAccent.primary, 0.08),
-                    borderColor: hexToRgba(currentAccent.primary, 0.25),
-                    color: currentAccent.primary,
-                  }}
-                  title="Change theme color"
-                >
-                  <span
-                    className="w-3 h-3 rounded-full border-2 border-white shadow-sm flex-shrink-0 transition-all duration-500"
-                    style={{ background: currentAccent.primary }}
-                  />
-                  <ChevronDown
-                    size={13}
-                    className="transition-transform duration-200"
-                    style={{ transform: themeOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
-                  />
-                </button>
-
-                {/* Color Picker Popover */}
-                {themeOpen && (
-                  <div
-                    className="absolute top-full left-0 mt-2 z-50 rounded-2xl shadow-xl border border-slate-200/60 p-3"
-                    style={{
-                      background: 'rgba(255,255,255,0.97)',
-                      backdropFilter: 'blur(12px)',
-                      minWidth: '160px',
-                    }}
-                  >
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 px-1">Theme Color</p>
-                    <div className="flex flex-col gap-0.5">
-                      {Object.entries(accentColors).map(([color, val]) => (
-                        <button
-                          key={color}
-                          onClick={() => { setAccentName(color); setThemeOpen(false); }}
-                          className="group flex items-center gap-2 w-full px-2 py-1.5 rounded-xl cursor-pointer border-none text-left transition-all duration-150"
-                          style={{
-                            background: accentName === color ? hexToRgba(val.primary, 0.12) : 'transparent',
-                          }}
-                          onMouseEnter={e => e.currentTarget.style.background = hexToRgba(val.primary, 0.10)}
-                          onMouseLeave={e => e.currentTarget.style.background = accentName === color ? hexToRgba(val.primary, 0.12) : 'transparent'}
-                        >
-                          <span
-                            className="w-4 h-4 rounded-full border-2 border-white shadow flex-shrink-0 transition-transform duration-150 group-hover:scale-110"
-                            style={{
-                              background: `linear-gradient(135deg, ${val.primary}, ${val.hover})`,
-                              boxShadow: accentName === color ? `0 0 0 2px ${val.primary}` : '0 1px 3px rgba(0,0,0,0.15)',
-                            }}
-                          />
-                          <span
-                            className="text-xs font-semibold capitalize"
-                            style={{ color: accentName === color ? val.primary : '#64748b' }}
-                          >
-                            {color}
-                          </span>
-                          {accentName === color && (
-                            <span className="ml-auto text-[10px] font-bold" style={{ color: val.primary }}>✓</span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
 
               {/* Active Plan Badge */}
               {adminUser?.subscription_plan && (
@@ -880,6 +703,7 @@ export default function SuperAdminLayout() {
               </div>
 
               {/* Profile Dropdown */}
+              <ThemeToggle />
               <div ref={profileRef} className="relative">
                 <button
                   onClick={() => setDropdownOpen(!dropdownOpen)}
@@ -926,8 +750,7 @@ export default function SuperAdminLayout() {
           {/* Horizontal Navbar (Navbar Layout) */}
           {layoutConfig?.layout_type === "navbar" && (
             <div 
-              className="flex items-center gap-1 px-6 h-14 border-t border-slate-200/40 overflow-x-auto hide-scrollbar z-30 sticky top-[64px]" 
-              style={{ background: sidebarBg }}
+              className="flex items-center gap-1 px-6 h-14 border-t border-slate-200/40 overflow-x-auto hide-scrollbar z-30 sticky top-[64px] bg-white dark:bg-[#0b1120]" 
             >
               {navItems.map((item) => {
                 const isActive = location.pathname.startsWith(item.path);
@@ -937,30 +760,11 @@ export default function SuperAdminLayout() {
                     to={item.path}
                     className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 whitespace-nowrap shrink-0 ${
                       isActive
-                        ? '!text-white text-white font-semibold shadow-md'
-                        : 'text-slate-600 hover:text-slate-900'
+                        ? 'bg-indigo-600 text-white font-semibold shadow-md shadow-indigo-500/20'
+                        : 'text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-800/80 hover:text-indigo-600 dark:hover:text-indigo-400'
                     }`}
-                    style={{
-                      background: isActive
-                        ? `linear-gradient(135deg, ${currentAccent.primary} 0%, ${currentAccent.hover} 100%)`
-                        : 'transparent',
-                      boxShadow: isActive ? `0 4px 14px ${hexToRgba(currentAccent.primary, 0.35)}` : 'none',
-                      color: isActive ? '#ffffff' : undefined,
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isActive) {
-                        e.currentTarget.style.background = hexToRgba(currentAccent.primary, 0.10)
-                        e.currentTarget.style.color = currentAccent.primary
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isActive) {
-                        e.currentTarget.style.background = 'transparent'
-                        e.currentTarget.style.color = ''
-                      }
-                    }}
                   >
-                    {item.icon && <item.icon size={15} className={`shrink-0 ${isActive ? '!text-white text-white' : ''}`} />}
+                    {item.icon && <item.icon size={15} className={`shrink-0 ${isActive ? 'text-white' : ''}`} />}
                     <span>{item.label}</span>
                   </NavLink>
                 );

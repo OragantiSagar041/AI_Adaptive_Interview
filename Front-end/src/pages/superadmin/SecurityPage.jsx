@@ -5,7 +5,7 @@ import { ShieldCheck, ShieldAlert, Key, Users, AlertTriangle, X } from 'lucide-r
 
 const ToggleSwitch = ({ checked, onChange }) => (
   <div onClick={onChange} className={`w-11 h-6 rounded-full flex items-center p-1 cursor-pointer transition-colors ${checked ? 'bg-indigo-600' : 'bg-slate-300'}`}>
-    <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${checked ? 'translate-x-5' : 'translate-x-0'}`}></div>
+    <div className={`bg-white dark:bg-slate-800/60 w-4 h-4 rounded-full shadow-md transform transition-transform ${checked ? 'translate-x-5' : 'translate-x-0'}`}></div>
   </div>
 );
 import api, { dedupedGet } from '../../lib/api';
@@ -105,8 +105,8 @@ export default function SecurityPage() {
     >
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900">Security & Access</h1>
-          <p className="text-slate-500 mt-1">Monitor authentication methods, sessions, and security alerts.</p>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Security & Access</h1>
+          <p className="text-slate-500 dark:text-slate-400 mt-1">Monitor authentication methods, sessions, and security alerts.</p>
         </div>
       </div>
 
@@ -144,9 +144,9 @@ export default function SecurityPage() {
         
         {/* Auth Methods Chart */}
         <div
-          className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100"
+          className="bg-white dark:bg-slate-800/60 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800"
         >
-          <h2 className="text-lg font-semibold text-slate-800 mb-6">Authentication Methods</h2>
+          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-6">Authentication Methods</h2>
           <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -175,17 +175,17 @@ export default function SecurityPage() {
 
         {/* Security Alerts */}
         <div
-          className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100"
+          className="bg-white dark:bg-slate-800/60 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800"
         >
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
               <AlertTriangle className="w-6 h-6 text-rose-500" />
-              <h2 className="text-lg font-semibold text-slate-800">Active Security Alerts</h2>
+              <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Active Security Alerts</h2>
             </div>
             <select
               value={roleFilter}
               onChange={(e) => setRoleFilter(e.target.value)}
-              className="px-3 py-1.5 border border-slate-300 bg-white rounded-lg text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="px-3 py-1.5 border border-slate-300 bg-white dark:bg-slate-800/60 rounded-lg text-sm text-slate-700 dark:text-slate-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               <option value="all">All Roles</option>
               <option value="super_admin">Super Admins</option>
@@ -214,14 +214,14 @@ export default function SecurityPage() {
                       <h4 className="font-semibold">{alert.type}</h4>
                       <p className="text-sm opacity-80">IP: {alert.ip}</p>
                     </div>
-                    <span className={`text-xs font-medium bg-white px-2 py-1 rounded-md shadow-sm ${badgeStyle}`}>
+                    <span className={`text-xs font-medium bg-white dark:bg-slate-800/60 px-2 py-1 rounded-md shadow-sm ${badgeStyle}`}>
                       {alert.time}
                     </span>
                   </div>
                 );
               })
             ) : (
-              <div className="p-8 text-center text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-300">
+              <div className="p-8 text-center text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-300">
                 <ShieldCheck className="w-12 h-12 text-emerald-400 mx-auto mb-3 opacity-50" />
                 <p>No active security alerts.</p>
                 <p className="text-sm mt-1">Your system is secure.</p>
@@ -242,36 +242,36 @@ export default function SecurityPage() {
       {/* Security Policies Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm transition-opacity">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center p-6 border-b border-slate-100 bg-slate-50/80">
-              <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+          <div className="bg-white dark:bg-slate-800/60 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50/80">
+              <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
                 <ShieldCheck className="w-6 h-6 text-indigo-600" />
                 Global Security Policies
               </h2>
               <button 
                 onClick={() => setIsModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 hover:bg-slate-200 p-2 rounded-full transition-colors"
+                className="text-slate-400 hover:text-slate-600 dark:text-slate-400 hover:bg-slate-200 p-2 rounded-full transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
             
-            <div className="p-6 overflow-y-auto custom-scrollbar flex-1 bg-slate-50/30">
+            <div className="p-6 overflow-y-auto custom-scrollbar flex-1 bg-slate-50 dark:bg-slate-900/50/30">
               <div className="space-y-6">
                 <div>
                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 ml-1">Authentication Requirements</h3>
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200 shadow-sm hover:border-indigo-200 transition-colors">
+                    <div className="flex items-center justify-between p-4 bg-white dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:border-indigo-200 transition-colors">
                       <div>
-                        <p className="font-semibold text-slate-800">Require Two-Factor Authentication</p>
-                        <p className="text-sm text-slate-500 mt-1">Enforce 2FA for Super Admin account</p>
+                        <p className="font-semibold text-slate-800 dark:text-slate-100">Require Two-Factor Authentication</p>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Enforce 2FA for Super Admin account</p>
                       </div>
                       <ToggleSwitch checked={policies.require_2fa} onChange={() => handleTogglePolicy('require_2fa')} />
                     </div>
-                    <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200 shadow-sm hover:border-indigo-200 transition-colors">
+                    <div className="flex items-center justify-between p-4 bg-white dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:border-indigo-200 transition-colors">
                       <div>
-                        <p className="font-semibold text-slate-800">Strict Session Timeout</p>
-                        <p className="text-sm text-slate-500 mt-1">Log out inactive users after 30 minutes of idle time</p>
+                        <p className="font-semibold text-slate-800 dark:text-slate-100">Strict Session Timeout</p>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Log out inactive users after 30 minutes of idle time</p>
                       </div>
                       <ToggleSwitch checked={policies.strict_session_timeout} onChange={() => handleTogglePolicy('strict_session_timeout')} />
                     </div>
@@ -281,16 +281,16 @@ export default function SecurityPage() {
                 <div>
                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 ml-1">Access Control</h3>
                   <div className="space-y-3">
-                    <div className="flex flex-col p-4 bg-white rounded-xl border border-slate-200 shadow-sm hover:border-indigo-200 transition-colors space-y-4">
+                    <div className="flex flex-col p-4 bg-white dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:border-indigo-200 transition-colors space-y-4">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="font-semibold text-slate-800">Restrict by IP Address</p>
-                          <p className="text-sm text-slate-500 mt-1">Only allow dashboard logins from recognized corporate IP addresses</p>
+                          <p className="font-semibold text-slate-800 dark:text-slate-100">Restrict by IP Address</p>
+                          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Only allow dashboard logins from recognized corporate IP addresses</p>
                         </div>
                         <ToggleSwitch checked={policies.restrict_ip} onChange={() => handleTogglePolicy('restrict_ip')} />
                       </div>
                       {policies.restrict_ip && (
-                        <div className="pt-3 border-t border-slate-100 flex gap-3">
+                        <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex gap-3">
                           <input
                             type="text"
                             value={ipInput}
@@ -312,7 +312,7 @@ export default function SecurityPage() {
               </div>
             </div>
             
-            <div className="p-5 border-t border-slate-100 bg-white flex justify-between items-center">
+            <div className="p-5 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-800/60 flex justify-between items-center">
               <span className="text-xs text-slate-400 flex items-center gap-1">
                 <ShieldCheck className="w-4 h-4" /> Policy changes take effect immediately.
               </span>
@@ -333,16 +333,16 @@ export default function SecurityPage() {
 function KPICard({ title, value, icon, delay, valueClass = "" }) {
   return (
     <div
-      className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow flex flex-col justify-between"
+      className="bg-white dark:bg-slate-800/60 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 hover:shadow-md transition-shadow flex flex-col justify-between"
     >
       <div className="flex justify-between items-start mb-4">
-        <div className="p-3 rounded-xl bg-slate-50">
+        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50">
           {icon}
         </div>
       </div>
       <div>
-        <p className="text-sm font-medium text-slate-500 mb-1">{title}</p>
-        <h3 className={`text-3xl font-bold text-slate-900 ${valueClass}`}>{value}</h3>
+        <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">{title}</p>
+        <h3 className={`text-3xl font-bold text-slate-900 dark:text-white ${valueClass}`}>{value}</h3>
       </div>
     </div>
   );

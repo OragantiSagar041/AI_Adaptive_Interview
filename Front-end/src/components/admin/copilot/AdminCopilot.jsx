@@ -10,119 +10,9 @@ import {
 import { API_BASE_URL } from '../../../apiConfig';
 import CopilotActionCard from './CopilotActionCard';
 import { useSelector } from 'react-redux';
-
-const ACCENT_THEMES = {
-  indigo: {
-    primary: '#6366f1',
-    hover: '#4f46e5',
-    bgLight: '#eef2ff',
-    borderLight: '#e0e7ff',
-    textLight: '#4338ca',
-    glow: 'rgba(99, 102, 241, 0.35)',
-  },
-  teal: {
-    primary: '#0d9488',
-    hover: '#0f766e',
-    bgLight: '#f0fdfa',
-    borderLight: '#ccfbf1',
-    textLight: '#0f766e',
-    glow: 'rgba(13, 148, 136, 0.35)',
-  },
-  purple: {
-    primary: '#9333ea',
-    hover: '#7e22ce',
-    bgLight: '#faf5ff',
-    borderLight: '#f3e8ff',
-    textLight: '#7e22ce',
-    glow: 'rgba(147, 51, 234, 0.35)',
-  },
-  red: {
-    primary: '#e11d48',
-    hover: '#be123c',
-    bgLight: '#fff1f2',
-    borderLight: '#ffe4e6',
-    textLight: '#be123c',
-    glow: 'rgba(225, 29, 72, 0.35)',
-  },
-  green: {
-    primary: '#16a34a',
-    hover: '#15803d',
-    bgLight: '#f0fdf4',
-    borderLight: '#dcfce7',
-    textLight: '#15803d',
-    glow: 'rgba(22, 163, 74, 0.35)',
-  },
-  blue: {
-    primary: '#2563eb',
-    hover: '#1d4ed8',
-    bgLight: '#eff6ff',
-    borderLight: '#dbeafe',
-    textLight: '#1d4ed8',
-    glow: 'rgba(37, 99, 237, 0.35)',
-  },
-  emerald: {
-    primary: '#10b981',
-    hover: '#059669',
-    bgLight: '#ecfdf5',
-    borderLight: '#d1fae5',
-    textLight: '#047857',
-    glow: 'rgba(16, 185, 129, 0.35)',
-  },
-  amber: {
-    primary: '#d97706',
-    hover: '#b45309',
-    bgLight: '#fffbeb',
-    borderLight: '#fef3c7',
-    textLight: '#b45309',
-    glow: 'rgba(217, 119, 6, 0.35)',
-  },
-  rose: {
-    primary: '#f43f5e',
-    hover: '#e11d48',
-    bgLight: '#fff1f2',
-    borderLight: '#ffe4e6',
-    textLight: '#e11d48',
-    glow: 'rgba(244, 63, 94, 0.35)',
-  },
-  cyan: {
-    primary: '#0891b2',
-    hover: '#0e7490',
-    bgLight: '#ecfeff',
-    borderLight: '#cffafe',
-    textLight: '#0e7490',
-    glow: 'rgba(8, 145, 178, 0.35)',
-  },
-};
-
 const AdminCopilot = () => {
   const user = useSelector(state => state.auth.adminUser);
   const authRole = useSelector(state => state.auth.role);
-  
-  const [accentColor, setAccentColor] = useState(() => {
-    try {
-      return localStorage.getItem('theme_accent') || 'indigo';
-    } catch {
-      return 'indigo';
-    }
-  });
-
-  useEffect(() => {
-    const updateAccent = (e) => {
-      try {
-        const color = (e && e.detail) || localStorage.getItem('theme_accent') || 'indigo';
-        setAccentColor(color);
-      } catch {}
-    };
-
-    window.addEventListener('storage', updateAccent);
-    window.addEventListener('accent_changed', updateAccent);
-    return () => {
-      window.removeEventListener('storage', updateAccent);
-      window.removeEventListener('accent_changed', updateAccent);
-    };
-  }, []);
-
-  const currentTheme = ACCENT_THEMES[accentColor] || ACCENT_THEMES.indigo;
   
   const sessionUser = (() => {
     try {
@@ -451,13 +341,13 @@ const AdminCopilot = () => {
       <button
         onClick={() => setIsOpen(true)}
         style={{
-          background: `linear-gradient(135deg, ${currentTheme.primary}, ${currentTheme.hover})`,
-          boxShadow: `0 10px 25px -5px ${currentTheme.glow}`
+          background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
+          boxShadow: '0 8px 30px rgba(99, 102, 241, 0.55)'
         }}
-        className="fixed bottom-6 right-6 p-4 rounded-full text-white hover:-translate-y-1 transition-all duration-300 z-50 group flex items-center justify-center cursor-pointer border-none"
+        className="fixed bottom-6 right-6 p-4 rounded-full !bg-indigo-600 hover:!bg-indigo-500 !text-white hover:-translate-y-1 transition-all duration-300 z-50 group flex items-center justify-center cursor-pointer border-none"
       >
-        <Sparkles className="w-6 h-6 animate-pulse" />
-        <span className="max-w-0 overflow-hidden group-hover:max-w-xs transition-all duration-500 ease-in-out whitespace-nowrap pl-0 group-hover:pl-2 font-medium">
+        <Sparkles className="w-6 h-6 animate-pulse text-white" />
+        <span className="max-w-0 overflow-hidden group-hover:max-w-xs transition-all duration-500 ease-in-out whitespace-nowrap pl-0 group-hover:pl-2 font-medium text-white">
           {copilotTitle}
         </span>
       </button>
@@ -465,34 +355,24 @@ const AdminCopilot = () => {
   }
 
   return (
-    <div className={`fixed bottom-6 right-6 flex flex-col bg-white border border-slate-200/80 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] overflow-hidden z-50 transition-all duration-300 ease-in-out ${isExpanded ? 'w-[520px] h-[720px]' : 'w-[380px] h-[580px]'}`}>
+    <div className={`fixed bottom-6 right-6 flex flex-col bg-white dark:bg-[#131b2e] border border-slate-200/80 dark:border-[#26334d] rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] overflow-hidden z-50 transition-all duration-300 ease-in-out ${isExpanded ? 'w-[520px] h-[720px]' : 'w-[380px] h-[580px]'}`}>
       {/* Header */}
-      <div className="bg-white border-b border-slate-100 p-3.5 flex items-center justify-between shrink-0 relative overflow-hidden">
-        <div 
-          className="absolute top-0 right-0 w-32 h-32 blur-3xl rounded-full pointer-events-none" 
-          style={{ background: currentTheme.glow }}
-        />
+      <div className="bg-white dark:bg-[#131b2e] border-b border-slate-100 dark:border-[#26334d] p-3.5 flex items-center justify-between shrink-0 relative overflow-hidden">
         <div className="flex items-center gap-2.5 relative z-10">
           <button 
             onClick={() => setShowSidebar(!showSidebar)}
             title="Chat History Sessions"
-            className="p-1.5 hover:bg-slate-100 text-slate-600 rounded-lg transition-colors flex items-center gap-1 text-xs font-semibold cursor-pointer border-none bg-transparent"
+            className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-indigo-600 dark:text-indigo-400 rounded-lg transition-colors flex items-center gap-1 text-xs font-semibold cursor-pointer border-none bg-transparent"
           >
-            <History className="w-4 h-4" style={{ color: currentTheme.primary }} />
+            <History className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
           </button>
 
-          <div 
-            className="w-8 h-8 rounded-full flex items-center justify-center shadow-md shrink-0"
-            style={{
-              background: `linear-gradient(135deg, ${currentTheme.primary}, ${currentTheme.hover})`,
-              boxShadow: `0 4px 12px ${currentTheme.glow}`
-            }}
-          >
+          <div className="w-8 h-8 rounded-full flex items-center justify-center bg-indigo-600 text-white shadow-md shrink-0">
             <Bot className="w-4 h-4 text-white" />
           </div>
           <div>
-            <h3 className="font-semibold text-slate-800 text-xs leading-tight">{copilotTitle}</h3>
-            <p className="text-[10px] text-slate-500 capitalize">{copilotSubtitle}</p>
+            <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-xs leading-tight">{copilotTitle}</h3>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 capitalize">{copilotSubtitle}</p>
           </div>
         </div>
 
@@ -500,15 +380,14 @@ const AdminCopilot = () => {
           <button 
             onClick={handleNewChat} 
             title="New Chat Session" 
-            className="p-1.5 hover:bg-slate-100 rounded-md transition-colors flex items-center gap-1 text-xs font-medium cursor-pointer border-none bg-transparent"
-            style={{ color: currentTheme.primary }}
+            className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors flex items-center gap-1 text-xs font-medium cursor-pointer border-none bg-transparent text-indigo-600 dark:text-indigo-400"
           >
             <Plus className="w-4 h-4" />
           </button>
-          <button onClick={() => setIsExpanded(!isExpanded)} className="p-1.5 hover:bg-slate-100 hover:text-slate-600 rounded-md transition-colors cursor-pointer border-none bg-transparent">
+          <button onClick={() => setIsExpanded(!isExpanded)} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-md transition-colors cursor-pointer border-none bg-transparent">
             {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
           </button>
-          <button onClick={() => setIsOpen(false)} className="p-1.5 hover:bg-slate-100 hover:text-slate-600 rounded-md transition-colors cursor-pointer border-none bg-transparent">
+          <button onClick={() => setIsOpen(false)} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-md transition-colors cursor-pointer border-none bg-transparent">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -519,18 +398,17 @@ const AdminCopilot = () => {
         
         {/* History Sidebar Drawer */}
         {showSidebar && (
-          <div className="absolute inset-0 bg-white z-20 flex flex-col border-r border-slate-100 animate-in slide-in-from-left duration-200">
-            <div className="p-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+          <div className="absolute inset-0 bg-white dark:bg-[#131b2e] z-20 flex flex-col border-r border-slate-100 dark:border-[#26334d] animate-in slide-in-from-left duration-200">
+            <div className="p-3 border-b border-slate-100 dark:border-[#26334d] flex items-center justify-between bg-slate-50/50 dark:bg-[#0b1120]">
               <div className="flex items-center gap-2">
-                <button onClick={() => setShowSidebar(false)} className="p-1 hover:bg-slate-200 rounded-md cursor-pointer border-none bg-transparent">
-                  <ChevronLeft className="w-4 h-4 text-slate-600" />
+                <button onClick={() => setShowSidebar(false)} className="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-md cursor-pointer border-none bg-transparent">
+                  <ChevronLeft className="w-4 h-4 text-slate-600 dark:text-slate-300" />
                 </button>
-                <span className="text-xs font-semibold text-slate-700">Chat History</span>
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Chat History</span>
               </div>
               <button 
                 onClick={handleNewChat}
-                style={{ background: currentTheme.primary }}
-                className="px-2.5 py-1 text-white rounded-md text-[11px] font-semibold flex items-center gap-1 shadow-sm hover:opacity-90 transition-opacity cursor-pointer border-none"
+                className="px-2.5 py-1 bg-indigo-600 text-white rounded-md text-[11px] font-semibold flex items-center gap-1 shadow-sm hover:bg-indigo-700 transition-colors cursor-pointer border-none"
               >
                 <Plus className="w-3 h-3" /> New Chat
               </button>
@@ -539,7 +417,7 @@ const AdminCopilot = () => {
             <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
               {loadingSessions ? (
                 <div className="flex justify-center items-center py-8 text-slate-400">
-                  <Loader2 className="w-5 h-5 animate-spin" style={{ color: currentTheme.primary }} />
+                  <Loader2 className="w-5 h-5 animate-spin text-indigo-600 dark:text-indigo-400" />
                 </div>
               ) : sessions.length === 0 ? (
                 <p className="text-xs text-slate-400 text-center py-8">No saved chat sessions.</p>
@@ -550,21 +428,15 @@ const AdminCopilot = () => {
                     <div
                       key={s.session_id}
                       onClick={() => selectSession(s.session_id)}
-                      style={isSelected ? {
-                        background: currentTheme.bgLight,
-                        borderColor: currentTheme.borderLight,
-                        color: currentTheme.textLight
-                      } : {}}
                       className={`group p-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-between border ${
                         isSelected
-                          ? 'font-semibold'
-                          : 'border-transparent hover:bg-slate-50 text-slate-600'
+                          ? 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 font-semibold'
+                          : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/60 text-slate-600 dark:text-slate-300'
                       }`}
                     >
                       <div className="flex items-center gap-2 overflow-hidden">
                         <MessageSquare 
-                          className="w-3.5 h-3.5 shrink-0" 
-                          style={{ color: isSelected ? currentTheme.primary : undefined }} 
+                          className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`}
                         />
                         <div className="truncate">
                           <p className="text-xs truncate">{s.title || 'Untitled Session'}</p>
@@ -577,7 +449,7 @@ const AdminCopilot = () => {
 
                       <button
                         onClick={(e) => handleDeleteSession(e, s.session_id)}
-                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 hover:text-red-600 rounded text-slate-400 transition-all cursor-pointer border-none bg-transparent"
+                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50 rounded text-slate-400 transition-all cursor-pointer border-none bg-transparent"
                         title="Delete Session"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -591,12 +463,12 @@ const AdminCopilot = () => {
         )}
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50 dark:bg-[#0b1120] custom-scrollbar">
           {messages.map((msg, index) => (
           <div key={index} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             {msg.role === 'assistant' && (
-              <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center shrink-0 mt-1 shadow-xs">
-                <Bot className="w-4 h-4" style={{ color: currentTheme.primary }} />
+              <div className="w-8 h-8 rounded-full bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-[#26334d] flex items-center justify-center shrink-0 mt-1 shadow-xs">
+                <Bot className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
               </div>
             )}
             
@@ -604,14 +476,9 @@ const AdminCopilot = () => {
               <div 
                 className={`p-3 rounded-2xl text-sm ${
                   msg.role === 'user' 
-                    ? 'rounded-tr-sm shadow-md' 
-                    : 'bg-white text-slate-700 border border-slate-200/80 rounded-tl-sm shadow-xs'
+                    ? 'bg-indigo-600 text-white rounded-tr-sm shadow-md shadow-indigo-500/20' 
+                    : 'bg-white dark:bg-[#131b2e] text-slate-700 dark:text-slate-100 border border-slate-200/80 dark:border-[#26334d] rounded-tl-sm shadow-xs'
                 }`}
-                style={msg.role === 'user' ? {
-                  background: currentTheme.primary,
-                  color: '#ffffff',
-                  boxShadow: `0 4px 12px ${currentTheme.glow}`
-                } : {}}
               >
                 <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
               </div>
@@ -619,16 +486,13 @@ const AdminCopilot = () => {
               {/* Render Action Card if present */}
               {msg.actionRequired && (
                 <div className="w-full mt-2">
-                  <CopilotActionCard actionRequired={msg.actionRequired} currentTheme={currentTheme} />
+                  <CopilotActionCard actionRequired={msg.actionRequired} />
                 </div>
               )}
             </div>
 
             {msg.role === 'user' && (
-              <div 
-                className="w-8 h-8 rounded-full shadow-xs flex items-center justify-center shrink-0 mt-1"
-                style={{ background: currentTheme.primary }}
-              >
+              <div className="w-8 h-8 rounded-full bg-indigo-600 text-white shadow-xs flex items-center justify-center shrink-0 mt-1">
                 <User className="w-4 h-4 text-white" />
               </div>
             )}
@@ -636,12 +500,12 @@ const AdminCopilot = () => {
         ))}
         {isLoading && (
           <div className="flex gap-3 justify-start">
-            <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center shrink-0 shadow-xs">
-              <Bot className="w-4 h-4" style={{ color: currentTheme.primary }} />
+            <div className="w-8 h-8 rounded-full bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-[#26334d] flex items-center justify-center shrink-0 shadow-xs">
+              <Bot className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
             </div>
-            <div className="bg-white border border-slate-200/80 p-3 rounded-2xl rounded-tl-sm shadow-xs flex items-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin" style={{ color: currentTheme.primary }} />
-              <span className="text-sm text-slate-500">Thinking...</span>
+            <div className="bg-white dark:bg-[#131b2e] border border-slate-200/80 dark:border-[#26334d] p-3 rounded-2xl rounded-tl-sm shadow-xs flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin text-indigo-600 dark:text-indigo-400" />
+              <span className="text-sm text-slate-500 dark:text-slate-400">Thinking...</span>
             </div>
           </div>
         )}
@@ -650,12 +514,12 @@ const AdminCopilot = () => {
 
       {/* Suggestions */}
       {messages.length < 3 && !isLoading && (
-        <div className="px-4 py-3 flex flex-wrap gap-2 shrink-0 border-t border-slate-100 bg-white shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.02)] z-10 relative">
+        <div className="px-4 py-3 flex flex-wrap gap-2 shrink-0 border-t border-slate-100 dark:border-[#26334d] bg-white dark:bg-[#131b2e] z-10 relative">
           {getSuggestions().map((suggestion, idx) => (
             <button
               key={idx}
               onClick={() => handleSuggestionClick(suggestion)}
-              className="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-full text-[11px] text-slate-600 hover:text-slate-800 transition-colors shadow-xs text-left leading-tight max-w-full cursor-pointer"
+              className="px-3 py-1.5 bg-white dark:bg-[#0b1120] hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-[#26334d] rounded-full text-[11px] text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors shadow-xs text-left leading-tight max-w-full cursor-pointer"
             >
               {suggestion}
             </button>
@@ -664,38 +528,24 @@ const AdminCopilot = () => {
       )}
 
       {/* Input Area */}
-      <div className="p-3 bg-white border-t border-slate-100 shrink-0 flex flex-col gap-2">
+      <div className="p-3 bg-white dark:bg-[#131b2e] border-t border-slate-100 dark:border-[#26334d] shrink-0 flex flex-col gap-2">
         {/* Attachment preview */}
         {attachedFileName && (
-          <div 
-            className="flex items-center justify-between rounded-lg p-2 px-3 border"
-            style={{
-              background: currentTheme.bgLight,
-              borderColor: currentTheme.borderLight,
-              color: currentTheme.textLight
-            }}
-          >
+          <div className="flex items-center justify-between rounded-lg p-2 px-3 border bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300">
             <div className="flex items-center gap-2 overflow-hidden">
-              <Paperclip className="w-3.5 h-3.5 shrink-0" style={{ color: currentTheme.primary }} />
+              <Paperclip className="w-3.5 h-3.5 shrink-0 text-indigo-600 dark:text-indigo-400" />
               <span className="text-[11px] font-medium truncate">{attachedFileName}</span>
             </div>
             <button 
               onClick={removeAttachment} 
-              className="p-1 hover:opacity-80 rounded-md transition-colors cursor-pointer border-none bg-transparent"
-              style={{ color: currentTheme.primary }}
+              className="p-1 hover:opacity-80 rounded-md transition-colors cursor-pointer border-none bg-transparent text-indigo-600 dark:text-indigo-400"
             >
               <X className="w-3 h-3" />
             </button>
           </div>
         )}
 
-        <div 
-          className="relative flex items-end gap-2 bg-slate-50 border border-slate-200 rounded-xl p-1 transition-all shadow-inner"
-          style={isInputFocused ? {
-            borderColor: currentTheme.primary,
-            boxShadow: `0 0 0 1px ${currentTheme.primary}`
-          } : {}}
-        >
+        <div className="relative flex items-end gap-2 bg-slate-50 dark:bg-[#0b1120] border border-slate-200 dark:border-[#26334d] rounded-xl p-1 transition-all shadow-inner focus-within:border-indigo-500">
           <input 
             type="file" 
             ref={fileInputRef} 
@@ -706,14 +556,10 @@ const AdminCopilot = () => {
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isLoading || isUploading}
-            className={`p-2.5 rounded-lg shrink-0 mb-0.5 ml-0.5 transition-colors cursor-pointer border-none bg-transparent ${
-              isUploading 
-                ? 'text-slate-400' 
-                : 'text-slate-400 hover:text-slate-600 hover:bg-slate-200/50'
-            }`}
+            className="p-2.5 rounded-lg shrink-0 mb-0.5 ml-0.5 transition-colors cursor-pointer border-none bg-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
             title="Attach Resume or Document"
           >
-            {isUploading ? <Loader2 className="w-4 h-4 animate-spin" style={{ color: currentTheme.primary }} /> : <Paperclip className="w-4 h-4" />}
+            {isUploading ? <Loader2 className="w-4 h-4 animate-spin text-indigo-600 dark:text-indigo-400" /> : <Paperclip className="w-4 h-4" />}
           </button>
 
           <textarea
@@ -724,16 +570,13 @@ const AdminCopilot = () => {
             onBlur={() => setIsInputFocused(false)}
             onKeyDown={handleKeyDown}
             placeholder="Ask Copilot..."
-            className="flex-1 max-h-32 min-h-[40px] bg-transparent text-sm text-slate-800 placeholder:text-slate-400 resize-none p-2 focus:outline-none custom-scrollbar"
+            className="flex-1 max-h-32 min-h-[40px] bg-transparent text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 resize-none p-2 focus:outline-none custom-scrollbar"
             rows={1}
           />
           <button
             onClick={() => handleSend()}
             disabled={(!inputValue.trim() && !attachedFileText) || isLoading || isUploading}
-            style={(!inputValue.trim() && !attachedFileText) || isLoading || isUploading ? {} : {
-              background: currentTheme.primary
-            }}
-            className="p-2.5 rounded-lg disabled:bg-slate-200 disabled:text-slate-400 text-white transition-colors shrink-0 mb-0.5 mr-0.5 shadow-sm cursor-pointer border-none hover:opacity-90"
+            className="p-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 dark:disabled:bg-slate-800 disabled:text-slate-400 text-white transition-colors shrink-0 mb-0.5 mr-0.5 shadow-sm cursor-pointer border-none"
           >
             <Send className="w-4 h-4" />
           </button>

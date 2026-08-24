@@ -245,15 +245,15 @@ export default function RecruitersPage() {
   return (
     <div className="p-6 lg:p-8 w-full max-w-7xl mx-auto space-y-8">
       {/* ── Page Header ── */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl shadow-xs border border-slate-100">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-slate-800/60 p-6 rounded-2xl shadow-xs border border-slate-100 dark:border-slate-800">
         <div>
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-xs">
               <Users className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-2xl lg:text-3xl font-bold text-slate-900 tracking-tight">Recruiters Management</h1>
-              <p className="text-sm font-medium text-slate-500 mt-0.5">Manage platform recruiters, allocate interview credits, and monitor activity.</p>
+              <h1 className="text-2xl lg:text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Recruiters Management</h1>
+              <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-0.5">Manage platform recruiters, allocate interview credits, and monitor activity.</p>
             </div>
           </div>
         </div>
@@ -297,13 +297,13 @@ export default function RecruitersPage() {
         </div>
 
         {/* Weekly Activity Chart (7 columns) */}
-        <div className="lg:col-span-7 bg-white p-6 rounded-2xl shadow-xs border border-slate-100 flex flex-col justify-between">
+        <div className="lg:col-span-7 bg-white dark:bg-slate-800/60 p-6 rounded-2xl shadow-xs border border-slate-100 dark:border-slate-800 flex flex-col justify-between">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-base font-bold text-slate-800">Weekly Activity (Interviews)</h2>
+              <h2 className="text-base font-bold text-slate-800 dark:text-slate-100">Weekly Activity (Interviews)</h2>
               <p className="text-xs text-slate-400 font-medium">Interview sessions completed across recent weeks</p>
             </div>
-            <span className="px-2.5 py-1 bg-slate-50 border border-slate-200/80 rounded-lg text-xs font-semibold text-slate-600">
+            <span className="px-2.5 py-1 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700/80 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-400">
               Last 8 Weeks
             </span>
           </div>
@@ -326,11 +326,11 @@ export default function RecruitersPage() {
       </div>
 
       {/* ── Recruiters Directory: 100% Full Width & Spacious ── */}
-      <div className="w-full bg-white rounded-2xl shadow-xs border border-slate-100 overflow-hidden">
+      <div className="w-full bg-white dark:bg-slate-800/60 rounded-2xl shadow-xs border border-slate-100 dark:border-slate-800 overflow-hidden">
         {/* Controls Bar */}
-        <div className="p-5 border-b border-slate-100 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4 bg-slate-50/50">
+        <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4 bg-slate-50 dark:bg-slate-900/50/50">
           <div className="flex items-center gap-3">
-            <h2 className="text-lg font-bold text-slate-800">Recruiters Directory</h2>
+            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Recruiters Directory</h2>
             <span className="px-2.5 py-0.5 bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-bold rounded-full">
               {filteredRecruiters.length} {filteredRecruiters.length === 1 ? 'Recruiter' : 'Recruiters'}
             </span>
@@ -345,12 +345,12 @@ export default function RecruitersPage() {
                 placeholder="Search by name, email..."
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-8 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium placeholder:text-slate-400"
+                className="w-full pl-9 pr-8 py-2 text-sm bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium placeholder:text-slate-400"
               />
               {searchTerm && (
                 <button 
                   onClick={() => setSearchTerm('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:text-slate-400"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -361,7 +361,7 @@ export default function RecruitersPage() {
             <select
               value={roleFilter}
               onChange={e => setRoleFilter(e.target.value)}
-              className="px-3 py-2 text-sm bg-white border border-slate-200 rounded-xl text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer"
+              className="px-3 py-2 text-sm bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer"
             >
               <option value="all">All Roles</option>
               <option value="super_admin">Super Admin</option>
@@ -372,7 +372,7 @@ export default function RecruitersPage() {
             <select
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value)}
-              className="px-3 py-2 text-sm bg-white border border-slate-200 rounded-xl text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer"
+              className="px-3 py-2 text-sm bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer"
             >
               <option value="all">All Status</option>
               <option value="Active">Active</option>
@@ -382,10 +382,10 @@ export default function RecruitersPage() {
             {/* Export CSV */}
             <button 
               onClick={handleDownloadCSV}
-              className="flex items-center gap-2 px-3.5 py-2 bg-white border border-slate-200 text-slate-700 font-semibold rounded-xl hover:bg-slate-50 hover:border-slate-300 shadow-xs transition-colors text-sm"
+              className="flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-semibold rounded-xl hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700 hover:border-slate-300 shadow-xs transition-colors text-sm"
               title="Export recruiters list to CSV"
             >
-              <Download className="w-4 h-4 text-slate-500" />
+              <Download className="w-4 h-4 text-slate-500 dark:text-slate-400" />
               Export
             </button>
           </div>
@@ -395,7 +395,7 @@ export default function RecruitersPage() {
         <div className="w-full overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-[800px]">
             <thead>
-              <tr className="bg-slate-50/70 text-slate-500 text-xs uppercase tracking-wider font-semibold border-b border-slate-100">
+              <tr className="bg-slate-50 dark:bg-slate-900/50/70 text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider font-semibold border-b border-slate-100 dark:border-slate-800">
                 <th className="px-6 py-4">Recruiter</th>
                 <th className="px-6 py-4">Role</th>
                 <th className="px-6 py-4">Status</th>
@@ -424,8 +424,8 @@ export default function RecruitersPage() {
                           {recruiter.name ? recruiter.name.charAt(0).toUpperCase() : 'R'}
                         </div>
                         <div>
-                          <p className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">{recruiter.name}</p>
-                          <p className="text-xs text-slate-500 font-medium">{recruiter.email}</p>
+                          <p className="font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 transition-colors">{recruiter.name}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{recruiter.email}</p>
                         </div>
                       </div>
                     </td>
@@ -447,7 +447,7 @@ export default function RecruitersPage() {
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
                         recruiter.status === 'Active' 
                           ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-                          : 'bg-slate-100 text-slate-600 border border-slate-200'
+                          : 'bg-slate-100 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
                       }`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${recruiter.status === 'Active' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></span>
                         {recruiter.status}
@@ -456,7 +456,7 @@ export default function RecruitersPage() {
 
                     {/* Interviews */}
                     <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <span className="inline-flex items-center gap-1.5 text-sm font-bold text-slate-800 bg-slate-100/70 px-3 py-1 rounded-lg">
+                      <span className="inline-flex items-center gap-1.5 text-sm font-bold text-slate-800 dark:text-slate-100 bg-slate-100 dark:bg-slate-800/50/70 px-3 py-1 rounded-lg">
                         <Video className="w-3.5 h-3.5 text-slate-400" />
                         {recruiter.interviews_conducted || 0}
                       </span>
@@ -479,7 +479,7 @@ export default function RecruitersPage() {
                     </td>
 
                     {/* Last Active */}
-                    <td className="px-6 py-4 whitespace-nowrap text-center text-xs font-medium text-slate-500">
+                    <td className="px-6 py-4 whitespace-nowrap text-center text-xs font-medium text-slate-500 dark:text-slate-400">
                       {recruiter.last_active ? (
                         <span className="inline-flex items-center gap-1">
                           <Clock className="w-3 h-3 text-slate-400" />
@@ -529,26 +529,26 @@ export default function RecruitersPage() {
                             className="fixed inset-0 z-10" 
                             onClick={() => setOpenDropdownId(null)}
                           ></div>
-                          <div className="absolute right-6 top-12 w-48 bg-white rounded-xl shadow-lg border border-slate-100 py-1.5 z-20 animate-in fade-in slide-in-from-top-2 duration-150 text-left">
+                          <div className="absolute right-6 top-12 w-48 bg-white dark:bg-slate-800/60 rounded-xl shadow-lg border border-slate-100 dark:border-slate-800 py-1.5 z-20 animate-in fade-in slide-in-from-top-2 duration-150 text-left">
                             <button 
                               onClick={() => { setEditingRecruiter(recruiter); setOpenDropdownId(null); }}
-                              className="w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-indigo-600 flex items-center gap-2.5 transition-colors font-medium"
+                              className="w-full px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700 hover:text-indigo-600 flex items-center gap-2.5 transition-colors font-medium"
                             >
                               <Edit className="w-4 h-4 text-slate-400" /> Edit Recruiter
                             </button>
                             <button 
                               onClick={() => { setAddingCreditsRecruiter(recruiter); setOpenDropdownId(null); }}
-                              className="w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-indigo-600 flex items-center gap-2.5 transition-colors font-medium"
+                              className="w-full px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700 hover:text-indigo-600 flex items-center gap-2.5 transition-colors font-medium"
                             >
                               <Coins className="w-4 h-4 text-amber-500" /> Add Credits
                             </button>
                             <button 
                               onClick={() => { setMessagingRecruiter(recruiter); setOpenDropdownId(null); }}
-                              className="w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-indigo-600 flex items-center gap-2.5 transition-colors font-medium"
+                              className="w-full px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700 hover:text-indigo-600 flex items-center gap-2.5 transition-colors font-medium"
                             >
                               <Mail className="w-4 h-4 text-indigo-500" /> Send Message
                             </button>
-                            <div className="h-px bg-slate-100 my-1"></div>
+                            <div className="h-px bg-slate-100 dark:bg-slate-800/50 my-1"></div>
                             <button 
                               onClick={() => { setDeactivatingRecruiter(recruiter); setOpenDropdownId(null); }}
                               className={`w-full px-4 py-2 text-sm ${recruiter.status === 'Active' ? 'text-rose-600 hover:bg-rose-50' : 'text-emerald-600 hover:bg-emerald-50'} flex items-center gap-2.5 transition-colors font-medium`}
@@ -564,12 +564,12 @@ export default function RecruitersPage() {
               })}
               {filteredRecruiters.length === 0 && (
                 <tr>
-                  <td colSpan="7" className="px-6 py-16 text-center text-slate-500">
+                  <td colSpan="7" className="px-6 py-16 text-center text-slate-500 dark:text-slate-400">
                     <div className="flex flex-col items-center justify-center max-w-xs mx-auto">
-                      <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 mb-3">
+                      <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800/50 flex items-center justify-center text-slate-400 mb-3">
                         <Users className="w-6 h-6" />
                       </div>
-                      <p className="font-bold text-slate-700">No recruiters found</p>
+                      <p className="font-bold text-slate-700 dark:text-slate-200">No recruiters found</p>
                       <p className="text-xs text-slate-400 mt-1">
                         {searchTerm ? `No results match "${searchTerm}"` : 'No recruiters match the selected filter criteria'}
                       </p>
@@ -585,7 +585,7 @@ export default function RecruitersPage() {
       {/* MODAL: ADD ADMIN */}
       {isAddAdminOpen && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4 animate-in fade-in duration-200">
-          <form onSubmit={handleAddAdminSubmit} className="w-full max-w-lg bg-white/95 backdrop-blur-xl border border-white/60 rounded-[2rem] p-8 shadow-[0_20px_60px_rgba(0,0,0,0.15)] space-y-6 text-slate-800 max-h-[90vh] overflow-y-auto relative animate-in zoom-in-95 duration-200">
+          <form onSubmit={handleAddAdminSubmit} className="w-full max-w-lg bg-white dark:bg-slate-800/60/95 backdrop-blur-xl border border-white/60 rounded-[2rem] p-8 shadow-[0_20px_60px_rgba(0,0,0,0.15)] space-y-6 text-slate-800 dark:text-slate-100 max-h-[90vh] overflow-y-auto relative animate-in zoom-in-95 duration-200">
 
             <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-indigo-50/80 to-transparent pointer-events-none rounded-t-[2rem]" />
 
@@ -595,14 +595,14 @@ export default function RecruitersPage() {
                   <UserPlus size={24} />
                 </div>
                 <div>
-                  <h3 className="text-xl font-black text-slate-800 tracking-tight">Provision Recruiter</h3>
-                  <p className="text-xs font-semibold text-slate-500 mt-0.5">Create a new recruiter account</p>
+                  <h3 className="text-xl font-black text-slate-800 dark:text-slate-100 tracking-tight">Provision Recruiter</h3>
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-0.5">Create a new recruiter account</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setIsAddAdminOpen(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 hover:bg-rose-100 text-slate-500 hover:text-rose-600 border-none cursor-pointer transition-colors"
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800/50 hover:bg-rose-100 text-slate-500 dark:text-slate-400 hover:text-rose-600 border-none cursor-pointer transition-colors"
               >
                 <X size={16} strokeWidth={2.5} />
               </button>
@@ -611,68 +611,68 @@ export default function RecruitersPage() {
             <div className="space-y-5 relative z-10">
               <div className="grid sm:grid-cols-2 gap-5">
                 <div className="space-y-1.5">
-                  <label className="text-[0.7rem] font-bold text-slate-500 uppercase tracking-wider ml-1">Full Name</label>
+                  <label className="text-[0.7rem] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Full Name</label>
                   <input
                     type="text"
                     required
                     value={newAdminForm.name}
                     onChange={(e) => setNewAdminForm(prev => ({ ...prev, name: e.target.value.replace(/[0-9]/g, '') }))}
                     placeholder="e.g. John Doe"
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-sm text-slate-800 font-medium outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-400"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/50 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 font-medium outline-none focus:bg-white dark:bg-slate-800/60 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-400"
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[0.7rem] font-bold text-slate-500 uppercase tracking-wider ml-1">Username</label>
+                  <label className="text-[0.7rem] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Username</label>
                   <input
                     type="text"
                     required
                     value={newAdminForm.username}
                     onChange={(e) => setNewAdminForm(prev => ({ ...prev, username: e.target.value }))}
                     placeholder="e.g. john_d"
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-sm text-slate-800 font-medium outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-400"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/50 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 font-medium outline-none focus:bg-white dark:bg-slate-800/60 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-400"
                   />
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[0.7rem] font-bold text-slate-500 uppercase tracking-wider ml-1">Email Address</label>
+                <label className="text-[0.7rem] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Email Address</label>
                 <input
                   type="email"
                   required
                   value={newAdminForm.email}
                   onChange={(e) => setNewAdminForm(prev => ({ ...prev, email: e.target.value }))}
                   placeholder="e.g. john@example.com"
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-sm text-slate-800 font-medium outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-400"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/50 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 font-medium outline-none focus:bg-white dark:bg-slate-800/60 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-400"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[0.7rem] font-bold text-slate-500 uppercase tracking-wider ml-1">Description (Included in Email)</label>
+                <label className="text-[0.7rem] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Description (Included in Email)</label>
                 <textarea
                   value={newAdminForm.description}
                   onChange={(e) => setNewAdminForm(prev => ({ ...prev, description: e.target.value }))}
                   placeholder="e.g. You can now log in and manage your AI interviews..."
                   rows="3"
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-sm text-slate-800 font-medium outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-400"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/50 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 font-medium outline-none focus:bg-white dark:bg-slate-800/60 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-400"
                 />
               </div>
 
               <div className="grid sm:grid-cols-2 gap-5">
                 <div className="space-y-1.5">
-                  <label className="text-[0.7rem] font-bold text-slate-500 uppercase tracking-wider ml-1">Password</label>
+                  <label className="text-[0.7rem] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Password</label>
                   <div className="relative">
                     <input
                       type={showPassword ? "text" : "password"}
                       required
                       value={newAdminForm.password}
                       onChange={(e) => setNewAdminForm(prev => ({ ...prev, password: e.target.value }))}
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 pr-10 text-sm text-slate-800 font-medium outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-400"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/50 px-4 py-3 pr-10 text-sm text-slate-800 dark:text-slate-100 font-medium outline-none focus:bg-white dark:bg-slate-800/60 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-400"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:text-slate-400 focus:outline-none"
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
@@ -680,7 +680,7 @@ export default function RecruitersPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[0.7rem] font-bold text-slate-500 uppercase tracking-wider ml-1">Initial Credits</label>
+                  <label className="text-[0.7rem] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Initial Credits</label>
                   <div className="relative">
                     <Coins size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
@@ -688,18 +688,18 @@ export default function RecruitersPage() {
                       min="0"
                       value={newAdminForm.credits}
                       onChange={(e) => setNewAdminForm(prev => ({ ...prev, credits: e.target.value }))}
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50/50 pl-10 pr-4 py-3 text-sm text-slate-800 font-bold outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-400"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/50 pl-10 pr-4 py-3 text-sm text-slate-800 dark:text-slate-100 font-bold outline-none focus:bg-white dark:bg-slate-800/60 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-400"
                     />
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="flex gap-4 pt-6 mt-6 border-t border-slate-100 relative z-10">
+            <div className="flex gap-4 pt-6 mt-6 border-t border-slate-100 dark:border-slate-800 relative z-10">
               <button
                 type="button"
                 onClick={() => setIsAddAdminOpen(false)}
-                className="flex-1 py-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-sm cursor-pointer transition-colors border-none"
+                className="flex-1 py-3.5 rounded-xl bg-slate-100 dark:bg-slate-800/50 hover:bg-slate-200 text-slate-600 dark:text-slate-400 font-bold text-sm cursor-pointer transition-colors border-none"
               >
                 Cancel
               </button>
@@ -718,27 +718,27 @@ export default function RecruitersPage() {
       {/* MODAL: ADD CREDITS */}
       {addingCreditsRecruiter && (
         <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-[9999] p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-              <h3 className="text-lg font-bold text-slate-800">Add Credits</h3>
-              <button onClick={() => setAddingCreditsRecruiter(null)} className="text-slate-400 hover:text-slate-600">
+          <div className="bg-white dark:bg-slate-800/60 rounded-2xl w-full max-w-md shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Add Credits</h3>
+              <button onClick={() => setAddingCreditsRecruiter(null)} className="text-slate-400 hover:text-slate-600 dark:text-slate-400">
                 <X className="w-5 h-5" />
               </button>
             </div>
             <form onSubmit={handleAddCreditsSubmit} className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Recruiter</label>
-                <input type="text" disabled value={addingCreditsRecruiter.name} className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-500" />
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Recruiter</label>
+                <input type="text" disabled value={addingCreditsRecruiter.name} className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Amount to Add</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Amount to Add</label>
                 <div className="relative">
                   <Coins className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input type="number" min="1" required value={addCreditsAmount} onChange={e => setAddCreditsAmount(e.target.value)} className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  <input type="number" min="1" required value={addCreditsAmount} onChange={e => setAddCreditsAmount(e.target.value)} className="w-full pl-9 pr-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
               </div>
               <div className="pt-4 flex gap-3">
-                <button type="button" onClick={() => setAddingCreditsRecruiter(null)} className="flex-1 px-4 py-2 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors font-medium">Cancel</button>
+                <button type="button" onClick={() => setAddingCreditsRecruiter(null)} className="flex-1 px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 rounded-lg hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700 transition-colors font-medium">Cancel</button>
                 <button type="submit" className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium">Add Credits</button>
               </div>
             </form>
@@ -749,31 +749,31 @@ export default function RecruitersPage() {
       {/* Edit Recruiter Modal */}
       {editingRecruiter && (
         <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h3 className="font-semibold text-slate-800 text-lg">Edit Recruiter</h3>
-              <button onClick={() => setEditingRecruiter(null)} className="text-slate-400 hover:text-slate-600">
+          <div className="bg-white dark:bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-900/50/50">
+              <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-lg">Edit Recruiter</h3>
+              <button onClick={() => setEditingRecruiter(null)} className="text-slate-400 hover:text-slate-600 dark:text-slate-400">
                 <X className="w-5 h-5" />
               </button>
             </div>
             <form onSubmit={handleEditSubmit} className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
-                <input required type="text" value={editingRecruiter.name} onChange={(e) => setEditingRecruiter({...editingRecruiter, name: e.target.value})} className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Name</label>
+                <input required type="text" value={editingRecruiter.name} onChange={(e) => setEditingRecruiter({...editingRecruiter, name: e.target.value})} className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-                <input required type="email" value={editingRecruiter.email} onChange={(e) => setEditingRecruiter({...editingRecruiter, email: e.target.value})} className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Email</label>
+                <input required type="email" value={editingRecruiter.email} onChange={(e) => setEditingRecruiter({...editingRecruiter, email: e.target.value})} className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
-                <select value={editingRecruiter.role} onChange={(e) => setEditingRecruiter({...editingRecruiter, role: e.target.value})} className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Role</label>
+                <select value={editingRecruiter.role} onChange={(e) => setEditingRecruiter({...editingRecruiter, role: e.target.value})} className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none">
                   <option value="admin">Admin</option>
                   <option value="super_admin">Super Admin</option>
                 </select>
               </div>
               <div className="flex justify-end gap-3 pt-4">
-                <button type="button" onClick={() => setEditingRecruiter(null)} className="px-5 py-2 text-slate-600 hover:bg-slate-100 rounded-xl font-medium transition-colors">Cancel</button>
+                <button type="button" onClick={() => setEditingRecruiter(null)} className="px-5 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:bg-slate-800/50 rounded-xl font-medium transition-colors">Cancel</button>
                 <button type="submit" className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium shadow-sm transition-colors">Save Changes</button>
               </div>
             </form>
@@ -784,24 +784,24 @@ export default function RecruitersPage() {
       {/* Message Recruiter Modal */}
       {messagingRecruiter && (
         <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h3 className="font-semibold text-slate-800 text-lg">Send Message to {messagingRecruiter.name}</h3>
-              <button onClick={() => setMessagingRecruiter(null)} className="text-slate-400 hover:text-slate-600">
+          <div className="bg-white dark:bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-900/50/50">
+              <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-lg">Send Message to {messagingRecruiter.name}</h3>
+              <button onClick={() => setMessagingRecruiter(null)} className="text-slate-400 hover:text-slate-600 dark:text-slate-400">
                 <X className="w-5 h-5" />
               </button>
             </div>
             <form onSubmit={handleSendMessage} className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Subject</label>
-                <input required type="text" value={messageForm.subject} onChange={(e) => setMessageForm({...messageForm, subject: e.target.value})} className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none" placeholder="Important Update" />
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Subject</label>
+                <input required type="text" value={messageForm.subject} onChange={(e) => setMessageForm({...messageForm, subject: e.target.value})} className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none" placeholder="Important Update" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Message</label>
-                <textarea required rows={4} value={messageForm.body} onChange={(e) => setMessageForm({...messageForm, body: e.target.value})} className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none" placeholder="Type your message here..."></textarea>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Message</label>
+                <textarea required rows={4} value={messageForm.body} onChange={(e) => setMessageForm({...messageForm, body: e.target.value})} className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none" placeholder="Type your message here..."></textarea>
               </div>
               <div className="flex justify-end gap-3 pt-4">
-                <button type="button" onClick={() => setMessagingRecruiter(null)} className="px-5 py-2 text-slate-600 hover:bg-slate-100 rounded-xl font-medium transition-colors">Cancel</button>
+                <button type="button" onClick={() => setMessagingRecruiter(null)} className="px-5 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:bg-slate-800/50 rounded-xl font-medium transition-colors">Cancel</button>
                 <button type="submit" className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium shadow-sm transition-colors flex items-center gap-2">
                   <Mail className="w-4 h-4" /> Send Now
                 </button>
@@ -814,20 +814,20 @@ export default function RecruitersPage() {
       {/* Deactivate/Activate Recruiter Modal */}
       {deactivatingRecruiter && (
         <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-center p-6">
+          <div className="bg-white dark:bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-center p-6">
             <div className={`w-16 h-16 rounded-full ${deactivatingRecruiter.status === 'Active' ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'} flex items-center justify-center mx-auto mb-4`}>
               <UserCheck className="w-8 h-8" />
             </div>
-            <h3 className="font-bold text-slate-800 text-xl mb-2">
+            <h3 className="font-bold text-slate-800 dark:text-slate-100 text-xl mb-2">
               {deactivatingRecruiter.status === 'Active' ? 'Deactivate' : 'Activate'} {deactivatingRecruiter.name}?
             </h3>
-            <p className="text-slate-500 mb-6 text-sm">
+            <p className="text-slate-500 dark:text-slate-400 mb-6 text-sm">
               {deactivatingRecruiter.status === 'Active' 
                 ? "This recruiter will immediately lose access to their account and dashboard."
                 : "This recruiter will regain full access to their account and dashboard."}
             </p>
             <div className="flex gap-3">
-              <button onClick={() => setDeactivatingRecruiter(null)} className="flex-1 py-3 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl font-medium transition-colors">
+              <button onClick={() => setDeactivatingRecruiter(null)} className="flex-1 py-3 text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800/50 hover:bg-slate-200 rounded-xl font-medium transition-colors">
                 Cancel
               </button>
               <button onClick={handleDeactivate} className={`flex-1 py-3 text-white ${deactivatingRecruiter.status === 'Active' ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'} rounded-xl font-medium shadow-sm transition-colors`}>
@@ -843,19 +843,19 @@ export default function RecruitersPage() {
 
 function KPICard({ title, value, subtitle, icon, badge, badgeColor }) {
   return (
-    <div className="bg-white p-5 rounded-2xl shadow-xs border border-slate-100 hover:shadow-sm transition-all flex items-center justify-between gap-4">
+    <div className="bg-white dark:bg-slate-800/60 p-5 rounded-2xl shadow-xs border border-slate-100 dark:border-slate-800 hover:shadow-sm transition-all flex items-center justify-between gap-4">
       <div className="flex items-center gap-4 min-w-0">
-        <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 shrink-0">
+        <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 shrink-0">
           {icon}
         </div>
         <div className="min-w-0">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{title}</p>
-          <h3 className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight mt-0.5">{value ?? 0}</h3>
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{title}</p>
+          <h3 className="text-2xl lg:text-3xl font-black text-slate-900 dark:text-white tracking-tight mt-0.5">{value ?? 0}</h3>
           {subtitle && <p className="text-xs text-slate-400 font-medium mt-0.5 truncate">{subtitle}</p>}
         </div>
       </div>
       {badge && (
-        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border shrink-0 hidden sm:inline-block ${badgeColor || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border shrink-0 hidden sm:inline-block ${badgeColor || 'bg-slate-100 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}>
           {badge}
         </span>
       )}

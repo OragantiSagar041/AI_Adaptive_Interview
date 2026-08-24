@@ -76,13 +76,13 @@ export default function NewSuperDashboardPage() {
   const PIE_COLORS = ["#10b981", "#ef4444"]; // Green for available, Red for used
 
   return (
-    <div className="p-8 h-full overflow-y-auto bg-slate-50">
+    <div className="p-8 h-full overflow-y-auto bg-slate-50 dark:bg-slate-900/50">
       
       {/* Top Cards Row */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
         
         <Card
-          className="bg-white border-none shadow-sm flex flex-col justify-center h-28 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md hover:border hover:border-emerald-200"
+          className="bg-white dark:bg-slate-800/60 border-none shadow-sm flex flex-col justify-center h-28 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md hover:border hover:border-emerald-200"
           onClick={() => navigate('/superadmin/dashboard')}
         >
           <CardContent className="p-4 flex items-center justify-between">
@@ -99,13 +99,13 @@ export default function NewSuperDashboardPage() {
         </Card>
 
         <Card
-          className="bg-white border-none shadow-sm flex flex-col justify-center h-28 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md hover:border hover:border-indigo-200"
+          className="bg-white dark:bg-slate-800/60 border-none shadow-sm flex flex-col justify-center h-28 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md hover:border hover:border-indigo-200"
           onClick={() => navigate('/superadmin/dashboard')}
         >
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex flex-col">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">TOTAL INTERVIEWS</span>
-              <span className="text-3xl font-bold text-slate-800 tracking-tight">
+              <span className="text-3xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">
                 {dbStats?.total ?? '--'}
               </span>
             </div>
@@ -116,7 +116,7 @@ export default function NewSuperDashboardPage() {
         </Card>
 
         <Card
-          className="bg-white border-none shadow-sm flex flex-col justify-center h-28 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md hover:border hover:border-indigo-200"
+          className="bg-white dark:bg-slate-800/60 border-none shadow-sm flex flex-col justify-center h-28 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md hover:border hover:border-indigo-200"
           onClick={() => {
             dispatch(setStatusFilter('completed'));
             navigate('/superadmin/interviews');
@@ -125,7 +125,7 @@ export default function NewSuperDashboardPage() {
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex flex-col">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">COMPLETED</span>
-              <span className="text-3xl font-bold text-slate-800 tracking-tight">
+              <span className="text-3xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">
                 {dbStats?.completed ?? '--'}
               </span>
             </div>
@@ -136,13 +136,13 @@ export default function NewSuperDashboardPage() {
         </Card>
 
         <Card
-          className="bg-white border-none shadow-sm flex flex-col justify-center h-28 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md hover:border hover:border-amber-200"
+          className="bg-white dark:bg-slate-800/60 border-none shadow-sm flex flex-col justify-center h-28 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md hover:border hover:border-amber-200"
           onClick={() => navigate('/superadmin/dashboard')}
         >
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex flex-col">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">PENDING</span>
-              <span className="text-3xl font-bold text-slate-800 tracking-tight">
+              <span className="text-3xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">
                 {dbStats?.pending ?? '--'}
               </span>
             </div>
@@ -153,13 +153,13 @@ export default function NewSuperDashboardPage() {
         </Card>
 
         <Card
-          className="bg-white border-none shadow-sm flex flex-col justify-center h-28 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md hover:border hover:border-blue-200"
+          className="bg-white dark:bg-slate-800/60 border-none shadow-sm flex flex-col justify-center h-28 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md hover:border hover:border-blue-200"
           onClick={() => navigate('/superadmin/team')}
         >
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex flex-col">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">RECRUITERS</span>
-              <span className="text-3xl font-bold text-slate-800 tracking-tight">
+              <span className="text-3xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">
                 {dbStats?.recruiters_count ?? '--'}
               </span>
             </div>
@@ -174,9 +174,9 @@ export default function NewSuperDashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Interviews Last 7 Days */}
-        <Card className="bg-white border-none shadow-sm h-[380px] flex flex-col">
+        <Card className="bg-white dark:bg-slate-800/60 border-none shadow-sm h-[380px] flex flex-col">
           <CardHeader className="pb-2">
-            <CardTitle className="text-[13px] font-bold text-slate-800 uppercase tracking-wide">
+            <CardTitle className="text-[13px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wide">
               INTERVIEWS LAST 7 DAYS
             </CardTitle>
           </CardHeader>
@@ -203,9 +203,9 @@ export default function NewSuperDashboardPage() {
         </Card>
 
         {/* Interviews by Admin */}
-        <Card className="bg-white border-none shadow-sm h-[380px] flex flex-col">
+        <Card className="bg-white dark:bg-slate-800/60 border-none shadow-sm h-[380px] flex flex-col">
           <CardHeader className="pb-2">
-            <CardTitle className="text-[13px] font-bold text-slate-800 uppercase tracking-wide">
+            <CardTitle className="text-[13px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wide">
               INTERVIEWS BY ADMIN
             </CardTitle>
           </CardHeader>
@@ -235,9 +235,9 @@ export default function NewSuperDashboardPage() {
         </Card>
 
         {/* Credits Used vs Available */}
-        <Card className="bg-white border-none shadow-sm h-[380px] flex flex-col">
+        <Card className="bg-white dark:bg-slate-800/60 border-none shadow-sm h-[380px] flex flex-col">
           <CardHeader className="pb-2">
-            <CardTitle className="text-[13px] font-bold text-slate-800 uppercase tracking-wide">
+            <CardTitle className="text-[13px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wide">
               CREDITS USED VS AVAILABLE
             </CardTitle>
           </CardHeader>
@@ -268,11 +268,11 @@ export default function NewSuperDashboardPage() {
             <div className="absolute bottom-6 left-0 right-0 flex justify-center items-center gap-6">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-2.5 bg-[#ef4444] rounded-[1px]"></div>
-                <span className="text-xs text-slate-600 font-medium">Credits Used</span>
+                <span className="text-xs text-slate-600 dark:text-slate-400 font-medium">Credits Used</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-8 h-2.5 bg-[#10b981] rounded-[1px]"></div>
-                <span className="text-xs text-slate-600 font-medium">Credits Available</span>
+                <span className="text-xs text-slate-600 dark:text-slate-400 font-medium">Credits Available</span>
               </div>
             </div>
           </CardContent>
