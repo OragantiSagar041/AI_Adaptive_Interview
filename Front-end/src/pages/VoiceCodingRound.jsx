@@ -209,7 +209,8 @@ export default function VoiceCodingRound({
   language: sessionLang,
   wsRef,
   duration,
-  onComplete
+  onComplete,
+  warningsCount = 0
 }) {
   const getBoilerplateCode = (lang, task) => {
     const funcName = task?.function_name || 'solution';
@@ -417,11 +418,42 @@ export default function VoiceCodingRound({
       mediaRecorderRef.current = mediaRecorder
       audioChunksRef.current = []
 
+      // Enable live transcription feedback using Web Speech API
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+      let recognition = null
+      if (SR) {
+        try {
+          recognition = new SR()
+          recognition.continuous = true
+          recognition.interimResults = true
+          const langMap = { 'Hindi': 'hi-IN', 'Telugu': 'te-IN', 'Tamil': 'ta-IN', 'Malayalam': 'ml-IN', 'Kannada': 'kn-IN', 'English': 'en-US' }
+          recognition.lang = langMap[sessionLang] || 'en-US'
+          recognition.onresult = (e) => {
+            let current = ''
+            for (let i = e.resultIndex; i < e.results.length; ++i) {
+              current += e.results[i][0].transcript
+            }
+            setTranscript(current)
+          }
+          recognition.start()
+        } catch (e) {
+          console.debug("Web Speech API not available or failed to start", e)
+        }
+      }
+
       mediaRecorder.ondataavailable = e => {
         if (e.data.size > 0) audioChunksRef.current.push(e.data)
       }
 
-      mediaRecorder.onstop = async () => {
+        mediaRecorder.onstop = async () => {
+        // Stop the live recognition
+        if (recognition) {
+          try {
+            recognition.onresult = null
+            recognition.stop()
+          } catch (e) { }
+        }
+
         // Reset UI immediately so user knows recording ended
         setAiStatus('idle')
         setOrbLabel('Processing…')
@@ -740,6 +772,11 @@ export default function VoiceCodingRound({
           <div className={`text-sm font-mono font-bold px-3 py-1 rounded-full border ${timeLeft < 180 ? 'border-rose-500/50 text-rose-400 bg-rose-500/10' : 'border-amber-500/30 text-amber-300 bg-amber-500/10'}`}>
             <i className="fas fa-clock mr-1.5" />{fmt(timeLeft)}
           </div>
+          {warningsCount > 0 && (
+            <div className="flex items-center gap-1 px-3 py-1 rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-400 text-xs font-bold" title={`${warningsCount} proctoring alert${warningsCount > 1 ? 's' : ''} detected`}>
+              <i className="fas fa-exclamation-triangle text-[10px]" />{warningsCount}
+            </div>
+          )}
         </div>
       </header>
 
@@ -925,7 +962,7 @@ export default function VoiceCodingRound({
                 {runResultData ? (
                   <div className="flex flex-col w-full h-full text-slate-300 bg-[#0a0f1e] overflow-hidden">
                     {runResultData.status === 'error' && runResultData.runtime_error && (
-                      <div className="bg-rose-500/10 border-b border-rose-500/20 p-3 text-rose-400 font-mono text-[11px] whitespace-pre-wrap shrink-0">
+                      <div className="bg-rose-500/10 border-b border-rose-500/20 p-3 text-rose-400 font-mono text-[11px] whitespace-pre-wrap shrink-0 max-h-48 overflow-y-auto scrollbar-thin scrollbar-thumb-rose-500/50 scrollbar-track-transparent">
                         <i className="fas fa-exclamation-triangle mr-2"></i>
                         {runResultData.runtime_error}
                       </div>
