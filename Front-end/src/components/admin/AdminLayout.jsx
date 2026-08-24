@@ -605,6 +605,7 @@ export default function AdminLayout({
                       className="w-full text-left flex items-center gap-2.5 px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 font-medium cursor-pointer border-none bg-transparent"
                     >
                       <LogOut size={15} /> Logout
+                    </button>
                   </div>
                 )}
               </div>

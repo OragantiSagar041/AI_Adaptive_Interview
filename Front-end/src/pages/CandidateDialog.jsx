@@ -10,7 +10,7 @@ import {
   Mail, Phone, MapPin, Building2, IndianRupee, Clock, Download,
   Play, FileText, Sparkles, Star, Check, X, Calendar, Send,
   MessageSquare, Video, Scale, Loader2, AlertCircle, Monitor,
-  Mic, ShieldAlert, Eye, UserCheck, User
+  Mic, ShieldAlert, Eye, UserCheck, User, ArrowLeft
 } from "lucide-react"
 
 // ── Score Ring ──────────────────────────────────────────────────────────────
@@ -470,14 +470,14 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" onClick={(e) => { if (e.target === e.currentTarget) onOpenChange(false) }}>
+    <div className="fixed top-16 left-0 md:left-64 right-0 bottom-0 z-30 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 md:p-6" onClick={(e) => { if (e.target === e.currentTarget) onOpenChange(false) }}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
 
         {/* ── Header ── */}
         <div className="relative p-6 pb-4 border-b border-slate-100 bg-gradient-to-br from-indigo-50/60 to-white shrink-0">
           <button onClick={() => onOpenChange(false)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
-            <X size={20} />
-          </button>
+              <X size={20} />
+            </button>
 
           {loading ? (
             <div className="flex items-center gap-3 py-4">
@@ -963,7 +963,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
             <Send size={16} /> Send Offer
           </button>
         </div>
-      </div>
+      )}
 
       <ScheduleModal
         isOpen={showScheduleModal}
