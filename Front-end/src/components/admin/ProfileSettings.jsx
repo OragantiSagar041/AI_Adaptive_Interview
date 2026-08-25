@@ -15,6 +15,8 @@ export default function ProfileSettings() {
 
   const [loading, setLoading] = useState(false)
   const [pwdLoading, setPwdLoading] = useState(false)
+  const [imgLoading, setImgLoading] = useState(false)
+  const fileInputRef = React.useRef(null)
   
   const [formData, setFormData] = useState({
     username: adminUser?.name || adminUser?.username || '',
@@ -95,6 +97,54 @@ export default function ProfileSettings() {
     }
   }
 
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('admin_id', adminUser?.admin_id || adminUser?.id || adminUser?._id)
+
+    setImgLoading(true)
+    try {
+      const endpoint = role === 'master' 
+        ? `${API_BASE_URL}/master/profile/image` 
+        : (role === 'super_admin' || role === 'superadmin')
+          ? `${API_BASE_URL}/superadmin/profile/image` 
+          : `${API_BASE_URL}/admin/profile/image`
+          
+      const res = await axios.post(endpoint, formData, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
+      })
+      
+      const newImageUrl = res.data.profile_image || res.data.secure_url
+      const updatedUser = { 
+        ...adminUser, 
+        profile_image: newImageUrl,
+        avatar: newImageUrl
+      }
+      sessionStorage.setItem('adminUser', JSON.stringify(updatedUser))
+      dispatch(setCredentials({ role, token, adminUser: updatedUser }))
+      
+      Swal.fire({
+        title: 'Success!',
+        text: 'Profile picture updated successfully.',
+        icon: 'success',
+        timer: 2000,
+        showConfirmButton: false
+      })
+    } catch (err) {
+      console.error(err)
+      Swal.fire('Error', 'Failed to upload profile picture', 'error')
+    } finally {
+      setImgLoading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
   const handleUpdatePassword = async (e) => {
     e.preventDefault()
     if(pwdData.new_password !== pwdData.confirm_password) {
@@ -163,20 +213,40 @@ export default function ProfileSettings() {
         <div className="lg:col-span-1 space-y-6">
           {/* Profile Card */}
           <div className="bg-card rounded-[20px] p-8 shadow-sm border border-border dark:border-slate-700/90 flex flex-col items-center relative">
-            <div className="relative">
-              <div className="w-28 h-28 rounded-full p-1 border-2 border-border dark:border-slate-700">
-                <img
-                  src={adminUser?.profile_image || adminUser?.avatar || "https://ui-avatars.com/api/?name=Admin&background=random"}
-                  alt="Avatar"
-                  className="w-full h-full rounded-full object-cover"
-                />
+            <div className="relative group cursor-pointer" onClick={() => !imgLoading && fileInputRef.current?.click()}>
+              <div className="w-28 h-28 rounded-full p-1 border-2 border-border dark:border-slate-700 relative overflow-hidden bg-muted flex items-center justify-center">
+                {imgLoading ? (
+                  <RefreshCw className="animate-spin text-muted-foreground w-8 h-8" />
+                ) : (
+                  <img
+                    src={adminUser?.profile_image || adminUser?.avatar || "https://ui-avatars.com/api/?name=Admin&background=random"}
+                    alt="Avatar"
+                    className="w-full h-full rounded-full object-cover"
+                  />
+                )}
+                
+                {/* Upload Overlay */}
+                {!imgLoading && (
+                  <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
+                    <span className="text-[10px] text-white font-bold tracking-wider uppercase">Upload</span>
+                  </div>
+                )}
               </div>
               <div className="absolute bottom-2 right-2 w-4 h-4 bg-emerald-500 rounded-full border-2 border-background"></div>
             </div>
             
+            {/* Hidden File Input */}
+            <input 
+              type="file" 
+              accept="image/*" 
+              ref={fileInputRef} 
+              onChange={handleImageUpload} 
+              className="hidden" 
+            />
+            
             <h3 className="mt-4 text-xl font-bold text-foreground">{adminUser?.name || adminUser?.username || 'admin'}</h3>
             <div className="mt-2 px-4 py-1 bg-indigo-100 dark:bg-indigo-950/80 text-indigo-800 dark:text-indigo-200 text-xs font-black rounded-full uppercase tracking-widest border border-indigo-300 dark:border-indigo-500/60">
-              {role || 'ADMIN'}
+              {(role === 'super_admin' || role === 'superadmin') ? 'SUPER ADMIN' : role || 'ADMIN'}
             </div>
 
             <div className="w-full border-t border-border dark:border-slate-700 border-dashed my-6"></div>
@@ -188,7 +258,9 @@ export default function ProfileSettings() {
               </div>
               <div className="flex items-center gap-3 text-sm text-muted-foreground">
                 <Shield size={16} className="text-muted-foreground shrink-0" />
-                <span>Access: <strong className="text-foreground font-semibold">{role === 'master' ? 'Master Level' : 'Admin Level'}</strong></span>
+                <span>Access: <strong className="text-foreground font-semibold">
+                  {role === 'master' ? 'Master Level' : (role === 'super_admin' || role === 'superadmin') ? 'Super Admin Level' : 'Admin Level'}
+                </strong></span>
               </div>
               <div className="flex items-center gap-3 text-sm text-muted-foreground">
                 <Calendar size={16} className="text-muted-foreground shrink-0" />

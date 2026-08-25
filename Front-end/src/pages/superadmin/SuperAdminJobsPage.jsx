@@ -422,18 +422,18 @@ export default function SuperAdminJobsPage() {
     <div className="superadmin-jobs-page w-full max-w-7xl text-slate-900 dark:text-white">
 
       {/* ── Header ─────────────────────────────────────── */}
-      <div className="bg-white dark:bg-slate-900/40 backdrop-blur-2xl border border-slate-200 dark:border-slate-800/80 rounded-3xl shadow-sm p-6 sm:p-8 mb-8 relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-indigo-50/50 dark:from-indigo-900/10 to-transparent pointer-events-none" />
+      <div className="bg-card border border-border dark:border-slate-700/80 rounded-3xl shadow-sm p-6 sm:p-8 mb-8 relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-32 bg-indigo-500/5 pointer-events-none" />
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-5">
           <div className="flex gap-4 items-center">
-            <div className="w-16 h-16 rounded-2xl flex items-center justify-center bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-800 text-white shadow-[0_8px_20px_rgba(79,70,229,0.3)] border border-white/20 ring-4 ring-indigo-50 dark:ring-slate-800/50 shrink-0">
+            <div className="w-16 h-16 rounded-2xl flex items-center justify-center bg-indigo-600 text-white shadow-md border border-indigo-500/30 shrink-0">
               <Briefcase size={30} strokeWidth={2.5} />
             </div>
             <div>
-              <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-slate-900 to-indigo-900 dark:from-white dark:to-indigo-100 tracking-tight">
+              <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
                 Jobs Management
               </h1>
-              <p className="text-slate-500 dark:text-slate-400 mt-0.5 text-sm font-semibold">
+              <p className="text-muted-foreground mt-0.5 text-sm font-semibold">
                 {totalJobs} active posting{totalJobs !== 1 ? 's' : ''} · Create and manage job openings
               </p>
             </div>
@@ -441,13 +441,13 @@ export default function SuperAdminJobsPage() {
 
           <div className="flex flex-wrap items-center gap-3">
             {/* View Toggle */}
-            <div className="flex items-center bg-slate-100 dark:bg-slate-800/50 rounded-xl p-1 gap-1 border border-slate-200 dark:border-slate-700/80">
+            <div className="flex items-center bg-secondary rounded-xl p-1 gap-1 border border-border dark:border-slate-700/80">
               <button
                 onClick={() => setViewMode('grid')}
                 title="Grid View"
                 className={`p-2.5 rounded-lg transition-all border-none cursor-pointer ${viewMode === 'grid'
-                  ? 'bg-white dark:bg-slate-800/60 text-indigo-600 shadow-sm shadow-indigo-100'
-                  : 'bg-transparent text-slate-400 hover:text-slate-600 dark:text-slate-400'
+                  ? 'bg-card text-indigo-600 dark:text-indigo-400 shadow-sm'
+                  : 'bg-transparent text-muted-foreground hover:text-foreground'
                   }`}
               >
                 <LayoutGrid size={18} />
@@ -456,8 +456,8 @@ export default function SuperAdminJobsPage() {
                 onClick={() => setViewMode('list')}
                 title="List View"
                 className={`p-2.5 rounded-lg transition-all border-none cursor-pointer ${viewMode === 'list'
-                  ? 'bg-white dark:bg-slate-800/60 text-indigo-600 shadow-sm shadow-indigo-100'
-                  : 'bg-transparent text-slate-400 hover:text-slate-600 dark:text-slate-400'
+                  ? 'bg-card text-indigo-600 dark:text-indigo-400 shadow-sm'
+                  : 'bg-transparent text-muted-foreground hover:text-foreground'
                   }`}
               >
                 <LayoutList size={18} />
@@ -475,7 +475,7 @@ export default function SuperAdminJobsPage() {
                 navigator.clipboard.writeText(url);
                 alert(`Job portal link copied to clipboard:\n${url}`);
               }}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/50 hover:bg-slate-200 text-slate-700 dark:text-slate-200 font-bold text-sm cursor-pointer border border-slate-200 dark:border-slate-700 transition-all active:scale-95"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-secondary hover:bg-muted text-foreground font-bold text-sm cursor-pointer border border-border dark:border-slate-700 transition-all active:scale-95"
             >
               <Share2 size={18} />
               Share Job Portal
@@ -483,7 +483,8 @@ export default function SuperAdminJobsPage() {
 
             <button
               onClick={() => { resetForm(); setShowModal(true); }}
-              className="group flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-bold text-sm cursor-pointer border-none shadow-lg shadow-indigo-500/30 transition-all hover:-translate-y-0.5 active:translate-y-0"
+              style={{ backgroundColor: '#4f46e5', color: '#ffffff' }}
+              className="group flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm cursor-pointer border border-indigo-600 shadow-md hover:opacity-90 transition-all"
             >
               <Plus size={18} className="group-hover:rotate-90 transition-transform duration-200" />
               Create Job

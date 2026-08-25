@@ -651,7 +651,7 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
             "interview_duration": data.interview_duration,
             "interview_format": data.interview_format,
             "interview_type": data.interview_type,
-            "industry_type": data.industry_type,
+            "industry": data.industry_type,
             "language": data.language,
             "case_study_count": data.case_study_count,
             "record_video": candidate.record_video,  # Task 5: Per-candidate video

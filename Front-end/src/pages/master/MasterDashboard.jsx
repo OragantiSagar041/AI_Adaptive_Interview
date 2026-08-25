@@ -306,19 +306,21 @@ export default function MasterDashboard() {
               { key: '7days', label: 'Last 7 Days' },
               { key: '30days', label: 'Last 30 Days' },
               { key: 'this_month', label: 'This Month' }
-            ].map(preset => (
-              <button
-                key={preset.key}
-                onClick={() => handlePresetSelect(preset.key)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  activePreset === preset.key
-                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-200'
-                    : 'bg-slate-100 dark:bg-slate-800/50/80 hover:bg-slate-200/80 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700/60'
-                }`}
-              >
-                {preset.label}
-              </button>
-            ))}
+            ].map(preset => {
+              const isActive = activePreset === preset.key;
+              return (
+                <button
+                  key={preset.key}
+                  onClick={() => handlePresetSelect(preset.key)}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all border ${isActive
+                    ? 'bg-indigo-600 dark:bg-indigo-500 text-white border-indigo-500 shadow-md shadow-indigo-500/30 ring-2 ring-indigo-400 dark:ring-indigo-400'
+                    : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700/60 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    }`}
+                >
+                  {preset.label}
+                </button>
+              );
+            })}
           </div>
 
           {/* Date Picker Form: From & To */}
@@ -385,7 +387,7 @@ export default function MasterDashboard() {
               <ArrowUp size={12} /> {stats.is_filtered ? 'Active range sales' : `${stats.growth_pct}% growth`}
             </span>
           </div>
-          <div className="w-9 h-9 sm:w-11 sm:h-11 bg-emerald-50 text-emerald-500 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0">
+          <div className="w-9 h-9 sm:w-11 sm:h-11 bg-emerald-500/15 dark:bg-emerald-500/25 border border-emerald-400/30 text-emerald-600 dark:text-emerald-400 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0">
             <IndianRupee className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
         </div>
@@ -406,7 +408,7 @@ export default function MasterDashboard() {
               <ArrowUp size={12} /> {stats.is_filtered ? `${stats.active_companies} active` : `${stats.total_companies} total`}
             </span>
           </div>
-          <div className="w-9 h-9 sm:w-11 sm:h-11 bg-indigo-50 text-indigo-500 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0">
+          <div className="w-9 h-9 sm:w-11 sm:h-11 bg-indigo-500/15 dark:bg-indigo-500/25 border border-indigo-400/30 text-indigo-600 dark:text-indigo-400 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0">
             <Building className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
         </div>
@@ -425,7 +427,7 @@ export default function MasterDashboard() {
               {stats.completed_interviews} completed
             </span>
           </div>
-          <div className="w-9 h-9 sm:w-11 sm:h-11 bg-amber-50 text-amber-500 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0">
+          <div className="w-9 h-9 sm:w-11 sm:h-11 bg-amber-500/15 dark:bg-amber-500/25 border border-amber-400/30 text-amber-600 dark:text-amber-400 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0">
             <Video className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
         </div>
@@ -441,7 +443,7 @@ export default function MasterDashboard() {
               {stats.system_status} {stats.latency_ms > 0 ? `• ${stats.latency_ms}ms` : ''}
             </span>
           </div>
-          <div className="w-9 h-9 sm:w-11 sm:h-11 bg-indigo-50 text-indigo-500 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0">
+          <div className="w-9 h-9 sm:w-11 sm:h-11 bg-purple-500/15 dark:bg-purple-500/25 border border-purple-400/30 text-purple-600 dark:text-purple-400 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0">
             <Server className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
         </div>

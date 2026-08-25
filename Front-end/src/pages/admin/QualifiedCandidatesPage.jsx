@@ -110,12 +110,12 @@ export default function QualifiedCandidatesPage() {
     : "0.0"
 
   const STATS = [
-    { label: "Total Candidates", value: qualifiedCandidates.length.toString(), icon: Users, tone: "primary", colorClass: "bg-indigo-100 text-indigo-600" },
-    { label: "Avg AI Score", value: `${avgScore}%`, icon: Star, tone: "info", colorClass: "bg-blue-100 text-blue-600" },
-    { label: "AI Interviews", value: candidates.length.toString(), icon: Phone, tone: "chart-2", colorClass: "bg-emerald-100 text-emerald-600" },
-    { label: "Pending Review", value: qualifiedCandidates.filter(c => !c.reviewed).length.toString(), icon: ClipboardCheck, tone: "warning", colorClass: "bg-amber-100 text-amber-600" },
-    { label: "Ready to Hire", value: qualifiedCandidates.filter(c => Number(c.score || 0) >= 85).length.toString(), icon: Target, tone: "success", colorClass: "bg-teal-100 text-teal-600" },
-    { label: "Offers Released", value: "0", icon: FileSignature, tone: "chart-5", colorClass: "bg-purple-100 text-purple-600" },
+    { label: "Total Candidates", value: qualifiedCandidates.length.toString(), icon: Users, tone: "primary", colorClass: "bg-indigo-500/15 dark:bg-indigo-500/25 border border-indigo-400/30 text-indigo-600 dark:text-indigo-400" },
+    { label: "Avg AI Score", value: `${avgScore}%`, icon: Star, tone: "info", colorClass: "bg-blue-500/15 dark:bg-blue-500/25 border border-blue-400/30 text-blue-600 dark:text-blue-400" },
+    { label: "AI Interviews", value: candidates.length.toString(), icon: Phone, tone: "chart-2", colorClass: "bg-emerald-500/15 dark:bg-emerald-500/25 border border-emerald-400/30 text-emerald-600 dark:text-emerald-400" },
+    { label: "Pending Review", value: qualifiedCandidates.filter(c => !c.reviewed).length.toString(), icon: ClipboardCheck, tone: "warning", colorClass: "bg-amber-500/15 dark:bg-amber-500/25 border border-amber-400/30 text-amber-600 dark:text-amber-400" },
+    { label: "Ready to Hire", value: qualifiedCandidates.filter(c => Number(c.score || 0) >= 85).length.toString(), icon: Target, tone: "success", colorClass: "bg-teal-500/15 dark:bg-teal-500/25 border border-teal-400/30 text-teal-600 dark:text-teal-400" },
+    { label: "Offers Released", value: "0", icon: FileSignature, tone: "chart-5", colorClass: "bg-purple-500/15 dark:bg-purple-500/25 border border-purple-400/30 text-purple-600 dark:text-purple-400" },
   ]
 
   return (
