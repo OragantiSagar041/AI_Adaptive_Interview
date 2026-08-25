@@ -414,8 +414,9 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
     const base = (user?.email || user?._id || user?.id || 'admin').replace(/[^a-zA-Z0-9_]/g, '_')
     adminIdRef.current = `${base}_tab_${Math.random().toString(36).substring(2, 9)}_${Date.now().toString(36)}`
 
+    const adminBaseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL
     const wsUrl =
-      API_BASE_URL.replace(/^https/, 'wss').replace(/^http/, 'ws') +
+      adminBaseUrl.replace(/^https/, 'wss').replace(/^http/, 'ws') +
       `/ws/webrtc/admin/${sessionId}?token=${token}&admin_id=${encodeURIComponent(adminIdRef.current)}`
 
     console.log('[AdminWebRTC] Connecting with admin_id:', adminIdRef.current)

@@ -17,7 +17,7 @@ export default function Input({
   return (
     <div className={`flex flex-col gap-1.5 w-full ${wrapperClassName}`}>
       {label && (
-        <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+        <label className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400">
           {label} {required && <span className="text-danger">*</span>}
         </label>
       )}

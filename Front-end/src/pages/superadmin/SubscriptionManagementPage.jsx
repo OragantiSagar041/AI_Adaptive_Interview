@@ -59,8 +59,8 @@ function PlanBadge({ label, planKey }) {
 function StatCard({ icon: Icon, label, value, sub, gradient }) {
   return (
     <div className={`rounded-2xl p-5 ${gradient} text-white shadow-lg flex items-start gap-4`}>
-      <div className="p-2.5 bg-white dark:bg-slate-800/60/20 rounded-xl">
-        <Icon className="w-5 h-5" />
+      <div className="p-2.5 bg-white/20 backdrop-blur-md rounded-xl text-white shrink-0">
+        <Icon className="w-5 h-5 text-white" />
       </div>
       <div>
         <p className="text-2xl font-bold leading-tight">{value}</p>

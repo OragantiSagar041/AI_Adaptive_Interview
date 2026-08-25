@@ -119,7 +119,7 @@ export default function QualifiedCandidatesPage() {
   ]
 
   return (
-    <div className="min-h-[calc(100vh-64px)] bg-slate-50 dark:bg-slate-900/50">
+    <div className="min-h-[calc(100vh-64px)]">
       <main className="mx-auto max-w-7xl px-4 sm:px-6 py-8 space-y-8">
         {/* Header Section */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

@@ -77,7 +77,7 @@ export default function MasterLayout() {
   const [notifications, setNotifications] = useState([])
   const [notifDropdownOpen, setNotifDropdownOpen] = useState(false)
   const notifRef = useRef(null)
-  
+
   // Close theme popover, notifications, and profile dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event) {
@@ -248,13 +248,18 @@ export default function MasterLayout() {
       {/* Sidebar */}
       <aside className="hidden w-64 shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/90 backdrop-blur-md md:flex flex-col h-screen relative z-10">
         {/* Brand / Logo */}
-        <div className="flex items-center gap-3 px-6 h-16 border-b border-slate-200 dark:border-slate-800 shrink-0">
-          <div className="grid h-8 w-8 place-items-center rounded-lg bg-indigo-600 text-white shadow-sm">
-            <Zap className="h-4 w-4" />
+        <div className="flex items-center gap-3 px-6 h-16 border-b border-border shrink-0">
+          <div
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-white p-1 cursor-pointer"
+            style={{
+              background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)'
+            }}
+          >
+            <Zap className="h-5 w-5 text-white fill-white/20" />
           </div>
           <div className="leading-tight">
-            <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">HireIQ</div>
-            <div className="text-[11px] text-slate-500 dark:text-slate-400">Master Admin</div>
+            <div className="text-base font-extrabold text-foreground">HireIQ</div>
+            <div className="text-[11px] font-semibold text-primary">Master Admin</div>
           </div>
         </div>
 
@@ -265,10 +270,9 @@ export default function MasterLayout() {
               key={item.id}
               to={item.path}
               className={({ isActive }) =>
-                `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-indigo-600 text-white font-semibold shadow-sm'
-                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+                `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${isActive
+                  ? '!bg-indigo-600 !text-white font-semibold shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white !bg-transparent dark:!bg-transparent !border-none !shadow-none'
                 }`
               }
             >
@@ -283,7 +287,7 @@ export default function MasterLayout() {
         </div>
 
         {/* Bottom Sidebar Actions */}
-    
+
       </aside>
 
       {/* Main Content Wrapper */}
@@ -308,7 +312,7 @@ export default function MasterLayout() {
             <div ref={notifRef} className="relative">
               <button
                 onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
-                className="relative p-2.5 text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 rounded-full transition-all cursor-pointer flex items-center justify-center shadow-xs"
+                className="relative p-2.5 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-full transition-all cursor-pointer flex items-center justify-center shadow-xs"
                 title="Notifications"
               >
                 <Bell size={18} className="text-slate-600" />
@@ -320,9 +324,9 @@ export default function MasterLayout() {
               </button>
 
               {notifDropdownOpen && (
-                <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl py-2 z-50">
-                  <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100">
-                    <span className="text-xs font-bold text-slate-800 font-sans">Recent Notifications</span>
+                <div className="absolute right-0 top-full mt-2 w-80 bg-popover border border-border rounded-2xl shadow-xl py-2 z-50">
+                  <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100 dark:border-slate-700">
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-100 font-sans">Recent Notifications</span>
                     {unreadCount > 0 && (
                       <button
                         onClick={handleMarkAllRead}
@@ -333,7 +337,7 @@ export default function MasterLayout() {
                     )}
                   </div>
 
-                  <div className="max-h-64 overflow-y-auto divide-y divide-slate-50">
+                  <div className="max-h-64 overflow-y-auto divide-y divide-slate-50 dark:divide-slate-700/50">
                     {notifications.length === 0 ? (
                       <div className="py-8 text-center text-xs text-slate-400 font-sans">No notifications</div>
                     ) : (
@@ -345,14 +349,14 @@ export default function MasterLayout() {
                             setNotifDropdownOpen(false)
                             navigate('/master/notifications')
                           }}
-                          className={`p-3 text-left hover:bg-slate-50 cursor-pointer transition-colors flex gap-2.5 items-start ${!n.read ? 'bg-indigo-50/30' : ''}`}
+                          className={`p-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer transition-colors flex gap-2.5 items-start ${!n.read ? 'bg-indigo-50/30 dark:bg-indigo-900/20' : ''}`}
                         >
                           <div className="p-1.5 rounded-lg bg-slate-50 flex-shrink-0 mt-0.5">
                             {getNotifIcon(n.type)}
                           </div>
                           <div className="space-y-0.5 min-w-0">
                             <div className="flex items-center gap-1.5 justify-between">
-                              <span className={`text-xs font-bold truncate block ${!n.read ? 'text-slate-800' : 'text-slate-600'}`}>{n.title}</span>
+                              <span className={`text-xs font-bold truncate block ${!n.read ? 'text-slate-800 dark:text-slate-100' : 'text-slate-600 dark:text-slate-300'}`}>{n.title}</span>
                               {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 shrink-0" />}
                             </div>
                             <p className="text-[11px] text-slate-500 leading-normal line-clamp-2 font-sans">{n.message}</p>
@@ -363,7 +367,7 @@ export default function MasterLayout() {
                     )}
                   </div>
 
-                  <div className="border-t border-slate-100 px-4 pt-2 pb-1 text-center">
+                  <div className="border-t border-slate-100 dark:border-slate-700 px-4 pt-2 pb-1 text-center">
                     <NavLink
                       to="/master/notifications"
                       onClick={() => setNotifDropdownOpen(false)}
@@ -380,7 +384,7 @@ export default function MasterLayout() {
             <div ref={profileRef} className="relative">
               <button
                 onClick={() => setDropdownOpen(!dropdownOpen)}
-                className="flex items-center gap-2 p-1.5 px-2 hover:bg-slate-50 rounded-xl shadow-sm transition-all cursor-pointer border border-slate-100 bg-white"
+                className="flex items-center gap-2 p-1.5 px-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl shadow-sm transition-all cursor-pointer border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800/60"
               >
                 <img
                   src={adminUser?.profile_image || adminUser?.avatar || "https://ui-avatars.com/api/?name=Master&background=random"}
@@ -388,33 +392,33 @@ export default function MasterLayout() {
                   className="w-8 h-8 rounded-full object-cover border border-slate-200"
                 />
                 <div className="text-left hidden sm:block">
-                  <div className="text-[13px] font-semibold text-slate-800 leading-none">{userName}</div>
+                  <div className="text-[13px] font-semibold text-slate-800 dark:text-slate-100 leading-none">{userName}</div>
                   <span className="text-[10px] text-slate-400 font-medium">Master Control</span>
                 </div>
                 <ChevronDown size={14} className="text-slate-400 ml-1" />
               </button>
 
               {dropdownOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-lg py-1.5 z-50">
-                    <NavLink
-                      to="/master/profile"
-                      onClick={() => setDropdownOpen(false)}
-                      className="flex items-center gap-2.5 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 no-underline"
-                    >
-                      <User size={15} /> My Profile
-                    </NavLink>
+                <div className="absolute right-0 mt-2 w-48 bg-popover border border-border rounded-xl shadow-lg py-1.5 z-50">
+                  <NavLink
+                    to="/master/profile"
+                    onClick={() => setDropdownOpen(false)}
+                    className="flex items-center gap-2.5 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/60 no-underline"
+                  >
+                    <User size={15} /> My Profile
+                  </NavLink>
 
-                    <hr className="border-slate-100 my-1" />
-                    <button
-                      onClick={() => {
-                        setDropdownOpen(false);
-                        handleLogout();
-                      }}
-                      className="w-full text-left flex items-center gap-2.5 px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 font-medium cursor-pointer border-none bg-transparent"
-                    >
-                      <LogOut size={15} /> Logout
-                    </button>
-                  </div>
+                  <hr className="border-slate-100 dark:border-slate-700 my-1" />
+                  <button
+                    onClick={() => {
+                      setDropdownOpen(false);
+                      handleLogout();
+                    }}
+                    className="w-full text-left flex items-center gap-2.5 px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 font-medium cursor-pointer border-none bg-transparent"
+                  >
+                    <LogOut size={15} /> Logout
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -425,7 +429,7 @@ export default function MasterLayout() {
           <Outlet />
         </main>
       </div>
-      
+
       {/* Global Copilot */}
       <AdminCopilot />
     </div>

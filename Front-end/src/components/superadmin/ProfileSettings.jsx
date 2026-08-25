@@ -144,16 +144,16 @@ export default function ProfileSettings() {
   return (
     <div className="max-w-[1000px] mx-auto space-y-6 pb-12 font-sans">
       {/* Header section */}
-      <div className="bg-white rounded-[20px] p-6 shadow-sm border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="bg-card rounded-[20px] p-6 shadow-sm border border-border dark:border-slate-700/90 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-800">My Profile</h2>
-          <p className="text-sm text-slate-500 mt-1">View and update your Master Control credentials and security preferences.</p>
+          <h2 className="text-xl font-bold text-foreground">My Profile</h2>
+          <p className="text-sm text-muted-foreground mt-1">View and update your Master Control credentials and security preferences.</p>
         </div>
         <button 
           onClick={handleRefresh}
-          className="flex items-center gap-2 px-4 py-2 border border-slate-200 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors w-fit"
+          className="flex items-center gap-2 px-4 py-2 border border-border dark:border-slate-700 bg-secondary rounded-xl text-sm font-semibold text-foreground hover:bg-muted transition-colors w-fit cursor-pointer"
         >
-          <RefreshCw size={15} className="text-slate-400" />
+          <RefreshCw size={15} className="text-muted-foreground" />
           Refresh Details
         </button>
       </div>
@@ -162,47 +162,47 @@ export default function ProfileSettings() {
         {/* Left Column */}
         <div className="lg:col-span-1 space-y-6">
           {/* Profile Card */}
-          <div className="bg-white rounded-[20px] p-8 shadow-sm border border-slate-100 flex flex-col items-center relative">
+          <div className="bg-card rounded-[20px] p-8 shadow-sm border border-border dark:border-slate-700/90 flex flex-col items-center relative">
             <div className="relative">
-              <div className="w-28 h-28 rounded-full p-1 border-2 border-slate-100">
+              <div className="w-28 h-28 rounded-full p-1 border-2 border-border dark:border-slate-700">
                 <img
                   src={adminUser?.profile_image || adminUser?.avatar || "https://ui-avatars.com/api/?name=Super+Admin&background=random"}
                   alt="Avatar"
                   className="w-full h-full rounded-full object-cover"
                 />
               </div>
-              <div className="absolute bottom-2 right-2 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white"></div>
+              <div className="absolute bottom-2 right-2 w-4 h-4 bg-emerald-500 rounded-full border-2 border-background"></div>
             </div>
             
-            <h3 className="mt-4 text-xl font-bold text-slate-800">{adminUser?.name || adminUser?.username || 'master'}</h3>
-            <div className="mt-2 px-4 py-1 bg-blue-50 text-blue-500 text-xs font-bold rounded-full uppercase tracking-widest">
+            <h3 className="mt-4 text-xl font-bold text-foreground">{adminUser?.name || adminUser?.username || 'master'}</h3>
+            <div className="mt-2 px-4 py-1 bg-indigo-100 dark:bg-indigo-950/80 text-indigo-800 dark:text-indigo-200 text-xs font-black rounded-full uppercase tracking-widest border border-indigo-300 dark:border-indigo-500/60">
               {role || 'MASTER'}
             </div>
 
-            <div className="w-full border-t border-slate-100 border-dashed my-6"></div>
+            <div className="w-full border-t border-border dark:border-slate-700 border-dashed my-6"></div>
 
             <div className="w-full space-y-4">
-              <div className="flex items-center gap-3 text-sm text-slate-600">
-                <Mail size={16} className="text-slate-400 shrink-0" />
+              <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                <Mail size={16} className="text-muted-foreground shrink-0" />
                 <span className="truncate">{adminUser?.email || 'oragantisagar041@gmail.com'}</span>
               </div>
-              <div className="flex items-center gap-3 text-sm text-slate-600">
-                <Shield size={16} className="text-slate-400 shrink-0" />
-                <span>Access: <strong className="text-slate-800 font-semibold">{role === 'master' ? 'Master Level' : 'Admin Level'}</strong></span>
+              <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                <Shield size={16} className="text-muted-foreground shrink-0" />
+                <span>Access: <strong className="text-foreground font-semibold">{role === 'master' ? 'Master Level' : 'Admin Level'}</strong></span>
               </div>
-              <div className="flex items-center gap-3 text-sm text-slate-600">
-                <Calendar size={16} className="text-slate-400 shrink-0" />
-                <span>Joined: <strong className="text-slate-800 font-semibold">{joinDate}</strong></span>
+              <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                <Calendar size={16} className="text-muted-foreground shrink-0" />
+                <span>Joined: <strong className="text-foreground font-semibold">{joinDate}</strong></span>
               </div>
             </div>
           </div>
 
           {/* Account Details Card */}
-          <div className="bg-white rounded-[20px] p-6 shadow-sm border border-slate-100">
-            <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-4">Account Details</h4>
-            <div className="bg-slate-50/70 rounded-2xl p-4 text-center border border-slate-100">
-              <div className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-1">Role / Access Level</div>
-              <div className="text-sm font-bold text-slate-800 capitalize">{role || 'Master'}</div>
+          <div className="bg-card rounded-[20px] p-6 shadow-sm border border-border dark:border-slate-700/90">
+            <h4 className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-4">Account Details</h4>
+            <div className="bg-secondary/70 rounded-2xl p-4 text-center border border-border dark:border-slate-700">
+              <div className="text-[11px] text-muted-foreground font-bold uppercase tracking-wider mb-1">Role / Access Level</div>
+              <div className="text-sm font-bold text-foreground capitalize">{role || 'Master'}</div>
             </div>
           </div>
         </div>
@@ -210,38 +210,38 @@ export default function ProfileSettings() {
         {/* Right Column */}
         <div className="lg:col-span-2 space-y-6">
           {/* Account Settings */}
-          <div className="bg-white rounded-[20px] p-6 shadow-sm border border-slate-100">
+          <div className="bg-card rounded-[20px] p-6 shadow-sm border border-border dark:border-slate-700/90">
             <div className="flex items-center gap-2.5 mb-6">
-              <User size={18} className="text-blue-500" />
-              <h3 className="text-base font-bold text-slate-800">Account Settings</h3>
+              <User size={18} className="text-indigo-500" />
+              <h3 className="text-base font-bold text-foreground">Account Settings</h3>
             </div>
 
             <form onSubmit={handleSaveProfile} className="space-y-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Username / ID</label>
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Username / ID</label>
                   <div className="relative">
-                    <User size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <User size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                     <input
                       type="text"
                       name="username"
                       value={formData.username}
                       onChange={handleChange}
-                      className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                      className="w-full pl-10 pr-4 py-2.5 bg-background border border-border dark:border-slate-700 rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                       required
                     />
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Registered Email Address</label>
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Registered Email Address</label>
                   <div className="relative">
-                    <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                     <input
                       type="email"
                       name="email"
                       value={formData.email}
                       onChange={handleChange}
-                      className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                      className="w-full pl-10 pr-4 py-2.5 bg-background border border-border dark:border-slate-700 rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                       required
                     />
                   </div>
@@ -249,15 +249,15 @@ export default function ProfileSettings() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Workspace / Owner Name</label>
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Workspace / Owner Name</label>
                 <div className="relative">
-                  <Shield size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <Shield size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <input
                     type="text"
                     name="company_name"
                     value={formData.company_name}
                     onChange={handleChange}
-                    className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                    className="w-full pl-10 pr-4 py-2.5 bg-background border border-border dark:border-slate-700 rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                     required
                   />
                 </div>
@@ -267,7 +267,8 @@ export default function ProfileSettings() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="px-6 py-2.5 bg-[#0070F3] hover:bg-blue-600 text-white text-sm font-semibold rounded-xl shadow-sm hover:shadow transition-all disabled:opacity-70"
+                  style={{ backgroundColor: '#4f46e5', color: '#ffffff' }}
+                  className="px-6 py-3 rounded-xl font-extrabold text-sm shadow-md transition-all disabled:opacity-70 cursor-pointer border border-indigo-600 hover:opacity-90"
                 >
                   {loading ? 'Saving...' : 'Save Profile Changes'}
                 </button>
@@ -276,54 +277,54 @@ export default function ProfileSettings() {
           </div>
 
           {/* Security Credentials */}
-          <div className="bg-white rounded-[20px] p-6 shadow-sm border border-slate-100">
+          <div className="bg-card rounded-[20px] p-6 shadow-sm border border-border dark:border-slate-700/90">
             <div className="flex items-center gap-2.5 mb-6">
-              <Lock size={18} className="text-blue-500" />
-              <h3 className="text-base font-bold text-slate-800">Security Credentials</h3>
+              <Lock size={18} className="text-indigo-500" />
+              <h3 className="text-base font-bold text-foreground">Security Credentials</h3>
             </div>
 
             <form onSubmit={handleUpdatePassword} className="space-y-5">
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Current Password</label>
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Current Password</label>
                 <div className="relative">
-                  <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <input
                     type="password"
                     name="old_password"
                     value={pwdData.old_password}
                     onChange={handlePwdChange}
                     placeholder="Enter current master password"
-                    className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                    className="w-full pl-10 pr-4 py-2.5 bg-background border border-border dark:border-slate-700 rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">New Password</label>
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">New Password</label>
                   <div className="relative">
-                    <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                     <input
                       type="password"
                       name="new_password"
                       value={pwdData.new_password}
                       onChange={handlePwdChange}
                       placeholder="At least 6 characters"
-                      className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                      className="w-full pl-10 pr-4 py-2.5 bg-background border border-border dark:border-slate-700 rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                     />
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Confirm New Password</label>
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Confirm New Password</label>
                   <div className="relative">
-                    <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                     <input
                       type="password"
                       name="confirm_password"
                       value={pwdData.confirm_password}
                       onChange={handlePwdChange}
                       placeholder="Confirm new password"
-                      className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                      className="w-full pl-10 pr-4 py-2.5 bg-background border border-border dark:border-slate-700 rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                     />
                   </div>
                 </div>
@@ -333,7 +334,8 @@ export default function ProfileSettings() {
                 <button
                   type="submit"
                   disabled={pwdLoading}
-                  className="px-6 py-2.5 bg-[#0070F3] hover:bg-blue-600 text-white text-sm font-semibold rounded-xl shadow-sm hover:shadow transition-all disabled:opacity-70"
+                  style={{ backgroundColor: '#4f46e5', color: '#ffffff' }}
+                  className="px-6 py-3 rounded-xl font-extrabold text-sm shadow-md transition-all disabled:opacity-70 cursor-pointer border border-indigo-600 hover:opacity-90"
                 >
                   {pwdLoading ? 'Updating...' : 'Update Password'}
                 </button>

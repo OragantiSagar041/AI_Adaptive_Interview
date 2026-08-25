@@ -237,7 +237,8 @@ export default function SpectatorPage() {
     }
     mountedRef.current = true
 
-    const wsUrl = API_BASE_URL.replace(/^https/, 'wss').replace(/^http/, 'ws') +
+    const specBaseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL
+    const wsUrl = specBaseUrl.replace(/^https/, 'wss').replace(/^http/, 'ws') +
       `/ws/webrtc/spectator/${linkId}?token=${encodeURIComponent(token)}`
 
     setStatus('connecting')

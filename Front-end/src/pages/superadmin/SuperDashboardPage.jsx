@@ -63,7 +63,7 @@ function formatNum(n) {
 
 function AnimatedNumber({ value, suffix = "", isDecimal = false }) {
   const numericValue = typeof value === 'string' ? parseFloat(value.replace(/,/g, '')) : (typeof value === 'number' ? value : 0);
-  
+
   const count = useMotionValue(0);
   const display = useTransform(count, (latest) => {
     const val = isDecimal ? latest.toFixed(1) : Math.floor(latest);
@@ -82,10 +82,10 @@ function renderTrend(trend, goodIsUp = true) {
   if (trend == null) return <div className="text-[10px] text-slate-400">Loading...</div>;
   const isPositive = trend > 0;
   const isZero = trend === 0;
-  
+
   let color = "text-slate-400";
   let Icon = TrendingUp;
-  
+
   if (!isZero) {
     if (isPositive) {
       color = goodIsUp ? "text-emerald-500" : "text-rose-400";
@@ -232,7 +232,7 @@ export default function SuperDashboardPage() {
   const starRating = avgScore / 20;
 
   return (
-    <div className="space-y-6 bg-[#f8fafc] rounded-3xl p-2 sm:p-4 -m-2 sm:-m-4 min-h-screen">
+    <div className="space-y-6 bg-background rounded-3xl p-2 sm:p-4 -m-2 sm:-m-4 min-h-screen">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -252,7 +252,7 @@ export default function SuperDashboardPage() {
           className="relative group rounded-2xl"
         >
           <div className="absolute -inset-0.5 bg-gradient-to-br from-transparent to-violet-400/0 group-hover:to-violet-400/10 rounded-2xl blur-md transition-all duration-300 z-0" />
-          <div className="relative z-10 bg-gradient-to-b from-white/80 to-white/40 backdrop-blur-2xl border border-slate-200 dark:border-slate-700 shadow-[0_8px_30px_rgb(0,0,0,0.05)] group-hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] rounded-2xl overflow-hidden flex flex-col justify-between h-full transition-all duration-500">
+          <div className="relative z-10 bg-card border border-border shadow-sm group-hover:shadow-md rounded-2xl overflow-hidden flex flex-col justify-between h-full transition-all duration-500">
             <div className="absolute -bottom-6 -right-6 w-32 h-32 bg-violet-400/20 blur-[40px] rounded-full group-hover:bg-violet-400/40 group-hover:scale-110 transition-all duration-500" />
             <div className="p-4 flex flex-col h-full relative z-10">
               <div className="flex items-start justify-between">
@@ -303,7 +303,7 @@ export default function SuperDashboardPage() {
           className="relative group rounded-2xl"
         >
           <div className="absolute -inset-0.5 bg-gradient-to-br from-transparent to-blue-400/0 group-hover:to-blue-400/10 rounded-2xl blur-md transition-all duration-300 z-0" />
-          <div className="relative z-10 bg-gradient-to-b from-white/80 to-white/40 backdrop-blur-2xl border border-slate-200 dark:border-slate-700 shadow-[0_8px_30px_rgb(0,0,0,0.05)] group-hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] rounded-2xl overflow-hidden flex flex-col justify-between h-full transition-all duration-500">
+          <div className="relative z-10 bg-card border border-border shadow-sm group-hover:shadow-md rounded-2xl overflow-hidden flex flex-col justify-between h-full transition-all duration-500">
             <div className="absolute -bottom-6 -right-6 w-32 h-32 bg-blue-400/20 blur-[40px] rounded-full group-hover:bg-blue-400/40 group-hover:scale-110 transition-all duration-500" />
             <div className="p-4 flex flex-col h-full relative z-10">
               <div className="flex items-start justify-between">
@@ -325,11 +325,7 @@ export default function SuperDashboardPage() {
                   <div className="text-[10px] text-slate-400 mt-0.5">Last updated: 5s ago</div>
                 </div>
               </div>
-              <div className="mt-4 flex-1 flex items-center">
-                <div className="w-full rounded-md bg-blue-50/50 border border-blue-100/50 p-2.5 flex items-center gap-2 text-xs text-blue-600 font-medium">
-                  <Users className="w-4 h-4" /> {ongoingLiveCount || 0} candidates in active interviews
-                </div>
-              </div>
+
               {/* Live Sessions Picker */}
               <div className="mt-3 relative">
                 <div className="flex items-center justify-end text-[11px]">
@@ -425,7 +421,7 @@ export default function SuperDashboardPage() {
           className="relative group rounded-2xl"
         >
           <div className="absolute -inset-0.5 bg-gradient-to-br from-transparent to-emerald-400/0 group-hover:to-emerald-400/10 rounded-2xl blur-md transition-all duration-300 z-0" />
-          <div className="relative z-10 bg-gradient-to-b from-white/80 to-white/40 backdrop-blur-2xl border border-slate-200 dark:border-slate-700 shadow-[0_8px_30px_rgb(0,0,0,0.05)] group-hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] rounded-2xl overflow-hidden flex flex-col justify-between h-full transition-all duration-500">
+          <div className="relative z-10 bg-card border border-border shadow-sm group-hover:shadow-md rounded-2xl overflow-hidden flex flex-col justify-between h-full transition-all duration-500">
             <div className="absolute -bottom-6 -right-6 w-32 h-32 bg-emerald-400/20 blur-[40px] rounded-full group-hover:bg-emerald-400/40 group-hover:scale-110 transition-all duration-500" />
             <div className="p-4 flex flex-col h-full relative z-10">
               <div className="flex items-start justify-between">
@@ -471,7 +467,7 @@ export default function SuperDashboardPage() {
           className="relative group rounded-2xl"
         >
           <div className="absolute -inset-0.5 bg-gradient-to-br from-transparent to-amber-400/0 group-hover:to-amber-400/10 rounded-2xl blur-md transition-all duration-300 z-0" />
-          <div className="relative z-10 bg-gradient-to-b from-white/80 to-white/40 backdrop-blur-2xl border border-slate-200 dark:border-slate-700 shadow-[0_8px_30px_rgb(0,0,0,0.05)] group-hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] rounded-2xl overflow-hidden flex flex-col justify-between h-full transition-all duration-500">
+          <div className="relative z-10 bg-card border border-border shadow-sm group-hover:shadow-md rounded-2xl overflow-hidden flex flex-col justify-between h-full transition-all duration-500">
             <div className="absolute -bottom-6 -right-6 w-32 h-32 bg-amber-400/20 blur-[40px] rounded-full group-hover:bg-amber-400/40 group-hover:scale-110 transition-all duration-500" />
             <div className="p-4 flex flex-col h-full relative z-10">
               <div className="flex items-start justify-between">
@@ -499,17 +495,7 @@ export default function SuperDashboardPage() {
                   )}
                 </div>
               </div>
-              <div className="mt-4 flex-1 flex items-center">
-                {(!dbStats?.pending || dbStats?.pending === 0) ? (
-                  <div className="w-full rounded-md bg-emerald-50/50 border border-emerald-100/50 p-2.5 flex items-center gap-2 text-xs text-emerald-600 font-medium">
-                    🎉 All interviews are up to date!
-                  </div>
-                ) : (
-                  <div className="w-full rounded-md bg-amber-50/50 border border-amber-100/50 p-2.5 flex items-center gap-2 text-xs text-amber-600 font-medium">
-                    <Clock className="w-3 h-3" /> {dbStats.pending} pending to be completed
-                  </div>
-                )}
-              </div>
+
               <div className="mt-3 flex items-center justify-end text-[11px] min-h-[16px]">
               </div>
             </div>
@@ -525,7 +511,7 @@ export default function SuperDashboardPage() {
           className="relative group rounded-2xl"
         >
           <div className="absolute -inset-0.5 bg-gradient-to-br from-transparent to-fuchsia-400/0 group-hover:to-fuchsia-400/10 rounded-2xl blur-md transition-all duration-300 z-0" />
-          <div className="relative z-10 bg-gradient-to-b from-white/80 to-white/40 backdrop-blur-2xl border border-slate-200 dark:border-slate-700 shadow-[0_8px_30px_rgb(0,0,0,0.05)] group-hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] rounded-2xl overflow-hidden flex flex-col justify-between h-full transition-all duration-500">
+          <div className="relative z-10 bg-card border border-border shadow-sm group-hover:shadow-md rounded-2xl overflow-hidden flex flex-col justify-between h-full transition-all duration-500">
             <div className="absolute -bottom-6 -right-6 w-32 h-32 bg-fuchsia-400/20 blur-[40px] rounded-full group-hover:bg-fuchsia-400/40 group-hover:scale-110 transition-all duration-500" />
             <div className="p-4 flex flex-col h-full relative z-10">
               <div className="flex items-start justify-between">
@@ -579,7 +565,7 @@ export default function SuperDashboardPage() {
           className="relative group rounded-2xl"
         >
           <div className="absolute -inset-0.5 bg-gradient-to-br from-transparent to-teal-400/0 group-hover:to-teal-400/10 rounded-2xl blur-md transition-all duration-300 z-0" />
-          <div className="relative z-10 bg-gradient-to-b from-white/80 to-white/40 backdrop-blur-2xl border border-slate-200 dark:border-slate-700 shadow-[0_8px_30px_rgb(0,0,0,0.05)] group-hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] rounded-2xl overflow-hidden flex flex-col justify-between h-full transition-all duration-500">
+          <div className="relative z-10 bg-card border border-border shadow-sm group-hover:shadow-md rounded-2xl overflow-hidden flex flex-col justify-between h-full transition-all duration-500">
             <div className="absolute -bottom-6 -right-6 w-32 h-32 bg-teal-400/20 blur-[40px] rounded-full group-hover:bg-teal-400/40 group-hover:scale-110 transition-all duration-500" />
             <div className="p-4 flex flex-col h-full relative z-10">
               <div className="flex items-start justify-between">
@@ -630,7 +616,7 @@ export default function SuperDashboardPage() {
           className="relative group rounded-2xl"
         >
           <div className="absolute -inset-0.5 bg-gradient-to-br from-transparent to-rose-400/0 group-hover:to-rose-400/10 rounded-2xl blur-md transition-all duration-300 z-0" />
-          <div className="relative z-10 bg-gradient-to-b from-white/80 to-white/40 backdrop-blur-2xl border border-slate-200 dark:border-slate-700 shadow-[0_8px_30px_rgb(0,0,0,0.05)] group-hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] rounded-2xl overflow-hidden flex flex-col justify-between h-full transition-all duration-500">
+          <div className="relative z-10 bg-card border border-border shadow-sm group-hover:shadow-md rounded-2xl overflow-hidden flex flex-col justify-between h-full transition-all duration-500">
             <div className="absolute -bottom-6 -right-6 w-32 h-32 bg-rose-400/20 blur-[40px] rounded-full group-hover:bg-rose-400/40 group-hover:scale-110 transition-all duration-500" />
             <div className="p-4 flex flex-col h-full relative z-10">
               <div className="flex items-start justify-between">
@@ -681,7 +667,7 @@ export default function SuperDashboardPage() {
           className="relative group rounded-2xl"
         >
           <div className="absolute -inset-0.5 bg-gradient-to-br from-transparent to-rose-400/0 group-hover:to-rose-400/10 rounded-2xl blur-md transition-all duration-300 z-0" />
-          <div className="relative z-10 bg-gradient-to-b from-white/80 to-white/40 backdrop-blur-2xl border border-slate-200 dark:border-slate-700 shadow-[0_8px_30px_rgb(0,0,0,0.05)] group-hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] rounded-2xl overflow-hidden flex flex-col justify-between h-full transition-all duration-500">
+          <div className="relative z-10 bg-card border border-border shadow-sm group-hover:shadow-md rounded-2xl overflow-hidden flex flex-col justify-between h-full transition-all duration-500">
             <div className="absolute -bottom-6 -right-6 w-32 h-32 bg-rose-400/20 blur-[40px] rounded-full group-hover:bg-rose-400/40 group-hover:scale-110 transition-all duration-500" />
             <div className="p-4 flex flex-col h-full relative z-10">
               <div className="flex items-start justify-between">
@@ -755,7 +741,7 @@ export default function SuperDashboardPage() {
                       }}
                     />
                     <Funnel dataKey="value" data={funnelData} isAnimationActive>
-                      <LabelList position="right" fill="#0f172a" stroke="none" dataKey="name" fontSize={12} />
+                      <LabelList position="right" fill="var(--foreground)" stroke="none" dataKey="name" fontSize={12} />
                       <LabelList position="center" fill="#fff" stroke="none" dataKey="value" fontSize={12} formatter={(v) => formatNum(v)} />
                     </Funnel>
                   </FunnelChart>
@@ -846,7 +832,7 @@ export default function SuperDashboardPage() {
                       </div>
                     </td>
                     <td className="py-3 text-right whitespace-nowrap">
-                      <button 
+                      <button
                         onClick={() => handleOpenLiveStreamAction && handleOpenLiveStreamAction(session)}
                         className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 cursor-pointer"
                       >

@@ -224,35 +224,35 @@ const Customize = () => {
       {/* Stats Dashboard - Colorful Accented Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {/* Total Subscribers */}
-        <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl p-4 flex items-center justify-between shadow-[0_1px_2px_rgba(0,0,0,0.01)] hover:shadow-sm transition-all duration-300">
+        <div className="bg-card border border-border rounded-xl p-4 flex items-center justify-between shadow-sm transition-all duration-300">
           <div>
-            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block">Total Enrolled</span>
-            <span className="text-xl font-bold text-slate-900 dark:text-white mt-1 block">{totalSubscribers}</span>
+            <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block">Total Enrolled</span>
+            <span className="text-xl font-bold text-foreground mt-1 block">{totalSubscribers}</span>
           </div>
-          <div className="w-8 h-8 rounded-lg bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex items-center justify-center shrink-0">
-            <Users className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+          <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-500/40 text-indigo-400 flex items-center justify-center shrink-0 shadow-sm">
+            <Users className="w-5 h-5 text-indigo-400" />
           </div>
         </div>
 
         {/* Active Subscriptions */}
-        <div className="bg-emerald-50/40 border border-emerald-100/60 rounded-xl p-4 flex items-center justify-between shadow-[0_1px_2px_rgba(0,0,0,0.01)] hover:shadow-sm transition-all duration-300">
+        <div className="bg-card border border-border rounded-xl p-4 flex items-center justify-between shadow-sm transition-all duration-300">
           <div>
-            <span className="text-[9px] font-bold text-emerald-600/80 uppercase tracking-widest block">Active Plans</span>
-            <span className="text-xl font-bold text-emerald-800 mt-1 block">{activeSubs}</span>
+            <span className="text-[9px] font-bold text-emerald-400 uppercase tracking-widest block">Active Plans</span>
+            <span className="text-xl font-bold text-foreground mt-1 block">{activeSubs}</span>
           </div>
-          <div className="w-8 h-8 rounded-lg bg-white dark:bg-slate-800/60 border border-emerald-100 flex items-center justify-center shrink-0">
-            <Activity className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center shrink-0 shadow-sm">
+            <Activity className="w-5 h-5 text-emerald-400 animate-pulse" />
           </div>
         </div>
 
         {/* Premium Plan Subscribers */}
-        <div className="bg-amber-50/40 border border-amber-100/60 rounded-xl p-4 flex items-center justify-between shadow-[0_1px_2px_rgba(0,0,0,0.01)] hover:shadow-sm transition-all duration-300">
+        <div className="bg-card border border-border rounded-xl p-4 flex items-center justify-between shadow-sm transition-all duration-300">
           <div>
-            <span className="text-[9px] font-bold text-amber-600/80 uppercase tracking-widest block">Premium Tier</span>
-            <span className="text-xl font-bold text-amber-800 mt-1 block">{premiumSubs}</span>
+            <span className="text-[9px] font-bold text-amber-400 uppercase tracking-widest block">Premium Tier</span>
+            <span className="text-xl font-bold text-foreground mt-1 block">{premiumSubs}</span>
           </div>
-          <div className="w-8 h-8 rounded-lg bg-white dark:bg-slate-800/60 border border-amber-100 flex items-center justify-center shrink-0">
-            <Crown className="w-3.5 h-3.5 text-amber-500" />
+          <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center shrink-0 shadow-sm">
+            <Crown className="w-5 h-5 text-amber-400" />
           </div>
         </div>
       </div>
@@ -332,33 +332,33 @@ const Customize = () => {
           const isPremium = admin.plan?.toLowerCase() === "premium";
           const isOwner = admin.plan?.toLowerCase() === "owner";
 
-          let badgeStyle = "bg-slate-100 dark:bg-slate-800/50 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700";
-          let avatarStyle = "bg-slate-50 dark:bg-slate-900/50 text-slate-700 dark:text-slate-200 border-slate-250";
+          let badgeStyle = "bg-slate-500/20 text-slate-300 border-slate-500/30";
+          let avatarStyle = "bg-gradient-to-br from-indigo-500 to-indigo-600 text-white border-indigo-400/30 shadow-md shadow-indigo-500/25";
 
           if (isPremium) {
-            badgeStyle = "bg-amber-50 text-amber-700 border-amber-200/60";
-            avatarStyle = "bg-amber-50/50 text-amber-700 border-amber-100";
+            badgeStyle = "bg-amber-500/20 text-amber-300 border-amber-500/30";
+            avatarStyle = "bg-gradient-to-br from-amber-500 to-amber-600 text-white border-amber-400/30 shadow-md shadow-amber-500/25";
           } else if (isOwner) {
-            badgeStyle = "bg-purple-50 text-purple-700 border-purple-200/60";
-            avatarStyle = "bg-purple-50/50 text-purple-700 border-purple-100";
+            badgeStyle = "bg-purple-500/20 text-purple-300 border-purple-500/30";
+            avatarStyle = "bg-gradient-to-br from-purple-500 to-purple-600 text-white border-purple-400/30 shadow-md shadow-purple-500/25";
           } else {
-            badgeStyle = "bg-blue-50 text-blue-700 border-blue-200/60";
-            avatarStyle = "bg-blue-50/50 text-blue-700 border-blue-100";
+            badgeStyle = "bg-blue-500/20 text-blue-300 border-blue-500/30";
+            avatarStyle = "bg-gradient-to-br from-indigo-500 to-indigo-600 text-white border-indigo-400/30 shadow-md shadow-indigo-500/25";
           }
 
           return (
             <div
               key={admin._id || admin.id}
               onClick={() => navigate(`/master/customizing-admin/${admin._id || admin.id}`, { state: { admin } })}
-              className="bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-[0_1px_3px_rgba(0,0,0,0.01)] hover:border-slate-400 hover:shadow-md cursor-pointer transition-all duration-300 flex flex-col justify-between overflow-hidden group hover:-translate-y-1"
+              className="bg-card border border-border rounded-2xl p-6 shadow-sm hover:border-slate-400 hover:shadow-md cursor-pointer transition-all duration-300 flex flex-col justify-between overflow-hidden group hover:-translate-y-1"
             >
               {/* Card Content Wrapper */}
-              <div className="p-6 space-y-5 flex-1">
+              <div className="space-y-5 flex-1">
                 
                 {/* Header row: Company logo & plan name & status */}
                 <div className="flex justify-between items-start gap-3">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className={`w-9 h-9 rounded-xl border flex items-center justify-center font-bold text-xs shadow-sm shrink-0 transition-all duration-300 ${avatarStyle}`}>
+                    <div className={`w-9 h-9 rounded-xl border flex items-center justify-center font-black text-sm text-white shrink-0 shadow-md transition-all duration-300 ${avatarStyle}`}>
                       {admin.companyName ? admin.companyName.charAt(0).toUpperCase() : admin.name?.charAt(0).toUpperCase()}
                     </div>
                     <div className="min-w-0">
