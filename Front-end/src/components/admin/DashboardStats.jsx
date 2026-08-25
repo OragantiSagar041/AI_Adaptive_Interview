@@ -69,84 +69,84 @@ export default memo(function DashboardStats({
 
       {/* Total Card */}
       <div
-        className="bg-white/70 backdrop-blur-xl border border-white/40 rounded-2xl p-5 relative overflow-hidden cursor-pointer shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_-4px_rgba(59,130,246,0.15)] hover:-translate-y-1 hover:border-blue-200 transition-all duration-300 group"
+        className="bg-card border border-border dark:border-slate-700/80 rounded-2xl p-5 relative overflow-hidden cursor-pointer shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 group"
         onClick={() => onStatusFilter('all')}
       >
-        <Users className="absolute -bottom-4 -right-4 w-24 h-24 text-blue-50 opacity-50 group-hover:scale-110 group-hover:rotate-6 transition-transform duration-500" />
-        <div className="absolute top-0 right-0 w-32 h-32 bg-blue-100/30 blur-[30px] rounded-full" />
+        <Users className="absolute -bottom-4 -right-4 w-24 h-24 text-blue-500/10 opacity-40 group-hover:scale-110 group-hover:rotate-6 transition-transform duration-500" />
+        <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 blur-[30px] rounded-full" />
 
         <div className="relative z-10">
           <div className="flex items-center gap-2 mb-2">
-            <div className="p-1.5 bg-blue-50 text-blue-500 rounded-lg"><Users size={16} /></div>
-            <span className="text-[0.7rem] text-slate-500 uppercase tracking-widest font-bold">Total Interviews</span>
+            <div className="p-1.5 bg-blue-500/15 dark:bg-blue-500/25 border border-blue-400/30 text-blue-600 dark:text-blue-400 rounded-lg"><Users size={16} /></div>
+            <span className="text-[0.7rem] text-muted-foreground uppercase tracking-widest font-bold">Total Interviews</span>
           </div>
-          <div className="text-3xl font-black text-slate-800 mt-3">{dbStats.total}</div>
+          <div className="text-3xl font-black text-foreground mt-3">{dbStats.total}</div>
           <div className="mt-4 flex items-center justify-between">
-            <span className="text-xs text-slate-500 font-medium"><strong className="text-blue-600">{dbStats.today}</strong> today</span>
-            <div className="w-6 h-6 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-500 transition-colors"><ChevronRight size={14} /></div>
+            <span className="text-xs text-muted-foreground font-medium"><strong className="text-blue-600 dark:text-blue-400">{dbStats.today}</strong> today</span>
+            <div className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center text-muted-foreground group-hover:bg-blue-500/20 group-hover:text-blue-600 transition-colors"><ChevronRight size={14} /></div>
           </div>
         </div>
       </div>
 
       {/* Pending Card */}
       <div
-        className="bg-white/70 backdrop-blur-xl border border-white/40 rounded-2xl p-5 relative overflow-hidden cursor-pointer shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_-4px_rgba(245,158,11,0.15)] hover:-translate-y-1 hover:border-amber-200 transition-all duration-300 group"
+        className="bg-card border border-border dark:border-slate-700/80 rounded-2xl p-5 relative overflow-hidden cursor-pointer shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 group"
         onClick={() => onStatusFilter('pending')}
       >
-        <Clock className="absolute -bottom-4 -right-4 w-24 h-24 text-amber-50 opacity-50 group-hover:scale-110 group-hover:-rotate-6 transition-transform duration-500" />
-        <div className="absolute top-0 right-0 w-32 h-32 bg-amber-100/30 blur-[30px] rounded-full" />
+        <Clock className="absolute -bottom-4 -right-4 w-24 h-24 text-amber-500/10 opacity-40 group-hover:scale-110 group-hover:-rotate-6 transition-transform duration-500" />
+        <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 blur-[30px] rounded-full" />
 
         <div className="relative z-10">
           <div className="flex items-center gap-2 mb-2">
-            <div className="p-1.5 bg-amber-50 text-amber-500 rounded-lg"><Clock size={16} /></div>
-            <span className="text-[0.7rem] text-slate-500 uppercase tracking-widest font-bold">Pending</span>
+            <div className="p-1.5 bg-amber-500/15 dark:bg-amber-500/25 border border-amber-400/30 text-amber-600 dark:text-amber-400 rounded-lg"><Clock size={16} /></div>
+            <span className="text-[0.7rem] text-muted-foreground uppercase tracking-widest font-bold">Pending</span>
           </div>
-          <div className="text-3xl font-black text-slate-800 mt-3">{dbStats.pending}</div>
+          <div className="text-3xl font-black text-foreground mt-3">{dbStats.pending}</div>
           <div className="mt-4 flex items-center justify-between">
-            <span className="text-xs text-slate-500 font-medium"><strong className="text-amber-600">{dbStats.started}</strong> in progress</span>
-            <div className="w-6 h-6 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-amber-50 group-hover:text-amber-500 transition-colors"><ChevronRight size={14} /></div>
+            <span className="text-xs text-muted-foreground font-medium"><strong className="text-amber-600 dark:text-amber-400">{dbStats.started}</strong> in progress</span>
+            <div className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center text-muted-foreground group-hover:bg-amber-500/20 group-hover:text-amber-600 transition-colors"><ChevronRight size={14} /></div>
           </div>
         </div>
       </div>
 
       {/* Completed Card */}
       <div
-        className="bg-white/70 backdrop-blur-xl border border-white/40 rounded-2xl p-5 relative overflow-hidden cursor-pointer shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_-4px_rgba(16,185,129,0.15)] hover:-translate-y-1 hover:border-emerald-200 transition-all duration-300 group"
+        className="bg-card border border-border dark:border-slate-700/80 rounded-2xl p-5 relative overflow-hidden cursor-pointer shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 group"
         onClick={() => onStatusFilter('completed')}
       >
-        <CheckCircle className="absolute -bottom-4 -right-4 w-24 h-24 text-emerald-50 opacity-50 group-hover:scale-110 group-hover:rotate-6 transition-transform duration-500" />
-        <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-100/30 blur-[30px] rounded-full" />
+        <CheckCircle className="absolute -bottom-4 -right-4 w-24 h-24 text-emerald-500/10 opacity-40 group-hover:scale-110 group-hover:rotate-6 transition-transform duration-500" />
+        <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 blur-[30px] rounded-full" />
 
         <div className="relative z-10">
           <div className="flex items-center gap-2 mb-2">
-            <div className="p-1.5 bg-emerald-50 text-emerald-500 rounded-lg"><CheckCircle size={16} /></div>
-            <span className="text-[0.7rem] text-slate-500 uppercase tracking-widest font-bold">Completed</span>
+            <div className="p-1.5 bg-emerald-500/15 dark:bg-emerald-500/25 border border-emerald-400/30 text-emerald-600 dark:text-emerald-400 rounded-lg"><CheckCircle size={16} /></div>
+            <span className="text-[0.7rem] text-muted-foreground uppercase tracking-widest font-bold">Completed</span>
           </div>
-          <div className="text-3xl font-black text-slate-800 mt-3">{dbStats.completed}</div>
+          <div className="text-3xl font-black text-foreground mt-3">{dbStats.completed}</div>
           <div className="mt-4 flex items-center justify-between">
-            <span className="text-xs text-slate-500 font-medium">Avg score: <strong className="text-emerald-600">{dbStats.avg_score}</strong></span>
-            <div className="w-6 h-6 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-emerald-50 group-hover:text-emerald-500 transition-colors"><ChevronRight size={14} /></div>
+            <span className="text-xs text-muted-foreground font-medium">Avg score: <strong className="text-emerald-600 dark:text-emerald-400">{dbStats.avg_score}</strong></span>
+            <div className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center text-muted-foreground group-hover:bg-emerald-500/20 group-hover:text-emerald-600 transition-colors"><ChevronRight size={14} /></div>
           </div>
         </div>
       </div>
 
       {/* Qualified Card */}
       <div
-        className="bg-gradient-to-br from-indigo-50 to-white backdrop-blur-xl border border-indigo-100 rounded-2xl p-5 relative overflow-hidden cursor-pointer shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_-4px_rgba(99,102,241,0.2)] hover:-translate-y-1 hover:border-indigo-300 transition-all duration-300 group"
+        className="bg-card border border-indigo-400/30 rounded-2xl p-5 relative overflow-hidden cursor-pointer shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 group"
         onClick={onOpenQualified}
       >
-        <Award className="absolute -bottom-4 -right-4 w-24 h-24 text-indigo-100 opacity-50 group-hover:scale-110 group-hover:-rotate-6 transition-transform duration-500" />
-        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-200/30 blur-[30px] rounded-full" />
+        <Award className="absolute -bottom-4 -right-4 w-24 h-24 text-indigo-500/10 opacity-40 group-hover:scale-110 group-hover:-rotate-6 transition-transform duration-500" />
+        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 blur-[30px] rounded-full" />
 
         <div className="relative z-10">
           <div className="flex items-center gap-2 mb-2">
-            <div className="p-1.5 bg-indigo-100 text-indigo-600 rounded-lg"><Award size={16} /></div>
-            <span className="text-[0.7rem] text-indigo-600 uppercase tracking-widest font-bold">Selected</span>
+            <div className="p-1.5 bg-indigo-500/15 dark:bg-indigo-500/25 border border-indigo-400/30 text-indigo-600 dark:text-indigo-400 rounded-lg"><Award size={16} /></div>
+            <span className="text-[0.7rem] text-indigo-600 dark:text-indigo-400 uppercase tracking-widest font-bold">Selected</span>
           </div>
-          <div className="text-3xl font-black text-indigo-600 mt-3">{dbStats.selected}</div>
+          <div className="text-3xl font-black text-indigo-600 dark:text-indigo-400 mt-3">{dbStats.selected}</div>
           <div className="mt-4 flex items-center justify-between">
-            <span className="text-xs text-slate-500 font-medium"><strong className="text-rose-500">{dbStats.rejected}</strong> rejected</span>
-            <div className="w-6 h-6 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-100 group-hover:text-indigo-600 transition-colors"><ChevronRight size={14} /></div>
+            <span className="text-xs text-muted-foreground font-medium"><strong className="text-rose-500">{dbStats.rejected}</strong> rejected</span>
+            <div className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center text-muted-foreground group-hover:bg-indigo-500/20 group-hover:text-indigo-600 transition-colors"><ChevronRight size={14} /></div>
           </div>
         </div>
       </div>

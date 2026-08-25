@@ -346,7 +346,7 @@ export default function CompanyRevenue() {
         <div className="bg-white dark:bg-slate-800/60 p-5 rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-medium text-slate-500 dark:text-slate-400 tracking-wide uppercase">Top Client</span>
-            <div className="p-1.5 bg-amber-50 rounded-lg text-amber-600">
+            <div className="p-2 bg-amber-500/15 dark:bg-amber-500/25 border border-amber-400/30 text-amber-600 dark:text-amber-400 rounded-xl">
               <Award size={16} />
             </div>
           </div>
@@ -369,7 +369,7 @@ export default function CompanyRevenue() {
         <div className="bg-white dark:bg-slate-800/60 p-5 rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-medium text-slate-500 dark:text-slate-400 tracking-wide uppercase">Total Purchases</span>
-            <div className="p-1.5 bg-purple-50 rounded-lg text-purple-600">
+            <div className="p-2 bg-purple-500/15 dark:bg-purple-500/25 border border-purple-400/30 text-purple-600 dark:text-purple-400 rounded-xl">
               <CreditCard size={16} />
             </div>
           </div>
@@ -388,7 +388,7 @@ export default function CompanyRevenue() {
         <div className="bg-white dark:bg-slate-800/60 p-5 rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-medium text-slate-500 dark:text-slate-400 tracking-wide uppercase">Paid vs Trial</span>
-            <div className="p-1.5 bg-emerald-50 rounded-lg text-emerald-600">
+            <div className="p-2 bg-emerald-500/15 dark:bg-emerald-500/25 border border-emerald-400/30 text-emerald-600 dark:text-emerald-400 rounded-xl">
               <Building2 size={16} />
             </div>
           </div>
@@ -415,7 +415,7 @@ export default function CompanyRevenue() {
         <div className="bg-white dark:bg-slate-800/60 p-5 rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-medium text-slate-500 dark:text-slate-400 tracking-wide uppercase">Avg Rev / Tenant</span>
-            <div className="p-1.5 bg-blue-50 rounded-lg text-blue-600">
+            <div className="p-2 bg-blue-500/15 dark:bg-blue-500/25 border border-blue-400/30 text-blue-600 dark:text-blue-400 rounded-xl">
               <Layers size={16} />
             </div>
           </div>
@@ -446,18 +446,21 @@ export default function CompanyRevenue() {
               { key: '30days', label: 'Last 30 Days' },
               { key: 'month', label: 'This Month' },
               { key: 'year', label: 'This Year' },
-            ].map(p => (
-              <button
-                key={p.key}
-                onClick={() => handlePresetChange(p.key)}
-                className={`px-3 py-1 text-xs font-medium rounded-lg transition ${datePreset === p.key && !startDate && !endDate && p.key === 'all' || (datePreset === p.key && (startDate || endDate || p.key === 'all'))
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'bg-slate-100 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 hover:bg-slate-200/80'
-                  }`}
-              >
-                {p.label}
-              </button>
-            ))}
+            ].map(p => {
+              const isActive = datePreset === p.key;
+              return (
+                <button
+                  key={p.key}
+                  onClick={() => handlePresetChange(p.key)}
+                  className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all border ${isActive
+                    ? 'bg-indigo-600 dark:bg-indigo-500 text-white border-indigo-500 shadow-md shadow-indigo-500/30 ring-2 ring-indigo-400 dark:ring-indigo-400'
+                    : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700/60 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    }`}
+                >
+                  {p.label}
+                </button>
+              );
+            })}
           </div>
 
           {/* Custom Date Inputs */}

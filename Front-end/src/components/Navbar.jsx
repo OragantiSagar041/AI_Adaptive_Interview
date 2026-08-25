@@ -131,6 +131,8 @@ export default function Navbar({
           </button>
         </div>
 
+        <ThemeToggle />
+
         {/* Notification Bell */}
         <div ref={notifRef} className="relative flex items-center">
           <button
@@ -146,70 +148,71 @@ export default function Navbar({
             )}
           </button>
           {notifDropdownOpen && (
-            <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl py-2 z-50">
-              <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100 dark:border-slate-800">
-                <span className="text-xs font-bold text-slate-800 dark:text-slate-100 font-sans">Recent Notifications</span>
-                {unreadCount > 0 && (
-                  <button
-                    onClick={handleMarkAllRead}
-                    className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer border-none bg-transparent"
-                  >
-                    Mark all read
-                  </button>
-                )}
-              </div>
-
-              <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
-                {notifications.length === 0 ? (
-                  <div className="py-8 text-center text-xs text-slate-400 font-sans">No notifications</div>
-                ) : (
-                  notifications.slice(0, 5).map(n => (
-                    <div
-                      key={n.id}
-                      onClick={() => {
-                        if (!n.read) handleMarkRead(n.id)
-                        setNotifDropdownOpen(false)
-                        if (n.type === 'candidate') navigate('/admin/dashboard')
-                        else if (n.type === 'credits') navigate('/admin/profile-settings')
-                        else navigate('/admin/dashboard')
-                      }}
-                      className={`p-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer transition-colors flex gap-2.5 items-start ${!n.read ? 'bg-slate-50/50 dark:bg-slate-800/30' : ''
-                        }`}
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setNotifDropdownOpen(false)} />
+              <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl py-2 z-50">
+                <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100 dark:border-slate-800">
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-100 font-sans">Recent Notifications</span>
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={handleMarkAllRead}
+                      className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer border-none bg-transparent"
                     >
-                      <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 flex-shrink-0 mt-0.5 animate-none">
-                        {getNotifIcon(n.type)}
-                      </div>
-                      <div className="space-y-0.5 min-w-0">
-                        <div className="flex items-center gap-1.5 justify-between">
-                          <span className={`text-xs font-bold truncate block ${!n.read ? 'text-slate-800 dark:text-slate-100' : 'text-slate-600 dark:text-slate-400'}`}>{n.title}</span>
-                          {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 shrink-0" />}
-                        </div>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-normal line-clamp-2 font-sans">{n.message}</p>
-                        <span className="text-[9px] text-slate-400 block pt-0.5 font-sans">{formatRelativeTime(n.created_at)}</span>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+                      Mark all read
+                    </button>
+                  )}
+                </div>
 
-              <div className="border-t border-slate-100 dark:border-slate-800 px-4 pt-2 pb-1 text-center">
-                <NavLink
-                  to="/admin/notifications"
-                  onClick={() => setNotifDropdownOpen(false)}
-                  className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline no-underline block py-1 font-sans"
-                >
-                  View All Notifications
-                </NavLink>
+                <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+                  {notifications.length === 0 ? (
+                    <div className="py-8 text-center text-xs text-slate-400 font-sans">No notifications</div>
+                  ) : (
+                    notifications.slice(0, 5).map(n => (
+                      <div
+                        key={n.id}
+                        onClick={() => {
+                          if (!n.read) handleMarkRead(n.id)
+                          setNotifDropdownOpen(false)
+                          if (n.type === 'candidate') navigate('/admin/dashboard')
+                          else if (n.type === 'credits') navigate('/admin/profile-settings')
+                          else navigate('/admin/dashboard')
+                        }}
+                        className={`p-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer transition-colors flex gap-2.5 items-start ${!n.read ? 'bg-slate-50/50 dark:bg-slate-800/30' : ''
+                          }`}
+                      >
+                        <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 flex-shrink-0 mt-0.5 animate-none">
+                          {getNotifIcon(n.type)}
+                        </div>
+                        <div className="space-y-0.5 min-w-0">
+                          <div className="flex items-center gap-1.5 justify-between">
+                            <span className={`text-xs font-bold truncate block ${!n.read ? 'text-slate-800 dark:text-slate-100' : 'text-slate-600 dark:text-slate-400'}`}>{n.title}</span>
+                            {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 shrink-0" />}
+                          </div>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-normal line-clamp-2 font-sans">{n.message}</p>
+                          <span className="text-[9px] text-slate-400 block pt-0.5 font-sans">{formatRelativeTime(n.created_at)}</span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div className="border-t border-slate-100 dark:border-slate-800 px-4 pt-2 pb-1 text-center">
+                  <NavLink
+                    to="/admin/notifications"
+                    onClick={() => setNotifDropdownOpen(false)}
+                    className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline no-underline block py-1 font-sans"
+                  >
+                    View All Notifications
+                  </NavLink>
+                </div>
               </div>
-            </div>
+            </>
           )}
         </div>
 
         <span className="text-sm text-slate-600 dark:text-slate-300">
           Welcome back, <strong className="text-slate-800 dark:text-white">{adminUser?.name || 'admin'}</strong>
         </span>
-
-        <ThemeToggle />
 
         <button
           onClick={onLogout}

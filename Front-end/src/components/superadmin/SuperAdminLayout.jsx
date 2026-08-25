@@ -630,86 +630,91 @@ export default function SuperAdminLayout() {
               </div>
             </div>
 
-            {/* Right Side: Notifications & User Profile */}
+            {/* Right Side: Theme Toggle, Notifications & User Profile */}
             <div className="flex items-center gap-5">
+              {/* Theme Toggle */}
+              <ThemeToggle />
+
               {/* Notification Bell */}
               <div className="relative" ref={notifRef}>
                 <button
                   onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
-                  className="relative p-2.5 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-full transition-all cursor-pointer flex items-center justify-center shadow-xs"
+                  className="relative p-2.5 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-full transition-all cursor-pointer flex items-center justify-center"
                   title="Notifications"
                 >
-                  <Bell size={18} className="text-slate-600" />
+                  <Bell size={18} className="text-slate-600 dark:text-slate-300" />
                   {unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-sky-500 text-white font-extrabold text-[9px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center shadow-sm border-2 border-white">
+                    <span className="absolute -top-1 -right-1 bg-sky-500 text-white font-extrabold text-[9px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900">
                       {unreadCount}
                     </span>
                   )}
                 </button>
 
                 {notifDropdownOpen && (
-                  <div className="absolute right-0 mt-3 w-80 bg-popover border border-border rounded-2xl shadow-xl py-2 z-50">
-                    <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100 dark:border-slate-700">
-                      <span className="text-xs font-bold text-slate-800 dark:text-slate-100 font-sans">Recent Notifications</span>
-                      {unreadCount > 0 && (
-                        <button
-                          onClick={handleMarkAllRead}
-                          className="text-[10px] font-bold text-indigo-600 hover:underline cursor-pointer border-none bg-transparent"
-                        >
-                          Mark all read
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="max-h-64 overflow-y-auto divide-y divide-slate-50 dark:divide-slate-700/50">
-                      {notifications.length === 0 ? (
-                        <div className="py-8 text-center text-xs text-slate-400 font-sans">No notifications</div>
-                      ) : (
-                        notifications.slice(0, 5).map(n => (
-                          <div
-                            key={n.id}
-                            onClick={() => {
-                              if (!n.read) handleMarkRead(n.id)
-                              setNotifDropdownOpen(false)
-                              navigate('/superadmin/notifications')
-                            }}
-                            className={`p-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer transition-colors flex gap-2.5 items-start ${!n.read ? 'bg-indigo-50/30 dark:bg-indigo-900/20' : ''}`}
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setNotifDropdownOpen(false)} />
+                    <div className="absolute right-0 mt-3 w-80 bg-popover border border-border rounded-2xl py-2 z-50">
+                      <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100 dark:border-slate-700">
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-100 font-sans">Recent Notifications</span>
+                        {unreadCount > 0 && (
+                          <button
+                            onClick={handleMarkAllRead}
+                            className="text-[10px] font-bold text-indigo-600 hover:underline cursor-pointer border-none bg-transparent"
                           >
-                            <div className="p-1.5 rounded-lg bg-slate-50 flex-shrink-0 mt-0.5">
-                              {getNotifIcon(n.type)}
-                            </div>
-                            <div className="space-y-0.5 min-w-0">
-                              <div className="flex items-center gap-1.5 justify-between">
-                                <span className={`text-xs font-bold truncate block ${!n.read ? 'text-slate-800 dark:text-slate-100' : 'text-slate-600 dark:text-slate-300'}`}>{n.title}</span>
-                                {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 shrink-0" />}
-                              </div>
-                              <p className="text-[11px] text-slate-500 leading-normal line-clamp-2 font-sans">{n.message}</p>
-                              <span className="text-[9px] text-slate-400 block pt-0.5 font-sans">{formatRelativeTime(n.created_at)}</span>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
+                            Mark all read
+                          </button>
+                        )}
+                      </div>
 
-                    <div className="border-t border-slate-100 dark:border-slate-700 px-4 pt-2 pb-1 text-center">
-                      <NavLink
-                        to="/superadmin/notifications"
-                        onClick={() => setNotifDropdownOpen(false)}
-                        className="text-[11px] font-bold text-indigo-600 hover:underline no-underline block py-1 font-sans"
-                      >
-                        View All Notifications
-                      </NavLink>
+                      <div className="max-h-64 overflow-y-auto divide-y divide-slate-50 dark:divide-slate-700/50">
+                        {notifications.length === 0 ? (
+                          <div className="py-8 text-center text-xs text-slate-400 font-sans">No notifications</div>
+                        ) : (
+                          notifications.slice(0, 5).map(n => (
+                            <div
+                              key={n.id}
+                              onClick={() => {
+                                if (!n.read) handleMarkRead(n.id)
+                                setNotifDropdownOpen(false)
+                                navigate('/superadmin/notifications')
+                              }}
+                              className={`p-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer transition-colors flex gap-2.5 items-start ${!n.read ? 'bg-indigo-50/30 dark:bg-indigo-900/20' : ''}`}
+                            >
+                              <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 flex-shrink-0 mt-0.5">
+                                {getNotifIcon(n.type)}
+                              </div>
+                              <div className="space-y-0.5 min-w-0">
+                                <div className="flex items-center gap-1.5 justify-between">
+                                  <span className={`text-xs font-bold truncate block ${!n.read ? 'text-slate-800 dark:text-slate-100' : 'text-slate-600 dark:text-slate-300'}`}>{n.title}</span>
+                                  {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 shrink-0" />}
+                                </div>
+                                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-normal line-clamp-2 font-sans">{n.message}</p>
+                                <span className="text-[9px] text-slate-400 block pt-0.5 font-sans">{formatRelativeTime(n.created_at)}</span>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+
+                      <div className="border-t border-slate-100 dark:border-slate-700 px-4 pt-2 pb-1 text-center">
+                        <NavLink
+                          to="/superadmin/notifications"
+                          onClick={() => setNotifDropdownOpen(false)}
+                          className="text-[11px] font-bold text-indigo-600 hover:underline no-underline block py-1 font-sans"
+                        >
+                          View All Notifications
+                        </NavLink>
+                      </div>
                     </div>
-                  </div>
+                  </>
                 )}
               </div>
 
               {/* Profile Dropdown */}
-              <ThemeToggle />
               <div ref={profileRef} className="relative">
                 <button
                   onClick={() => setDropdownOpen(!dropdownOpen)}
-                  className="flex items-center gap-2 p-1.5 px-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl shadow-sm transition-all cursor-pointer border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800/60"
+                  className="flex items-center gap-2 p-1.5 px-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800/60"
                 >
                   <img
                     src={adminUser?.profile_image || adminUser?.avatar || "https://ui-avatars.com/api/?name=Super+Admin&background=random"}
@@ -724,26 +729,29 @@ export default function SuperAdminLayout() {
                 </button>
 
                 {dropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-48 bg-popover border border-border rounded-xl shadow-lg py-1.5 z-50">
-                    <NavLink
-                      to="/superadmin/profile-settings"
-                      onClick={() => setDropdownOpen(false)}
-                      className="flex items-center gap-2.5 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/60 no-underline"
-                    >
-                      <User size={15} /> My Profile
-                    </NavLink>
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setDropdownOpen(false)} />
+                    <div className="absolute right-0 mt-2 w-48 bg-popover border border-border rounded-xl py-1.5 z-50">
+                      <NavLink
+                        to="/superadmin/profile-settings"
+                        onClick={() => setDropdownOpen(false)}
+                        className="flex items-center gap-2.5 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/60 no-underline"
+                      >
+                        <User size={15} /> My Profile
+                      </NavLink>
 
-                    <hr className="border-slate-100 dark:border-slate-700 my-1" />
-                    <button
-                      onClick={() => {
-                        setDropdownOpen(false);
-                        handleLogout();
-                      }}
-                      className="w-full text-left flex items-center gap-2.5 px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 font-medium cursor-pointer border-none bg-transparent"
-                    >
-                      <LogOut size={15} /> Logout
-                    </button>
-                  </div>
+                      <hr className="border-slate-100 dark:border-slate-700 my-1" />
+                      <button
+                        onClick={() => {
+                          setDropdownOpen(false);
+                          handleLogout();
+                        }}
+                        className="w-full text-left flex items-center gap-2.5 px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 font-medium cursor-pointer border-none bg-transparent"
+                      >
+                        <LogOut size={15} /> Logout
+                      </button>
+                    </div>
+                  </>
                 )}
               </div>
             </div>

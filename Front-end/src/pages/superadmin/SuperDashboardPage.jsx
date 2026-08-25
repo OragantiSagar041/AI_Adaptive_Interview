@@ -257,8 +257,8 @@ export default function SuperDashboardPage() {
             <div className="p-4 flex flex-col h-full relative z-10">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded bg-violet-50 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
-                    <Mic className="w-4 h-4 text-violet-500" />
+                  <div className="w-8 h-8 rounded-lg bg-violet-500/15 dark:bg-violet-500/25 border border-violet-400/30 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
+                    <Mic className="w-4 h-4 text-violet-600 dark:text-violet-400" />
                   </div>
                   <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Total AI Interviews</span>
                 </div>
@@ -308,8 +308,8 @@ export default function SuperDashboardPage() {
             <div className="p-4 flex flex-col h-full relative z-10">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded bg-blue-50 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
-                    <Activity className="w-4 h-4 text-blue-500" />
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/15 dark:bg-blue-500/25 border border-blue-400/30 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
+                    <Activity className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                   </div>
                   <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Active Today</span>
                 </div>
@@ -426,8 +426,8 @@ export default function SuperDashboardPage() {
             <div className="p-4 flex flex-col h-full relative z-10">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded bg-emerald-50 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/15 dark:bg-emerald-500/25 border border-emerald-400/30 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                   </div>
                   <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Completed Interviews</span>
                 </div>
@@ -472,8 +472,8 @@ export default function SuperDashboardPage() {
             <div className="p-4 flex flex-col h-full relative z-10">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded bg-amber-50 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
-                    <Clock className="w-4 h-4 text-amber-500" />
+                  <div className="w-8 h-8 rounded-lg bg-amber-500/15 dark:bg-amber-500/25 border border-amber-400/30 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
+                    <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                   </div>
                   <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Pending Interviews</span>
                 </div>
@@ -516,8 +516,8 @@ export default function SuperDashboardPage() {
             <div className="p-4 flex flex-col h-full relative z-10">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded bg-fuchsia-50 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
-                    <Star className="w-4 h-4 text-fuchsia-500" />
+                  <div className="w-8 h-8 rounded-lg bg-fuchsia-500/15 dark:bg-fuchsia-500/25 border border-fuchsia-400/30 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
+                    <Star className="w-4 h-4 text-fuchsia-600 dark:text-fuchsia-400" />
                   </div>
                   <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Avg AI Score</span>
                 </div>
@@ -570,8 +570,8 @@ export default function SuperDashboardPage() {
             <div className="p-4 flex flex-col h-full relative z-10">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded bg-teal-50 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
-                    <Target className="w-4 h-4 text-teal-500" />
+                  <div className="w-8 h-8 rounded-lg bg-teal-500/15 dark:bg-teal-500/25 border border-teal-400/30 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
+                    <Target className="w-4 h-4 text-teal-600 dark:text-teal-400" />
                   </div>
                   <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Candidates Hired</span>
                 </div>
@@ -621,8 +621,8 @@ export default function SuperDashboardPage() {
             <div className="p-4 flex flex-col h-full relative z-10">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded bg-rose-50 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
-                    <XCircle className="w-4 h-4 text-rose-500" />
+                  <div className="w-8 h-8 rounded-lg bg-rose-500/15 dark:bg-rose-500/25 border border-rose-400/30 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
+                    <XCircle className="w-4 h-4 text-rose-600 dark:text-rose-400" />
                   </div>
                   <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Candidates Rejected</span>
                 </div>
@@ -672,8 +672,8 @@ export default function SuperDashboardPage() {
             <div className="p-4 flex flex-col h-full relative z-10">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded bg-rose-50 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
-                    <AlertTriangle className="w-4 h-4 text-rose-500" />
+                  <div className="w-8 h-8 rounded-lg bg-rose-500/15 dark:bg-rose-500/25 border border-rose-400/30 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
+                    <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400" />
                   </div>
                   <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Expired Links</span>
                 </div>

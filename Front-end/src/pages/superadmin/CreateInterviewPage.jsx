@@ -1027,8 +1027,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
             <div
               className="w-12 h-12 rounded-2xl flex items-center justify-center text-white shrink-0 border border-indigo-400/30"
               style={{
-                background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
-                boxShadow: '0 4px 20px rgba(99, 102, 241, 0.45)'
+                background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)'
               }}
             >
               <i className="fas fa-file-signature text-xl text-white"></i>
