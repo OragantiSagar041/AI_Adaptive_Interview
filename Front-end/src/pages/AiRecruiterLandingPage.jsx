@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import useSEO from "../hooks/useSEO";
+import ThemeToggle from "../components/ThemeToggle";
 import {
   Mic,
   Sparkles,
@@ -249,6 +250,7 @@ function SiteHeader() {
 
           {/* Right Group: Action buttons (Desktop Only) */}
           <div className="desktop-only items-center gap-2">
+            <ThemeToggle />
             <Link to="/login"><Button variant="ghost" size="sm" className="rounded-full">Sign in</Button></Link>
             <a href="#contact"><Button size="sm" className="rounded-full bg-gradient-to-r from-primary to-violet text-white hover:opacity-90">Book demo</Button></a>
           </div>
@@ -1147,10 +1149,6 @@ function RecruiterContact() {
 // ==========================================
 
 function AiRecruiterLandingPage() {
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', 'dark');
-    document.documentElement.classList.add('dark');
-  }, []);
 
   useSEO({
     title: "AI Calling Agent for Recruitment & AI Voice Recruiter | HireIQ India",

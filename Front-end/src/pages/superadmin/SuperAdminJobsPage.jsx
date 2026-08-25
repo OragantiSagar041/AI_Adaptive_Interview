@@ -419,10 +419,10 @@ export default function SuperAdminJobsPage() {
   };
 
   return (
-    <div className="superadmin-jobs-page w-full max-w-7xl text-slate-900">
+    <div className="superadmin-jobs-page w-full max-w-7xl text-slate-900 dark:text-white">
 
       {/* ── Header ─────────────────────────────────────── */}
-      <div className="bg-white/80 backdrop-blur-2xl border border-white/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-6 sm:p-8 mb-8 relative overflow-hidden">
+      <div className="bg-white dark:bg-slate-800/60/80 backdrop-blur-2xl border border-white/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-6 sm:p-8 mb-8 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-indigo-50/50 to-transparent pointer-events-none" />
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-5">
           <div className="flex gap-4 items-center">
@@ -433,7 +433,7 @@ export default function SuperAdminJobsPage() {
               <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-slate-900 to-indigo-900 tracking-tight">
                 Jobs Management
               </h1>
-              <p className="text-slate-500 mt-0.5 text-sm font-semibold">
+              <p className="text-slate-500 dark:text-slate-400 mt-0.5 text-sm font-semibold">
                 {totalJobs} active posting{totalJobs !== 1 ? 's' : ''} · Create and manage job openings
               </p>
             </div>
@@ -441,13 +441,13 @@ export default function SuperAdminJobsPage() {
 
           <div className="flex items-center gap-3">
             {/* View Toggle */}
-            <div className="flex items-center bg-slate-100 rounded-xl p-1 gap-1 border border-slate-200/80">
+            <div className="flex items-center bg-slate-100 dark:bg-slate-800/50 rounded-xl p-1 gap-1 border border-slate-200 dark:border-slate-700/80">
               <button
                 onClick={() => setViewMode('grid')}
                 title="Grid View"
                 className={`p-2.5 rounded-lg transition-all border-none cursor-pointer ${viewMode === 'grid'
-                  ? 'bg-white text-indigo-600 shadow-sm shadow-indigo-100'
-                  : 'bg-transparent text-slate-400 hover:text-slate-600'
+                  ? 'bg-white dark:bg-slate-800/60 text-indigo-600 shadow-sm shadow-indigo-100'
+                  : 'bg-transparent text-slate-400 hover:text-slate-600 dark:text-slate-400'
                   }`}
               >
                 <LayoutGrid size={18} />
@@ -456,8 +456,8 @@ export default function SuperAdminJobsPage() {
                 onClick={() => setViewMode('list')}
                 title="List View"
                 className={`p-2.5 rounded-lg transition-all border-none cursor-pointer ${viewMode === 'list'
-                  ? 'bg-white text-indigo-600 shadow-sm shadow-indigo-100'
-                  : 'bg-transparent text-slate-400 hover:text-slate-600'
+                  ? 'bg-white dark:bg-slate-800/60 text-indigo-600 shadow-sm shadow-indigo-100'
+                  : 'bg-transparent text-slate-400 hover:text-slate-600 dark:text-slate-400'
                   }`}
               >
                 <LayoutList size={18} />
@@ -475,7 +475,7 @@ export default function SuperAdminJobsPage() {
                 navigator.clipboard.writeText(url);
                 alert(`Job portal link copied to clipboard:\n${url}`);
               }}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm cursor-pointer border border-slate-200 transition-all active:scale-95"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/50 hover:bg-slate-200 text-slate-700 dark:text-slate-200 font-bold text-sm cursor-pointer border border-slate-200 dark:border-slate-700 transition-all active:scale-95"
             >
               <Share2 size={18} />
               Share Job Portal
@@ -498,11 +498,11 @@ export default function SuperAdminJobsPage() {
           <div className="w-10 h-10 rounded-full border-4 border-indigo-200 border-t-indigo-600 animate-spin" />
         </div>
       ) : jobs.length === 0 ? (
-        <div className="bg-white/80 backdrop-blur-xl border border-white/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col items-center justify-center py-24">
+        <div className="bg-white dark:bg-slate-800/60/80 backdrop-blur-xl border border-white/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col items-center justify-center py-24">
           <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center mb-6 shadow-inner">
             <Briefcase size={44} className="text-indigo-400" />
           </div>
-          <h3 className="text-xl font-bold text-slate-700 mb-2">No job postings yet</h3>
+          <h3 className="text-xl font-bold text-slate-700 dark:text-slate-200 mb-2">No job postings yet</h3>
           <p className="text-slate-400 text-sm max-w-sm text-center mb-8 leading-relaxed">
             You haven't created any job openings. Click the button below to post your first role.
           </p>
@@ -520,7 +520,7 @@ export default function SuperAdminJobsPage() {
           {jobs.map((job, idx) => (
             <div
               key={job.job_id || job._id}
-              className="group relative bg-white rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-2xl hover:shadow-indigo-100/60 transition-all duration-300 overflow-hidden flex flex-col cursor-pointer"
+              className="group relative bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-sm hover:shadow-2xl hover:shadow-indigo-100/60 transition-all duration-300 overflow-hidden flex flex-col cursor-pointer"
               onClick={() => setSelectedJobDetails(job)}
             >
               {/* Accent gradient bar */}
@@ -535,13 +535,13 @@ export default function SuperAdminJobsPage() {
                     </div>
                     <div className="overflow-hidden flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <h3 className="font-black text-slate-800 text-base leading-tight truncate" title={job.title}>{job.title}</h3>
-                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider bg-slate-100 px-1.5 py-0.5 rounded shrink-0">{job.custom_id || job.job_id || 'JOB'}</span>
+                        <h3 className="font-black text-slate-800 dark:text-slate-100 text-base leading-tight truncate" title={job.title}>{job.title}</h3>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider bg-slate-100 dark:bg-slate-800/50 px-1.5 py-0.5 rounded shrink-0">{job.custom_id || job.job_id || 'JOB'}</span>
                       </div>
                       <div className="flex items-center gap-2 mt-1 text-xs text-slate-400 font-medium truncate">
                         <span className="flex items-center gap-1 shrink-0"><Building2 size={11} /> {job.location}</span>
                         <span>•</span>
-                        <span className="flex items-center gap-1 text-slate-500 font-semibold truncate" title={`Created by ${job.created_by_name || job.created_by || 'Admin'} (${job.created_by_role || 'Admin'})`}>
+                        <span className="flex items-center gap-1 text-slate-500 dark:text-slate-400 font-semibold truncate" title={`Created by ${job.created_by_name || job.created_by || 'Admin'} (${job.created_by_role || 'Admin'})`}>
                           <User size={11} className="text-indigo-500 shrink-0" /> {job.created_by_name || job.created_by || 'Admin'}
                         </span>
                       </div>
@@ -552,7 +552,7 @@ export default function SuperAdminJobsPage() {
                   <div className="flex items-center gap-1.5 shrink-0 ml-1">
                     <button
                       onClick={(e) => handleCopyJobLink(job, e)}
-                      className="p-2 bg-slate-50 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 rounded-xl border border-slate-200/80 hover:border-indigo-200 cursor-pointer transition-all shadow-xs"
+                      className="p-2 bg-slate-50 dark:bg-slate-900/50 hover:bg-indigo-50 text-slate-500 dark:text-slate-400 hover:text-indigo-600 rounded-xl border border-slate-200 dark:border-slate-700/80 hover:border-indigo-200 cursor-pointer transition-all shadow-xs"
                       title="Copy Public Apply Link"
                     >
                       <Copy size={14} />
@@ -576,26 +576,26 @@ export default function SuperAdminJobsPage() {
 
                 {/* Work mode + description */}
                 <div className="flex items-center gap-2">
-                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[0.68rem] font-bold border ${WORK_MODE_STYLES[job.workMode] || 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[0.68rem] font-bold border ${WORK_MODE_STYLES[job.workMode] || 'bg-slate-50 dark:bg-slate-900/50 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}>
                     <Clock size={11} /> {job.workMode}
                   </span>
                 </div>
 
-                <p className="text-xs text-slate-500 leading-relaxed line-clamp-2 flex-1">{job.description}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed line-clamp-2 flex-1">{job.description}</p>
 
                 {/* Stats row */}
                 <div className="grid grid-cols-3 gap-2">
-                  <div className="bg-slate-50 rounded-xl p-2.5 flex flex-col gap-0.5 border border-slate-100">
+                  <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-2.5 flex flex-col gap-0.5 border border-slate-100 dark:border-slate-800">
                     <span className="text-[0.62rem] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1"><Target size={9} /> Exp</span>
-                    <span className="text-xs font-black text-slate-800 truncate">{job.experience}</span>
+                    <span className="text-xs font-black text-slate-800 dark:text-slate-100 truncate">{job.experience}</span>
                   </div>
-                  <div className="bg-slate-50 rounded-xl p-2.5 flex flex-col gap-0.5 border border-slate-100">
+                  <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-2.5 flex flex-col gap-0.5 border border-slate-100 dark:border-slate-800">
                     <span className="text-[0.62rem] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1"><Wallet size={9} /> Salary</span>
-                    <span className="text-xs font-black text-slate-800 truncate">{job.salary || '—'}</span>
+                    <span className="text-xs font-black text-slate-800 dark:text-slate-100 truncate">{job.salary || '—'}</span>
                   </div>
-                  <div className="bg-slate-50 rounded-xl p-2.5 flex flex-col gap-0.5 border border-slate-100">
+                  <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-2.5 flex flex-col gap-0.5 border border-slate-100 dark:border-slate-800">
                     <span className="text-[0.62rem] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1"><BookOpen size={9} /> Bond</span>
-                    <span className="text-xs font-black text-slate-800 truncate">{job.bond || 'None'}</span>
+                    <span className="text-xs font-black text-slate-800 dark:text-slate-100 truncate">{job.bond || 'None'}</span>
                   </div>
                 </div>
 
@@ -607,7 +607,7 @@ export default function SuperAdminJobsPage() {
                     </span>
                   ))}
                   {job.skills.split(',').length > 3 && (
-                    <span className="px-2.5 py-1 bg-slate-100 text-slate-500 text-[0.68rem] font-bold rounded-lg">
+                    <span className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 text-[0.68rem] font-bold rounded-lg">
                       +{job.skills.split(',').length - 3}
                     </span>
                   )}
@@ -624,7 +624,7 @@ export default function SuperAdminJobsPage() {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={(e) => { e.stopPropagation(); setSelectedJobDetails(job); }}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs border border-slate-200/60 cursor-pointer transition-colors"
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-slate-100 dark:bg-slate-800/50 hover:bg-slate-200 text-slate-700 dark:text-slate-200 font-semibold text-xs border border-slate-200 dark:border-slate-700/60 cursor-pointer transition-colors"
                     >
                       <Eye size={13} /> Details
                     </button>
@@ -643,11 +643,11 @@ export default function SuperAdminJobsPage() {
       ) : (
 
         /* ── LIST VIEW ──────────────────────────────────── */
-        <div className="bg-white/80 backdrop-blur-2xl border border-white/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
-          <div className="overflow-x-auto p-4 sm:p-6 bg-slate-50/30">
+        <div className="bg-white dark:bg-slate-800/60/80 backdrop-blur-2xl border border-white/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+          <div className="overflow-x-auto p-4 sm:p-6 bg-slate-50 dark:bg-slate-900/50/30">
             <table className="w-full border-collapse text-left">
               <thead>
-                <tr className="border-b-2 border-slate-200">
+                <tr className="border-b-2 border-slate-200 dark:border-slate-700">
                   <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider">Job Title</th>
                   <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider">Location</th>
                   <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider">Mode</th>
@@ -671,12 +671,12 @@ export default function SuperAdminJobsPage() {
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
-                            <p className="font-black text-slate-800 text-sm">{job.title}</p>
-                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider bg-slate-100 px-1.5 py-0.5 rounded">{job.custom_id || job.job_id || 'JOB'}</span>
+                            <p className="font-black text-slate-800 dark:text-slate-100 text-sm">{job.title}</p>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider bg-slate-100 dark:bg-slate-800/50 px-1.5 py-0.5 rounded">{job.custom_id || job.job_id || 'JOB'}</span>
                           </div>
                           <div className="flex items-center gap-2 mt-0.5">
                             <p className="text-xs text-slate-400 line-clamp-1 max-w-[180px]">{job.description}</p>
-                            <span className="text-[0.65rem] text-slate-500 font-semibold flex items-center gap-1 bg-slate-100/80 px-1.5 py-0.5 rounded border border-slate-200/60" title={`Created by ${job.created_by_name || job.created_by || 'Admin'}`}>
+                            <span className="text-[0.65rem] text-slate-500 dark:text-slate-400 font-semibold flex items-center gap-1 bg-slate-100 dark:bg-slate-800/50/80 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700/60" title={`Created by ${job.created_by_name || job.created_by || 'Admin'}`}>
                               <User size={10} className="text-indigo-500" /> {job.created_by_name || job.created_by || 'Admin'}
                             </span>
                           </div>
@@ -684,17 +684,17 @@ export default function SuperAdminJobsPage() {
                       </div>
                     </td>
                     <td className="p-4">
-                      <div className="flex items-center gap-1.5 text-sm text-slate-600 font-medium">
+                      <div className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-400 font-medium">
                         <MapPin size={13} className="text-indigo-400" /> {job.location}
                       </div>
                     </td>
                     <td className="p-4">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[0.7rem] font-bold border ${WORK_MODE_STYLES[job.workMode] || 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[0.7rem] font-bold border ${WORK_MODE_STYLES[job.workMode] || 'bg-slate-50 dark:bg-slate-900/50 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}>
                         <Clock size={11} /> {job.workMode}
                       </span>
                     </td>
                     <td className="p-4">
-                      <div className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
+                      <div className="flex items-center gap-1.5 text-sm font-semibold text-slate-700 dark:text-slate-200">
                         <Target size={13} className="text-amber-400" /> {job.experience}
                       </div>
                     </td>
@@ -709,7 +709,7 @@ export default function SuperAdminJobsPage() {
                           <span key={i} className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[0.65rem] font-bold rounded-md border border-indigo-100/60">{s.trim()}</span>
                         ))}
                         {job.skills.split(',').length > 2 && (
-                          <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[0.65rem] font-bold rounded-md">+{job.skills.split(',').length - 2}</span>
+                          <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 text-[0.65rem] font-bold rounded-md">+{job.skills.split(',').length - 2}</span>
                         )}
                       </div>
                     </td>
@@ -725,7 +725,7 @@ export default function SuperAdminJobsPage() {
                         </button>
                         <button
                           onClick={(e) => handleCopyJobLink(job, e)}
-                          className="p-2 bg-slate-50 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl border border-slate-200 cursor-pointer transition-all shadow-xs"
+                          className="p-2 bg-slate-50 dark:bg-slate-900/50 text-slate-600 dark:text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer transition-all shadow-xs"
                           title="Copy Public Apply Link"
                         >
                           <Copy size={14} />
@@ -763,22 +763,22 @@ export default function SuperAdminJobsPage() {
 
       {/* Pagination Controls */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-6 bg-white/80 backdrop-blur-2xl border border-white/60 rounded-2xl shadow-[0_4px_20px_rgb(0,0,0,0.02)] p-4">
-          <div className="text-sm font-semibold text-slate-500">
+        <div className="flex items-center justify-between mt-6 bg-white dark:bg-slate-800/60/80 backdrop-blur-2xl border border-white/60 rounded-2xl shadow-[0_4px_20px_rgb(0,0,0,0.02)] p-4">
+          <div className="text-sm font-semibold text-slate-500 dark:text-slate-400">
             Page <span className="text-indigo-600 font-bold">{currentPage}</span> of <span className="text-indigo-600 font-bold">{totalPages}</span>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={currentPage === 1}
-              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${currentPage === 1 ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white border border-slate-200 text-slate-700 hover:border-indigo-300 hover:text-indigo-600 cursor-pointer shadow-sm'}`}
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${currentPage === 1 ? 'bg-slate-100 dark:bg-slate-800/50 text-slate-400 cursor-not-allowed' : 'bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-indigo-300 hover:text-indigo-600 cursor-pointer shadow-sm'}`}
             >
               Previous
             </button>
             <button
               onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
               disabled={currentPage === totalPages}
-              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${currentPage === totalPages ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white border border-slate-200 text-slate-700 hover:border-indigo-300 hover:text-indigo-600 cursor-pointer shadow-sm'}`}
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${currentPage === totalPages ? 'bg-slate-100 dark:bg-slate-800/50 text-slate-400 cursor-not-allowed' : 'bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-indigo-300 hover:text-indigo-600 cursor-pointer shadow-sm'}`}
             >
               Next
             </button>
@@ -790,7 +790,7 @@ export default function SuperAdminJobsPage() {
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-50 flex items-center justify-center p-4">
           <div
-            className="bg-white/95 backdrop-blur-xl rounded-[2rem] shadow-[0_20px_60px_rgba(0,0,0,0.15)] border border-white/60 w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col relative"
+            className="bg-white dark:bg-slate-800/60/95 backdrop-blur-xl rounded-[2rem] shadow-[0_20px_60px_rgba(0,0,0,0.15)] border border-white/60 w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col relative"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="absolute top-0 left-0 w-full h-28 bg-gradient-to-b from-indigo-50/80 to-transparent pointer-events-none rounded-t-[2rem]" />
@@ -801,13 +801,13 @@ export default function SuperAdminJobsPage() {
                   <Briefcase size={24} />
                 </div>
                 <div>
-                  <h2 className="text-xl font-black text-slate-800 tracking-tight">{editingJobId ? 'Edit Job Posting' : 'Create New Job'}</h2>
-                  <p className="text-xs font-semibold text-slate-500 mt-0.5">{editingJobId ? 'Update the job details below' : 'Fill in the details to post a new opening'}</p>
+                  <h2 className="text-xl font-black text-slate-800 dark:text-slate-100 tracking-tight">{editingJobId ? 'Edit Job Posting' : 'Create New Job'}</h2>
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-0.5">{editingJobId ? 'Update the job details below' : 'Fill in the details to post a new opening'}</p>
                 </div>
               </div>
               <button
                 onClick={resetForm}
-                className="w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 hover:bg-rose-100 text-slate-500 hover:text-rose-600 border-none cursor-pointer transition-colors"
+                className="w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800/50 hover:bg-rose-100 text-slate-500 dark:text-slate-400 hover:text-rose-600 border-none cursor-pointer transition-colors"
               >
                 <X size={18} strokeWidth={2.5} />
               </button>
@@ -816,30 +816,30 @@ export default function SuperAdminJobsPage() {
             <div className="p-7 overflow-y-auto relative z-10">
               <form id="createJobForm" onSubmit={handleCreateJob} className="space-y-5">
                 <div>
-                  <label className="block text-[0.7rem] font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-1">Job Title</label>
+                  <label className="block text-[0.7rem] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5 ml-1">Job Title</label>
                   <input
                     type="text" name="title" required
                     value={formData.title} onChange={handleInputChange}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50/50 focus:outline-none focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 font-medium placeholder:text-slate-400"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/50 focus:outline-none focus:bg-white dark:bg-slate-800/60 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 font-medium placeholder:text-slate-400"
                     placeholder="e.g. Senior Frontend Developer"
                   />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div>
-                    <label className="block text-[0.7rem] font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-1">Experience Required</label>
+                    <label className="block text-[0.7rem] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5 ml-1">Experience Required</label>
                     <input
                       type="text" name="experience" required
                       value={formData.experience} onChange={handleInputChange}
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50/50 focus:outline-none focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 font-medium placeholder:text-slate-400"
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/50 focus:outline-none focus:bg-white dark:bg-slate-800/60 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 font-medium placeholder:text-slate-400"
                       placeholder="e.g. 3-5 Years"
                     />
                   </div>
                   <div>
-                    <label className="block text-[0.7rem] font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-1">Work Mode</label>
+                    <label className="block text-[0.7rem] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5 ml-1">Work Mode</label>
                     <select
                       name="workMode" value={formData.workMode} onChange={handleInputChange}
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50/50 focus:outline-none focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 font-medium"
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/50 focus:outline-none focus:bg-white dark:bg-slate-800/60 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 font-medium"
                     >
                       <option value="Remote">Remote</option>
                       <option value="Hybrid">Hybrid</option>
@@ -850,47 +850,47 @@ export default function SuperAdminJobsPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                   <div>
-                    <label className="block text-[0.7rem] font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-1">Location</label>
+                    <label className="block text-[0.7rem] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5 ml-1">Location</label>
                     <input
                       type="text" name="location" required
                       value={formData.location} onChange={handleInputChange}
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50/50 focus:outline-none focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 font-medium placeholder:text-slate-400"
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/50 focus:outline-none focus:bg-white dark:bg-slate-800/60 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 font-medium placeholder:text-slate-400"
                       placeholder="e.g. San Francisco"
                     />
                   </div>
                   <div>
-                    <label className="block text-[0.7rem] font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-1">Salary (LPA)</label>
+                    <label className="block text-[0.7rem] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5 ml-1">Salary (LPA)</label>
                     <input
                       type="text" name="salary"
                       value={formData.salary} onChange={handleInputChange}
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50/50 focus:outline-none focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 font-medium placeholder:text-slate-400"
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/50 focus:outline-none focus:bg-white dark:bg-slate-800/60 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 font-medium placeholder:text-slate-400"
                       placeholder="e.g. 15 LPA"
                     />
                   </div>
                   <div>
-                    <label className="block text-[0.7rem] font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-1">Bond / Contract</label>
+                    <label className="block text-[0.7rem] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5 ml-1">Bond / Contract</label>
                     <input
                       type="text" name="bond"
                       value={formData.bond} onChange={handleInputChange}
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50/50 focus:outline-none focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 font-medium placeholder:text-slate-400"
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/50 focus:outline-none focus:bg-white dark:bg-slate-800/60 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 font-medium placeholder:text-slate-400"
                       placeholder="e.g. 1 Year"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-[0.7rem] font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-1">Skills (comma separated)</label>
+                  <label className="block text-[0.7rem] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5 ml-1">Skills (comma separated)</label>
                   <input
                     type="text" name="skills" required
                     value={formData.skills} onChange={handleInputChange}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50/50 focus:outline-none focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 font-medium placeholder:text-slate-400"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/50 focus:outline-none focus:bg-white dark:bg-slate-800/60 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 font-medium placeholder:text-slate-400"
                     placeholder="e.g. React, Node.js, AWS"
                   />
                 </div>
 
                 <div>
                   <div className="flex justify-between items-center mb-1.5 ml-1">
-                    <label className="block text-[0.7rem] font-bold text-slate-500 uppercase tracking-wider">Job Description</label>
+                    <label className="block text-[0.7rem] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Job Description</label>
                     <button
                       type="button"
                       onClick={() => document.getElementById('jdUploadInput').click()}
@@ -911,17 +911,17 @@ export default function SuperAdminJobsPage() {
                     name="description" required
                     value={formData.description} onChange={handleInputChange}
                     rows="4"
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50/50 focus:outline-none focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 font-medium placeholder:text-slate-400 resize-none"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/50 focus:outline-none focus:bg-white dark:bg-slate-800/60 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 font-medium placeholder:text-slate-400 resize-none"
                     placeholder="Describe the role, responsibilities, and requirements..."
                   ></textarea>
                 </div>
               </form>
             </div>
 
-            <div className="p-7 border-t border-slate-100 flex justify-end gap-4 relative z-10">
+            <div className="p-7 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-4 relative z-10">
               <button
                 onClick={resetForm}
-                className="px-6 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-sm border-none cursor-pointer transition-colors"
+                className="px-6 py-3 rounded-xl bg-slate-100 dark:bg-slate-800/50 hover:bg-slate-200 text-slate-600 dark:text-slate-400 font-bold text-sm border-none cursor-pointer transition-colors"
               >
                 Cancel
               </button>
@@ -941,30 +941,30 @@ export default function SuperAdminJobsPage() {
       {applicationData.open && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-md z-50 flex items-center justify-center p-4">
           <div
-            className="bg-white rounded-[2rem] shadow-[0_24px_64px_rgba(0,0,0,0.18)] border border-slate-200/80 w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col"
+            className="bg-white dark:bg-slate-800/60 rounded-[2rem] shadow-[0_24px_64px_rgba(0,0,0,0.18)] border border-slate-200 dark:border-slate-700/80 w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col"
             onClick={e => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-teal-50/60 to-cyan-50/60">
+            <div className="px-8 py-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-gradient-to-r from-teal-50/60 to-cyan-50/60">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-gradient-to-br from-teal-500 to-cyan-600 text-white shadow-lg shadow-teal-500/25">
                   <Users size={24} />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-xl font-black text-slate-800 tracking-tight">{applicationData.job?.title}</h2>
+                    <h2 className="text-xl font-black text-slate-800 dark:text-slate-100 tracking-tight">{applicationData.job?.title}</h2>
                     {!applicationData.loading && (
                       <span className="px-2.5 py-0.5 bg-teal-100 text-teal-800 text-xs font-bold rounded-full border border-teal-200">
                         {applicationData.list.length} applicant{applicationData.list.length !== 1 ? 's' : ''}
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-3 mt-1 text-xs text-slate-500 font-medium flex-wrap">
+                  <div className="flex items-center gap-3 mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium flex-wrap">
                     <span className="flex items-center gap-1">
                       <Building2 size={12} className="text-slate-400" /> {applicationData.job?.location || 'Remote'}
                     </span>
                     <span>•</span>
-                    <span className="flex items-center gap-1.5 bg-white/90 text-slate-700 font-bold px-2 py-0.5 rounded-lg border border-slate-200 shadow-xs">
+                    <span className="flex items-center gap-1.5 bg-white dark:bg-slate-800/60/90 text-slate-700 dark:text-slate-200 font-bold px-2 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700 shadow-xs">
                       <User size={11} className="text-indigo-600" />
                       Created by: <span className="text-indigo-600 font-extrabold">{applicationData.job?.created_by_name || applicationData.job?.created_by || 'Admin'}</span>
                       {applicationData.job?.created_by_role && (
@@ -982,14 +982,14 @@ export default function SuperAdminJobsPage() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => openApplications(applicationData.job)}
-                  className="p-2.5 rounded-xl bg-slate-100 hover:bg-teal-50 text-slate-500 hover:text-teal-600 border-none cursor-pointer transition-colors"
+                  className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/50 hover:bg-teal-50 text-slate-500 dark:text-slate-400 hover:text-teal-600 border-none cursor-pointer transition-colors"
                   title="Refresh"
                 >
                   <RefreshCw size={16} />
                 </button>
                 <button
                   onClick={closeApplications}
-                  className="p-2.5 rounded-xl bg-slate-100 hover:bg-rose-100 text-slate-500 hover:text-rose-600 border-none cursor-pointer transition-colors"
+                  className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/50 hover:bg-rose-100 text-slate-500 dark:text-slate-400 hover:text-rose-600 border-none cursor-pointer transition-colors"
                 >
                   <X size={18} strokeWidth={2.5} />
                 </button>
@@ -1007,7 +1007,7 @@ export default function SuperAdminJobsPage() {
                   <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-teal-100 to-cyan-100 flex items-center justify-center mb-5 shadow-inner">
                     <Users size={36} className="text-teal-400" />
                   </div>
-                  <h3 className="text-lg font-black text-slate-700 mb-1">No applications yet</h3>
+                  <h3 className="text-lg font-black text-slate-700 dark:text-slate-200 mb-1">No applications yet</h3>
                   <p className="text-sm text-slate-400 max-w-xs leading-relaxed">
                     No one has applied for <span className="font-bold">{applicationData.job?.title}</span> yet.
                     Share the job link to start receiving applications.
@@ -1017,7 +1017,7 @@ export default function SuperAdminJobsPage() {
                       href={`${window.location.origin}/apply/${applicationData.job?.job_id}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="px-4 py-2.5 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 rounded-xl flex items-center gap-2 text-sm text-slate-600 hover:text-indigo-700 font-mono transition-colors cursor-pointer"
+                      className="px-4 py-2.5 bg-slate-50 dark:bg-slate-900/50 hover:bg-indigo-50 border border-slate-200 dark:border-slate-700 hover:border-indigo-200 rounded-xl flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-indigo-700 font-mono transition-colors cursor-pointer"
                     >
                       <ExternalLink size={14} className="text-indigo-400" />
                       {window.location.origin}/apply/{applicationData.job?.job_id}
@@ -1027,7 +1027,7 @@ export default function SuperAdminJobsPage() {
                         navigator.clipboard.writeText(`${window.location.origin}/apply/${applicationData.job?.job_id}`);
                         Swal.fire({ title: 'Copied!', text: 'Job link copied to clipboard.', icon: 'success', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
                       }}
-                      className="p-2.5 bg-white border border-slate-200 hover:bg-slate-50 hover:border-indigo-200 text-slate-500 hover:text-indigo-600 rounded-xl cursor-pointer transition-colors"
+                      className="p-2.5 bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700 hover:border-indigo-200 text-slate-500 dark:text-slate-400 hover:text-indigo-600 rounded-xl cursor-pointer transition-colors"
                       title="Copy Link"
                     >
                       <Copy size={16} />
@@ -1035,10 +1035,10 @@ export default function SuperAdminJobsPage() {
                   </div>
                 </div>
               ) : (
-                <div className="overflow-x-auto rounded-2xl border border-slate-100 shadow-sm">
+                <div className="overflow-x-auto rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
                   <table className="w-full text-left border-collapse">
-                    <thead className="bg-slate-50/80">
-                      <tr className="border-b border-slate-200">
+                    <thead className="bg-slate-50 dark:bg-slate-900/50/80">
+                      <tr className="border-b border-slate-200 dark:border-slate-700">
                         <th className="py-3.5 px-5 text-[0.7rem] font-extrabold uppercase text-slate-400 tracking-wider">Candidate</th>
                         <th className="py-3.5 px-5 text-[0.7rem] font-extrabold uppercase text-slate-400 tracking-wider">Contact</th>
                         <th className="py-3.5 px-5 text-[0.7rem] font-extrabold uppercase text-slate-400 tracking-wider">Resume</th>
@@ -1058,14 +1058,14 @@ export default function SuperAdminJobsPage() {
                         };
                         const st = app.status || 'Pending Review';
                         return (
-                          <tr key={app._id} className="hover:bg-slate-50/60 transition-colors group">
+                          <tr key={app._id} className="hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700/60 transition-colors group">
                             <td className="py-4 px-5">
                               <div className="flex items-center gap-3">
                                 <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center text-indigo-600 font-black text-sm shrink-0">
                                   {(app.name || '?')[0].toUpperCase()}
                                 </div>
                                 <div>
-                                  <p className="font-bold text-slate-800 text-sm">{app.name || '—'}</p>
+                                  <p className="font-bold text-slate-800 dark:text-slate-100 text-sm">{app.name || '—'}</p>
                                   {app.linkedin_url && (
                                     <a href={app.linkedin_url} target="_blank" rel="noreferrer"
                                       className="text-[0.68rem] text-indigo-500 hover:underline flex items-center gap-0.5">
@@ -1077,10 +1077,10 @@ export default function SuperAdminJobsPage() {
                             </td>
                             <td className="py-4 px-5">
                               <div className="flex flex-col gap-1">
-                                <span className="flex items-center gap-1.5 text-xs text-slate-600 font-medium">
+                                <span className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 font-medium">
                                   <Mail size={11} className="text-indigo-400 shrink-0" />{app.candidate_email || app.email || '—'}
                                 </span>
-                                <span className="flex items-center gap-1.5 text-xs text-slate-500">
+                                <span className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
                                   <Phone size={11} className="text-teal-400 shrink-0" />{app.phone || '—'}
                                 </span>
                               </div>
@@ -1100,7 +1100,7 @@ export default function SuperAdminJobsPage() {
                               )}
                             </td>
                             <td className="py-4 px-5">
-                              <span className="text-xs text-slate-500 font-medium">
+                              <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
                                 {app.applied_at
                                   ? new Date(app.applied_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
                                   : '—'}
@@ -1108,12 +1108,12 @@ export default function SuperAdminJobsPage() {
                             </td>
                             <td className="py-4 px-5">
                               <div className="flex flex-col gap-1 items-start">
-                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[0.68rem] font-bold border ${statusStyles[st] || 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[0.68rem] font-bold border ${statusStyles[st] || 'bg-slate-50 dark:bg-slate-900/50 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}>
                                   {st}
                                 </span>
                                 {app.last_action_by_name ? (
-                                  <div className="flex flex-col text-[0.68rem] text-slate-500 bg-slate-50/80 px-2 py-0.5 rounded-md border border-slate-200/60 max-w-[170px]" title={`Action taken by ${app.last_action_by_name} (${app.last_action_by_role || 'Admin'})`}>
-                                    <span className="font-semibold text-slate-700 flex items-center gap-1 truncate">
+                                  <div className="flex flex-col text-[0.68rem] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50/80 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700/60 max-w-[170px]" title={`Action taken by ${app.last_action_by_name} (${app.last_action_by_role || 'Admin'})`}>
+                                    <span className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1 truncate">
                                       <UserCheck size={11} className="text-indigo-600 shrink-0" />
                                       <span>by {app.last_action_by_name}</span>
                                       {app.last_action_by_role && (
@@ -1150,7 +1150,7 @@ export default function SuperAdminJobsPage() {
                                       handleStatusChange(app, e.target.value);
                                     }
                                   }}
-                                  className="text-xs font-bold px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all hover:border-indigo-300"
+                                  className="text-xs font-bold px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 text-slate-700 dark:text-slate-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all hover:border-indigo-300"
                                 >
                                   <option value="__SCHEDULE__">📅 Schedule Interview...</option>
                                   <option disabled>──────────</option>
@@ -1170,10 +1170,10 @@ export default function SuperAdminJobsPage() {
             </div>
 
             {/* Footer */}
-            <div className="px-8 py-5 border-t border-slate-100 flex items-center justify-between bg-slate-50/40">
+            <div className="px-8 py-5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/50/40">
               <div className="flex items-center gap-4">
                 <p className="text-xs text-slate-400 font-medium">
-                  Job ID: <span className="font-mono font-bold text-slate-500">{applicationData.job?.job_id}</span>
+                  Job ID: <span className="font-mono font-bold text-slate-500 dark:text-slate-400">{applicationData.job?.job_id}</span>
                 </p>
                 <div className="h-4 w-px bg-slate-200"></div>
                 <a
@@ -1197,7 +1197,7 @@ export default function SuperAdminJobsPage() {
               </div>
               <button
                 onClick={closeApplications}
-                className="px-6 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-sm border-none cursor-pointer transition-colors"
+                className="px-6 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/50 hover:bg-slate-200 text-slate-600 dark:text-slate-400 font-bold text-sm border-none cursor-pointer transition-colors"
               >
                 Close
               </button>
@@ -1210,7 +1210,7 @@ export default function SuperAdminJobsPage() {
       {selectedJobDetails && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-50 flex items-center justify-center p-4">
           <div
-            className="bg-white/95 backdrop-blur-xl rounded-[2rem] shadow-[0_20px_60px_rgba(0,0,0,0.15)] border border-white/60 w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col relative"
+            className="bg-white dark:bg-slate-800/60/95 backdrop-blur-xl rounded-[2rem] shadow-[0_20px_60px_rgba(0,0,0,0.15)] border border-white/60 w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col relative"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="absolute top-0 left-0 w-full h-28 bg-gradient-to-b from-indigo-50/80 to-transparent pointer-events-none rounded-t-[2rem]" />
@@ -1221,15 +1221,15 @@ export default function SuperAdminJobsPage() {
                   <Briefcase size={24} />
                 </div>
                 <div className="overflow-hidden">
-                  <h2 className="text-xl font-black text-slate-800 tracking-tight truncate">{selectedJobDetails.title}</h2>
+                  <h2 className="text-xl font-black text-slate-800 dark:text-slate-100 tracking-tight truncate">{selectedJobDetails.title}</h2>
                   <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                    <span className="text-xs text-slate-500 flex items-center gap-1"><MapPin size={11} /> {selectedJobDetails.location}</span>
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.65rem] font-bold border ${WORK_MODE_STYLES[selectedJobDetails.workMode] || 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                    <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1"><MapPin size={11} /> {selectedJobDetails.location}</span>
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.65rem] font-bold border ${WORK_MODE_STYLES[selectedJobDetails.workMode] || 'bg-slate-50 dark:bg-slate-900/50 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}>
                       <Clock size={10} /> {selectedJobDetails.workMode}
                     </span>
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 bg-slate-100/80 px-2 py-0.5 rounded-lg border border-slate-200">
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/50/80 px-2 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
                       <User size={11} className="text-indigo-500" />
-                      Created by <strong className="text-slate-700">{selectedJobDetails.created_by_name || selectedJobDetails.created_by || 'Admin'}</strong>
+                      Created by <strong className="text-slate-700 dark:text-slate-200">{selectedJobDetails.created_by_name || selectedJobDetails.created_by || 'Admin'}</strong>
                       {selectedJobDetails.created_by_role && <span className="text-[0.62rem] text-slate-400 uppercase">({selectedJobDetails.created_by_role})</span>}
                     </span>
                   </div>
@@ -1237,7 +1237,7 @@ export default function SuperAdminJobsPage() {
               </div>
               <button
                 onClick={() => setSelectedJobDetails(null)}
-                className="w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 hover:bg-rose-100 text-slate-500 hover:text-rose-600 border-none cursor-pointer transition-colors shrink-0"
+                className="w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800/50 hover:bg-rose-100 text-slate-500 dark:text-slate-400 hover:text-rose-600 border-none cursor-pointer transition-colors shrink-0"
               >
                 <X size={18} strokeWidth={2.5} />
               </button>
@@ -1260,16 +1260,16 @@ export default function SuperAdminJobsPage() {
               </div>
 
               <div>
-                <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2 mb-3">
+                <h4 className="text-sm font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2 mb-3">
                   <FileText size={15} className="text-indigo-500" /> Job Description
                 </h4>
-                <p className="text-sm text-slate-600 leading-relaxed bg-slate-50 rounded-xl p-4 border border-slate-100">
+                <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-100 dark:border-slate-800">
                   {selectedJobDetails.description}
                 </p>
               </div>
 
               <div>
-                <h4 className="text-sm font-bold text-slate-700 mb-3">Required Skills</h4>
+                <h4 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-3">Required Skills</h4>
                 <div className="flex flex-wrap gap-2">
                   {selectedJobDetails.skills.split(',').map((skill, i) => (
                     <span key={i} className="px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-xl text-sm font-bold border border-indigo-100/60">
@@ -1280,7 +1280,7 @@ export default function SuperAdminJobsPage() {
               </div>
             </div>
 
-            <div className="p-6 sm:p-7 border-t border-slate-100 flex flex-wrap items-center gap-3 relative z-10">
+            <div className="p-6 sm:p-7 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center gap-3 relative z-10">
               <button
                 onClick={() => {
                   const job = selectedJobDetails;
@@ -1293,7 +1293,7 @@ export default function SuperAdminJobsPage() {
               </button>
               <button
                 onClick={() => handleCopyJobLink(selectedJobDetails)}
-                className="flex items-center gap-2 px-4 py-3 rounded-xl bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-600 font-bold text-sm border-none cursor-pointer transition-colors"
+                className="flex items-center gap-2 px-4 py-3 rounded-xl bg-slate-100 dark:bg-slate-800/50 hover:bg-indigo-50 text-slate-700 dark:text-slate-200 hover:text-indigo-600 font-bold text-sm border-none cursor-pointer transition-colors"
                 title="Copy Public Apply Link"
               >
                 <Copy size={15} /> Copy Link
@@ -1418,16 +1418,16 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-fadeIn">
-      <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-scaleUp">
+      <div className="bg-white dark:bg-slate-800/60 rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-scaleUp">
         {/* Header */}
-        <div className="px-7 py-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white">
+        <div className="px-7 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white font-extrabold text-lg shadow-md shadow-indigo-500/20">
               {(application.name || '?')[0].toUpperCase()}
             </div>
             <div>
               <div className="flex items-center gap-2.5 flex-wrap">
-                <h3 className="text-xl font-extrabold text-slate-800 tracking-tight">{application.name || 'Candidate'}</h3>
+                <h3 className="text-xl font-extrabold text-slate-800 dark:text-slate-100 tracking-tight">{application.name || 'Candidate'}</h3>
                 <span className={`px-2.5 py-0.5 rounded-full text-[0.7rem] font-bold border ${statusStyles[application.status] || 'bg-indigo-50 text-indigo-700 border-indigo-100'}`}>
                   {application.status || 'Pending Review'}
                 </span>
@@ -1439,7 +1439,7 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-4 mt-1 text-xs text-slate-500 font-medium flex-wrap">
+              <div className="flex items-center gap-4 mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium flex-wrap">
                 <span className="flex items-center gap-1"><Mail size={12} className="text-indigo-400" /> {application.candidate_email || application.email || '—'}</span>
                 {application.phone && <span className="flex items-center gap-1"><Phone size={12} className="text-teal-400" /> {application.phone}</span>}
                 {job?.title && <span className="flex items-center gap-1 text-slate-400 font-semibold">• Applied for <span className="text-indigo-600">{job.title}</span></span>}
@@ -1449,22 +1449,22 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
           <button
             type="button"
             onClick={onClose}
-            className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 flex items-center justify-center transition-colors cursor-pointer border-none"
+            className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800/50 hover:bg-slate-200 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-200 flex items-center justify-center transition-colors cursor-pointer border-none"
           >
             <X size={18} />
           </button>
         </div>
 
         {/* Tab Switcher & Actions */}
-        <div className="px-7 pt-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 flex-wrap gap-2">
+        <div className="px-7 pt-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/50/50 flex-wrap gap-2">
           <div className="flex items-center gap-2">
             {(application.resume_url || application.resume_text) && (
               <button
                 type="button"
                 onClick={() => setActiveTab('resume')}
                 className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 ${activeTab === 'resume'
-                    ? 'border-indigo-600 text-indigo-700 bg-white shadow-sm'
-                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                    ? 'border-indigo-600 text-indigo-700 bg-white dark:bg-slate-800/60 shadow-sm'
+                    : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-100'
                   }`}
               >
                 <FileText size={14} /> Resume Document
@@ -1475,8 +1475,8 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
                 type="button"
                 onClick={() => setActiveTab('parsedText')}
                 className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 ${activeTab === 'parsedText'
-                    ? 'border-indigo-600 text-indigo-700 bg-white shadow-sm'
-                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                    ? 'border-indigo-600 text-indigo-700 bg-white dark:bg-slate-800/60 shadow-sm'
+                    : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-100'
                   }`}
               >
                 <FileCheck size={14} /> Extracted Text
@@ -1487,8 +1487,8 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
                 type="button"
                 onClick={() => setActiveTab('coverLetter')}
                 className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 ${activeTab === 'coverLetter'
-                    ? 'border-indigo-600 text-indigo-700 bg-white shadow-sm'
-                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                    ? 'border-indigo-600 text-indigo-700 bg-white dark:bg-slate-800/60 shadow-sm'
+                    : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-100'
                   }`}
               >
                 <BookOpen size={14} /> Cover Letter
@@ -1498,8 +1498,8 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
               type="button"
               onClick={() => setActiveTab('history')}
               className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 ${activeTab === 'history'
-                  ? 'border-indigo-600 text-indigo-700 bg-white shadow-sm'
-                  : 'border-transparent text-slate-500 hover:text-slate-800'
+                  ? 'border-indigo-600 text-indigo-700 bg-white dark:bg-slate-800/60 shadow-sm'
+                  : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-100'
                 }`}
             >
               <History size={14} /> Action History
@@ -1516,7 +1516,7 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
               <button
                 type="button"
                 onClick={() => handleCopy(application.resume_text)}
-                className="flex items-center gap-1 px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-lg shadow-sm transition-all cursor-pointer"
+                className="flex items-center gap-1 px-3 py-1.5 bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-lg shadow-sm transition-all cursor-pointer"
               >
                 {copied ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
                 {copied ? 'Copied' : 'Copy Text'}
@@ -1537,11 +1537,11 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
         </div>
 
         {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto p-6 bg-slate-50/30">
+        <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-900/50/30">
           {activeTab === 'resume' && (
             <div>
               {resumeFullUrl && isPdf ? (
-                <div className="w-full rounded-2xl overflow-hidden border border-slate-200 shadow-inner bg-white">
+                <div className="w-full rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-inner bg-white dark:bg-slate-800/60">
                   <iframe
                     src={resumeFullUrl}
                     title="Candidate Resume"
@@ -1549,13 +1549,13 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
                   />
                 </div>
               ) : resumeFullUrl ? (
-                <div className="p-8 text-center bg-white rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <div className="p-8 text-center bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
                   <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto shadow-inner">
                     <FileText size={32} />
                   </div>
                   <div>
-                    <h4 className="font-extrabold text-slate-800 text-base">Resume File Attached</h4>
-                    <p className="text-xs text-slate-500 mt-1 font-mono">{application.resume_filename || application.resume_url}</p>
+                    <h4 className="font-extrabold text-slate-800 dark:text-slate-100 text-base">Resume File Attached</h4>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-mono">{application.resume_filename || application.resume_url}</p>
                   </div>
                   <div className="flex justify-center gap-3 pt-2">
                     <a
@@ -1569,28 +1569,28 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
                     <a
                       href={resumeFullUrl}
                       download
-                      className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center gap-2"
+                      className="px-5 py-2.5 bg-slate-100 dark:bg-slate-800/50 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl transition-all flex items-center gap-2"
                     >
                       <Download size={14} /> Download Document
                     </a>
                   </div>
                   {application.resume_text && (
-                    <div className="mt-6 text-left border-t border-slate-100 pt-5">
+                    <div className="mt-6 text-left border-t border-slate-100 dark:border-slate-800 pt-5">
                       <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1.5">
                         <FileCheck size={13} className="text-indigo-500" /> Extracted Resume Content
                       </div>
-                      <pre className="whitespace-pre-wrap font-sans text-xs text-slate-700 bg-slate-50 p-4 rounded-xl border border-slate-200 max-h-[250px] overflow-y-auto leading-relaxed">
+                      <pre className="whitespace-pre-wrap font-sans text-xs text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700 max-h-[250px] overflow-y-auto leading-relaxed">
                         {application.resume_text}
                       </pre>
                     </div>
                   )}
                 </div>
               ) : application.resume_text ? (
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                <div className="bg-white dark:bg-slate-800/60 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
                   <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
                     <FileText size={14} className="text-indigo-500" /> Candidate Resume Content
                   </div>
-                  <pre className="whitespace-pre-wrap font-sans text-xs text-slate-800 bg-slate-50 p-5 rounded-xl border border-slate-100 max-h-[500px] overflow-y-auto leading-relaxed shadow-inner font-medium">
+                  <pre className="whitespace-pre-wrap font-sans text-xs text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-900/50 p-5 rounded-xl border border-slate-100 dark:border-slate-800 max-h-[500px] overflow-y-auto leading-relaxed shadow-inner font-medium">
                     {application.resume_text}
                   </pre>
                 </div>
@@ -1603,7 +1603,7 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
           )}
 
           {activeTab === 'parsedText' && (
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+            <div className="bg-white dark:bg-slate-800/60 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
                   <Sparkles size={14} className="text-indigo-500" /> AI Parsed Text
@@ -1612,24 +1612,24 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
                   {application.resume_text?.length || 0} characters
                 </span>
               </div>
-              <pre className="whitespace-pre-wrap font-sans text-xs text-slate-800 bg-slate-50 p-5 rounded-xl border border-slate-100 max-h-[520px] overflow-y-auto leading-relaxed shadow-inner font-medium">
+              <pre className="whitespace-pre-wrap font-sans text-xs text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-900/50 p-5 rounded-xl border border-slate-100 dark:border-slate-800 max-h-[520px] overflow-y-auto leading-relaxed shadow-inner font-medium">
                 {application.resume_text}
               </pre>
             </div>
           )}
 
           {activeTab === 'coverLetter' && (
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+            <div className="bg-white dark:bg-slate-800/60 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
               <div className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
                 <BookOpen size={14} className="text-indigo-500" /> Cover Letter
               </div>
               {application.cover_letter ? (
-                <div className="text-sm text-slate-700 bg-slate-50 p-5 rounded-xl border border-slate-100 leading-relaxed whitespace-pre-wrap">
+                <div className="text-sm text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-900/50 p-5 rounded-xl border border-slate-100 dark:border-slate-800 leading-relaxed whitespace-pre-wrap">
                   {application.cover_letter}
                 </div>
               ) : coverLetterFullUrl ? (
                 <div className="p-6 text-center space-y-3">
-                  <p className="text-sm font-semibold text-slate-700">Cover letter file attached.</p>
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Cover letter file attached.</p>
                   <a
                     href={coverLetterFullUrl}
                     target="_blank"
@@ -1649,10 +1649,10 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
 
           {activeTab === 'history' && (
             <div className="space-y-6">
-              <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
-                <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
+              <div className="bg-white dark:bg-slate-800/60 p-6 rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-sm">
+                <div className="flex items-center justify-between mb-4 border-b border-slate-100 dark:border-slate-800 pb-3">
                   <div>
-                    <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                    <h4 className="text-sm font-black text-slate-800 dark:text-slate-100 flex items-center gap-2">
                       <History size={16} className="text-indigo-600" />
                       Candidate Audit Trail & Action History
                     </h4>
@@ -1675,12 +1675,12 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
                   <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
                     {historyList.map((item, idx) => (
                       <div key={idx} className="relative flex items-start gap-4">
-                        <div className="absolute -left-6 top-0.5 w-5 h-5 rounded-full bg-white border-2 border-indigo-600 flex items-center justify-center shadow-xs">
+                        <div className="absolute -left-6 top-0.5 w-5 h-5 rounded-full bg-white dark:bg-slate-800/60 border-2 border-indigo-600 flex items-center justify-center shadow-xs">
                           <div className="w-2 h-2 rounded-full bg-indigo-600" />
                         </div>
-                        <div className="flex-1 bg-slate-50 rounded-xl p-4 border border-slate-200/70">
+                        <div className="flex-1 bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700/70">
                           <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
-                            <span className={`px-2 py-0.5 rounded-md text-xs font-extrabold border ${statusStyles[item.status] || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+                            <span className={`px-2 py-0.5 rounded-md text-xs font-extrabold border ${statusStyles[item.status] || 'bg-slate-100 dark:bg-slate-800/50 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700'}`}>
                               {item.status || item.action || 'Action Taken'}
                             </span>
                             {item.timestamp && (
@@ -1691,8 +1691,8 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
                               </span>
                             )}
                           </div>
-                          <div className="text-xs text-slate-600 mt-2 flex items-center gap-2 flex-wrap">
-                            <span className="flex items-center gap-1 font-bold text-slate-700">
+                          <div className="text-xs text-slate-600 dark:text-slate-400 mt-2 flex items-center gap-2 flex-wrap">
+                            <span className="flex items-center gap-1 font-bold text-slate-700 dark:text-slate-200">
                               <UserCheck size={13} className="text-indigo-600" />
                               {item.action_by_name || 'Admin'}
                             </span>
@@ -1706,7 +1706,7 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
                             )}
                           </div>
                           {item.notes && (
-                            <p className="text-xs text-slate-500 mt-2 italic bg-white p-2 rounded-lg border border-slate-100">
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 italic bg-white dark:bg-slate-800/60 p-2 rounded-lg border border-slate-100 dark:border-slate-800">
                               Note: {item.notes}
                             </p>
                           )}
@@ -1721,7 +1721,7 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
         </div>
 
         {/* Footer with Quick Action Controls */}
-        <div className="px-7 py-4 border-t border-slate-100 flex items-center justify-between bg-white flex-wrap gap-3">
+        <div className="px-7 py-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-800/60 flex-wrap gap-3">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mr-1">Change Status:</span>
             {['Shortlisted', 'Hired', 'Rejected'].map((s) => (
@@ -1731,7 +1731,7 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
                 onClick={() => onStatusChange && onStatusChange(s)}
                 className={`px-3 py-1.5 text-xs font-bold rounded-xl border transition-all cursor-pointer ${application.status === s
                     ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    : 'bg-white dark:bg-slate-800/60 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700'
                   }`}
               >
                 {s}
@@ -1743,7 +1743,7 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
             <button
               type="button"
               onClick={onClose}
-              className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer border-none"
+              className="px-5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/50 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all cursor-pointer border-none"
             >
               Close
             </button>

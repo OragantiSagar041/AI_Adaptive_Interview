@@ -163,10 +163,10 @@ export default function CreateTenant() {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Page Header */}
-      <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:shadow-none flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-800">Provision Tenant Account</h2>
-          <p className="text-sm text-slate-500">Create new company workspaces and assign credentials on the platform.</p>
+          <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Provision Tenant Account</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Create new company workspaces and assign credentials on the platform.</p>
         </div>
         <div className="flex items-center gap-1 bg-indigo-50 text-indigo-600 text-xs font-semibold px-3 py-1.5 rounded-xl shrink-0">
           <Sparkles size={14} className="animate-pulse" /> Smart Provisioning
@@ -175,15 +175,15 @@ export default function CreateTenant() {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Section 1: Company & Admin Details */}
-        <div className="bg-white border border-slate-200/60 rounded-2xl p-6 md:p-8 space-y-6 shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
-          <h3 className="text-base font-bold text-slate-800 border-b border-slate-100 pb-3">
+        <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl p-6 md:p-8 space-y-6 shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:shadow-none">
+          <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 border-b border-slate-100 dark:border-slate-800 pb-3">
             1. Company & Admin Details
           </h3>
 
           <div className="grid gap-6 sm:grid-cols-2">
             {/* Company Name */}
             <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-500 block uppercase tracking-wider">Company Name</label>
+              <label className="text-xs font-bold text-slate-500 dark:text-slate-400 block uppercase tracking-wider">Company Name</label>
               <div className="relative">
                 <span className="absolute left-[14px] top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
                   <Building size={16} />
@@ -195,14 +195,14 @@ export default function CreateTenant() {
                   onChange={(e) => handleCompanyChange(e.target.value)}
                   placeholder="Acme Corp"
                   style={{ paddingLeft: '2.75rem' }}
-                  className="w-full py-3 pr-4 text-sm text-slate-800 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-indigo-500 focus:bg-white transition-all"
+                  className="w-full py-3 pr-4 text-sm text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-indigo-500 focus:bg-white dark:bg-slate-800/60 transition-all"
                 />
               </div>
             </div>
 
             {/* Email Address */}
             <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-500 block uppercase tracking-wider">Admin Email Address</label>
+              <label className="text-xs font-bold text-slate-500 dark:text-slate-400 block uppercase tracking-wider">Admin Email Address</label>
               <div className="relative">
                 <span className="absolute left-[14px] top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
                   <Mail size={16} />
@@ -214,7 +214,7 @@ export default function CreateTenant() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="admin@company.com"
                   style={{ paddingLeft: '2.75rem' }}
-                  className="w-full py-3 pr-4 text-sm text-slate-800 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-indigo-500 focus:bg-white transition-all"
+                  className="w-full py-3 pr-4 text-sm text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-indigo-500 focus:bg-white dark:bg-slate-800/60 transition-all"
                 />
               </div>
             </div>
@@ -223,7 +223,7 @@ export default function CreateTenant() {
           <div className="grid gap-6 sm:grid-cols-2">
             {/* Username */}
             <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-500 block uppercase tracking-wider">Admin Username</label>
+              <label className="text-xs font-bold text-slate-500 dark:text-slate-400 block uppercase tracking-wider">Admin Username</label>
               <div className="relative">
                 <span className="absolute left-[14px] top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
                   <User size={16} />
@@ -235,14 +235,14 @@ export default function CreateTenant() {
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="e.g. company_admin"
                   style={{ paddingLeft: '2.75rem' }}
-                  className="w-full py-3 pr-4 text-sm text-slate-800 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-indigo-500 focus:bg-white transition-all"
+                  className="w-full py-3 pr-4 text-sm text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-indigo-500 focus:bg-white dark:bg-slate-800/60 transition-all"
                 />
               </div>
             </div>
 
             {/* Password */}
             <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-500 block uppercase tracking-wider">Access Password</label>
+              <label className="text-xs font-bold text-slate-500 dark:text-slate-400 block uppercase tracking-wider">Access Password</label>
               <div className="relative">
                 <span className="absolute left-[14px] top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
                   <Lock size={16} />
@@ -254,12 +254,12 @@ export default function CreateTenant() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Secure password"
                   style={{ paddingLeft: '2.75rem', paddingRight: '2.75rem' }}
-                  className="w-full py-3 text-sm text-slate-800 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-indigo-500 focus:bg-white transition-all"
+                  className="w-full py-3 text-sm text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-indigo-500 focus:bg-white dark:bg-slate-800/60 transition-all"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 cursor-pointer"
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:text-slate-200 cursor-pointer"
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
@@ -272,7 +272,7 @@ export default function CreateTenant() {
                     <span>Password Strength</span>
                     <span className="font-semibold">{strength.text}</span>
                   </div>
-                  <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-1 w-full bg-slate-100 dark:bg-slate-800/50 rounded-full overflow-hidden">
                     <div className={`h-full ${strength.color} ${strength.width} transition-all duration-300`} />
                   </div>
                 </div>
@@ -282,9 +282,9 @@ export default function CreateTenant() {
         </div>
 
         {/* Section 2: Choose Subscription Plan */}
-        <div className="bg-white border border-slate-200/60 rounded-2xl p-6 md:p-8 space-y-6 shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
-          <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-            <h3 className="text-base font-bold text-slate-800">
+        <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl p-6 md:p-8 space-y-6 shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:shadow-none">
+          <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-3">
+            <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">
               2. Assign Subscription Plan
             </h3>
             <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase">Select One Option</span>
@@ -293,7 +293,7 @@ export default function CreateTenant() {
           {loadingPlans ? (
             <div className="grid gap-4 sm:grid-cols-3">
               {[1, 2, 3].map(i => (
-                <div key={i} className="animate-pulse border border-slate-100 rounded-2xl p-4 bg-slate-50/50 h-28 flex flex-col justify-between" />
+                <div key={i} className="animate-pulse border border-slate-100 dark:border-slate-800 rounded-2xl p-4 bg-slate-50 dark:bg-slate-900/50/50 h-28 flex flex-col justify-between" />
               ))}
             </div>
           ) : (
@@ -307,7 +307,7 @@ export default function CreateTenant() {
                     className={`cursor-pointer border-2 p-4 rounded-xl transition-all relative flex flex-col justify-between h-28 select-none ${
                       isSelected
                         ? 'border-indigo-600 bg-indigo-50/20 shadow-[0_4px_12px_rgba(99,102,241,0.08)]'
-                        : 'border-slate-200/60 bg-white hover:bg-slate-50'
+                        : 'border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-800/60 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700'
                     }`}
                   >
                     {isSelected && (
@@ -316,7 +316,7 @@ export default function CreateTenant() {
                       </div>
                     )}
                     <div>
-                      <h4 className="text-sm font-bold text-slate-800">{p.plan_name}</h4>
+                      <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100">{p.plan_name}</h4>
                       <p className="text-[10px] text-slate-400 font-medium line-clamp-2 mt-1 leading-snug">
                         {p.summary || 'Custom plan configuration.'}
                       </p>
@@ -325,7 +325,7 @@ export default function CreateTenant() {
                       <span className="text-xs font-bold text-indigo-600">
                         {p.credits_granted} Credits
                       </span>
-                      <span className="text-xs font-black text-slate-800">
+                      <span className="text-xs font-black text-slate-800 dark:text-slate-100">
                         {p.price === 0 ? 'Free' : `Rs. ${p.price.toLocaleString()}`}
                       </span>
                     </div>
@@ -337,7 +337,7 @@ export default function CreateTenant() {
         </div>
 
         {/* Buttons */}
-        <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 bg-white p-6 rounded-2xl border border-slate-200/60 shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
+        <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 bg-white dark:bg-slate-800/60 p-6 rounded-2xl border border-slate-200 dark:border-slate-700/60 shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:shadow-none">
           <button
             type="button"
             onClick={() => {
@@ -348,7 +348,7 @@ export default function CreateTenant() {
               setLastSuggestedUser('')
               setLastSuggestedEmail('')
             }}
-            className="w-full sm:w-auto px-6 py-3 border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-sm rounded-xl transition-colors cursor-pointer text-center"
+            className="w-full sm:w-auto px-6 py-3 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-sm rounded-xl transition-colors cursor-pointer text-center"
           >
             Reset Form
           </button>

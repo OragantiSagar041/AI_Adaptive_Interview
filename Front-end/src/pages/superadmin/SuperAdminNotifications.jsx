@@ -116,18 +116,18 @@ export default function SuperAdminNotifications() {
   return (
     <div className="space-y-8 max-w-6xl">
       {/* Page Title Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-6 rounded-3xl border border-slate-200/60 shadow-[0_4px_25px_rgba(0,0,0,0.02)] gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white dark:bg-slate-800/60 p-6 rounded-3xl border border-slate-200 dark:border-slate-700/60 shadow-[0_4px_25px_rgba(0,0,0,0.02)] gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-800 font-sans flex items-center gap-2">
+          <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 font-sans flex items-center gap-2">
             <Bell className="text-indigo-600 h-6 w-6" /> Notifications
           </h2>
-          <p className="text-sm text-slate-500 mt-1">View account alerts, interview events, and subscription notifications.</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">View account alerts, interview events, and subscription notifications.</p>
         </div>
         <div className="flex gap-2">
           <button
             onClick={fetchNotifications}
             disabled={loading}
-            className="px-4 py-2 bg-white border border-slate-200/80 hover:bg-slate-50 hover:text-indigo-600 text-slate-700 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
+            className="px-4 py-2 bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700 hover:text-indigo-600 text-slate-700 dark:text-slate-200 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
           >
             <RefreshCw size={14} className={loading ? 'animate-spin text-indigo-600' : 'text-slate-400'} /> Refresh
           </button>
@@ -144,16 +144,16 @@ export default function SuperAdminNotifications() {
       </div>
 
       {/* Main Content Area */}
-      <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_4px_25px_rgba(0,0,0,0.02)] overflow-hidden">
+      <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-3xl shadow-[0_4px_25px_rgba(0,0,0,0.02)] overflow-hidden">
         {/* Tabs / Filters Header */}
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 px-6 py-4">
           <div className="flex gap-2">
             <button
               onClick={() => setFilter('all')}
               className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border-none cursor-pointer ${
                 filter === 'all'
                   ? 'bg-indigo-50 text-indigo-600'
-                  : 'bg-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-50'
+                  : 'bg-transparent text-slate-400 hover:text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700'
               }`}
             >
               All Notifications ({notifications.length})
@@ -163,7 +163,7 @@ export default function SuperAdminNotifications() {
               className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border-none cursor-pointer ${
                 filter === 'unread'
                   ? 'bg-indigo-50 text-indigo-600'
-                  : 'bg-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-50'
+                  : 'bg-transparent text-slate-400 hover:text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700'
               }`}
             >
               Unread ({unreadCount})
@@ -179,11 +179,11 @@ export default function SuperAdminNotifications() {
           </div>
         ) : filteredNotifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-slate-400 space-y-4">
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+            <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-800">
               <Bell className="h-8 w-8 text-slate-300" />
             </div>
             <div className="text-center space-y-1">
-              <p className="text-sm font-bold text-slate-700">All caught up!</p>
+              <p className="text-sm font-bold text-slate-700 dark:text-slate-200">All caught up!</p>
               <p className="text-xs text-slate-400">No {filter === 'unread' ? 'unread ' : ''}notifications at the moment.</p>
             </div>
           </div>
@@ -192,26 +192,26 @@ export default function SuperAdminNotifications() {
             {filteredNotifications.map((n) => (
               <div
                 key={n.id}
-                className={`flex items-start justify-between p-6 gap-4 transition-all hover:bg-slate-50/50 ${
-                  !n.read ? 'bg-slate-50/20' : ''
+                className={`flex items-start justify-between p-6 gap-4 transition-all hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700/50 ${
+                  !n.read ? 'bg-slate-50 dark:bg-slate-900/50/20' : ''
                 }`}
               >
                 <div className="flex gap-4">
                   {/* Icon Indicator */}
-                  <div className="p-2.5 rounded-2xl bg-slate-50 border border-slate-100 flex-shrink-0 self-start shadow-xs">
+                  <div className="p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 flex-shrink-0 self-start shadow-xs">
                     {getNotificationIcon(n.type)}
                   </div>
                   {/* Title and Message */}
                   <div className="space-y-1 text-left">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h4 className={`text-sm font-bold ${!n.read ? 'text-slate-800' : 'text-slate-600'}`}>
+                      <h4 className={`text-sm font-bold ${!n.read ? 'text-slate-800 dark:text-slate-100' : 'text-slate-600 dark:text-slate-400'}`}>
                         {n.title}
                       </h4>
                       {!n.read && (
                         <span className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse" title="Unread" />
                       )}
                     </div>
-                    <p className="text-xs sm:text-sm text-slate-500 leading-relaxed max-w-2xl">{n.message}</p>
+                    <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed max-w-2xl">{n.message}</p>
                     <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-slate-400 font-medium pt-1">
                       <Calendar size={12} />
                       <span>{formatRelativeTime(n.created_at)}</span>

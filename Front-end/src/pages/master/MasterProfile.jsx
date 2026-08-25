@@ -240,7 +240,7 @@ export default function MasterProfile() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-32 text-slate-500 space-y-4">
+      <div className="flex flex-col items-center justify-center py-32 text-slate-500 dark:text-slate-400 space-y-4">
         <div className="p-4 bg-primary/5 rounded-2xl border border-primary/10">
           <RefreshCw className="animate-spin text-primary h-8 w-8" />
         </div>
@@ -252,15 +252,15 @@ export default function MasterProfile() {
   return (
     <div className="space-y-8 max-w-6xl">
       {/* Page Title Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-6 rounded-3xl border border-slate-200/60 shadow-[0_4px_25px_rgba(0,0,0,0.02)] gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white dark:bg-slate-800/60 p-6 rounded-3xl border border-slate-200 dark:border-slate-700/60 shadow-[0_4px_25px_rgba(0,0,0,0.02)] gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-800 font-sans">My Profile</h2>
-          <p className="text-sm text-slate-500 mt-1">View and update your Master Control credentials and security preferences.</p>
+          <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 font-sans">My Profile</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">View and update your Master Control credentials and security preferences.</p>
         </div>
         <button
           onClick={fetchProfile}
           disabled={loading}
-          className="px-4 py-2 bg-white border border-slate-200/80 hover:bg-slate-50 hover:text-primary hover:border-primary/30 text-slate-700 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
+          className="px-4 py-2 bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700 hover:text-primary hover:border-primary/30 text-slate-700 dark:text-slate-200 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
         >
           <RefreshCw size={14} className={loading ? 'animate-spin text-primary' : 'text-slate-400'} /> Refresh Details
         </button>
@@ -270,7 +270,7 @@ export default function MasterProfile() {
         <div className="grid gap-8 grid-cols-1 lg:grid-cols-12">
           {/* Left: Summary Profile Card */}
           <div className="lg:col-span-4 flex flex-col gap-8">
-            <div className="bg-white border border-slate-200/60 p-8 rounded-3xl shadow-[0_4px_25px_rgba(0,0,0,0.02)] flex flex-col items-center text-center">
+            <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 p-8 rounded-3xl shadow-[0_4px_25px_rgba(0,0,0,0.02)] flex flex-col items-center text-center">
               <div className="relative mb-6 group cursor-pointer" title="Click to upload profile picture" onClick={() => document.getElementById('avatar-upload-input').click()}>
                 <div className="p-1 rounded-full bg-gradient-to-tr from-primary/30 via-slate-100 to-primary/40 transition-all duration-300 group-hover:from-primary/60 group-hover:to-primary/70">
                   <div className="relative w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-md">
@@ -295,36 +295,36 @@ export default function MasterProfile() {
                 />
               </div>
 
-              <h3 className="font-bold text-lg text-slate-800">{profileData.name || 'Master Admin'}</h3>
+              <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100">{profileData.name || 'Master Admin'}</h3>
               <span className="text-[11px] text-primary font-bold uppercase tracking-wider bg-primary/10 border border-primary/20 px-3.5 py-1 rounded-full mt-2">
                 {profileData.role || 'master'}
               </span>
 
-              <div className="w-full border-t border-dashed border-slate-200/80 my-6" />
+              <div className="w-full border-t border-dashed border-slate-200 dark:border-slate-700/80 my-6" />
 
-              <div className="w-full space-y-4 text-left text-sm text-slate-600">
-                <div className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50/50 rounded-xl transition-all">
+              <div className="w-full space-y-4 text-left text-sm text-slate-600 dark:text-slate-400">
+                <div className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700/50 rounded-xl transition-all">
                   <Mail size={16} className="text-slate-400 shrink-0" />
-                  <span className="truncate text-slate-700 font-medium" title={profileData.email}>{profileData.email}</span>
+                  <span className="truncate text-slate-700 dark:text-slate-200 font-medium" title={profileData.email}>{profileData.email}</span>
                 </div>
-                <div className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50/50 rounded-xl transition-all">
+                <div className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700/50 rounded-xl transition-all">
                   <Shield size={16} className="text-slate-400 shrink-0" />
-                  <span className="text-slate-500">Access: <span className="font-semibold text-slate-800">Master Level</span></span>
+                  <span className="text-slate-500 dark:text-slate-400">Access: <span className="font-semibold text-slate-800 dark:text-slate-100">Master Level</span></span>
                 </div>
-                <div className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50/50 rounded-xl transition-all">
+                <div className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700/50 rounded-xl transition-all">
                   <Calendar size={16} className="text-slate-400 shrink-0" />
-                  <span className="text-slate-500">Joined: <span className="font-semibold text-slate-800">{formatDate(profileData.created_at)}</span></span>
+                  <span className="text-slate-500 dark:text-slate-400">Joined: <span className="font-semibold text-slate-800 dark:text-slate-100">{formatDate(profileData.created_at)}</span></span>
                 </div>
               </div>
             </div>
 
             {/* Quick Statistics Card */}
-            <div className="bg-white border border-slate-200/60 p-6 rounded-3xl shadow-[0_4px_25px_rgba(0,0,0,0.02)] space-y-4">
+            <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 p-6 rounded-3xl shadow-[0_4px_25px_rgba(0,0,0,0.02)] space-y-4">
               <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest px-1">Account Details</h4>
               <div className="grid gap-4">
-                <div className="bg-slate-50/60 p-3.5 rounded-2xl border border-slate-100/80 text-center">
+                <div className="bg-slate-50 dark:bg-slate-900/50/60 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800/80 text-center">
                   <div className="text-xs text-slate-400 font-medium">Role / Access Level</div>
-                  <div className="text-sm font-bold text-slate-800 capitalize mt-1 truncate" title={profileData.role}>
+                  <div className="text-sm font-bold text-slate-800 dark:text-slate-100 capitalize mt-1 truncate" title={profileData.role}>
                     {profileData.role || 'Master'}
                   </div>
                 </div>
@@ -335,8 +335,8 @@ export default function MasterProfile() {
           {/* Right: Detailed Settings Forms */}
           <div className="lg:col-span-8 space-y-8">
             {/* Card 1: Edit Account Details */}
-            <div className="bg-white border border-slate-200/60 p-8 rounded-3xl shadow-[0_4px_25px_rgba(0,0,0,0.02)]">
-              <h3 className="text-base font-bold text-slate-800 flex items-center gap-2.5 border-b border-slate-100 pb-4">
+            <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 p-8 rounded-3xl shadow-[0_4px_25px_rgba(0,0,0,0.02)]">
+              <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2.5 border-b border-slate-100 dark:border-slate-800 pb-4">
                 <User size={18} className="text-primary" /> Account Settings
               </h3>
 
@@ -344,7 +344,7 @@ export default function MasterProfile() {
                 <div className="grid gap-6 sm:grid-cols-2">
                   <div className="space-y-1">
                     <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Username / ID</label>
-                    <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 bg-slate-50/30 transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10 focus-within:bg-white">
+                    <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/30 transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10 focus-within:bg-white dark:bg-slate-800/60">
                       <span className="text-slate-400 flex-shrink-0">
                         <User size={16} />
                       </span>
@@ -354,14 +354,14 @@ export default function MasterProfile() {
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
                         style={inputStyle}
-                        className="text-sm text-slate-800 placeholder-slate-400"
+                        className="text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400"
                       />
                     </div>
                   </div>
 
                   <div className="space-y-1">
                     <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Registered Email Address</label>
-                    <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 bg-slate-50/30 transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10 focus-within:bg-white">
+                    <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/30 transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10 focus-within:bg-white dark:bg-slate-800/60">
                       <span className="text-slate-400 flex-shrink-0">
                         <Mail size={16} />
                       </span>
@@ -371,7 +371,7 @@ export default function MasterProfile() {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         style={inputStyle}
-                        className="text-sm text-slate-800 placeholder-slate-400"
+                        className="text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400"
                       />
                     </div>
                   </div>
@@ -379,7 +379,7 @@ export default function MasterProfile() {
 
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Workspace / Owner Name</label>
-                  <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 bg-slate-50/30 transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10 focus-within:bg-white">
+                  <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/30 transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10 focus-within:bg-white dark:bg-slate-800/60">
                     <span className="text-slate-400 flex-shrink-0">
                       <Shield size={16} />
                     </span>
@@ -389,7 +389,7 @@ export default function MasterProfile() {
                       onChange={(e) => setCompanyName(e.target.value)}
                       placeholder="Enter Workspace Owner Name"
                       style={inputStyle}
-                      className="text-sm text-slate-800 placeholder-slate-400"
+                      className="text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400"
                     />
                   </div>
                 </div>
@@ -407,15 +407,15 @@ export default function MasterProfile() {
             </div>
 
             {/* Card 2: Security & Password Update */}
-            <div className="bg-white border border-slate-200/60 p-8 rounded-3xl shadow-[0_4px_25px_rgba(0,0,0,0.02)]">
-              <h3 className="text-base font-bold text-slate-800 flex items-center gap-2.5 border-b border-slate-100 pb-4">
+            <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 p-8 rounded-3xl shadow-[0_4px_25px_rgba(0,0,0,0.02)]">
+              <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2.5 border-b border-slate-100 dark:border-slate-800 pb-4">
                 <Lock size={18} className="text-primary" /> Security Credentials
               </h3>
 
               <form onSubmit={handleUpdatePassword} className="space-y-6 mt-6">
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Current Password</label>
-                  <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 bg-slate-50/30 transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10 focus-within:bg-white">
+                  <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/30 transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10 focus-within:bg-white dark:bg-slate-800/60">
                     <span className="text-slate-400 flex-shrink-0">
                       <Lock size={16} />
                     </span>
@@ -425,12 +425,12 @@ export default function MasterProfile() {
                       value={oldPassword}
                       onChange={(e) => setOldPassword(e.target.value)}
                       style={inputStyle}
-                      className="text-sm text-slate-800 placeholder-slate-400"
+                      className="text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400"
                     />
                     <button
                       type="button"
                       onClick={() => setShowOldPassword(!showOldPassword)}
-                      className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                      className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 dark:text-slate-400 cursor-pointer"
                     >
                       {showOldPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
@@ -440,7 +440,7 @@ export default function MasterProfile() {
                 <div className="grid gap-6 sm:grid-cols-2">
                   <div className="space-y-1">
                     <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">New Password</label>
-                    <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 bg-slate-50/30 transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10 focus-within:bg-white">
+                    <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/30 transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10 focus-within:bg-white dark:bg-slate-800/60">
                       <span className="text-slate-400 flex-shrink-0">
                         <KeyRound size={16} />
                       </span>
@@ -450,12 +450,12 @@ export default function MasterProfile() {
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                         style={inputStyle}
-                        className="text-sm text-slate-800 placeholder-slate-400"
+                        className="text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400"
                       />
                       <button
                         type="button"
                         onClick={() => setShowNewPassword(!showNewPassword)}
-                        className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                        className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 dark:text-slate-400 cursor-pointer"
                       >
                         {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
@@ -464,7 +464,7 @@ export default function MasterProfile() {
 
                   <div className="space-y-1">
                     <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Confirm New Password</label>
-                    <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 bg-slate-50/30 transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10 focus-within:bg-white">
+                    <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/30 transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10 focus-within:bg-white dark:bg-slate-800/60">
                       <span className="text-slate-400 flex-shrink-0">
                         <KeyRound size={16} />
                       </span>
@@ -474,12 +474,12 @@ export default function MasterProfile() {
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         style={inputStyle}
-                        className="text-sm text-slate-800 placeholder-slate-400"
+                        className="text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400"
                       />
                       <button
                         type="button"
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                        className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 dark:text-slate-400 cursor-pointer"
                       >
                         {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
@@ -514,7 +514,7 @@ export default function MasterProfile() {
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 15 }}
               transition={{ type: 'spring', duration: 0.4 }}
-              className="bg-white border border-slate-200/80 rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center relative overflow-hidden"
+              className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center relative overflow-hidden"
             >
               {/* Decorative top background gradient */}
               <div className={`absolute top-0 inset-x-0 h-2 bg-gradient-to-r ${
@@ -537,15 +537,15 @@ export default function MasterProfile() {
                     </motion.div>
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-slate-800">{modalTitle}</h3>
+                    <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">{modalTitle}</h3>
                     {modalFileName && (
                       <p className="text-xs text-slate-400 mt-1 truncate max-w-[280px] mx-auto" title={modalFileName}>
                         {modalFileName}
                       </p>
                     )}
-                    <p className="text-sm text-slate-500 mt-3 font-medium">{modalMessage}</p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-3 font-medium">{modalMessage}</p>
                   </div>
-                  <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                  <div className="w-full bg-slate-100 dark:bg-slate-800/50 rounded-full h-1.5 overflow-hidden">
                     <motion.div
                       initial={{ width: '0%' }}
                       animate={{ width: '90%' }}
@@ -569,8 +569,8 @@ export default function MasterProfile() {
                     </motion.div>
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-slate-800">{modalTitle}</h3>
-                    <p className="text-sm text-slate-500 mt-1.5 font-medium">{modalMessage}</p>
+                    <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">{modalTitle}</h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1.5 font-medium">{modalMessage}</p>
                   </div>
                   <button
                     onClick={() => setModalState(null)}
@@ -594,8 +594,8 @@ export default function MasterProfile() {
                     </motion.div>
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-slate-800">{modalTitle}</h3>
-                    <p className="text-sm text-slate-500 mt-1.5 font-medium">{modalMessage}</p>
+                    <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">{modalTitle}</h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1.5 font-medium">{modalMessage}</p>
                   </div>
                   <button
                     onClick={() => setModalState(null)}
@@ -619,7 +619,7 @@ export default function MasterProfile() {
                     </motion.div>
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-slate-800">{modalTitle}</h3>
+                    <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">{modalTitle}</h3>
                     <p className="text-sm text-rose-500/90 mt-2 bg-rose-50/50 border border-rose-100/50 px-3 py-2.5 rounded-xl font-medium text-left text-xs break-words">
                       {modalMessage}
                     </p>

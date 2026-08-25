@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import logoImg from "../assets/logo.png";
+import ThemeToggle from "../components/ThemeToggle";
 import "../snake.css";
 import useSEO from "../hooks/useSEO";
 
@@ -101,10 +102,6 @@ const FAQ_SCHEMA = {
 };
 
 export default function LandingPage() {
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', 'dark');
-    document.documentElement.classList.add('dark');
-  }, []);
 
   useSEO({
     title: "HireIQ — #1 AI Interview Platform & AI Recruitment Software India",
@@ -182,6 +179,7 @@ function Nav() {
           <a href="#faq" className="hover:text-foreground transition">FAQ</a>
         </nav>
         <div className="flex items-center gap-2">
+          <ThemeToggle />
           <Link
             to="/login"
             className="hidden sm:inline-flex text-sm px-4 py-2 rounded-full glass hover:bg-white/10 transition"
