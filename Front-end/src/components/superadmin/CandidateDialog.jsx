@@ -604,11 +604,11 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   return (
     <>
       <div className="fixed top-16 left-0 md:left-64 right-0 bottom-0 z-30 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 md:p-6" onClick={(e) => { if (e.target === e.currentTarget) onOpenChange(false) }}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
+        <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
 
           {/* ── Header ── */}
-          <div className="relative p-6 pb-4 border-b border-slate-100 bg-gradient-to-br from-indigo-50/60 to-white shrink-0">
-            <button onClick={() => onOpenChange(false)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
+          <div className="relative p-6 pb-4 border-b border-border bg-card shrink-0">
+            <button onClick={() => onOpenChange(false)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
               <X size={20} />
             </button>
 
@@ -619,20 +619,26 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
               </div>
             ) : (
               <div className="flex items-start gap-4">
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-600 text-white text-xl font-bold shrink-0 shadow-sm">
+                <div
+                  className="flex h-16 w-16 items-center justify-center rounded-2xl text-white text-2xl font-black shrink-0 border border-indigo-400/40"
+                  style={{
+                    background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
+                    boxShadow: '0 4px 20px rgba(99, 102, 241, 0.45)'
+                  }}
+                >
                   {initials}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h2 className="text-2xl font-black text-slate-800 truncate">{name}</h2>
-                  <p className="text-sm font-medium text-slate-500 mt-0.5">{jobTitle}</p>
+                  <h2 className="text-2xl font-black text-foreground truncate">{name}</h2>
+                  <p className="text-sm font-medium text-muted-foreground mt-0.5">{jobTitle}</p>
                   <div className="flex flex-wrap items-center gap-2 mt-3">
-                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${isQualified ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${isQualified ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'}`}>
                       {isQualified ? 'Hire' : 'Rejected'}
                     </span>
-                    <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary px-2.5 py-1 text-xs font-semibold text-foreground">
                       {isQualified ? 'Qualified' : 'Rejected'}
                     </span>
-                    <span className="text-xs font-medium text-slate-400">ID: {candidate.link_id || candidate.id}</span>
+                    <span className="text-xs font-medium text-muted-foreground">ID: {candidate.link_id || candidate.id}</span>
                     {(c.decision_by_name || c.last_action_by_name) && (
                       <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-white px-2.5 py-1 rounded-md border border-slate-200 shadow-xs" title={`Action taken by ${c.decision_by_name || c.last_action_by_name} (${c.decision_by_role || c.last_action_by_role || 'Admin'})`}>
                         <UserCheck size={13} className="text-indigo-600" />
@@ -664,22 +670,22 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
           </div>
 
           {/* ── Tabs ── */}
-          <div className="flex items-center gap-4 px-6 border-b border-slate-100 bg-white overflow-x-auto shrink-0">
+          <div className="flex items-center gap-4 px-6 border-b border-border bg-card overflow-x-auto shrink-0">
             {tabs.map(t => (
-              <button key={t} onClick={() => setActiveTab(t)} className={`capitalize whitespace-nowrap px-1 py-4 text-sm font-bold border-b-2 transition-colors ${activeTab === t ? "border-indigo-600 text-indigo-600" : "border-transparent text-slate-500 hover:text-slate-800"}`}>
+              <button key={t} onClick={() => setActiveTab(t)} className={`capitalize whitespace-nowrap px-1 py-4 text-sm font-bold border-b-2 transition-colors ${activeTab === t ? "border-indigo-500 text-indigo-400" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
                 {t}
               </button>
             ))}
           </div>
 
           {/* ── Content ── */}
-          <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
+          <div className="flex-1 overflow-y-auto p-6 bg-background">
 
             {/* ─ Overview Tab ─ */}
             {activeTab === 'overview' && (
               <div className="space-y-6">
-                <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
-                  <h3 className="text-sm font-black text-slate-800 mb-4">Candidate Information</h3>
+                <section className="bg-card rounded-xl border border-border p-5 shadow-sm">
+                  <h3 className="text-sm font-black text-foreground mb-4">Candidate Information</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-5">
                     <InfoRow icon={Mail} label="Email" value={email} />
                     <InfoRow icon={Phone} label="Mobile" value={phone} />
@@ -698,33 +704,33 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                   </div >
                 </section >
 
-                <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
-                  <h3 className="text-sm font-black text-slate-800 mb-3 flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-indigo-600" /> AI Recommendation
+                <section className="bg-card rounded-xl border border-border p-5 shadow-sm">
+                  <h3 className="text-sm font-black text-foreground mb-3 flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-indigo-500" /> AI Recommendation
                   </h3>
-                  <div className="rounded-xl border border-slate-100 bg-gradient-to-br from-indigo-50/40 to-white p-4">
+                  <div className="rounded-xl border border-border bg-secondary p-4">
                     <div className="flex items-center gap-2 mb-3">
-                      <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${isQualified ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${isQualified ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'}`}>
                         {c.overall_recommendation || (isQualified ? 'Hire' : 'Reject')}
                       </span>
-                      <span className="text-sm font-medium text-slate-500">
+                      <span className="text-sm font-medium text-foreground">
                         {isQualified ? 'Ready for Technical Round / Hiring' : 'Does not meet required threshold'}
                       </span>
                     </div>
                     {c.strengths_summary && (
                       <div className="mb-3">
-                        <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Strengths</div>
-                        <p className="text-sm font-medium text-slate-700 bg-emerald-50/60 rounded-lg p-3 border border-emerald-100">{c.strengths_summary}</p>
+                        <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Strengths</div>
+                        <p className="text-sm font-medium text-foreground bg-emerald-500/10 rounded-lg p-3 border border-emerald-500/20">{c.strengths_summary}</p>
                       </div>
                     )}
                     {c.weaknesses_summary && (
                       <div>
-                        <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Areas to Improve</div>
-                        <p className="text-sm font-medium text-slate-700 bg-rose-50/60 rounded-lg p-3 border border-rose-100">{c.weaknesses_summary}</p>
+                        <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Areas to Improve</div>
+                        <p className="text-sm font-medium text-foreground bg-rose-500/10 rounded-lg p-3 border border-rose-500/20">{c.weaknesses_summary}</p>
                       </div>
                     )}
                     {!c.strengths_summary && !c.weaknesses_summary && (
-                      <p className="text-sm text-slate-500">No AI summary available for this candidate yet.</p>
+                      <p className="text-sm text-muted-foreground">No AI summary available for this candidate yet.</p>
                     )}
                   </div>
                 </section>

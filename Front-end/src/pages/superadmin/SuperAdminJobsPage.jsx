@@ -939,41 +939,41 @@ export default function SuperAdminJobsPage() {
 
       {/* ── Job Applications Modal ───────────────────────── */}
       {applicationData.open && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 sm:p-6" onClick={closeApplications}>
           <div
-            className="bg-white dark:bg-slate-800/60 rounded-[2rem] shadow-[0_24px_64px_rgba(0,0,0,0.18)] border border-slate-200 dark:border-slate-700/80 w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col"
+            className="bg-card border border-border rounded-[2rem] shadow-2xl w-full max-w-5xl max-h-[85vh] overflow-hidden flex flex-col z-10"
             onClick={e => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="px-8 py-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-gradient-to-r from-teal-50/60 to-cyan-50/60">
+            <div className="px-8 py-6 border-b border-border flex items-center justify-between bg-card shrink-0">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-gradient-to-br from-teal-500 to-cyan-600 text-white shadow-lg shadow-teal-500/25">
                   <Users size={24} />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-xl font-black text-slate-800 dark:text-slate-100 tracking-tight">{applicationData.job?.title}</h2>
+                    <h2 className="text-xl font-black text-foreground tracking-tight">{applicationData.job?.title}</h2>
                     {!applicationData.loading && (
-                      <span className="px-2.5 py-0.5 bg-teal-100 text-teal-800 text-xs font-bold rounded-full border border-teal-200">
+                      <span className="px-2.5 py-0.5 bg-teal-500/20 text-teal-300 text-xs font-bold rounded-full border border-teal-500/30">
                         {applicationData.list.length} applicant{applicationData.list.length !== 1 ? 's' : ''}
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-3 mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium flex-wrap">
-                    <span className="flex items-center gap-1">
-                      <Building2 size={12} className="text-slate-400" /> {applicationData.job?.location || 'Remote'}
+                  <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground font-medium flex-wrap">
+                    <span className="flex items-center gap-1 text-muted-foreground font-semibold">
+                      <Building2 size={13} className="text-teal-400" /> {applicationData.job?.location || 'Remote'}
                     </span>
                     <span>•</span>
-                    <span className="flex items-center gap-1.5 bg-white dark:bg-slate-800/60/90 text-slate-700 dark:text-slate-200 font-bold px-2 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700 shadow-xs">
-                      <User size={11} className="text-indigo-600" />
-                      Created by: <span className="text-indigo-600 font-extrabold">{applicationData.job?.created_by_name || applicationData.job?.created_by || 'Admin'}</span>
+                    <span className="flex items-center gap-1.5 bg-secondary text-foreground font-bold px-2.5 py-1 rounded-lg border border-border shadow-xs">
+                      <User size={12} className="text-indigo-400" />
+                      Created by: <span className="text-indigo-400 font-extrabold">{applicationData.job?.created_by_name || applicationData.job?.created_by || 'Admin'}</span>
                       {applicationData.job?.created_by_role && (
-                        <span className="text-[0.62rem] text-slate-400 uppercase font-bold">({applicationData.job?.created_by_role})</span>
+                        <span className="text-[0.62rem] text-muted-foreground uppercase font-bold">({applicationData.job?.created_by_role})</span>
                       )}
                     </span>
                     {applicationData.job?.created_at && (
-                      <span className="text-slate-400 flex items-center gap-1">
-                        <Calendar size={11} /> Posted {new Date(applicationData.job.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      <span className="text-muted-foreground font-medium flex items-center gap-1">
+                        <Calendar size={12} className="text-muted-foreground" /> Posted {new Date(applicationData.job.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                       </span>
                     )}
                   </div>
@@ -982,14 +982,14 @@ export default function SuperAdminJobsPage() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => openApplications(applicationData.job)}
-                  className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/50 hover:bg-teal-50 text-slate-500 dark:text-slate-400 hover:text-teal-600 border-none cursor-pointer transition-colors"
+                  className="p-2.5 rounded-xl bg-secondary hover:bg-muted text-muted-foreground hover:text-foreground border border-border cursor-pointer transition-colors"
                   title="Refresh"
                 >
                   <RefreshCw size={16} />
                 </button>
                 <button
                   onClick={closeApplications}
-                  className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/50 hover:bg-rose-100 text-slate-500 dark:text-slate-400 hover:text-rose-600 border-none cursor-pointer transition-colors"
+                  className="p-2.5 rounded-xl bg-secondary hover:bg-rose-500/20 text-muted-foreground hover:text-rose-400 border border-border cursor-pointer transition-colors"
                 >
                   <X size={18} strokeWidth={2.5} />
                 </button>
@@ -997,7 +997,7 @@ export default function SuperAdminJobsPage() {
             </div>
 
             {/* Body */}
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-6 bg-background">
               {applicationData.loading ? (
                 <div className="flex items-center justify-center py-24">
                   <div className="w-10 h-10 rounded-full border-4 border-teal-200 border-t-teal-600 animate-spin" />
@@ -1170,17 +1170,17 @@ export default function SuperAdminJobsPage() {
             </div>
 
             {/* Footer */}
-            <div className="px-8 py-5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/50/40">
+            <div className="px-8 py-5 border-t border-border flex items-center justify-between bg-card">
               <div className="flex items-center gap-4">
-                <p className="text-xs text-slate-400 font-medium">
-                  Job ID: <span className="font-mono font-bold text-slate-500 dark:text-slate-400">{applicationData.job?.job_id}</span>
+                <p className="text-xs text-muted-foreground font-medium">
+                  Job ID: <span className="font-mono font-bold text-foreground">{applicationData.job?.job_id}</span>
                 </p>
-                <div className="h-4 w-px bg-slate-200"></div>
+                <div className="h-4 w-px bg-border"></div>
                 <a
                   href={`${window.location.origin}/apply/${applicationData.job?.job_id}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 text-xs text-indigo-500 hover:text-indigo-700 font-mono font-medium transition-colors"
+                  className="flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 font-mono font-medium transition-colors"
                 >
                   <ExternalLink size={12} /> {window.location.origin}/apply/{applicationData.job?.job_id}
                 </a>
@@ -1189,7 +1189,7 @@ export default function SuperAdminJobsPage() {
                     navigator.clipboard.writeText(`${window.location.origin}/apply/${applicationData.job?.job_id}`);
                     Swal.fire({ title: 'Copied!', text: 'Job link copied to clipboard.', icon: 'success', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
                   }}
-                  className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                  className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg transition-colors cursor-pointer"
                   title="Copy Link"
                 >
                   <Copy size={14} />
@@ -1197,7 +1197,7 @@ export default function SuperAdminJobsPage() {
               </div>
               <button
                 onClick={closeApplications}
-                className="px-6 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/50 hover:bg-slate-200 text-slate-600 dark:text-slate-400 font-bold text-sm border-none cursor-pointer transition-colors"
+                className="px-6 py-2.5 rounded-xl bg-secondary hover:bg-muted text-foreground font-bold text-sm border border-border cursor-pointer transition-colors"
               >
                 Close
               </button>
@@ -1208,9 +1208,9 @@ export default function SuperAdminJobsPage() {
 
       {/* ── Job Details / Apply Modal ───────────────────── */}
       {selectedJobDetails && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 sm:p-6" onClick={() => setSelectedJobDetails(null)}>
           <div
-            className="bg-white dark:bg-slate-800/60/95 backdrop-blur-xl rounded-[2rem] shadow-[0_20px_60px_rgba(0,0,0,0.15)] border border-white/60 w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col relative"
+            className="bg-card border border-border rounded-[2rem] shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col relative z-10"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="absolute top-0 left-0 w-full h-28 bg-gradient-to-b from-indigo-50/80 to-transparent pointer-events-none rounded-t-[2rem]" />

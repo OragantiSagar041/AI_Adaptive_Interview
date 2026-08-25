@@ -20,33 +20,50 @@ html.admin-layout #root {
   overflow: hidden;
 }
 
+/* ════════════════════════════════════════════════════════════════════════════
+   GLOBAL THEME TOKENS — Single Source of Truth
+   Light = :root   |   Dark = html.dark / [data-theme="dark"]
+   Every component inherits from these; no per-file dark: overrides needed.
+   ════════════════════════════════════════════════════════════════════════════ */
+
 :root {
   --radius: 0.875rem;
+
+  /* ── Page ── */
   --background: #f8fafc;
   --foreground: #0f172a;
+
+  /* ── Surface / Card ── */
   --card: #ffffff;
   --card-foreground: #0f172a;
   --popover: #ffffff;
   --popover-foreground: #0f172a;
-  --primary: oklch(0.58 0.2 250);
-  --primary-foreground: oklch(0.98 0.01 220);
-  --secondary: oklch(0.07 0.015 250);
+
+  /* ── Interactive ── */
+  --primary: #4f46e5;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f5f9;
   --secondary-foreground: #0f172a;
-  --muted: #e2e8f0;
-  --muted-foreground: #475569;
-  --accent: #0ea5e9;
-  --accent-foreground: #ffffff;
-  --border: #cbd5e1;
-  --input: #f8fafc;
-  --ring: #2563eb;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent: #e0e7ff;
+  --accent-foreground: #4f46e5;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
 
-  --purple: oklch(0.68 0.16 285);
-  --violet: oklch(0.62 0.18 265);
-  --cyan: oklch(0.82 0.14 215);
-  --blue: oklch(0.58 0.2 250);
-  --pink: oklch(0.7 0.22 350);
-  --emerald: oklch(0.75 0.18 160);
+  /* ── Structural ── */
+  --border: #e2e8f0;
+  --input: #ffffff;
+  --ring: #4f46e5;
 
+  /* ── Charts ── */
+  --chart-1: #6366f1;
+  --chart-2: #10b981;
+  --chart-3: #f59e0b;
+  --chart-4: #ef4444;
+  --chart-5: #3b82f6;
+
+  /* ── Sidebar ── */
   --sidebar: #ffffff;
   --sidebar-foreground: #0f172a;
   --sidebar-primary: #4f46e5;
@@ -54,352 +71,78 @@ html.admin-layout #root {
   --sidebar-accent: #eef2ff;
   --sidebar-accent-foreground: #4f46e5;
   --sidebar-border: #e2e8f0;
+  --sidebar-ring: #4f46e5;
+
+  /* ── Shadows ── */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.07), 0 4px 12px rgba(0, 0, 0, 0.04);
+  --shadow-glow: 0 4px 20px rgba(99, 102, 241, 0.25);
 }
 
-/* ── Central Dark Mode Overrides ────────────────────────────────────────────── */
+/* ── Dark Mode — matches user mockup reference exactly ── */
 html.dark,
 [data-theme="dark"] {
   color-scheme: dark;
-  --background: #090d16;
+
+  /* ── Page ── */
+  --background: #070a12;
   --foreground: #f8fafc;
-  --card: #131b2e;
+
+  /* ── Surface / Card (clearly lighter than page, with visible border) ── */
+  --card: #121b2d;
   --card-foreground: #f8fafc;
-  --popover: #131b2e;
+  --popover: #121b2d;
   --popover-foreground: #f8fafc;
-  --primary: oklch(0.65 0.2 250);
+
+  /* ── Interactive ── */
+  --primary: #6366f1;
   --primary-foreground: #ffffff;
-  --secondary: #1e293b;
+  --secondary: #1a2642;
   --secondary-foreground: #f8fafc;
-  --muted: #1e293b;
+  --muted: #1a2642;
   --muted-foreground: #94a3b8;
-  --accent: #38bdf8;
-  --accent-foreground: #0f172a;
-  --border: #26334d;
-  --input: #131b2e;
+  --accent: #1e3a5f;
+  --accent-foreground: #38bdf8;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+
+  /* ── Structural ── */
+  --border: #3b5284;
+  --input: #172238;
   --ring: #6366f1;
 
-  --sidebar: #0b1120;
+  /* ── Charts ── */
+  --chart-1: #6366f1;
+  --chart-2: #10b981;
+  --chart-3: #f59e0b;
+  --chart-4: #ef4444;
+  --chart-5: #3b82f6;
+
+  /* ── Sidebar (darker than card, same palette family) ── */
+  --sidebar: #0a0f1b;
   --sidebar-foreground: #f8fafc;
-  --sidebar-primary: #6366f1;
+  --sidebar-primary: #4f46e5;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #1e293b;
+  --sidebar-accent: #1a2642;
   --sidebar-accent-foreground: #f8fafc;
-  --sidebar-border: #1e293b;
+  --sidebar-border: #354c7d;
+  --sidebar-ring: #6366f1;
+
+  /* ── Shadows ── */
+  --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--border);
+  --shadow-glow: 0 4px 20px rgba(99, 102, 241, 0.3);
 }
 
-/* Force Active Sidebar Menu Items to always render clean Indigo background & White text */
-[data-sidebar="menu-button"][data-active="true"] {
-  background-color: #4f46e5 !important;
-  color: #ffffff !important;
-}
-
-[data-sidebar="menu-button"][data-active="true"] * {
-  color: #ffffff !important;
-}
-
-html.dark body,
-html.dark #root {
-  background-color: #090d16 !important;
-  color: #f8fafc !important;
-}
-
-/* ── Dark Mode Global Component Overrides ────────────────────────────────────── */
-
-/* Backgrounds & Container Surfaces */
-.dark .bg-white,
-.dark .bg-slate-50,
-.dark .bg-slate-100,
-.dark .bg-gray-50,
-.dark .bg-gray-100,
-.dark .bg-zinc-50,
-.dark .bg-zinc-100,
-.dark .bg-slate-50\/50,
-.dark .bg-slate-50\/80,
-.dark .bg-slate-50\/95,
-.dark .bg-slate-100\/50,
-.dark .bg-slate-100\/80,
-.dark .bg-white\/50,
-.dark .bg-white\/70,
-.dark .bg-white\/80,
-.dark .bg-white\/90,
-.dark .bg-white\/95 {
-  background-color: #131b2e !important;
-}
-
-.dark .hover\:bg-slate-50:hover,
-.dark .hover\:bg-slate-100:hover,
-.dark .hover\:bg-gray-50:hover,
-.dark .hover\:bg-gray-100:hover,
-.dark .hover\:bg-slate-200\/60:hover {
-  background-color: #1e293b !important;
-}
-
-/* Text & Typography */
-.dark .text-slate-900,
-.dark .text-slate-800,
-.dark .text-gray-900,
-.dark .text-gray-800,
-.dark .text-zinc-900,
-.dark .text-zinc-800,
-.dark .text-black {
-  color: #f8fafc !important;
-}
-
-.dark .text-slate-700,
-.dark .text-slate-600,
-.dark .text-gray-700,
-.dark .text-gray-600,
-.dark .text-zinc-700,
-.dark .text-zinc-600 {
-  color: #cbd5e1 !important;
-}
-
-.dark .text-slate-500,
-.dark .text-gray-500,
-.dark .text-zinc-500,
-.dark .text-slate-400,
-.dark .text-gray-400 {
-  color: #94a3b8 !important;
-}
-
-/* Borders & Dividers */
-.dark .border-slate-200,
-.dark .border-slate-100,
-.dark .border-slate-300,
-.dark .border-gray-200,
-.dark .border-gray-100,
-.dark .border-gray-300,
-.dark .border-zinc-200,
-.dark .border-zinc-100,
-.dark .border-slate-200\/60,
-.dark .border-slate-200\/50,
-.dark .border-slate-100\/60,
-.dark .border-white\/30,
-.dark .border-white\/40,
-.dark .border-white\/50,
-.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]),
-.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
-.dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]) {
-  border-color: #26334d !important;
-}
-
-/* Inputs, Textareas, Selects & Form Controls */
-.dark input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]),
-.dark textarea,
-.dark select {
-  background-color: #131b2e !important;
-  color: #f8fafc !important;
-  border-color: #26334d !important;
-}
-
-.dark input::placeholder,
-.dark textarea::placeholder,
-.dark select::placeholder {
-  color: #64748b !important;
-}
-
-.dark input:focus,
-.dark textarea:focus,
-.dark select:focus {
-  border-color: #6366f1 !important;
-  background-color: #182236 !important;
-}
-
-/* Custom Card Component Override */
-.dark [class*="backdrop-blur"] {
-  background: #131b2e !important;
-  border-color: #26334d !important;
-}
-
-/* Tables & Rows */
-.dark table {
-  background-color: #131b2e !important;
-  color: #e2e8f0 !important;
-}
-
-.dark thead,
-.dark th {
-  background-color: #0f172a !important;
-  color: #94a3b8 !important;
-  border-bottom-color: #26334d !important;
-}
-
-.dark tr {
-  border-bottom-color: #26334d !important;
-}
-
-.dark tr:hover {
-  background-color: #1e293b !important;
-}
-
-.dark td {
-  border-color: #26334d !important;
-  color: #e2e8f0 !important;
-}
-
-/* Modals & Dialogs & Popovers */
-.dark [role="dialog"],
-.dark .modal-content,
-.dark [data-radix-popper-content-wrapper] > div,
-.dark .swal2-popup {
-  background-color: #131b2e !important;
-  color: #f8fafc !important;
-  border-color: #26334d !important;
-}
-
-.dark .swal2-title,
-.dark .swal2-html-container {
-  color: #f8fafc !important;
-}
-
-/* Sidebars & Headers */
-html.dark header,
-.dark header,
-html.dark aside,
-.dark aside,
-html.dark nav,
-.dark nav,
-html.dark [class*="sidebar"],
-.dark [class*="sidebar"],
-html.dark [data-sidebar="sidebar"],
-.dark [data-sidebar="sidebar"] {
-  background-color: #0b1120 !important;
-  border-color: #1e293b !important;
-  color: #f8fafc !important;
-}
-
-html.dark aside div,
-.dark aside div,
-html.dark aside button,
-.dark aside button {
-  border-color: #1e293b !important;
-}
-
-/* Copilot Dark Mode Enforcement */
-html.dark div[class*="bottom-6"][class*="right-6"],
-.dark div[class*="bottom-6"][class*="right-6"] {
-  background-color: #131b2e !important;
-  border-color: #26334d !important;
-  color: #f8fafc !important;
-}
-
-html.dark div[class*="bottom-6"][class*="right-6"] div,
-.dark div[class*="bottom-6"][class*="right-6"] div,
-html.dark div[class*="bottom-6"][class*="right-6"] header,
-.dark div[class*="bottom-6"][class*="right-6"] header {
-  background-color: #131b2e !important;
-  border-color: #26334d !important;
-  color: #f8fafc !important;
-}
-
-html.dark [class*="bottom-6"][class*="right-6"] textarea,
-.dark [class*="bottom-6"][class*="right-6"] textarea,
-html.dark [class*="bottom-6"][class*="right-6"] input,
-.dark [class*="bottom-6"][class*="right-6"] input {
-  background-color: #0b1120 !important;
-  border-color: #26334d !important;
-  color: #f8fafc !important;
-}
-
-html.dark [class*="bottom-6"][class*="right-6"] h3,
-.dark [class*="bottom-6"][class*="right-6"] h3,
-html.dark [class*="bottom-6"][class*="right-6"] p,
-.dark [class*="bottom-6"][class*="right-6"] p,
-html.dark [class*="bottom-6"][class*="right-6"] span,
-.dark [class*="bottom-6"][class*="right-6"] span {
-  color: #e2e8f0 !important;
-}
-
-/* Global Dark Mode Slate & Container Utility Overrides */
-html.dark .bg-white,
-.dark .bg-white,
-html.dark .bg-white\/80,
-.dark .bg-white\/80,
-html.dark .bg-white\/90,
-.dark .bg-white\/90,
-html.dark .bg-white\/70,
-.dark .bg-white\/70 {
-  background-color: #131b2e !important;
-  border-color: #26334d !important;
-  color: #f8fafc !important;
-}
-
-html.dark .bg-slate-50,
-.dark .bg-slate-50,
-html.dark .bg-slate-100,
-.dark .bg-slate-100,
-html.dark .bg-slate-50\/50,
-.dark .bg-slate-50\/50,
-html.dark .bg-slate-50\/30,
-.dark .bg-slate-50\/30 {
-  background-color: #0b1120 !important;
-  border-color: #26334d !important;
-  color: #e2e8f0 !important;
-}
-
-html.dark .text-slate-800,
-.dark .text-slate-800,
-html.dark .text-slate-700,
-.dark .text-slate-700,
-html.dark .text-slate-900,
-.dark .text-slate-900 {
-  color: #f8fafc !important;
-}
-
-html.dark .text-slate-600,
-.dark .text-slate-600,
-html.dark .text-slate-500,
-.dark .text-slate-500 {
-  color: #cbd5e1 !important;
-}
-
-html.dark .text-slate-400,
-.dark .text-slate-400 {
-  color: #94a3b8 !important;
-}
-
-html.dark .border-slate-200,
-.dark .border-slate-200,
-html.dark .border-slate-100,
-.dark .border-slate-100,
-html.dark .border-slate-200\/80,
-.dark .border-slate-200\/80,
-html.dark .border-slate-200\/60,
-.dark .border-slate-200\/60 {
-  border-color: #26334d !important;
-}
-
-html.dark .text-transparent.bg-clip-text {
-  background-image: linear-gradient(to right, #f8fafc, #c084fc, #818cf8) !important;
-}
-
-html.dark .bg-gradient-to-b.from-indigo-50\/50,
-.dark .bg-gradient-to-b.from-indigo-50\/50 {
-  background-image: linear-gradient(to bottom, rgba(99, 102, 241, 0.15), transparent) !important;
-}
-
-/* Buttons */
-.dark button.bg-white,
-.dark button.bg-slate-100,
-.dark button.bg-slate-50,
-.dark a.bg-white,
-.dark a.bg-slate-100 {
-  background-color: #1e293b !important;
-  color: #f8fafc !important;
-  border-color: #334155 !important;
-}
-
-.dark button.bg-white:hover,
-.dark button.bg-slate-100:hover,
-.dark button.bg-slate-50:hover,
-.dark a.bg-white:hover,
-.dark a.bg-slate-100:hover {
-  background-color: #27354d !important;
-}
-
+/* ════════════════════════════════════════════════════════════════════════════
+   TAILWIND v4 @theme BRIDGE
+   Exposes CSS variables as Tailwind color utilities (bg-card, text-foreground…)
+   ════════════════════════════════════════════════════════════════════════════ */
 @theme {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
@@ -408,16 +151,11 @@ html.dark .bg-gradient-to-b.from-indigo-50\/50,
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -432,24 +170,383 @@ html.dark .bg-gradient-to-b.from-indigo-50\/50,
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  --color-purple: var(--purple);
-  --color-violet: var(--violet);
-  --color-cyan: var(--cyan);
-  --color-blue: var(--blue);
-  --color-pink: var(--pink);
-  --color-emerald: var(--emerald);
-
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+/* ════════════════════════════════════════════════════════════════════════════
+   BASE LAYER — html/body inherit theme tokens
+   ════════════════════════════════════════════════════════════════════════════ */
 html,
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   ACTIVE SIDEBAR ITEM — always indigo pill
+   ════════════════════════════════════════════════════════════════════════════ */
+[data-sidebar="menu-button"][data-active="true"],
+[data-sidebar="menu-button"][data-active="true"] * {
+  background-color: var(--primary) !important;
+  color: var(--primary-foreground) !important;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   DARK MODE — Tailwind utility color remapping
+   Strategy:
+   ● body/root get !important for guaranteed page background
+   ● bg-white and light surface classes get !important since pages have NO dark: equivalent
+   ● text overrides use !important to flip all light text to readable light colors
+   ● Tailwind's own dark:bg-* / dark:text-* utility variants ALWAYS win because
+     they have [data-theme=dark] / .dark ancestor specificity at the same level
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Page / canvas backgrounds ───────────────────────────────────────────── */
+.dark body,
+.dark #root,
+.dark main {
+  background-color: var(--background) !important;
+  color: var(--foreground) !important;
+}
+
+/* Page-level background utility classes */
+.dark .bg-background,
+.dark .bg-slate-50,
+.dark .bg-slate-100,
+.dark .bg-gray-50,
+.dark .bg-gray-100,
+.dark .bg-zinc-50,
+.dark .bg-zinc-100,
+.dark .bg-slate-50\/50,
+.dark .bg-slate-50\/80,
+.dark .bg-slate-100\/50,
+.dark .bg-gray-50\/50,
+.dark .bg-slate-900\/50,
+.dark .bg-slate-950 {
+  background-color: var(--background) !important;
+}
+
+/* ── Card / panel surfaces — in @layer base so Tailwind utilities always win ── */
+@layer base {
+
+  /* bg-white → card surface when NO dark:bg-* override exists on the element */
+  .dark .bg-white {
+    background-color: var(--card);
+    color: var(--card-foreground);
+  }
+
+  /* Opacity white variants */
+  .dark .bg-white\/50,
+  .dark .bg-white\/60,
+  .dark .bg-white\/70,
+  .dark .bg-white\/80,
+  .dark .bg-white\/90,
+  .dark .bg-white\/95 {
+    background-color: var(--card);
+  }
+
+  /* Shadcn ui/card uses bg-card */
+  .dark .bg-card {
+    background-color: var(--card);
+    color: var(--card-foreground);
+  }
+
+  /* Dark-specific slate heavy classes */
+  .dark .bg-slate-800,
+  .dark .bg-slate-800\/60,
+  .dark .bg-slate-800\/80,
+  .dark .bg-slate-700 {
+    background-color: var(--card);
+    color: var(--card-foreground);
+  }
+
+  /* Secondary / muted surfaces */
+  .dark .bg-secondary,
+  .dark .bg-muted,
+  .dark .bg-slate-200,
+  .dark .bg-slate-300 {
+    background-color: var(--secondary);
+    color: var(--secondary-foreground);
+  }
+}
+
+/* ── Text — ALL shades, ALL scale steps ──────────────────────────────────── */
+/* Dark = heading / body text → bright foreground */
+.dark .text-slate-950,
+.dark .text-slate-900,
+.dark .text-slate-800,
+.dark .text-gray-950,
+.dark .text-gray-900,
+.dark .text-gray-800,
+.dark .text-zinc-950,
+.dark .text-zinc-900,
+.dark .text-zinc-800,
+.dark .text-black,
+.dark .text-foreground {
+  color: var(--foreground) !important;
+}
+
+/* Medium = secondary body text → slightly dimmed */
+.dark .text-slate-700,
+.dark .text-slate-600,
+.dark .text-gray-700,
+.dark .text-gray-600,
+.dark .text-zinc-700,
+.dark .text-zinc-600 {
+  color: #cbd5e1 !important;
+}
+
+/* Muted / caption text → muted foreground token */
+.dark .text-slate-500,
+.dark .text-slate-400,
+.dark .text-slate-300,
+.dark .text-gray-500,
+.dark .text-gray-400,
+.dark .text-gray-300,
+.dark .text-zinc-500,
+.dark .text-zinc-400,
+.dark .text-muted-foreground {
+  color: var(--muted-foreground) !important;
+}
+
+/* ── Borders / Dividers ───────────────────────────────────────────────────── */
+.dark .border-slate-50,
+.dark .border-slate-100,
+.dark .border-slate-200,
+.dark .border-slate-300,
+.dark .border-gray-50,
+.dark .border-gray-100,
+.dark .border-gray-200,
+.dark .border-gray-300,
+.dark .border-zinc-100,
+.dark .border-zinc-200,
+.dark .border-zinc-300,
+.dark .border-white,
+.dark .border-white\/10,
+.dark .border-white\/20,
+.dark .border-white\/30,
+.dark .border-white\/40,
+.dark .border-white\/50,
+.dark .border-slate-200\/60,
+.dark .border-slate-200\/50,
+.dark .border-slate-200\/80,
+.dark .border-border {
+  border-color: var(--border) !important;
+}
+
+.dark .divide-slate-50> :not([hidden])~ :not([hidden]),
+.dark .divide-slate-100> :not([hidden])~ :not([hidden]),
+.dark .divide-slate-200> :not([hidden])~ :not([hidden]),
+.dark .divide-gray-100> :not([hidden])~ :not([hidden]),
+.dark .divide-gray-200> :not([hidden])~ :not([hidden]) {
+  border-color: var(--border) !important;
+}
+
+/* ── Hover States ─────────────────────────────────────────────────────────── */
+.dark .hover\:bg-white:hover,
+.dark .hover\:bg-slate-50:hover,
+.dark .hover\:bg-slate-100:hover,
+.dark .hover\:bg-gray-50:hover,
+.dark .hover\:bg-gray-100:hover,
+.dark .hover\:bg-slate-200\/60:hover {
+  background-color: var(--secondary) !important;
+}
+
+.dark .hover\:bg-slate-700:hover,
+.dark .hover\:bg-slate-800:hover {
+  background-color: var(--muted) !important;
+}
+
+/* ── Inputs / Form Controls ──────────────────────────────────────────────── */
+.dark input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="range"]),
+.dark textarea,
+.dark select {
+  background-color: var(--input) !important;
+  color: var(--foreground) !important;
+  border-color: var(--border) !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: var(--muted-foreground) !important;
+}
+
+.dark input:focus,
+.dark textarea:focus,
+.dark select:focus {
+  border-color: var(--ring) !important;
+  background-color: var(--card) !important;
+  outline-color: var(--ring) !important;
+}
+
+/* ── Buttons with light backgrounds ─────────────────────────────────────── */
+.dark button.bg-white,
+.dark button.bg-slate-50,
+.dark button.bg-slate-100,
+.dark button.bg-gray-50,
+.dark button.bg-gray-100,
+.dark a.bg-white,
+.dark a.bg-slate-100 {
+  background-color: var(--secondary) !important;
+  color: var(--foreground) !important;
+  border-color: var(--border) !important;
+}
+
+.dark button.bg-white:hover,
+.dark button.bg-slate-50:hover,
+.dark button.bg-slate-100:hover {
+  background-color: var(--muted) !important;
+}
+
+/* ── Tables ──────────────────────────────────────────────────────────────── */
+.dark table {
+  background-color: var(--card) !important;
+  color: var(--foreground) !important;
+}
+
+.dark thead,
+.dark th {
+  background-color: var(--secondary) !important;
+  color: var(--muted-foreground) !important;
+  border-bottom-color: var(--border) !important;
+}
+
+.dark tr {
+  border-bottom-color: var(--border) !important;
+}
+
+.dark tr:hover {
+  background-color: var(--secondary) !important;
+}
+
+.dark td {
+  border-color: var(--border) !important;
+  color: var(--foreground) !important;
+}
+
+/* ── Modals / Dialogs / Popovers ─────────────────────────────────────────── */
+.dark [role="dialog"],
+.dark .modal-content,
+.dark [data-radix-popper-content-wrapper]>div,
+.dark .swal2-popup {
+  background-color: var(--card) !important;
+  color: var(--foreground) !important;
+  border-color: var(--border) !important;
+}
+
+.dark .swal2-title,
+.dark .swal2-html-container {
+  color: var(--foreground) !important;
+}
+
+/* ── Sidebars / Headers / Nav ────────────────────────────────────────────── */
+.dark header,
+.dark aside,
+.dark [data-sidebar="sidebar"] {
+  background-color: var(--sidebar) !important;
+  border-color: var(--sidebar-border) !important;
+  color: var(--sidebar-foreground) !important;
+}
+
+/* ── Recharts / SVG Charts ───────────────────────────────────────────────── */
+.dark .recharts-cartesian-grid-horizontal line,
+.dark .recharts-cartesian-grid-vertical line {
+  stroke: var(--border) !important;
+}
+
+.dark .recharts-text,
+.dark .recharts-label {
+  fill: var(--muted-foreground) !important;
+}
+
+.dark .recharts-default-tooltip {
+  background-color: var(--card) !important;
+  border-color: var(--border) !important;
+  color: var(--foreground) !important;
+}
+
+/* ── Branded primary elements (indigo stays indigo) ─────────────────────── */
+.dark .bg-indigo-600,
+.dark .bg-indigo-700,
+.dark [class*="bg-indigo-600"] {
+  background-color: #4f46e5 !important;
+  color: #ffffff !important;
+}
+
+/* ── Backdrop-blur overlay panels ────────────────────────────────────────── */
+/* Only clear standalone panels with both backdrop-blur AND border */
+.dark .backdrop-blur-2xl.border,
+.dark .backdrop-blur-xl.border,
+.dark .backdrop-blur-md.border,
+.dark .backdrop-blur-sm.border {
+  background-color: color-mix(in srgb, var(--card) 90%, transparent) !important;
+  border-color: var(--border) !important;
+}
+
+/* ── Sticky admin headers (not table-sticky elements) ───────────────────── */
+/* Target only the flex header bars used in admin layouts */
+.dark .sticky.top-0.z-30,
+.dark .sticky.top-0.border-b {
+  background-color: color-mix(in srgb, var(--sidebar) 95%, transparent) !important;
+  border-color: var(--border) !important;
+}
+
+/* ── Gradient-from-white cards in dark mode ─────────────────────────────── */
+/* Targets the from-white/80 to-white/40 gradient pattern used in dashboard stat cards */
+.dark .bg-gradient-to-b[class*="from-white"],
+.dark [class*="from-white\/80"],
+.dark [class*="from-white\/70"],
+.dark [class*="from-white\/60"] {
+  background-color: var(--card) !important;
+  background-image: none !important;
+}
+
+/* ── Copilot floating panel ─────────────────────────────────────────────── */
+.dark div[class*="bottom-6"][class*="right-6"] {
+  background-color: var(--card) !important;
+  border-color: var(--border) !important;
+  color: var(--foreground) !important;
+}
+
+.dark div[class*="bottom-6"][class*="right-6"] header {
+  background-color: var(--card) !important;
+  border-color: var(--border) !important;
+}
+
+.dark div[class*="bottom-6"][class*="right-6"] textarea,
+.dark div[class*="bottom-6"][class*="right-6"] input {
+  background-color: var(--input) !important;
+  border-color: var(--border) !important;
+  color: var(--foreground) !important;
+}
+
+/* ── Explicit card panels (border + padding combos used on all pages) ─────── */
+/* Target the structural card pattern: border + bg-white → card surface */
+.dark .border.bg-white,
+.dark .border.bg-slate-50,
+.dark .border.bg-gray-50 {
+  background-color: var(--card) !important;
+  border-color: var(--border) !important;
+  color: var(--card-foreground) !important;
+}
+
+/* Ring/shadow focus helpers */
+.dark .ring-slate-200,
+.dark .ring-gray-200 {
+  --tw-ring-color: var(--border) !important;
+}
+
+/* Light mode card borders */
+:root .border.rounded-xl,
+:root .border.rounded-2xl,
+:root .border.rounded-lg {
+  border-color: var(--border);
+  background-color: var(--card);
+}
+
 
 /* Ensure white/light background cards don't inherit white card text */
 .bg-white.text-card-foreground,
@@ -464,167 +561,28 @@ body {
 .theme-bg-primary {
   background-color: var(--primary-color, #6366f1) !important;
 }
+
 .theme-bg-primary:hover {
   background-color: var(--primary-hover, #4f46e5) !important;
 }
+
 .theme-text-primary {
   color: var(--primary-color, #6366f1) !important;
 }
+
 .theme-border-primary {
   border-color: var(--primary-color, #6366f1) !important;
 }
+
 .theme-shadow-primary {
-  box-shadow: 0 4px 14px 0 var(--primary-glow, rgba(99,102,241,0.39)) !important;
+  box-shadow: 0 4px 14px 0 var(--primary-glow, rgba(99, 102, 241, 0.39)) !important;
 }
+
 .theme-stroke-primary {
   stroke: var(--primary-color, #6366f1) !important;
 }
 
-.superadmin-theme {
-  --radius: 0.625rem;
-  --background: #f8fafc;
-  --foreground: #0f172a;
-  --card: #ffffff;
-  --card-foreground: #0f172a;
-  --popover: #ffffff;
-  --popover-foreground: #0f172a;
-  --primary: oklch(0.58 0.2 250);
-  --primary-foreground: oklch(0.98 0.01 220);
-  --secondary: #e2e8f0;
-  --secondary-foreground: #0f172a;
-  --muted: #e2e8f0;
-  --muted-foreground: #475569;
-  --accent: #0ea5e9;
-  --accent-foreground: #ffffff;
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.984 0.003 247.858);
-  --border: #cbd5e1;
-  --input: #f8fafc;
-  --ring: #2563eb;
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: #ffffff;
-  --sidebar-foreground: #0f172a;
-  --sidebar-primary: #3b82f6;
-  --sidebar-primary-foreground: #f8fafc;
-  --sidebar-accent: #e2e8f0;
-  --sidebar-accent-foreground: #0f172a;
-  --sidebar-border: #cbd5e1;
-  --sidebar-ring: #2563eb;
-
-  /* Explicitly map --color-* variables so Tailwind v4 utilities pick them up */
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
-}
-
-html.dark,
-html[data-theme="dark"],
-html.dark .superadmin-theme,
-html[data-theme="dark"] .superadmin-theme {
-  --background: #08111f;
-  --foreground: #e6eef8;
-  --card: #0b1220;
-  --card-foreground: #e6eef8;
-  --popover: #0b1220;
-  --popover-foreground: #e6eef8;
-
-  /* Keep the header color selector pill visually dark in dark mode */
-  --color-card: #0b1220;
-  --color-border: #1f2937;
-  --color-foreground: #e6eef8;
-  --primary: oklch(0.58 0.2 250);
-  --primary-foreground: oklch(0.98 0.01 220);
-  --secondary: #0f172a;
-  --secondary-foreground: #cbd5e1;
-  --muted: #162033;
-  --muted-foreground: #94a3b8;
-  --accent: #0ea5e9;
-  --accent-foreground: #0f172a;
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.984 0.003 247.858);
-  --border: #1f2937;
-  --input: #0b1220;
-  --ring: #2563eb;
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: #071225;
-  --sidebar-foreground: #cbd5e1;
-  --sidebar-primary: #3b82f6;
-  --sidebar-primary-foreground: #f8fafc;
-  --sidebar-accent: #162033;
-  --sidebar-accent-foreground: #e6eef8;
-  --sidebar-border: #1f2937;
-  --sidebar-ring: #2563eb;
-
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
-}
+/* ── Duplicate dark-mode block removed — html.dark at top of file is the single source of truth ── */
 
 /* ── Glass ── */
 @utility glass {
@@ -658,14 +616,30 @@ html[data-theme="dark"] .superadmin-theme {
 }
 
 @utility text-gradient {
-  background: linear-gradient(120deg, oklch(0.97 0.02 220), oklch(0.82 0.14 215) 45%, oklch(0.58 0.2 250));
+  background: linear-gradient(120deg, #0284c7 0%, #06b6d4 45%, #4f46e5 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+html.dark .text-gradient,
+:is(.dark *) .text-gradient {
+  background: linear-gradient(120deg, #38bdf8 0%, #22d3ee 45%, #a5b4fc 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 
 @utility text-gradient-purple {
-  background: linear-gradient(120deg, oklch(0.92 0.1 230), oklch(0.62 0.18 265) 60%, oklch(0.68 0.16 285));
+  background: linear-gradient(120deg, #4f46e5 0%, #7c3aed 50%, #0284c7 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+html.dark .text-gradient-purple,
+:is(.dark *) .text-gradient-purple {
+  background: linear-gradient(120deg, #818cf8 0%, #a855f7 50%, #38bdf8 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -1070,7 +1044,7 @@ html.admin-layout[data-theme="dark"] .superadmin-jobs-page h1 {
 }
 
 @layer utilities {
-.animate-fade-up {
+  .animate-fade-up {
     animation: fade-up 0.8s ease-out forwards;
     opacity: 0;
   }
@@ -1094,6 +1068,16 @@ html.admin-layout[data-theme="dark"] .superadmin-jobs-page h1 {
     animation: fade-up 0.8s ease-out 0.8s forwards;
     opacity: 0;
   }
+}
+
+/* Universal Logo Visibility Filter for Light & Dark Themes (Without background box) */
+.brand-logo-img {
+  filter: drop-shadow(0 0 1.5px rgba(15, 23, 42, 0.95)) drop-shadow(0 1px 3px rgba(15, 23, 42, 0.5));
+  transition: filter 0.3s ease;
+}
+
+html.dark .brand-logo-img {
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.4));
 }
 
 /* Smooth color transitions for theme changes */
@@ -1658,242 +1642,4 @@ body,
 
 [data-theme="dark"] .shadow-xl {
   box-shadow: 0 20px 60px rgba(2, 6, 23, 0.6);
-}
-
-/* Admin / Superadmin dashboard specific dark overrides
-   Scope to html.admin-layout so only admin shells are affected. */
-html.admin-layout[data-theme="dark"] {
-  --sidebar: #071225;
-  --sidebar-foreground: #cbd5e1;
-  --sidebar-border: #0b1220;
-}
-
-html.admin-layout[data-theme="dark"] body,
-html.admin-layout[data-theme="dark"] main {
-  background:
-    radial-gradient(ellipse at top, rgba(124, 58, 237, 0.15), transparent 32%),
-    radial-gradient(circle at 12% 10%, rgba(59, 130, 246, 0.10), transparent 40%),
-    linear-gradient(180deg, rgba(6, 8, 15, 1) 0%, rgba(8, 10, 18, 1) 100%) !important;
-  color: var(--foreground) !important;
-}
-
-html.admin-layout[data-theme="dark"] aside {
-  background: var(--sidebar) !important;
-  color: var(--sidebar-foreground) !important;
-  border-right-color: var(--sidebar-border) !important;
-}
-
-html.admin-layout[data-theme="dark"] aside .leading-tight .text-sm,
-html.admin-layout[data-theme="dark"] aside .leading-tight .text-\[11px\],
-html.admin-layout[data-theme="dark"] aside .space-y-1 a,
-html.admin-layout[data-theme="dark"] .Sidebar,
-html.admin-layout[data-theme="dark"] .Sidebar * {
-  color: var(--sidebar-foreground) !important;
-}
-
-/* Top header and controls */
-html.admin-layout[data-theme="dark"] header {
-  background: linear-gradient(180deg, rgba(11, 18, 32, 0.96), rgba(8, 12, 22, 0.96)) !important;
-  border-bottom-color: rgba(255, 255, 255, 0.06) !important;
-  color: var(--foreground) !important;
-  box-shadow: 0 10px 30px -20px rgba(0, 0, 0, 0.75) !important;
-}
-
-html.admin-layout[data-theme="dark"] header button:not(.accent-selector-button),
-html.admin-layout[data-theme="dark"] header .p-2 {
-  background: var(--card) !important;
-  border-color: var(--border) !important;
-  color: var(--foreground) !important;
-}
-
-html.admin-layout[data-theme="dark"] header button.accent-selector-button {
-  background: none;
-  color: inherit;
-}
-
-/* Main content background should be dark-aware but slightly offset from cards */
-html.admin-layout[data-theme="dark"] main {
-  background:
-    radial-gradient(ellipse at top, rgba(124, 58, 237, 0.15), transparent 32%),
-    radial-gradient(circle at 12% 10%, rgba(59, 130, 246, 0.10), transparent 40%),
-    linear-gradient(180deg, rgba(6, 8, 15, 1) 0%, rgba(8, 10, 18, 1) 100%) !important;
-}
-
-html.admin-layout[data-theme="dark"] .superadmin-dashboard-page,
-html.admin-layout[data-theme="dark"] .superadmin-dashboard-page .bg-white,
-html.admin-layout[data-theme="dark"] .superadmin-dashboard-page .bg-slate-50,
-html.admin-layout[data-theme="dark"] .superadmin-dashboard-page .bg-slate-100,
-html.admin-layout[data-theme="dark"] .superadmin-dashboard-page .border-slate-100,
-html.admin-layout[data-theme="dark"] .superadmin-dashboard-page .border-slate-200,
-html.admin-layout[data-theme="dark"] .superadmin-dashboard-page .text-slate-900,
-html.admin-layout[data-theme="dark"] .superadmin-dashboard-page .text-slate-800,
-html.admin-layout[data-theme="dark"] .superadmin-dashboard-page .text-slate-700,
-html.admin-layout[data-theme="dark"] .superadmin-dashboard-page .text-slate-600,
-html.admin-layout[data-theme="dark"] .superadmin-dashboard-page .text-slate-500,
-html.admin-layout[data-theme="dark"] .superadmin-dashboard-page .text-slate-400 {
-  background-color: rgba(11, 18, 32, 0.95) !important;
-  color: var(--foreground) !important;
-  border-color: rgba(255, 255, 255, 0.06) !important;
-}
-
-html.admin-layout[data-theme="dark"] .superadmin-dashboard-page .text-slate-500,
-html.admin-layout[data-theme="dark"] .superadmin-dashboard-page .text-slate-400,
-html.admin-layout[data-theme="dark"] .superadmin-dashboard-page .text-slate-600 {
-  color: var(--muted-foreground) !important;
-}
-
-html.admin-layout[data-theme="dark"] .bg-white,
-html.admin-layout[data-theme="dark"] .bg-slate-50,
-html.admin-layout[data-theme="dark"] .bg-slate-100,
-html.admin-layout[data-theme="dark"] .bg-slate-200,
-html.admin-layout[data-theme="dark"] .bg-slate-300,
-html.admin-layout[data-theme="dark"] .bg-slate-50\/30,
-html.admin-layout[data-theme="dark"] .bg-slate-50\/40,
-html.admin-layout[data-theme="dark"] .bg-slate-50\/50,
-html.admin-layout[data-theme="dark"] .bg-slate-50\/60,
-html.admin-layout[data-theme="dark"] .bg-slate-50\/70,
-html.admin-layout[data-theme="dark"] .bg-slate-50\/95,
-html.admin-layout[data-theme="dark"] .bg-slate-100\/40,
-html.admin-layout[data-theme="dark"] .bg-slate-100\/50,
-html.admin-layout[data-theme="dark"] .bg-slate-100\/80,
-html.admin-layout[data-theme="dark"] .bg-slate-100\/95,
-html.admin-layout[data-theme="dark"] .bg-gray-50,
-html.admin-layout[data-theme="dark"] .bg-gray-100,
-html.admin-layout[data-theme="dark"] .bg-gray-200,
-html.admin-layout[data-theme="dark"] .bg-white\/10,
-html.admin-layout[data-theme="dark"] .bg-white\/20,
-html.admin-layout[data-theme="dark"] .bg-white\/30,
-html.admin-layout[data-theme="dark"] .bg-white\/50,
-html.admin-layout[data-theme="dark"] .bg-white\/80,
-html.admin-layout[data-theme="dark"] .bg-white\/85,
-html.admin-layout[data-theme="dark"] .bg-white\/90,
-html.admin-layout[data-theme="dark"] .bg-white\/95 {
-  background-color: var(--card) !important;
-  color: var(--card-foreground) !important;
-}
-
-html.admin-layout[data-theme="dark"] .border-slate-50,
-html.admin-layout[data-theme="dark"] .border-slate-100,
-html.admin-layout[data-theme="dark"] .border-slate-200,
-html.admin-layout[data-theme="dark"] .border-gray-100,
-html.admin-layout[data-theme="dark"] .border-gray-200,
-html.admin-layout[data-theme="dark"] .border-white\/5,
-html.admin-layout[data-theme="dark"] .border-white\/10 {
-  border-color: rgba(255, 255, 255, 0.06) !important;
-}
-
-html.admin-layout[data-theme="dark"] .text-slate-900,
-html.admin-layout[data-theme="dark"] .text-slate-800,
-html.admin-layout[data-theme="dark"] .text-gray-900,
-html.admin-layout[data-theme="dark"] .text-slate-700,
-html.admin-layout[data-theme="dark"] .text-gray-700 {
-  color: var(--foreground) !important;
-}
-
-html.admin-layout[data-theme="dark"] .text-slate-600,
-html.admin-layout[data-theme="dark"] .text-slate-500,
-html.admin-layout[data-theme="dark"] .text-slate-400,
-html.admin-layout[data-theme="dark"] .text-gray-500 {
-  color: var(--muted-foreground) !important;
-}
-
-html.admin-layout[data-theme="dark"] .superadmin-jobs-page .bg-slate-100,
-html.admin-layout[data-theme="dark"] .superadmin-jobs-page .bg-white,
-html.admin-layout[data-theme="dark"] .superadmin-jobs-page .bg-white\/80,
-html.admin-layout[data-theme="dark"] .superadmin-jobs-page .bg-gradient-to-b.from-indigo-50\/50.to-transparent {
-  background-color: var(--card) !important;
-  background-image: none !important;
-  background: var(--card) !important;
-}
-
-html.admin-layout[data-theme="dark"] .superadmin-jobs-page .border-slate-200\/80,
-html.admin-layout[data-theme="dark"] .superadmin-jobs-page .border-white\/60 {
-  border-color: rgba(255, 255, 255, 0.08) !important;
-}
-
-html.admin-layout[data-theme="dark"] .superadmin-jobs-page h1.text-transparent {
-  color: var(--foreground) !important;
-  background-image: none !important;
-  background: none !important;
-  -webkit-background-clip: unset !important;
-  background-clip: unset !important;
-}
-
-html.admin-layout[data-theme="dark"] .superadmin-jobs-page .text-slate-500,
-html.admin-layout[data-theme="dark"] .superadmin-jobs-page .text-slate-400 {
-  color: var(--foreground) !important;
-}
-
-html.admin-layout[data-theme="dark"] .superadmin-jobs-page .hover\:bg-indigo-100:hover,
-html.admin-layout[data-theme="dark"] .superadmin-jobs-page .hover\:bg-teal-100:hover,
-html.admin-layout[data-theme="dark"] .superadmin-jobs-page .hover\:bg-rose-100:hover,
-html.admin-layout[data-theme="dark"] .superadmin-jobs-page .hover\:bg-slate-100:hover,
-html.admin-layout[data-theme="dark"] .superadmin-jobs-page .hover\:bg-slate-200:hover,
-html.admin-layout[data-theme="dark"] .superadmin-jobs-page .hover\:bg-white\/10:hover,
-html.admin-layout[data-theme="dark"] .superadmin-jobs-page .hover\:bg-white\/20:hover,
-html.admin-layout[data-theme="dark"] .superadmin-jobs-page .hover\:bg-indigo-50\/30:hover {
-  background-color: transparent !important;
-  background-image: none !important;
-}
-
-/* Generic superadmin page dark-mode conversion for Admin shell pages */
-html.admin-layout[data-theme="dark"] [class*="bg-white"],
-html.admin-layout[data-theme="dark"] [class*="bg-slate-50"],
-html.admin-layout[data-theme="dark"] [class*="bg-slate-100"],
-html.admin-layout[data-theme="dark"] [class*="bg-slate-200"],
-html.admin-layout[data-theme="dark"] [class*="bg-slate-300"] {
-  background-color: var(--card) !important;
-  background-image: none !important;
-}
-
-html.admin-layout[data-theme="dark"] [class*="border-slate-"],
-html.admin-layout[data-theme="dark"] [class*="border-white"] {
-  border-color: rgba(255, 255, 255, 0.08) !important;
-}
-
-html.admin-layout[data-theme="dark"] [class*="text-slate-900"],
-html.admin-layout[data-theme="dark"] [class*="text-slate-800"],
-html.admin-layout[data-theme="dark"] [class*="text-slate-700"] {
-  color: var(--foreground) !important;
-}
-
-html.admin-layout[data-theme="dark"] [class*="text-slate-600"],
-html.admin-layout[data-theme="dark"] [class*="text-slate-500"],
-html.admin-layout[data-theme="dark"] [class*="text-slate-400"] {
-  color: var(--muted-foreground) !important;
-}
-
-html.admin-layout[data-theme="dark"] [class*="hover:bg-slate-50"]:hover,
-html.admin-layout[data-theme="dark"] [class*="hover:bg-slate-100"]:hover,
-html.admin-layout[data-theme="dark"] [class*="hover:bg-slate-200"]:hover,
-html.admin-layout[data-theme="dark"] [class*="hover:bg-white"]:hover {
-  background-color: rgba(255, 255, 255, 0.03) !important;
-}
-
-html.admin-layout[data-theme="dark"] .bg-slate-800,
-html.admin-layout[data-theme="dark"] .bg-black {
-  background-color: #0b1220 !important;
-}
-
-/* Sidebar buttons and footer actions */
-html.admin-layout[data-theme="dark"] aside button,
-html.admin-layout[data-theme="dark"] aside .px-3 {
-  color: var(--sidebar-foreground) !important;
-}
-
-/* Notification dropdown and popovers inside admin shell */
-html.admin-layout[data-theme="dark"] .relative .bg-white {
-  background: linear-gradient(180deg, rgba(11, 18, 32, 0.98), rgba(8, 12, 22, 0.98)) !important;
-  color: var(--card-foreground) !important;
-  border-color: rgba(255, 255, 255, 0.06) !important;
-  box-shadow: 0 20px 60px -20px rgba(0, 0, 0, 0.8) !important;
-}
-
-/* Ensure active/hovered navlink readability */
-html.admin-layout[data-theme="dark"] aside a:hover {
-  background: rgba(255, 255, 255, 0.02) !important;
-}
-
-html.admin-layout[data-theme="dark"] aside a {
-  color: var(--sidebar-foreground) !important;
 }

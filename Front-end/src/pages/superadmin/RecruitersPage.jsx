@@ -488,10 +488,10 @@ export default function RecruitersPage() {
                     {/* Recruiter Avatar & Info */}
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-3.5">
-                        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-sm shadow-xs ${
+                        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-sm text-white shadow-md ${
                           isSuperAdmin 
-                            ? 'bg-gradient-to-br from-purple-500 to-indigo-600 text-white' 
-                            : 'bg-indigo-100 text-indigo-700'
+                            ? 'bg-gradient-to-br from-purple-500 to-indigo-600 border border-purple-400/30' 
+                            : 'bg-gradient-to-br from-indigo-500 to-indigo-600 border border-indigo-400/30'
                         }`}>
                           {recruiter.name ? recruiter.name.charAt(0).toUpperCase() : 'R'}
                         </div>

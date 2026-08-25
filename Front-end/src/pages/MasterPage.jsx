@@ -490,7 +490,7 @@ export default function MasterPage() {
       >
         <div>
           <div className="p-6 border-b border-white/10 flex justify-center">
-            <img src={logo} alt="Hire IQ Logo" className="h-10 w-auto object-contain" />
+            <img src={logo} alt="Hire IQ Logo" className="h-10 w-auto object-contain brand-logo-img" />
           </div>
 
           <nav className="p-4 space-y-1.5">

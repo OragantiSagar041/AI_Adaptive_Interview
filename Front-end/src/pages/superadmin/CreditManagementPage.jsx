@@ -224,31 +224,31 @@ export default function CreditManagementPage() {
         </Table></CardContent>
       </Card>
 
-      <div className="bg-white dark:bg-slate-800/60/80 backdrop-blur-2xl border border-white/60 p-0 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-3xl overflow-hidden relative mb-6">
-        <div className="p-6 sm:p-8 border-b border-slate-100 dark:border-slate-800/50 flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-[0_8px_16px_rgba(245,158,11,0.25)] border border-white/20 ring-4 ring-amber-50 shrink-0">
+      <div className="bg-card border border-border rounded-3xl overflow-hidden shadow-sm mb-6">
+        <div className="p-6 sm:p-8 border-b border-border flex items-center gap-4">
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-md border border-amber-400/30 shrink-0">
             <CreditCard size={26} strokeWidth={2.5} />
           </div>
           <div className="flex flex-col">
-            <h3 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-slate-900 to-amber-900 tracking-tight leading-tight">
+            <h3 className="text-2xl font-black text-foreground tracking-tight leading-tight">
               Pending Credit Requests
             </h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 font-semibold tracking-wide mt-0.5">
+            <p className="text-sm text-muted-foreground font-semibold tracking-wide mt-0.5">
               Approve or reject credit request notifications from sub-admins
             </p>
           </div>
         </div>
 
-        <div className="overflow-x-auto p-4 sm:p-6 bg-slate-50 dark:bg-slate-900/50/30">
+        <div className="overflow-x-auto p-4 sm:p-6 bg-background">
           <table className="w-full border-collapse text-left">
             <thead>
-              <tr className="border-b-2 border-slate-200 dark:border-slate-700">
-                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider">Date</th>
-                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider">Admin</th>
-                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider">Requested</th>
-                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider">Reason</th>
-                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider text-center">Status</th>
-                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider text-right">Actions</th>
+              <tr className="border-b border-border">
+                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider">Date</th>
+                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider">Admin</th>
+                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider">Requested</th>
+                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider">Reason</th>
+                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider text-center">Status</th>
+                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">

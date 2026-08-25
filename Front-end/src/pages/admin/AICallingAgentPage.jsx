@@ -1502,6 +1502,7 @@ function RecentCallsTab({ calls, loading, onViewDetails }) {
                     ID: #{call.id}
                     <Copy size={12} className="cursor-pointer hover:text-indigo-600 transition-colors" />
                   </div>
+                </div>
               </motion.div>
             )
           }))}
