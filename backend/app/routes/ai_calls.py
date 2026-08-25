@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Union
 import bcrypt, jwt, requests
 import cloudinary, cloudinary.uploader, cloudinary.api, cloudinary.utils
 import edge_tts
+# pyrefly: ignore [missing-import]
 import pypdf
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -718,6 +719,53 @@ def get_omni_post_call_config(current_admin: dict = Depends(get_current_admin_de
         _, agent, _ = get_omni_account(omni_api_key)
         post_call = agent.get("post_call_config_ids", [])
         return {"post_call_configs": post_call, "success": True}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": str(e)})
+
+
+class ExtractedVariable(BaseModel):
+    key: str
+    description: str
+
+class PostCallConfigPayload(BaseModel):
+    delivery_method: str
+    destination: str
+    webhook_url: str
+    trigger_call_statuses: List[str]
+    call_summary: bool = False
+    full_conversation: bool = False
+    sentiment_analysis: bool = False
+    extracted_information: bool = False
+    extracted_variables: List[ExtractedVariable] = []
+
+
+@router.post("/api/calls/post-call-config")
+def update_omni_post_call_config(payload: PostCallConfigPayload, current_admin: dict = Depends(get_current_admin_details)):
+    """Update post-call configuration directly into Omni Dimension agent."""
+    omni_api_key = None
+    from app.ai.omni_dimension_client import get_omni_account, set_cached_omni_json
+    try:
+        client, agent, agent_id = get_omni_account(omni_api_key)
+        
+        new_config = {
+            "delivery_method": payload.delivery_method,
+            "destination": payload.destination,
+            "webhook_url": payload.webhook_url,
+            "trigger_call_statuses": payload.trigger_call_statuses,
+            "include_summary": payload.call_summary,
+            "include_full_conversation": payload.full_conversation,
+            "include_sentiment": payload.sentiment_analysis,
+            "include_extracted_info": payload.extracted_information,
+            "extracted_variables": [v.dict() for v in payload.extracted_variables]
+        }
+        
+        # Update the agent in Omni Dimension
+        client.agent.update(agent_id=agent_id, data={"post_call_config_ids": [new_config]})
+        
+        # Invalidate local cache so the next GET fetches fresh data
+        set_cached_omni_json(omni_api_key, "account", None)
+        
+        return {"success": True, "message": "Updated successfully"}
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": str(e)})
 

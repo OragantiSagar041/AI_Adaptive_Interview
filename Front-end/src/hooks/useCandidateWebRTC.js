@@ -43,8 +43,9 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
     destroyedRef.current = false
 
     function buildWsUrl() {
+      const candBaseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL
       return (
-        API_BASE_URL.replace(/^https/, 'wss').replace(/^http/, 'ws') +
+        candBaseUrl.replace(/^https/, 'wss').replace(/^http/, 'ws') +
         `/ws/webrtc/candidate/${linkId}?token=${encodeURIComponent(monitoringToken)}`
       )
     }
