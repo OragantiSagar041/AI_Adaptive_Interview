@@ -738,7 +738,7 @@ export const InterviewNonTechnical = () => {
                     tabIndex={-1}
                     aria-live="polite"
                     aria-label="Live transcript"
-                    style={{ pointerEvents: 'none', userSelect: 'none', cursor: 'default', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                    style={{ cursor: 'text', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
                   >
                     {transcriptionText || <span style={{ color: '#94a3b8' }}>Your speech will appear here automatically...</span>}
                   </div>
