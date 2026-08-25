@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { API_BASE_URL } from '../apiConfig'
 import { User, Building2, Mail, Phone, Lock, ShieldCheck, ArrowLeft } from 'lucide-react'
 import ThemeToggle from '../components/ThemeToggle'
+import Button from '../components/Button'
 import logo from '../assets/logo.png'
 
 function RegisterPage() {
@@ -48,7 +49,7 @@ function RegisterPage() {
 
         const preferredPlanName = searchParams.get("plan") || ""
         const match = sortedPlans.find(p => p.plan_name.toLowerCase() === preferredPlanName.toLowerCase())
-        
+
         if (match) {
           setSelectedPlan(match)
         } else {
@@ -214,9 +215,9 @@ function RegisterPage() {
   return (
     <main className="relative min-h-screen bg-slate-50 dark:bg-[#0f172a] text-slate-900 dark:text-slate-100 font-sans overflow-x-hidden px-4 py-8 md:px-8 transition-colors duration-300">
       {/* Background Soft Glows */}
-      <div 
-        aria-hidden="true" 
-        className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[500px] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-500/15 via-purple-500/10 to-transparent blur-[100px]" 
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[500px] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-500/15 via-purple-500/10 to-transparent blur-[100px]"
       />
       {/* Soft Dot Grid Pattern */}
       <div
@@ -239,8 +240,8 @@ function RegisterPage() {
           </Link>
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            <Link 
-              to="/" 
+            <Link
+              to="/"
               className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all shadow-xs"
             >
               <ArrowLeft size={14} /> Back to platform
@@ -264,13 +265,12 @@ function RegisterPage() {
             </div>
 
             {status.message && (
-              <div className={`rounded-xl border p-4 text-sm font-medium backdrop-blur-md ${
-                status.type === 'error'
-                  ? 'bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-500/30'
-                  : status.type === 'success'
+              <div className={`rounded-xl border p-4 text-sm font-medium backdrop-blur-md ${status.type === 'error'
+                ? 'bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-500/30'
+                : status.type === 'success'
                   ? 'bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/30'
                   : 'bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/30'
-              }`}>
+                }`}>
                 {status.message}
               </div>
             )}
@@ -355,7 +355,7 @@ function RegisterPage() {
                     name="password"
                     value={form.password}
                     onChange={handleInputChange}
-                    placeholder="Create a secure password"
+                    placeholder="e.g. John Doe"
                     required
                     className="w-full bg-slate-50 dark:bg-[#0f172a]/70 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-slate-100 text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none transition-all focus:border-indigo-500 focus:bg-white dark:focus:bg-[#0f172a] focus:ring-2 focus:ring-indigo-500/20"
                   />
@@ -372,11 +372,10 @@ function RegisterPage() {
                           key={p.id || p.plan_name}
                           type="button"
                           onClick={() => setSelectedPlan(p)}
-                          className={`flex cursor-pointer flex-col justify-between rounded-xl border p-4 text-left transition-all duration-200 relative overflow-hidden ${
-                            isSelected
+                          className={`flex cursor-pointer flex-col justify-between rounded-xl border p-4 text-left transition-all duration-200 relative overflow-hidden ${isSelected
                               ? 'border-2 border-indigo-600 dark:border-indigo-500 bg-indigo-50 dark:bg-indigo-500/15 shadow-[0_0_20px_rgba(99,102,241,0.2)] ring-1 ring-indigo-500'
                               : 'border-slate-200 dark:border-slate-700/60 bg-slate-50/50 dark:bg-[#0f172a]/40 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-100 dark:hover:bg-[#0f172a]/70'
-                          }`}
+                            }`}
                         >
                           {isSelected && (
                             <div className="absolute top-0 right-0 w-20 h-20 bg-indigo-500/15 blur-[20px] -mr-8 -mt-8 rounded-full pointer-events-none" />
@@ -414,12 +413,13 @@ function RegisterPage() {
                     Sign in here
                   </Link>
                 </div>
-              </form>
-            )}
-          </div>
+              </form >
+            )
+            }
+          </div >
 
           {/* Right Column: Selected Plan Overview Card */}
-          <div className="lg:sticky lg:top-8">
+          < div className="lg:sticky lg:top-8" >
             {selectedPlan && (
               <div className="relative overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-700/60 bg-white/90 dark:bg-[#1e293b]/70 p-7 md:p-8 shadow-xl backdrop-blur-xl flex flex-col gap-6 transition-colors">
                 <div className="absolute top-0 right-0 w-36 h-36 bg-indigo-500/10 blur-[50px] -mr-16 -mt-16 rounded-full pointer-events-none" />
@@ -464,10 +464,10 @@ function RegisterPage() {
                 </div>
               </div>
             )}
-          </div>
-        </div>
-      </div>
-    </main>
+          </div >
+        </div >
+      </div >
+    </main >
   )
 }
 

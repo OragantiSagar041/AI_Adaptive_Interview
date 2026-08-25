@@ -74,7 +74,7 @@ function ConfigureModal({ integration, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4 animate-in fade-in duration-200">
-      <div className="bg-white/90 backdrop-blur-xl border border-white/40 rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] w-full max-w-md relative overflow-hidden animate-in zoom-in-95 duration-200">
+      <div className="bg-white dark:bg-slate-800/60/90 backdrop-blur-xl border border-white/40 rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] w-full max-w-md relative overflow-hidden animate-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="relative overflow-hidden px-8 py-6">
           <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 via-purple-600 to-fuchsia-600 opacity-100"></div>
@@ -82,7 +82,7 @@ function ConfigureModal({ integration, onClose, onSaved }) {
           
           <div className="relative flex items-center justify-between z-10">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-white/20 shadow-inner backdrop-blur-md flex items-center justify-center ring-1 ring-white/30">
+              <div className="w-12 h-12 rounded-xl bg-white dark:bg-slate-800/60/20 shadow-inner backdrop-blur-md flex items-center justify-center ring-1 ring-white/30">
                 <Settings className="h-6 w-6 text-white" />
               </div>
               <div>
@@ -104,12 +104,12 @@ function ConfigureModal({ integration, onClose, onSaved }) {
 
         {/* Body */}
         <div className="p-8 space-y-6">
-          <p className="text-sm text-slate-600 leading-relaxed font-medium">{integration.description}</p>
+          <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed font-medium">{integration.description}</p>
 
           <div className="space-y-5">
             {(integration.fields || []).map((field) => (
               <div key={field.key} className="space-y-2">
-                <Label htmlFor={field.key} className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                <Label htmlFor={field.key} className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">
                   {field.label}
                 </Label>
                 <div className="relative group">
@@ -119,7 +119,7 @@ function ConfigureModal({ integration, onClose, onSaved }) {
                     placeholder={field.placeholder}
                     value={form[field.key] || ""}
                     onChange={(e) => handleChange(field.key, e.target.value)}
-                    className="pr-10 h-11 bg-slate-50 border-slate-200 shadow-sm transition-all duration-300 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 group-hover:border-indigo-300 rounded-xl"
+                    className="pr-10 h-11 bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-700 shadow-sm transition-all duration-300 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 group-hover:border-indigo-300 rounded-xl"
                   />
                   {field.type === "password" && (
                     <button
@@ -142,7 +142,7 @@ function ConfigureModal({ integration, onClose, onSaved }) {
         </div>
 
         {/* Footer */}
-        <div className="px-8 pb-8 pt-4 flex gap-4 bg-slate-50/50">
+        <div className="px-8 pb-8 pt-4 flex gap-4 bg-slate-50 dark:bg-slate-900/50/50">
           <Button
             className="flex-1 h-11 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-md hover:shadow-xl hover:shadow-indigo-500/25 transition-all duration-300 rounded-xl font-medium"
             onClick={handleSave}
@@ -153,7 +153,7 @@ function ConfigureModal({ integration, onClose, onSaved }) {
           <Button 
             variant="outline" 
             onClick={onClose} 
-            className="flex-1 h-11 border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900 rounded-xl font-medium transition-all"
+            className="flex-1 h-11 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:bg-slate-800/50 hover:text-slate-900 dark:text-white rounded-xl font-medium transition-all"
           >
             Cancel
           </Button>
@@ -205,7 +205,7 @@ export default function IntegrationsPage() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       toast.success(`${integ.name} ${newConnected ? "connected" : "disconnected"}`, {
-        icon: newConnected ? <Plug className="h-4 w-4 text-emerald-500" /> : <XCircle className="h-4 w-4 text-slate-500" />
+        icon: newConnected ? <Plug className="h-4 w-4 text-emerald-500" /> : <XCircle className="h-4 w-4 text-slate-500 dark:text-slate-400" />
       });
     } catch (err) {
       setIntegrations((prev) =>
@@ -233,7 +233,7 @@ export default function IntegrationsPage() {
             <div className="absolute inset-0 bg-indigo-500 rounded-full blur-xl opacity-20 animate-pulse"></div>
             <Loader2 className="h-10 w-10 animate-spin text-indigo-600 relative z-10" />
           </div>
-          <span className="text-sm font-medium text-slate-500 animate-pulse">Loading workspace integrations...</span>
+          <span className="text-sm font-medium text-slate-500 dark:text-slate-400 animate-pulse">Loading workspace integrations...</span>
         </div>
       </AdminShell>
     );
@@ -248,7 +248,7 @@ export default function IntegrationsPage() {
         <div className="max-w-6xl space-y-12 pb-12">
           {categories.map((cat) => {
             const Icon = CATEGORY_ICONS[cat] || Plug;
-            const colorClass = CATEGORY_COLORS[cat] || "from-slate-500/20 to-gray-500/20 text-slate-600";
+            const colorClass = CATEGORY_COLORS[cat] || "from-slate-500/20 to-gray-500/20 text-slate-600 dark:text-slate-400";
             
             return (
               <div key={cat} className="space-y-6 animate-in slide-in-from-bottom-4 duration-500 fade-in fill-mode-both" style={{animationDelay: `${categories.indexOf(cat) * 100}ms`}}>
@@ -259,10 +259,10 @@ export default function IntegrationsPage() {
                     <Icon className="h-5 w-5" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-bold text-slate-800 tracking-tight">
+                    <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 tracking-tight">
                       {cat}
                     </h2>
-                    <p className="text-xs font-medium text-slate-500 uppercase tracking-widest">{integrations.filter(r => r.category === cat).length} Apps Available</p>
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-widest">{integrations.filter(r => r.category === cat).length} Apps Available</p>
                   </div>
                 </div>
 
@@ -274,7 +274,7 @@ export default function IntegrationsPage() {
                       <Card 
                         key={r.id} 
                         className={`group relative overflow-hidden transition-all duration-300 border hover:border-indigo-200 hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-2xl ${
-                          r.connected ? 'bg-white shadow-sm border-slate-200' : 'bg-slate-50/50 border-slate-100'
+                          r.connected ? 'bg-white dark:bg-slate-800/60 shadow-sm border-slate-200 dark:border-slate-700' : 'bg-slate-50 dark:bg-slate-900/50/50 border-slate-100 dark:border-slate-800'
                         }`}
                       >
                         {/* Status Indicator Glow */}
@@ -286,12 +286,12 @@ export default function IntegrationsPage() {
                           <div className="flex items-start justify-between">
                             <div className="flex-1 min-w-0 pr-4">
                               <div className="flex items-center gap-2 mb-1.5">
-                                <CardTitle className="text-lg font-bold text-slate-800 tracking-tight">{r.name}</CardTitle>
+                                <CardTitle className="text-lg font-bold text-slate-800 dark:text-slate-100 tracking-tight">{r.name}</CardTitle>
                                 {r.connected && (
                                   <span className="flex h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"></span>
                                 )}
                               </div>
-                              <CardDescription className="text-xs text-slate-500 leading-relaxed font-medium line-clamp-2 h-10">
+                              <CardDescription className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-medium line-clamp-2 h-10">
                                 {r.description}
                               </CardDescription>
                             </div>
@@ -319,7 +319,7 @@ export default function IntegrationsPage() {
                               </span>
                               <span
                                 aria-hidden="true"
-                                className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-md ring-0 transition duration-300 ease-in-out z-10 ${
+                                className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white dark:bg-slate-800/60 shadow-md ring-0 transition duration-300 ease-in-out z-10 ${
                                   r.connected ? 'translate-x-9' : 'translate-x-0'
                                 }`}
                               />
@@ -339,7 +339,7 @@ export default function IntegrationsPage() {
                                   ? "bg-emerald-50 text-emerald-700 shadow-sm shadow-emerald-100"
                                   : r.status === "Degraded"
                                   ? "bg-amber-50 text-amber-700 shadow-sm shadow-amber-100"
-                                  : "bg-slate-100 text-slate-500 shadow-inner"
+                                  : "bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 shadow-inner"
                               }`}
                             >
                               {r.status === "Healthy" ? (
@@ -356,7 +356,7 @@ export default function IntegrationsPage() {
                               size="sm"
                               className={`h-8 px-4 rounded-lg text-xs font-semibold shadow-sm transition-all duration-300 ${
                                 r.connected 
-                                  ? 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-indigo-600 hover:border-indigo-200' 
+                                  ? 'bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700 hover:text-indigo-600 hover:border-indigo-200' 
                                   : 'bg-indigo-50 border-transparent text-indigo-700 hover:bg-indigo-100'
                               }`}
                               onClick={() => setConfigTarget(r)}

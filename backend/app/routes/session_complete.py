@@ -223,8 +223,28 @@ def complete_session(
                         # Reuse the existing score in the database session document if available
                         avg_score = session.get("avg_score")
                         if avg_score is None:
+                            # 1. Determine total expected questions
+                            interview_doc = interviews_collection.find_one({"id": interview_id})
+                            total_expected = 0
+                            if interview_doc and interview_doc.get("questions"):
+                                q_data = interview_doc.get("questions")
+                                if isinstance(q_data, str):
+                                    import json
+                                    try:
+                                        total_expected = len(json.loads(q_data))
+                                    except:
+                                        pass
+                                elif isinstance(q_data, list):
+                                    total_expected = len(q_data)
+                                    
+                            # 2. Get scores for answered questions
                             scores = [a.get("ai_score", 0) for a in answers if a.get("ai_score") is not None]
-                            avg_score = sum(scores) / len(scores) if scores else 0
+                            
+                            # 3. Fallback: if dynamic questions exceeded expected, or expected is 0
+                            total_expected = max(total_expected, len(scores))
+                            
+                            # 4. Calculate average based on TOTAL expected questions (penalizing skips)
+                            avg_score = sum(scores) / total_expected if total_expected > 0 else 0
                         
                         interview_sessions_collection.update_one(
                             {"link_id": link_id},

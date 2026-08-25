@@ -74,8 +74,8 @@ export default function AICallPage() {
   return (
     <div className="flex flex-col items-center justify-center w-full gap-8 p-6">
       <div className="w-full max-w-4xl space-y-4 text-center">
-        <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">AI Calls for Candidates</h1>
-        <p className="text-slate-500 text-sm">
+        <h1 className="text-3xl font-extrabold text-slate-800 dark:text-slate-100 tracking-tight">AI Calls for Candidates</h1>
+        <p className="text-slate-500 dark:text-slate-400 text-sm">
           Use the widget below to initiate and manage AI calls to candidates and record data.
         </p>
       </div>
@@ -88,7 +88,7 @@ export default function AICallPage() {
       
       <div 
         id="omni-widget-component" 
-        className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden" 
+        className="bg-white dark:bg-slate-800/60 rounded-3xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden" 
         style={{ width: "70%", height: "500px" }}
       ></div>
     </div>

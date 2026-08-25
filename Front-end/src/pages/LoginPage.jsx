@@ -168,6 +168,11 @@ const CSS = `
   }
   .lp-input-pr { padding-right: 48px; }
   input:-webkit-autofill, input:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0 1000px #f1f5f9 inset !important;
+    -webkit-text-fill-color: #0f172a !important;
+    caret-color: #0f172a !important;
+  }
+  .dark input:-webkit-autofill, .dark input:-webkit-autofill:focus {
     -webkit-box-shadow: 0 0 0 1000px #0f0c1e inset !important;
     -webkit-text-fill-color: #f1f5f9 !important;
     caret-color: #f1f5f9 !important;

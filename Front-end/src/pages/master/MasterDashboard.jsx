@@ -273,14 +273,14 @@ export default function MasterDashboard() {
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800">Master Console Overview</h2>
-          <p className="text-sm text-slate-500">Real-time sales, MRR (INR), and date-filtered platform analytics.</p>
+          <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Master Console Overview</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Real-time sales, MRR (INR), and date-filtered platform analytics.</p>
         </div>
         <div className="flex gap-3 w-full sm:w-auto">
           <button
             onClick={() => fetchDashboardData()}
             disabled={loading}
-            className="flex-1 sm:flex-initial px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+            className="flex-1 sm:flex-initial px-4 py-2 bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 dark:bg-slate-900/50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-1.5 shadow-sm"
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh Data
           </button>
@@ -294,12 +294,12 @@ export default function MasterDashboard() {
       </div>
 
       {/* Date-wise Sales Filter Control Card */}
-      <div className="bg-white border border-slate-200/80 p-4 sm:p-5 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.03)] space-y-3.5">
+      <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 p-4 sm:p-5 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-none space-y-3.5">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           {/* Quick Presets */}
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mr-1 flex items-center gap-1">
-              <Filter size={13} className="text-slate-500" /> Filter:
+              <Filter size={13} className="text-slate-500 dark:text-slate-400" /> Filter:
             </span>
             {[
               { key: 'all', label: 'All Time' },
@@ -312,8 +312,8 @@ export default function MasterDashboard() {
                 key={preset.key}
                 onClick={() => handlePresetSelect(preset.key)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${activePreset === preset.key
-                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-200'
-                    : 'bg-slate-100/80 hover:bg-slate-200/80 text-slate-600 border border-slate-200/60'
+                  ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-200'
+                  : 'bg-slate-100 dark:bg-slate-800/50/80 hover:bg-slate-200/80 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700/60'
                   }`}
               >
                 {preset.label}
@@ -323,24 +323,24 @@ export default function MasterDashboard() {
 
           {/* Date Picker Form: From & To */}
           <div className="flex flex-wrap items-center gap-2.5">
-            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 shadow-inner">
-              <span className="text-xs font-semibold text-slate-500">From:</span>
+            <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 shadow-inner">
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">From:</span>
               <input
                 type="date"
                 value={startDate}
                 onChange={(e) => handleCustomDateChange('start', e.target.value)}
-                className="bg-transparent text-xs font-medium text-slate-700 focus:outline-none cursor-pointer"
+                className="bg-transparent text-xs font-medium text-slate-700 dark:text-slate-200 focus:outline-none cursor-pointer"
               />
             </div>
 
-            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 shadow-inner">
-              <span className="text-xs font-semibold text-slate-500">To:</span>
+            <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 shadow-inner">
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">To:</span>
               <input
                 type="date"
                 value={endDate}
                 min={startDate}
                 onChange={(e) => handleCustomDateChange('end', e.target.value)}
-                className="bg-transparent text-xs font-medium text-slate-700 focus:outline-none cursor-pointer"
+                className="bg-transparent text-xs font-medium text-slate-700 dark:text-slate-200 focus:outline-none cursor-pointer"
               />
             </div>
 
@@ -348,7 +348,7 @@ export default function MasterDashboard() {
               <button
                 onClick={handleResetFilter}
                 title="Reset to All Time"
-                className="px-2.5 py-1.5 bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1 border border-slate-200"
+                className="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-800/50 hover:bg-red-50 text-slate-600 dark:text-slate-400 hover:text-red-600 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1 border border-slate-200 dark:border-slate-700"
               >
                 <RotateCcw size={12} /> Clear
               </button>
@@ -372,13 +372,13 @@ export default function MasterDashboard() {
         {/* MRR / Sales Card (INR) */}
         <div
           onClick={() => navigate('/master/subscribers')}
-          className="bg-white border border-slate-200/60 p-4 sm:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-start gap-2 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-lg hover:border-emerald-200"
+          className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 p-4 sm:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:shadow-none flex justify-between items-start gap-2 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-lg hover:border-emerald-200"
         >
           <div>
             <span className="text-[0.62rem] sm:text-[0.68rem] font-bold text-slate-400 uppercase tracking-widest block leading-tight">
               {stats.is_filtered ? 'Sales In Range' : 'Monthly Recurring Revenue'}
             </span>
-            <h3 className="text-xl sm:text-3xl font-extrabold mt-1.5 text-slate-900">
+            <h3 className="text-xl sm:text-3xl font-extrabold mt-1.5 text-slate-900 dark:text-white">
               ₹{stats.mrr_inr.toLocaleString('en-IN')}
             </h3>
             <span className="text-[10px] sm:text-xs text-emerald-500 font-semibold flex items-center gap-1 mt-2">
@@ -393,13 +393,13 @@ export default function MasterDashboard() {
         {/* Active / Registered Companies Card */}
         <div
           onClick={() => navigate('/master/subscribers')}
-          className="bg-white border border-slate-200/60 p-4 sm:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-start gap-2 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-lg hover:border-indigo-200"
+          className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 p-4 sm:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:shadow-none flex justify-between items-start gap-2 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-lg hover:border-indigo-200"
         >
           <div>
             <span className="text-[0.62rem] sm:text-[0.68rem] font-bold text-slate-400 uppercase tracking-widest block leading-tight">
               {stats.is_filtered ? 'Companies In Range' : 'Active Companies'}
             </span>
-            <h3 className="text-xl sm:text-3xl font-extrabold mt-1.5 text-slate-900">
+            <h3 className="text-xl sm:text-3xl font-extrabold mt-1.5 text-slate-900 dark:text-white">
               {stats.is_filtered ? stats.total_companies : stats.active_companies}
             </h3>
             <span className="text-[10px] sm:text-xs text-indigo-500 font-semibold flex items-center gap-1 mt-2">
@@ -414,13 +414,13 @@ export default function MasterDashboard() {
         {/* Real Interviews Conducted Card */}
         <div
           onClick={() => navigate('/master/subscribers')}
-          className="bg-white border border-slate-200/60 p-4 sm:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-start gap-2 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-lg hover:border-amber-200"
+          className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 p-4 sm:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:shadow-none flex justify-between items-start gap-2 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-lg hover:border-amber-200"
         >
           <div>
             <span className="text-[0.62rem] sm:text-[0.68rem] font-bold text-slate-400 uppercase tracking-widest block leading-tight">
               {stats.is_filtered ? 'Conducted In Range' : 'Total Conducted'}
             </span>
-            <h3 className="text-xl sm:text-3xl font-extrabold mt-1.5 text-slate-900">{stats.total_interviews_conducted}</h3>
+            <h3 className="text-xl sm:text-3xl font-extrabold mt-1.5 text-slate-900 dark:text-white">{stats.total_interviews_conducted}</h3>
             <span className="text-[10px] sm:text-xs text-amber-600 font-semibold flex items-center gap-1 mt-2">
               {stats.completed_interviews} completed
             </span>
@@ -432,11 +432,11 @@ export default function MasterDashboard() {
 
         {/* Real System Health Card */}
         <div
-          className="bg-white border border-slate-200/60 p-4 sm:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-start gap-2"
+          className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 p-4 sm:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:shadow-none flex justify-between items-start gap-2"
         >
           <div>
             <span className="text-[0.62rem] sm:text-[0.68rem] font-bold text-slate-400 uppercase tracking-widest block leading-tight">System Health</span>
-            <h3 className="text-xl sm:text-3xl font-extrabold mt-1.5 text-slate-900">{stats.system_health}</h3>
+            <h3 className="text-xl sm:text-3xl font-extrabold mt-1.5 text-slate-900 dark:text-white">{stats.system_health}</h3>
             <span className={`text-[10px] sm:text-xs font-semibold flex items-center gap-1 mt-2 ${stats.system_status === 'Operational' ? 'text-emerald-500' : 'text-amber-500'}`}>
               {stats.system_status} {stats.latency_ms > 0 ? `• ${stats.latency_ms}ms` : ''}
             </span>
@@ -449,9 +449,9 @@ export default function MasterDashboard() {
 
       {/* Visualizations Charts Panel */}
       <div className="grid gap-6 lg:grid-cols-[1.8fr_1fr]">
-        <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] space-y-4">
+        <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:shadow-none space-y-4">
           <div className="flex justify-between items-center">
-            <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
+            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider">
               {stats.is_filtered ? 'Sales & Revenue Trend (Filtered Period in ₹)' : 'Revenue Growth (Estimated MRR in ₹)'}
             </h3>
             {stats.is_filtered && (
@@ -465,8 +465,8 @@ export default function MasterDashboard() {
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] space-y-4">
-          <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Plan Distribution</h3>
+        <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:shadow-none space-y-4">
+          <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider">Plan Distribution</h3>
           <div className="h-[280px] w-full relative">
             <canvas ref={planDistChartRef} id="planDistChart" />
           </div>

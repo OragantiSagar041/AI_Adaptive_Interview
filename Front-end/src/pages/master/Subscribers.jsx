@@ -267,7 +267,7 @@ export default function Subscribers() {
   return (
     <div className="space-y-6 max-w-6xl">
       {/* Filters bar */}
-      <div className="bg-white border border-slate-200/60 p-4 sm:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] grid grid-cols-2 sm:flex sm:flex-wrap gap-4 items-end">
+      <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 p-4 sm:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:shadow-none grid grid-cols-2 sm:flex sm:flex-wrap gap-4 items-end">
         <div className="col-span-2 sm:flex-1 sm:min-w-[200px]">
           <label className="text-[0.62rem] font-bold text-slate-400 uppercase tracking-widest block mb-2">Search Subscribers</label>
           <div className="relative">
@@ -280,7 +280,7 @@ export default function Subscribers() {
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search company or email..."
               style={{ paddingLeft: '2.75rem' }}
-              className="w-full pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 placeholder-slate-400 outline-none focus:border-indigo-500"
+              className="w-full pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 outline-none focus:border-indigo-500"
             />
           </div>
         </div>
@@ -290,7 +290,7 @@ export default function Subscribers() {
           <select
             value={planFilter}
             onChange={(e) => setPlanFilter(e.target.value)}
-            className=" w-full sm:min-w-[130px] py-2.5 px-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 outline-none focus:border-indigo-500 cursor-pointer"
+            className=" w-full sm:min-w-[130px] py-2.5 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-indigo-500 cursor-pointer"
           >
             <option value="all">All Plans</option>
             <option value="trial">Free Trial</option>
@@ -304,7 +304,7 @@ export default function Subscribers() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="w-full sm:min-w-[130px] py-2.5 px-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 outline-none focus:border-indigo-500 cursor-pointer"
+            className="w-full sm:min-w-[130px] py-2.5 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-indigo-500 cursor-pointer"
           >
             <option value="all">All Statuses</option>
             <option value="active">Active</option>
@@ -319,8 +319,8 @@ export default function Subscribers() {
           <input
             type="date"
             value={startDate}
-            onChange={(e) => handleStartDateChange(e.target.value)}
-            className="w-full sm:w-auto py-2 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500 cursor-pointer"
+            onChange={(e) => setStartDate(e.target.value)}
+            className="w-full sm:w-auto py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 text-xs font-medium text-slate-700 dark:text-slate-200 outline-none focus:border-indigo-500 cursor-pointer"
           />
         </div>
 
@@ -331,7 +331,7 @@ export default function Subscribers() {
             value={endDate}
             min={startDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="w-full sm:w-auto py-2 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500 cursor-pointer"
+            className="w-full sm:w-auto py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 text-xs font-medium text-slate-700 dark:text-slate-200 outline-none focus:border-indigo-500 cursor-pointer"
           />
         </div>
 
@@ -340,7 +340,7 @@ export default function Subscribers() {
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            className="w-full sm:min-w-[130px] py-2.5 px-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 outline-none focus:border-indigo-500 cursor-pointer"
+            className="w-full sm:min-w-[130px] py-2.5 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 text-sm text-slate-800 dark:text-slate-100 outline-none focus:border-indigo-500 cursor-pointer"
           >
             <option value="name">Company Name</option>
             <option value="date">Date Registered</option>
@@ -365,11 +365,11 @@ export default function Subscribers() {
       </div>
 
       {/* Table view */}
-      <div className="bg-white border border-slate-200/60 rounded-2xl overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
+      <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:shadow-none">
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-left">
             <thead>
-              <tr className="border-b border-slate-100 bg-slate-50">
+              <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
                 <th className="p-4 text-[0.68rem] font-bold uppercase text-slate-400">Company / Admin</th>
                 <th className="p-4 text-[0.68rem] font-bold uppercase text-slate-400">Plan</th>
                 <th className="p-4 text-[0.68rem] font-bold uppercase text-slate-400">Status</th>
@@ -382,61 +382,59 @@ export default function Subscribers() {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan="7" className="p-10 text-center text-slate-500">
+                  <td colSpan="7" className="p-10 text-center text-slate-500 dark:text-slate-400">
                     <RefreshCw className="animate-spin text-indigo-600 inline mr-2" /> Syncing subscribers...
                   </td>
                 </tr>
               ) : filteredCompanies.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="p-10 text-center text-slate-500">
+                  <td colSpan="7" className="p-10 text-center text-slate-500 dark:text-slate-400">
                     No subscriber accounts match the active filter criteria.
                   </td>
                 </tr>
               ) : (
                 filteredCompanies.map(c => {
                   return (
-                    <tr key={c.id || c.company_id} className="hover:bg-slate-50/50">
+                    <tr key={c.id || c.company_id} className="hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700/50">
                       <td className="p-4">
-                        <div className="font-bold text-slate-800 text-sm">{c.company_name}</div>
-                        <div className="text-xs text-slate-500 mt-0.5">{c.email || c.username}</div>
+                        <div className="font-bold text-slate-800 dark:text-slate-100 text-sm">{c.company_name}</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{c.email || c.username}</div>
                       </td>
                       <td className="p-4 text-xs font-semibold text-indigo-600">
                         {c.subscription_plan_label || c.subscription_plan || 'Free Trial'}
                       </td>
                       <td className="p-4">
                         <span className={`px-2.5 py-0.5 rounded-full text-[0.65rem] font-bold uppercase tracking-wider ${c.status === 'blocked' || c.login_enabled === false || c.is_active === false
-                            ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
-                            : c.status === 'expired'
-                              ? 'bg-red-500/10 text-red-500 border border-red-500/20'
-                              : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                          ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                          : c.status === 'expired'
+                            ? 'bg-red-500/10 text-red-500 border border-red-500/20'
+                            : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
                           }`}>
                           {(c.status === 'blocked' || c.login_enabled === false || c.is_active === false) ? 'Deactivated' : c.status === 'expired' ? 'Expired' : 'Active'}
                         </span>
                       </td>
-                      <td className="p-4 text-xs text-slate-500">
+                      <td className="p-4 text-xs text-slate-500 dark:text-slate-400">
                         <div><strong>{c.total_sessions || 0}</strong> sessions</div>
                         <div className="text-[10px] text-slate-400 mt-0.5">{c.completed_sessions || 0} completed / {c.started_sessions || 0} live</div>
                       </td>
-                      <td className="p-4 text-xs text-slate-500">
+                      <td className="p-4 text-xs text-slate-500 dark:text-slate-400">
                         {c.created_at ? new Date(c.created_at).toLocaleDateString() : '-'}
                       </td>
-                      <td className="p-4 text-xs font-extrabold text-slate-800">{c.credits || 0}</td>
+                      <td className="p-4 text-xs font-extrabold text-slate-800 dark:text-slate-100">{c.credits || 0}</td>
                       <td className="p-4">
                         <div className="flex gap-2">
-                          {(c.login_enabled !== false && c.status !== 'blocked' && c.is_active !== false) && (
-                            <button
-                              onClick={() => handleOpenUpdateModal(c)}
-                              className="p-2 rounded-lg bg-slate-50 text-slate-500 hover:bg-slate-100 border border-slate-200 cursor-pointer transition-all"
-                              title="Extend / Update Subscription"
-                            >
-                              <Calendar size={14} />
-                            </button>
-                          )}
+                          <button
+                            onClick={() => handleOpenUpdateModal(c)}
+                            className="p-2 rounded-lg bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 cursor-pointer transition-all"
+                            title="Extend / Update Subscription"
+                          >
+                            <Calendar size={14} />
+                          </button>
                           <button
                             onClick={() => handleToggleLogin(c.id || c.company_id, c.login_enabled)}
                             className={`p-2 rounded-lg cursor-pointer transition-all border-none ${c.login_enabled !== false && c.status !== 'blocked' && c.is_active !== false
-                                ? 'bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white'
-                                : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white'
+                              ? 'bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white'
+                              : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white'
                               }`}
                             title={c.login_enabled !== false && c.status !== 'blocked' && c.is_active !== false ? 'Deactivate Login' : 'Reactivate Login'}
                           >
@@ -449,93 +447,95 @@ export default function Subscribers() {
                           >
                             <Trash2 size={14} />
                           </button>
-                        </div>
-                      </td>
-                    </tr>
+                        </div >
+                      </td >
+                    </tr >
                   )
                 })
               )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+            </tbody >
+          </table >
+        </div >
+      </div >
 
       {/* MODAL: UPDATE SUBSCRIPTION */}
-      {isUpdateModalOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <form onSubmit={(e) => { e.preventDefault(); handleSaveSubscriptionUpdate(); }} className="w-full max-w-md bg-white border border-slate-200 rounded-2xl p-6 shadow-2xl space-y-4 text-slate-800">
-            <div className="flex justify-between items-center border-b border-slate-200 pb-3">
-              <h3 className="font-bold text-slate-800">Update Tenant Subscription</h3>
-              <button
-                type="button"
-                onClick={() => setIsUpdateModalOpen(false)}
-                className="text-slate-400 hover:text-slate-800 bg-transparent border-none cursor-pointer outline-none"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-500">Subscription Plan</label>
-                <select
-                  value={updateTenantPlan}
-                  onChange={(e) => handlePlanSelectChange(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none cursor-pointer"
+      {
+        isUpdateModalOpen && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <form onSubmit={(e) => { e.preventDefault(); handleSaveSubscriptionUpdate(); }} className="w-full max-w-md bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-2xl space-y-4 text-slate-800 dark:text-slate-100">
+              <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-3">
+                <h3 className="font-bold text-slate-800 dark:text-slate-100">Update Tenant Subscription</h3>
+                <button
+                  type="button"
+                  onClick={() => setIsUpdateModalOpen(false)}
+                  className="text-slate-400 hover:text-slate-800 dark:text-slate-100 bg-transparent border-none cursor-pointer outline-none"
                 >
-                  <option value="trial">15 Days Free Trial</option>
-                  <option value="basic">Basic Plan</option>
-                  <option value="advance">Advance Plan</option>
-                </select>
+                  <X size={20} />
+                </button>
               </div>
 
-              <div className="grid gap-4 grid-cols-2">
+              <div className="space-y-4">
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-500">Extend Expiry (Days)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={updateTenantDays}
-                    onChange={(e) => setUpdateTenantDays(parseInt(e.target.value || 0))}
-                    placeholder="Days to add"
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none"
-                  />
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Subscription Plan</label>
+                  <select
+                    value={updateTenantPlan}
+                    onChange={(e) => setUpdateTenantPlan(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 outline-none cursor-pointer"
+                  >
+                    <option value="trial">15 Days Free Trial</option>
+                    <option value="basic">Basic Plan</option>
+                    <option value="advance">Advance Plan</option>
+                  </select>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-500">Add Extra Credits</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={updateTenantCredits}
-                    onChange={(e) => setUpdateTenantCredits(parseInt(e.target.value || 0))}
-                    placeholder="Credits to add"
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none"
-                  />
+                <div className="grid gap-4 grid-cols-2">
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Extend Expiry (Days)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={updateTenantDays}
+                      onChange={(e) => setUpdateTenantDays(parseInt(e.target.value || 0))}
+                      placeholder="Days to add"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Add Extra Credits</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={updateTenantCredits}
+                      onChange={(e) => setUpdateTenantCredits(parseInt(e.target.value || 0))}
+                      placeholder="Credits to add"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 outline-none"
+                    />
+                  </div>
                 </div>
+                <span className="text-[10px] text-slate-400 block -mt-2">Leave as 0 to maintain current values.</span>
               </div>
-              <span className="text-[10px] text-slate-400 block -mt-2">Leave as 0 to maintain current values.</span>
-            </div>
 
-            <div className="flex flex-col-reverse sm:flex-row gap-3 pt-3 border-t border-slate-200">
-              <button
-                type="button"
-                onClick={() => setIsUpdateModalOpen(false)}
-                className="w-full sm:flex-1 py-2.5 rounded-xl bg-transparent border border-slate-200 text-slate-500 hover:bg-slate-50 cursor-pointer transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={updateLoading}
-                className="w-full sm:flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 border-none text-white font-bold cursor-pointer disabled:opacity-50 transition-colors"
-              >
-                {updateLoading ? 'Saving...' : 'Update Plan'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-    </div>
+              <div className="flex flex-col-reverse sm:flex-row gap-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setIsUpdateModalOpen(false)}
+                  className="w-full sm:flex-1 py-2.5 rounded-xl bg-transparent border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700 cursor-pointer transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updateLoading}
+                  className="w-full sm:flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 border-none text-white font-bold cursor-pointer disabled:opacity-50 transition-colors"
+                >
+                  {updateLoading ? 'Saving...' : 'Update Plan'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )
+      }
+    </div >
   )
 }

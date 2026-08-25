@@ -10,7 +10,7 @@ import {
   Mail, Phone, MapPin, Building2, IndianRupee, Clock, Download,
   Play, FileText, Sparkles, Star, Check, X, Calendar, Send,
   MessageSquare, Video, Scale, Loader2, AlertCircle, Monitor,
-  Mic, ShieldAlert, Eye, ChevronRight, Code, UserCheck, User, ArrowLeft
+  Mic, ShieldAlert, Eye, ChevronRight, Code, UserCheck, User, ExternalLink, ArrowLeft
 } from "lucide-react"
 import { jsPDF } from 'jspdf'
 
@@ -76,6 +76,8 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   const [atsLoading, setAtsLoading] = useState(false)
   const [error, setError] = useState(null)
   const [showResumeModal, setShowResumeModal] = useState(false)
+  const [resumeSubTab, setResumeSubTab] = useState('document')
+  const [showResumeContent, setShowResumeContent] = useState(false)
   const [showRecordingModal, setShowRecordingModal] = useState(false)
   const [showTranscriptModal, setShowTranscriptModal] = useState(false)
   const [transcriptTab, setTranscriptTab] = useState('verbal')
@@ -97,6 +99,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
     setDetail(null)
     setAtsData(null)
     setError(null)
+    setShowResumeContent(false)
 
     const linkId = candidate.link_id || candidate.id || candidate._id
     if (!linkId || linkId.startsWith("ai_call_")) {
@@ -122,6 +125,13 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
     }
     fetchDetails()
   }, [open, candidate, API_BASE_URL, token])
+
+  // Auto-select sub-tab: if no resume_url, default to parsedText
+  useEffect(() => {
+    if (!detail) return
+    const hasUrl = !!(detail.resume_url || '')
+    setResumeSubTab(hasUrl ? 'document' : 'parsedText')
+  }, [detail])
 
   // Fetch ATS data when Resume tab is active
   useEffect(() => {
@@ -274,6 +284,32 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   const status = c.status || candidate.status || ''
   // Resume/profile text from any field available
   const resumeText = c.profile_text || c.resume_text || ''
+  const resumeUrl = c.resume_url || ''
+  const resumeFilename = c.resume_filename || ''
+
+  const getFullUrl = (rawUrl, type = 'resume') => {
+    if (!rawUrl) return '';
+    // If it's a Cloudinary raw URL, wrap it in Google Docs Viewer so it renders inline instead of downloading
+    if (rawUrl.includes('res.cloudinary.com') && rawUrl.includes('/raw/upload/')) {
+      return `https://docs.google.com/viewer?url=${encodeURIComponent(rawUrl)}&embedded=true`;
+    }
+    if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://') || rawUrl.startsWith('blob:')) {
+      return rawUrl;
+    }
+    const cleanPath = rawUrl.replace(/^\/+/, '');
+    if (!cleanPath.includes('/')) {
+      return `${API_BASE_URL}/api/public/${type === 'resume' ? 'resumes' : 'cover_letters'}/${cleanPath}`;
+    }
+    return `${API_BASE_URL}/${cleanPath}`;
+  };
+
+  const resumeFullUrl = getFullUrl(resumeUrl, 'resume');
+  const isPdf = resumeUrl && (
+    resumeUrl.toLowerCase().endsWith('.pdf') ||
+    resumeFilename?.toLowerCase().endsWith('.pdf') ||
+    resumeUrl.includes('res.cloudinary.com') // Cloudinary raw urls are treated as pdf by docs viewer usually
+  );
+
   const jdText = c.job_description || c.job_description_text || jobTitle || ''
 
   const scoreItems = [
@@ -573,128 +609,128 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
           {/* ── Header ── */}
           <div className="relative p-6 pb-4 border-b border-slate-100 bg-gradient-to-br from-indigo-50/60 to-white shrink-0">
             <button onClick={() => onOpenChange(false)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
-                <X size={20} />
+              <X size={20} />
+            </button>
+
+            {loading ? (
+              <div className="flex items-center gap-3 py-4">
+                <Loader2 size={28} className="animate-spin text-indigo-500" />
+                <span className="text-slate-500 font-medium">Loading candidate details…</span>
+              </div>
+            ) : (
+              <div className="flex items-start gap-4">
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-600 text-white text-xl font-bold shrink-0 shadow-sm">
+                  {initials}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-2xl font-black text-slate-800 truncate">{name}</h2>
+                  <p className="text-sm font-medium text-slate-500 mt-0.5">{jobTitle}</p>
+                  <div className="flex flex-wrap items-center gap-2 mt-3">
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${isQualified ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                      {isQualified ? 'Hire' : 'Rejected'}
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                      {isQualified ? 'Qualified' : 'Rejected'}
+                    </span>
+                    <span className="text-xs font-medium text-slate-400">ID: {candidate.link_id || candidate.id}</span>
+                    {(c.decision_by_name || c.last_action_by_name) && (
+                      <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-white px-2.5 py-1 rounded-md border border-slate-200 shadow-xs" title={`Action taken by ${c.decision_by_name || c.last_action_by_name} (${c.decision_by_role || c.last_action_by_role || 'Admin'})`}>
+                        <UserCheck size={13} className="text-indigo-600" />
+                        Decision by: <strong className="text-indigo-700">{c.decision_by_name || c.last_action_by_name}</strong>
+                        {(c.decision_by_role || c.last_action_by_role) && (
+                          <span className="text-[10px] text-slate-400 font-bold uppercase">({c.decision_by_role || c.last_action_by_role})</span>
+                        )}
+                      </span>
+                    )}
+                    {c.started_at && (
+                      <span className="flex items-center gap-1 text-xs font-medium text-slate-500 bg-slate-100/50 px-2.5 py-1 rounded-md border border-slate-200/50">
+                        <Calendar size={13} className="text-slate-400" /> Attended: {new Date(c.started_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="hidden sm:flex flex-col items-center justify-center mr-16">
+                  <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">AI Score</div>
+                  <div className={`text-4xl font-black tabular-nums tracking-tighter mt-1 ${aiScore >= 75 ? 'text-emerald-600' : aiScore >= 50 ? 'text-amber-500' : 'text-rose-500'}`}>{aiScore.toFixed(0)}%</div>
+                </div>
+              </div>
+            )}
+
+            {error && (
+              <div className="mt-3 flex items-center gap-2 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                <AlertCircle size={14} /> {error}
+              </div>
+            )}
+          </div>
+
+          {/* ── Tabs ── */}
+          <div className="flex items-center gap-4 px-6 border-b border-slate-100 bg-white overflow-x-auto shrink-0">
+            {tabs.map(t => (
+              <button key={t} onClick={() => setActiveTab(t)} className={`capitalize whitespace-nowrap px-1 py-4 text-sm font-bold border-b-2 transition-colors ${activeTab === t ? "border-indigo-600 text-indigo-600" : "border-transparent text-slate-500 hover:text-slate-800"}`}>
+                {t}
               </button>
+            ))}
+          </div>
 
-              {loading ? (
-                <div className="flex items-center gap-3 py-4">
-                  <Loader2 size={28} className="animate-spin text-indigo-500" />
-                  <span className="text-slate-500 font-medium">Loading candidate details…</span>
-                </div>
-              ) : (
-                <div className="flex items-start gap-4">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-600 text-white text-xl font-bold shrink-0 shadow-sm">
-                    {initials}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h2 className="text-2xl font-black text-slate-800 truncate">{name}</h2>
-                    <p className="text-sm font-medium text-slate-500 mt-0.5">{jobTitle}</p>
-                    <div className="flex flex-wrap items-center gap-2 mt-3">
+          {/* ── Content ── */}
+          <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
+
+            {/* ─ Overview Tab ─ */}
+            {activeTab === 'overview' && (
+              <div className="space-y-6">
+                <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
+                  <h3 className="text-sm font-black text-slate-800 mb-4">Candidate Information</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-5">
+                    <InfoRow icon={Mail} label="Email" value={email} />
+                    <InfoRow icon={Phone} label="Mobile" value={phone} />
+                    <InfoRow icon={Clock} label="Experience" value={c.experience} />
+                    <InfoRow icon={Building2} label="Current Company" value={(() => {
+                      const comp = c.current_company;
+                      if (!comp || comp === "N/A" || comp === "Not specified" || /^(technical|skills|apis,?\s*and\s*database)$/i.test(comp)) {
+                        return (c.experience && c.experience.toLowerCase().includes("fresher")) ? "Fresher" : (comp && !/^(technical|skills|apis,?\s*and\s*database)$/i.test(comp) ? comp : "Fresher");
+                      }
+                      return comp;
+                    })()} />
+                    <InfoRow icon={IndianRupee} label="Current CTC" value={c.current_ctc} />
+                    <InfoRow icon={IndianRupee} label="Expected CTC" value={c.expected_ctc} />
+                    <InfoRow icon={Clock} label="Notice Period" value={c.notice_period} />
+                    <InfoRow icon={MapPin} label="Location" value={c.location} />
+                  </div >
+                </section >
+
+                <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
+                  <h3 className="text-sm font-black text-slate-800 mb-3 flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-indigo-600" /> AI Recommendation
+                  </h3>
+                  <div className="rounded-xl border border-slate-100 bg-gradient-to-br from-indigo-50/40 to-white p-4">
+                    <div className="flex items-center gap-2 mb-3">
                       <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${isQualified ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                        {isQualified ? 'Hire' : 'Rejected'}
+                        {c.overall_recommendation || (isQualified ? 'Hire' : 'Reject')}
                       </span>
-                      <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
-                        {isQualified ? 'Qualified' : 'Rejected'}
+                      <span className="text-sm font-medium text-slate-500">
+                        {isQualified ? 'Ready for Technical Round / Hiring' : 'Does not meet required threshold'}
                       </span>
-                      <span className="text-xs font-medium text-slate-400">ID: {candidate.link_id || candidate.id}</span>
-                      {(c.decision_by_name || c.last_action_by_name) && (
-                        <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-white px-2.5 py-1 rounded-md border border-slate-200 shadow-xs" title={`Action taken by ${c.decision_by_name || c.last_action_by_name} (${c.decision_by_role || c.last_action_by_role || 'Admin'})`}>
-                          <UserCheck size={13} className="text-indigo-600" />
-                          Decision by: <strong className="text-indigo-700">{c.decision_by_name || c.last_action_by_name}</strong>
-                          {(c.decision_by_role || c.last_action_by_role) && (
-                            <span className="text-[10px] text-slate-400 font-bold uppercase">({c.decision_by_role || c.last_action_by_role})</span>
-                          )}
-                        </span>
-                      )}
-                      {c.started_at && (
-                        <span className="flex items-center gap-1 text-xs font-medium text-slate-500 bg-slate-100/50 px-2.5 py-1 rounded-md border border-slate-200/50">
-                          <Calendar size={13} className="text-slate-400" /> Attended: {new Date(c.started_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
-                        </span>
-                      )}
                     </div>
-                  </div>
-                  <div className="hidden sm:flex flex-col items-center justify-center mr-16">
-                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">AI Score</div>
-                    <div className={`text-4xl font-black tabular-nums tracking-tighter mt-1 ${aiScore >= 75 ? 'text-emerald-600' : aiScore >= 50 ? 'text-amber-500' : 'text-rose-500'}`}>{aiScore.toFixed(0)}%</div>
-                  </div>
-                </div>
-              )}
-
-              {error && (
-                <div className="mt-3 flex items-center gap-2 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-                  <AlertCircle size={14} /> {error}
-                </div>
-              )}
-            </div>
-
-            {/* ── Tabs ── */}
-            <div className="flex items-center gap-4 px-6 border-b border-slate-100 bg-white overflow-x-auto shrink-0">
-              {tabs.map(t => (
-                <button key={t} onClick={() => setActiveTab(t)} className={`capitalize whitespace-nowrap px-1 py-4 text-sm font-bold border-b-2 transition-colors ${activeTab === t ? "border-indigo-600 text-indigo-600" : "border-transparent text-slate-500 hover:text-slate-800"}`}>
-                  {t}
-                </button>
-              ))}
-            </div>
-
-            {/* ── Content ── */}
-            <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
-
-              {/* ─ Overview Tab ─ */}
-              {activeTab === 'overview' && (
-                <div className="space-y-6">
-                  <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
-                    <h3 className="text-sm font-black text-slate-800 mb-4">Candidate Information</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-5">
-                      <InfoRow icon={Mail} label="Email" value={email} />
-                      <InfoRow icon={Phone} label="Mobile" value={formatPhoneNumber(phone)} />
-                      <InfoRow icon={Clock} label="Experience" value={c.experience} />
-                      <InfoRow icon={Building2} label="Current Company" value={(() => {
-                        const comp = c.current_company;
-                        if (!comp || comp === "N/A" || comp === "Not specified" || /^(technical|skills|apis,?\s*and\s*database)$/i.test(comp)) {
-                          return (c.experience && c.experience.toLowerCase().includes("fresher")) ? "Fresher" : (comp && !/^(technical|skills|apis,?\s*and\s*database)$/i.test(comp) ? comp : "Fresher");
-                        }
-                        return comp;
-                      })()} />
-                      <InfoRow icon={IndianRupee} label="Current CTC" value={c.current_ctc} />
-                      <InfoRow icon={IndianRupee} label="Expected CTC" value={c.expected_ctc} />
-                      <InfoRow icon={Clock} label="Notice Period" value={c.notice_period} />
-                      <InfoRow icon={MapPin} label="Location" value={c.location} />
-                    </div>
-                  </section>
-
-                  <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
-                    <h3 className="text-sm font-black text-slate-800 mb-3 flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-indigo-600" /> AI Recommendation
-                    </h3>
-                    <div className="rounded-xl border border-slate-100 bg-gradient-to-br from-indigo-50/40 to-white p-4">
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${isQualified ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                          {c.overall_recommendation || (isQualified ? 'Hire' : 'Reject')}
-                        </span>
-                        <span className="text-sm font-medium text-slate-500">
-                          {isQualified ? 'Ready for Technical Round / Hiring' : 'Does not meet required threshold'}
-                        </span>
+                    {c.strengths_summary && (
+                      <div className="mb-3">
+                        <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Strengths</div>
+                        <p className="text-sm font-medium text-slate-700 bg-emerald-50/60 rounded-lg p-3 border border-emerald-100">{c.strengths_summary}</p>
                       </div>
-                      {c.strengths_summary && (
-                        <div className="mb-3">
-                          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Strengths</div>
-                          <p className="text-sm font-medium text-slate-700 bg-emerald-50/60 rounded-lg p-3 border border-emerald-100">{c.strengths_summary}</p>
-                        </div>
-                      )}
-                      {c.weaknesses_summary && (
-                        <div>
-                          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Areas to Improve</div>
-                          <p className="text-sm font-medium text-slate-700 bg-rose-50/60 rounded-lg p-3 border border-rose-100">{c.weaknesses_summary}</p>
-                        </div>
-                      )}
-                      {!c.strengths_summary && !c.weaknesses_summary && (
-                        <p className="text-sm text-slate-500">No AI summary available for this candidate yet.</p>
-                      )}
-                    </div>
-                  </section>
-
-                  {/* Integrity */}
-                  {c.integrity && (
+                    )}
+                    {c.weaknesses_summary && (
+                      <div>
+                        <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Areas to Improve</div>
+                        <p className="text-sm font-medium text-slate-700 bg-rose-50/60 rounded-lg p-3 border border-rose-100">{c.weaknesses_summary}</p>
+                      </div>
+                    )}
+                    {!c.strengths_summary && !c.weaknesses_summary && (
+                      <p className="text-sm text-slate-500">No AI summary available for this candidate yet.</p>
+                    )}
+                  </div>
+                </section>
+                {/* Integrity */}
+                {
+                  c.integrity && (
                     <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
                       <h3 className="text-sm font-black text-slate-800 mb-4 flex items-center gap-2">
                         <ShieldAlert className="h-4 w-4 text-amber-500" /> Interview Integrity
@@ -706,28 +742,113 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                         <StatCard label="Total Duration" value={`${c.integrity.total_time_minutes} min`} />
                       </div>
                     </section>
-                  )}
-                </div>
-              )}
+                  )
+                }
+              </div >
+            )
+            }
 
-              {/* ─ Resume Tab ─ */}
-              {activeTab === 'resume' && (
+            {/* ─ Resume Tab ─ */}
+            {
+              activeTab === 'resume' && (
                 <div className="space-y-6">
-                  {/* Resume Button */}
-                  {resumeText && (
-                    <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
-                      <div className="flex items-center justify-between">
+
+                  {/* Resume / Profile Text Card — compact header with expandable content */}
+                  {(resumeUrl || resumeText) && (
+                    <section className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
+
+                      {/* Header row — always visible */}
+                      <div className="flex items-center justify-between px-5 py-4">
                         <div>
-                          <h3 className="text-sm font-black text-slate-800">Resume / Profile Text</h3>
-                          <p className="text-xs text-slate-400 font-medium mt-0.5">Candidate's submitted resume</p>
+                          <h3 className="text-sm font-bold text-slate-800">Resume / Profile Text</h3>
+                          <p className="text-xs text-slate-400 mt-0.5">Candidate's submitted resume</p>
                         </div>
                         <button
-                          onClick={() => setShowResumeModal(true)}
-                          className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-xl hover:bg-indigo-100 transition-colors shadow-sm"
+                          type="button"
+                          onClick={() => setShowResumeContent(prev => !prev)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-100 transition-all shadow-sm hover:scale-[1.02] cursor-pointer"
+                          title="View Candidate Resume"
                         >
-                          <FileText size={16} /> Resume <ChevronRight size={14} />
+                          <FileText size={13} className="text-indigo-600" />
+                          Resume
+                          <ChevronRight size={13} className={`text-indigo-500 transition-transform ${showResumeContent ? 'rotate-90' : ''}`} />
                         </button>
                       </div>
+
+                      {/* Expandable content — shown when Resume > is clicked */}
+                      {showResumeContent && (
+                        <div className="border-t border-slate-100">
+
+                          {/* Sub-tabs — only show if both url and text exist */}
+                          {resumeUrl && resumeText && (
+                            <div className="flex items-center gap-2 px-4 pt-3 bg-slate-50/50 border-b border-slate-100">
+                              <button
+                                type="button"
+                                onClick={() => setResumeSubTab('document')}
+                                className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 ${resumeSubTab === 'document'
+                                  ? 'border-indigo-600 text-indigo-700 bg-white shadow-sm'
+                                  : 'border-transparent text-slate-500 hover:text-slate-800'
+                                  }`}
+                              >
+                                <FileText size={13} /> Resume Document
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setResumeSubTab('parsedText')}
+                                className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 ${resumeSubTab === 'parsedText'
+                                  ? 'border-indigo-600 text-indigo-700 bg-white shadow-sm'
+                                  : 'border-transparent text-slate-500 hover:text-slate-800'
+                                  }`}
+                              >
+                                <Check size={13} /> Extracted Text
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Content area */}
+                          <div>
+                            {/* Show document/PDF when: tab is 'document' OR only resumeUrl exists (no text) */}
+                            {(resumeSubTab === 'document' || (!resumeText && resumeUrl)) && resumeUrl && (
+                              <div>
+                                {resumeFullUrl && isPdf ? (
+                                  <iframe
+                                    src={resumeFullUrl}
+                                    title="Candidate Resume"
+                                    className="w-full h-[600px] border-none bg-white"
+                                  />
+                                ) : (
+                                  <div className="p-8 text-center bg-white space-y-4">
+                                    <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto shadow-inner">
+                                      <FileText size={32} />
+                                    </div>
+                                    <div>
+                                      <h4 className="font-extrabold text-slate-800 text-base">Resume File Attached</h4>
+                                      <p className="text-xs text-slate-500 mt-1 font-mono">{resumeFilename || resumeUrl}</p>
+                                    </div>
+                                    <a
+                                      href={resumeFullUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl transition-all shadow-md shadow-indigo-200"
+                                    >
+                                      <Download size={16} /> Download File
+                                    </a>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Show extracted text when: tab is 'parsedText' OR only resumeText exists (no url) */}
+                            {(resumeSubTab === 'parsedText' || (!resumeUrl && resumeText)) && resumeText && (
+                              <div className="p-6">
+                                <pre className="text-sm text-slate-700 bg-slate-50 rounded-xl p-5 whitespace-pre-wrap font-sans border border-slate-200 leading-relaxed max-h-[500px] overflow-y-auto">
+                                  {resumeText}
+                                </pre>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </section>
                   )}
 
@@ -794,10 +915,12 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                     )}
                   </section>
                 </div>
-              )}
+              )
+            }
 
-              {/* ─ Interview Tab ─ */}
-              {activeTab === 'interview' && (
+            {/* ─ Interview Tab ─ */}
+            {
+              activeTab === 'interview' && (
                 <div className="space-y-6">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <StatCard label="Status" value={c.status || "Completed"} />
@@ -863,10 +986,12 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                     </section>
                   )}
                 </div>
-              )}
+              )
+            }
 
-              {/* ─ Evaluation Tab ─ */}
-              {activeTab === 'evaluation' && (
+            {/* ─ Evaluation Tab ─ */}
+            {
+              activeTab === 'evaluation' && (
                 <div className="space-y-10">
                   <div className="flex justify-center mt-6">
                     <ScoreRing value={aiScore} size={160} strokeWidth={14} />
@@ -932,10 +1057,12 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                     );
                   })()}
                 </div>
-              )}
+              )
+            }
 
-              {/* ─ Timeline Tab ─ */}
-              {activeTab === 'timeline' && (
+            {/* ─ Timeline Tab ─ */}
+            {
+              activeTab === 'timeline' && (
                 <div className="max-w-2xl mx-auto py-6">
                   <div className="relative border-l-2 border-slate-200 ml-4 space-y-8">
                     {timeline.map((step, i) => (
@@ -956,11 +1083,13 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                     ))}
                   </div>
                 </div>
-              )}
-            </div>
+              )
+            }
+          </div >
 
-            {/* ─ Notes Side Panel ─ */}
-            {showNotes && (
+          {/* ─ Notes Side Panel ─ */}
+          {
+            showNotes && (
               <div className="absolute top-[88px] right-0 bottom-[73px] w-80 bg-white border-l border-slate-200 shadow-xl flex flex-col z-10 animate-in slide-in-from-right-8 duration-200">
                 <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                   <h3 className="font-bold text-slate-800">Candidate Notes</h3>
@@ -998,45 +1127,47 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                   </button>
                 </div>
               </div>
+            )
+          }
+
+          {/* ── Footer Actions ── */}
+          <div className="border-t border-slate-200/80 p-4 bg-white flex flex-wrap items-center justify-end gap-3 shrink-0">
+            <button onClick={() => setShowNotes(!showNotes)} className={`flex items-center gap-2 px-4 py-2 text-sm font-bold border rounded-xl transition-colors shadow-sm ${showNotes ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'text-slate-600 bg-white border-slate-200 hover:bg-slate-50'}`}>
+              <MessageSquare size={16} /> Notes {(c.notes?.length > 0) && <span className="bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded text-[10px] leading-none ml-1">{c.notes.length}</span>}
+            </button>
+            <button onClick={handleViewProfile} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
+              <Eye size={16} /> View Profile
+            </button>
+            <div className="w-px h-6 bg-slate-200 mx-1" />
+            {c.decision !== 'rejected' && (
+              <button onClick={() => handleDecision('rejected')} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-rose-600 bg-rose-50 border border-rose-100 rounded-xl hover:bg-rose-100 transition-colors shadow-sm">
+                <X size={16} strokeWidth={3} /> Reject
+              </button>
             )}
-
-            {/* ── Footer Actions ── */}
-            <div className="border-t border-slate-200/80 p-4 bg-white flex flex-wrap items-center justify-end gap-3 shrink-0">
-              <button onClick={() => setShowNotes(!showNotes)} className={`flex items-center gap-2 px-4 py-2 text-sm font-bold border rounded-xl transition-colors shadow-sm ${showNotes ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'text-slate-600 bg-white border-slate-200 hover:bg-slate-50'}`}>
-                <MessageSquare size={16} /> Notes {(c.notes?.length > 0) && <span className="bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded text-[10px] leading-none ml-1">{c.notes.length}</span>}
+            {c.decision !== 'selected' && c.decision !== 'hired' && (
+              <button onClick={() => handleDecision('selected')} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl hover:bg-emerald-100 transition-colors shadow-sm">
+                <Check size={16} strokeWidth={3} /> Select
               </button>
-              <button onClick={handleViewProfile} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
-                <Eye size={16} /> View Profile
-              </button>
-              <div className="w-px h-6 bg-slate-200 mx-1" />
-              {c.decision !== 'rejected' && (
-                <button onClick={() => handleDecision('rejected')} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-rose-600 bg-rose-50 border border-rose-100 rounded-xl hover:bg-rose-100 transition-colors shadow-sm">
-                  <X size={16} strokeWidth={3} /> Reject
-                </button>
-              )}
-              {c.decision !== 'selected' && c.decision !== 'hired' && (
-                <button onClick={() => handleDecision('selected')} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl hover:bg-emerald-100 transition-colors shadow-sm">
-                  <Check size={16} strokeWidth={3} /> Select
-                </button>
-              )}
-              <button onClick={handleSchedule} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-xl hover:bg-indigo-100 transition-colors shadow-sm">
-                <Calendar size={16} /> Schedule
-              </button>
-              <button onClick={handleOffer} className="flex items-center gap-2 px-5 py-2 text-sm font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 transition-colors shadow-sm">
-                <Send size={16} /> Send Offer
-              </button>
-            </div>
+            )}
+            <button onClick={handleSchedule} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-xl hover:bg-indigo-100 transition-colors shadow-sm">
+              <Calendar size={16} /> Schedule
+            </button>
+            <button onClick={handleOffer} className="flex items-center gap-2 px-5 py-2 text-sm font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 transition-colors shadow-sm">
+              <Send size={16} /> Send Offer
+            </button>
           </div>
+        </div >
 
-          <ScheduleModal
-            isOpen={showScheduleModal}
-            onClose={() => setShowScheduleModal(false)}
-            candidate={c}
-          />
-        </div>
+        <ScheduleModal
+          isOpen={showScheduleModal}
+          onClose={() => setShowScheduleModal(false)}
+          candidate={c}
+        />
+      </div >
 
-        {/* ── Resume Sub-Modal ── */}
-        {showResumeModal && (
+      {/* ── Resume Sub-Modal ── */}
+      {
+        showResumeModal && (
           <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4" onClick={() => setShowResumeModal(false)}>
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
@@ -1056,10 +1187,12 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
               </div>
             </div>
           </div>
-        )}
+        )
+      }
 
-        {/* ── Recording Sub-Modal ── */}
-        {showRecordingModal && (
+      {/* ── Recording Sub-Modal ── */}
+      {
+        showRecordingModal && (
           <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4" onClick={() => setShowRecordingModal(false)}>
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
@@ -1118,11 +1251,13 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
               </div>
             </div>
           </div>
-        )}
+        )
+      }
 
 
-        {/* ── Transcript Sub-Modal ── */}
-        {showTranscriptModal && (
+      {/* ── Transcript Sub-Modal ── */}
+      {
+        showTranscriptModal && (
           <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4" onClick={() => setShowTranscriptModal(false)}>
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between px-6 py-4 shrink-0">
@@ -1637,9 +1772,10 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
               </div>
             </div>
           </div>
-        )}
-      </>
-    )
-  }
+        )
+      }
+    </>
+  )
+}
 
 

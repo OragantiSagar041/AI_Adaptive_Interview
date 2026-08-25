@@ -14,10 +14,10 @@ const ScoreBar = ({ label, score }) => {
   return (
     <div className="mb-4 last:mb-0">
       <div className="flex justify-between items-end mb-1.5">
-        <span className="text-[13px] font-bold text-slate-600 tracking-wide">{label}</span>
-        <span className="text-sm font-black text-slate-800">{numScore.toFixed(0)}%</span>
+        <span className="text-[13px] font-bold text-slate-600 dark:text-slate-400 tracking-wide">{label}</span>
+        <span className="text-sm font-black text-slate-800 dark:text-slate-100">{numScore.toFixed(0)}%</span>
       </div>
-      <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden relative">
+      <div className="h-2 w-full bg-slate-100 dark:bg-slate-800/50 rounded-full overflow-hidden relative">
         <div 
           className={`absolute top-0 left-0 h-full rounded-full ${color} transition-all duration-1000 ease-out shadow-sm`}
           style={{ width: `${numScore}%` }}
@@ -73,10 +73,10 @@ export default function ProfileViewPage() {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-slate-50">
+      <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-slate-900/50">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="animate-spin text-indigo-600" size={40} />
-          <p className="text-slate-500 font-medium animate-pulse">Loading amazing insights...</p>
+          <p className="text-slate-500 dark:text-slate-400 font-medium animate-pulse">Loading amazing insights...</p>
         </div>
       </div>
     )
@@ -84,12 +84,12 @@ export default function ProfileViewPage() {
 
   if (error || !candidate) {
     return (
-      <div className="flex flex-col h-screen items-center justify-center bg-slate-50 gap-5">
+      <div className="flex flex-col h-screen items-center justify-center bg-slate-50 dark:bg-slate-900/50 gap-5">
         <div className="text-rose-600 bg-rose-50/80 p-6 rounded-2xl border border-rose-100/50 shadow-sm font-medium flex items-center gap-3">
           <XCircle className="text-rose-500" />
           {error || "Candidate not found"}
         </div>
-        <button onClick={() => navigate(-1)} className="px-6 py-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:shadow-sm flex items-center gap-2 font-semibold text-slate-700 transition-all">
+        <button onClick={() => navigate(-1)} className="px-6 py-2.5 bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700 hover:shadow-sm flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200 transition-all">
           <ArrowLeft size={16} /> Go Back
         </button>
       </div>
@@ -117,19 +117,19 @@ export default function ProfileViewPage() {
   ].filter(s => s.val !== undefined && s.val !== null && s.val !== 0)
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900/50 flex flex-col font-sans">
       {/* ── Sticky Header ── */}
-      <header className="bg-white/80 backdrop-blur-md border-b border-slate-200/80 px-6 py-4 flex items-center justify-between sticky top-0 z-30 shadow-sm">
+      <header className="bg-white dark:bg-slate-800/60/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-700/80 px-6 py-4 flex items-center justify-between sticky top-0 z-30 shadow-sm">
         <div className="flex items-center gap-4">
           <button 
             onClick={() => navigate(-1)}
-            className="p-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 rounded-xl transition-all hover:shadow-sm"
+            className="p-2.5 bg-slate-50 dark:bg-slate-900/50 hover:bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 rounded-xl transition-all hover:shadow-sm"
           >
             <ArrowLeft size={18} />
           </button>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-black text-slate-800 tracking-tight">{cName}</h1>
+              <h1 className="text-xl font-black text-slate-800 dark:text-slate-100 tracking-tight">{cName}</h1>
               {isQualified && <CheckCircle2 size={18} className="text-emerald-500 shrink-0" />}
               {isRejected && <XCircle size={18} className="text-rose-500 shrink-0" />}
             </div>
@@ -143,7 +143,7 @@ export default function ProfileViewPage() {
               href={resumeUrl} 
               target="_blank" 
               rel="noreferrer"
-              className="flex items-center gap-2 px-4 py-2 bg-white text-indigo-600 border border-indigo-200 hover:bg-indigo-50 font-bold rounded-xl transition-all shadow-sm text-sm"
+              className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800/60 text-indigo-600 border border-indigo-200 hover:bg-indigo-50 font-bold rounded-xl transition-all shadow-sm text-sm"
             >
               <Download size={16} /> Resume
             </a>
@@ -161,7 +161,7 @@ export default function ProfileViewPage() {
           </div>
           <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
             <div>
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 rounded-full backdrop-blur-md border border-white/20 mb-4">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white dark:bg-slate-800/60/10 rounded-full backdrop-blur-md border border-white/20 mb-4">
                 <Briefcase size={14} className="text-indigo-200" />
                 <span className="text-xs font-bold text-indigo-50 tracking-wide">{jobTitle}</span>
               </div>
@@ -172,7 +172,7 @@ export default function ProfileViewPage() {
               </div>
             </div>
             
-            <div className="shrink-0 flex items-center justify-center p-6 bg-white/10 rounded-3xl backdrop-blur-md border border-white/20">
+            <div className="shrink-0 flex items-center justify-center p-6 bg-white dark:bg-slate-800/60/10 rounded-3xl backdrop-blur-md border border-white/20">
               <div className="text-center">
                 <div className="text-xs font-bold text-indigo-200 uppercase tracking-widest mb-1">AI Match Score</div>
                 <div className="text-6xl font-black tracking-tighter flex items-start justify-center text-white">
@@ -188,8 +188,8 @@ export default function ProfileViewPage() {
           
           {/* Left Column (Details) */}
           <div className="lg:col-span-1 space-y-6">
-            <div className="bg-white rounded-2xl p-6 shadow-[var(--shadow-card)] border border-slate-200/60">
-              <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800 uppercase tracking-wider mb-5">
+            <div className="bg-white dark:bg-slate-800/60 rounded-2xl p-6 shadow-[var(--shadow-card)] border border-slate-200 dark:border-slate-700/60">
+              <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider mb-5">
                 <TrendingUp size={16} className="text-indigo-500" /> Score Breakdown
               </h3>
               {scoreDetails.length > 0 ? (
@@ -199,23 +199,23 @@ export default function ProfileViewPage() {
                   ))}
                 </div>
               ) : (
-                <div className="py-6 text-center text-sm font-medium text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                <div className="py-6 text-center text-sm font-medium text-slate-400 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
                   Detailed scores not available
                 </div>
               )}
             </div>
 
-            <div className="bg-white rounded-2xl p-6 shadow-[var(--shadow-card)] border border-slate-200/60">
-              <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800 uppercase tracking-wider mb-4">
+            <div className="bg-white dark:bg-slate-800/60 rounded-2xl p-6 shadow-[var(--shadow-card)] border border-slate-200 dark:border-slate-700/60">
+              <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider mb-4">
                 <BarChart3 size={16} className="text-indigo-500" /> Status
               </h3>
               <div className="space-y-3">
-                <div className="flex justify-between items-center py-2 border-b border-slate-100">
-                  <span className="text-sm font-medium text-slate-500">Interview Status</span>
-                  <span className="text-sm font-bold text-slate-800 capitalize">{candidate.status || 'Pending'}</span>
+                <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
+                  <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Interview Status</span>
+                  <span className="text-sm font-bold text-slate-800 dark:text-slate-100 capitalize">{candidate.status || 'Pending'}</span>
                 </div>
                 <div className="flex justify-between items-center py-2">
-                  <span className="text-sm font-medium text-slate-500">Final Decision</span>
+                  <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Final Decision</span>
                   <span className={`text-sm font-bold capitalize ${isQualified ? 'text-emerald-600' : isRejected ? 'text-rose-600' : 'text-amber-600'}`}>
                     {candidate.decision || 'Awaiting Review'}
                   </span>
@@ -226,14 +226,14 @@ export default function ProfileViewPage() {
 
           {/* Right Column (Resume/Text) */}
           <div className="lg:col-span-2">
-            <div className="bg-white rounded-2xl shadow-[var(--shadow-card)] border border-slate-200/60 h-full flex flex-col">
-              <div className="p-5 bg-slate-50/50 border-b border-slate-200/60 flex items-center gap-2 rounded-t-2xl">
+            <div className="bg-white dark:bg-slate-800/60 rounded-2xl shadow-[var(--shadow-card)] border border-slate-200 dark:border-slate-700/60 h-full flex flex-col">
+              <div className="p-5 bg-slate-50 dark:bg-slate-900/50/50 border-b border-slate-200 dark:border-slate-700/60 flex items-center gap-2 rounded-t-2xl">
                 <FileText size={18} className="text-indigo-500" />
-                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Profile Document</h3>
+                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider">Profile Document</h3>
               </div>
-              <div className="p-6 flex-1 bg-slate-50/20">
-                <div className="bg-white border border-slate-200 rounded-xl p-6 h-[500px] overflow-y-auto shadow-inner">
-                  <pre className="whitespace-pre-wrap font-sans text-slate-600 leading-relaxed text-sm">
+              <div className="p-6 flex-1 bg-slate-50 dark:bg-slate-900/50/20">
+                <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-6 h-[500px] overflow-y-auto shadow-inner">
+                  <pre className="whitespace-pre-wrap font-sans text-slate-600 dark:text-slate-400 leading-relaxed text-sm">
                     {resumeText}
                   </pre>
                 </div>

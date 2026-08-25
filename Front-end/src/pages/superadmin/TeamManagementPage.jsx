@@ -268,12 +268,12 @@ export default function TeamManagementPage() {
   }
 
   return (
-    <div className="space-y-8 w-full max-w-7xl text-slate-800 relative z-10">
+    <div className="space-y-8 w-full max-w-7xl text-slate-800 dark:text-slate-100 relative z-10">
       {/* Admins Table List Card */}
-      <div className="bg-white/80 backdrop-blur-2xl border border-white/60 p-0 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-3xl overflow-hidden relative">
+      <div className="bg-white dark:bg-slate-800/60/80 backdrop-blur-2xl border border-white/60 p-0 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-3xl overflow-hidden relative">
         <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-indigo-50/50 to-transparent pointer-events-none" />
 
-        <div className="p-6 sm:p-8 border-b border-slate-100/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 relative z-10">
+        <div className="p-6 sm:p-8 border-b border-slate-100 dark:border-slate-800/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 relative z-10">
           <div className="flex gap-4 items-center">
             <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-800 text-white shadow-[0_8px_16px_rgba(79,70,229,0.25)] border border-white/20 ring-4 ring-indigo-50 shrink-0">
               <Users size={26} strokeWidth={2.5} />
@@ -282,7 +282,7 @@ export default function TeamManagementPage() {
               <h3 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-slate-900 to-indigo-900 tracking-tight leading-tight">
                 Admin Management
               </h3>
-              <p className="text-sm text-slate-500 font-semibold tracking-wide mt-0.5">
+              <p className="text-sm text-slate-500 dark:text-slate-400 font-semibold tracking-wide mt-0.5">
                 Manage sub-admins and their allocated credits
               </p>
             </div>
@@ -296,10 +296,10 @@ export default function TeamManagementPage() {
           </button>
         </div>
 
-        <div className="overflow-x-auto p-4 sm:p-6 bg-slate-50/30">
+        <div className="overflow-x-auto p-4 sm:p-6 bg-slate-50 dark:bg-slate-900/50/30">
           <table className="w-full border-collapse text-left">
             <thead>
-              <tr className="border-b-2 border-slate-200">
+              <tr className="border-b-2 border-slate-200 dark:border-slate-700">
                 <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider">Profile</th>
                 <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider">Mail</th>
                 <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider">Role</th>
@@ -311,7 +311,7 @@ export default function TeamManagementPage() {
             <tbody className="divide-y divide-slate-100">
               {loadingAdmins ? (
                 <tr>
-                  <td colSpan="6" className="p-16 text-center text-slate-500 font-semibold">
+                  <td colSpan="6" className="p-16 text-center text-slate-500 dark:text-slate-400 font-semibold">
                     <RefreshCw className="animate-spin text-indigo-600 inline mr-2 w-6 h-6" /> Syncing team members...
                   </td>
                 </tr>
@@ -319,10 +319,10 @@ export default function TeamManagementPage() {
                 <tr>
                   <td colSpan="6" className="p-16 text-center">
                     <div className="flex flex-col items-center justify-center">
-                      <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
+                      <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800/50 flex items-center justify-center mb-4">
                         <Users size={32} className="text-slate-400" />
                       </div>
-                      <p className="text-slate-500 font-medium text-base">No additional sub-admins provisioned.</p>
+                      <p className="text-slate-500 dark:text-slate-400 font-medium text-base">No additional sub-admins provisioned.</p>
                       <p className="text-slate-400 text-sm mt-1">Click 'Provision Admin' to invite team members.</p>
                     </div>
                   </td>
@@ -336,14 +336,14 @@ export default function TeamManagementPage() {
                           {(admin.name || admin.username || 'A')[0]}
                         </div>
                         <div className="flex flex-col">
-                          <span className="font-bold text-slate-800 text-sm">{admin.name || admin.username}</span>
+                          <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">{admin.name || admin.username}</span>
                           <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">{admin.custom_id || admin.id}</span>
                         </div>
                       </div>
                     </td>
-                    <td className="p-4 text-sm text-slate-500 font-medium">{admin.email}</td>
+                    <td className="p-4 text-sm text-slate-500 dark:text-slate-400 font-medium">{admin.email}</td>
                     <td className="p-4">
-                      <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-slate-100 w-fit px-3 py-1 rounded-full border border-slate-200">
+                      <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/50 w-fit px-3 py-1 rounded-full border border-slate-200 dark:border-slate-700">
                         <Shield size={12} className="text-indigo-500" />
                         <span className="capitalize">{admin.role || 'Admin'}</span>
                       </div>
@@ -368,7 +368,7 @@ export default function TeamManagementPage() {
                         <button onClick={() => handleAddCreditsToAdmin(admin.id)} title="Add Credits" className="p-2 rounded-xl border-none cursor-pointer transition-all bg-indigo-100 text-indigo-700 hover:bg-indigo-200">
                           <Plus size={16} />
                         </button>
-                        <button onClick={() => handleDeleteAdmin(admin.id)} title="Remove Admin" className="p-2 rounded-xl border-none cursor-pointer transition-all bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-rose-600">
+                        <button onClick={() => handleDeleteAdmin(admin.id)} title="Remove Admin" className="p-2 rounded-xl border-none cursor-pointer transition-all bg-slate-100 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 hover:bg-slate-200 hover:text-rose-600">
                           <Trash2 size={16} />
                         </button>
                       </div>
@@ -382,8 +382,8 @@ export default function TeamManagementPage() {
       </div>
 
       {/* Credit Requests Card */}
-      <div className="bg-white/80 backdrop-blur-2xl border border-white/60 p-0 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-3xl overflow-hidden relative mt-10">
-        <div className="p-6 sm:p-8 border-b border-slate-100/50 flex items-center gap-4">
+      <div className="bg-white dark:bg-slate-800/60/80 backdrop-blur-2xl border border-white/60 p-0 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-3xl overflow-hidden relative mt-10">
+        <div className="p-6 sm:p-8 border-b border-slate-100 dark:border-slate-800/50 flex items-center gap-4">
           <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-[0_8px_16px_rgba(245,158,11,0.25)] border border-white/20 ring-4 ring-amber-50 shrink-0">
             <CreditCard size={26} strokeWidth={2.5} />
           </div>
@@ -391,16 +391,16 @@ export default function TeamManagementPage() {
             <h3 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-slate-900 to-amber-900 tracking-tight leading-tight">
               Pending Credit Requests
             </h3>
-            <p className="text-sm text-slate-500 font-semibold tracking-wide mt-0.5">
+            <p className="text-sm text-slate-500 dark:text-slate-400 font-semibold tracking-wide mt-0.5">
               Approve or reject credit request notifications from sub-admins
             </p>
           </div>
         </div>
 
-        <div className="overflow-x-auto p-4 sm:p-6 bg-slate-50/30">
+        <div className="overflow-x-auto p-4 sm:p-6 bg-slate-50 dark:bg-slate-900/50/30">
           <table className="w-full border-collapse text-left">
             <thead>
-              <tr className="border-b-2 border-slate-200">
+              <tr className="border-b-2 border-slate-200 dark:border-slate-700">
                 <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider">Date</th>
                 <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider">Admin</th>
                 <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider">Requested</th>
@@ -412,7 +412,7 @@ export default function TeamManagementPage() {
             <tbody className="divide-y divide-slate-100">
               {loadingRequests ? (
                 <tr>
-                  <td colSpan="6" className="p-16 text-center text-slate-500 font-semibold">
+                  <td colSpan="6" className="p-16 text-center text-slate-500 dark:text-slate-400 font-semibold">
                     <RefreshCw className="animate-spin text-amber-500 inline mr-2 w-6 h-6" /> Syncing requests...
                   </td>
                 </tr>
@@ -420,10 +420,10 @@ export default function TeamManagementPage() {
                 <tr>
                   <td colSpan="6" className="p-16 text-center">
                     <div className="flex flex-col items-center justify-center">
-                      <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
+                      <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800/50 flex items-center justify-center mb-4">
                         <Activity size={32} className="text-slate-400" />
                       </div>
-                      <p className="text-slate-500 font-medium text-base">No pending credit requests.</p>
+                      <p className="text-slate-500 dark:text-slate-400 font-medium text-base">No pending credit requests.</p>
                       <p className="text-slate-400 text-sm mt-1">You're all caught up!</p>
                     </div>
                   </td>
@@ -431,15 +431,15 @@ export default function TeamManagementPage() {
               ) : (
                 creditRequests.map(r => (
                   <tr key={r.id || r._id} className="hover:bg-amber-50/30 transition-colors">
-                    <td className="p-4 text-sm text-slate-500 font-medium">
+                    <td className="p-4 text-sm text-slate-500 dark:text-slate-400 font-medium">
                       {r.created_at ? new Date(r.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '-'}
                     </td>
                     <td className="p-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 font-bold uppercase text-xs">
+                        <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 dark:text-slate-400 font-bold uppercase text-xs">
                           {(r.admin_name || r.admin_username || 'U')[0]}
                         </div>
-                        <span className="font-bold text-slate-800 text-sm">{r.admin_name || r.admin_username}</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">{r.admin_name || r.admin_username}</span>
                       </div>
                     </td>
                     <td className="p-4">
@@ -448,7 +448,7 @@ export default function TeamManagementPage() {
                         {r.amount || r.amount_requested}
                       </div>
                     </td>
-                    <td className="p-4 text-sm text-slate-600 max-w-xs truncate" title={r.reason}>
+                    <td className="p-4 text-sm text-slate-600 dark:text-slate-400 max-w-xs truncate" title={r.reason}>
                       {r.reason || <span className="italic text-slate-400">No reason provided</span>}
                     </td>
                     <td className="p-4 text-center">
@@ -467,13 +467,13 @@ export default function TeamManagementPage() {
                           </button>
                           <button
                             onClick={() => handleDecideCreditRequest(r.id || r._id, 'rejected')}
-                            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-100 hover:bg-rose-100 text-slate-600 hover:text-rose-600 font-bold text-xs cursor-pointer border-none transition-all"
+                            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800/50 hover:bg-rose-100 text-slate-600 dark:text-slate-400 hover:text-rose-600 font-bold text-xs cursor-pointer border-none transition-all"
                           >
                             <X size={14} /> Reject
                           </button>
                         </div>
                       ) : (
-                        <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">Processed</span>
+                        <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider bg-slate-50 dark:bg-slate-900/50 px-3 py-1.5 rounded-lg border border-slate-100 dark:border-slate-800">Processed</span>
                       )}
                     </td>
                   </tr>
@@ -487,7 +487,7 @@ export default function TeamManagementPage() {
       {/* MODAL: ADD ADMIN */}
       {isAddAdminOpen && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4 animate-in fade-in duration-200">
-          <form onSubmit={handleAddAdminSubmit} className="w-full max-w-lg bg-white/95 backdrop-blur-xl border border-white/60 rounded-[2rem] p-8 shadow-[0_20px_60px_rgba(0,0,0,0.15)] space-y-6 text-slate-800 max-h-[90vh] overflow-y-auto relative animate-in zoom-in-95 duration-200">
+          <form onSubmit={handleAddAdminSubmit} className="w-full max-w-lg bg-white dark:bg-slate-800/60/95 backdrop-blur-xl border border-white/60 rounded-[2rem] p-8 shadow-[0_20px_60px_rgba(0,0,0,0.15)] space-y-6 text-slate-800 dark:text-slate-100 max-h-[90vh] overflow-y-auto relative animate-in zoom-in-95 duration-200">
 
             <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-indigo-50/80 to-transparent pointer-events-none rounded-t-[2rem]" />
 
@@ -497,14 +497,14 @@ export default function TeamManagementPage() {
                   <UserPlus size={24} />
                 </div>
                 <div>
-                  <h3 className="text-xl font-black text-slate-800 tracking-tight">Provision Recruiter</h3>
-                  <p className="text-xs font-semibold text-slate-500 mt-0.5">Create a new recruiter account</p>
+                  <h3 className="text-xl font-black text-slate-800 dark:text-slate-100 tracking-tight">Provision Recruiter</h3>
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-0.5">Create a new recruiter account</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setIsAddAdminOpen(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 hover:bg-rose-100 text-slate-500 hover:text-rose-600 border-none cursor-pointer transition-colors"
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800/50 hover:bg-rose-100 text-slate-500 dark:text-slate-400 hover:text-rose-600 border-none cursor-pointer transition-colors"
               >
                 <X size={16} strokeWidth={2.5} />
               </button>
@@ -513,57 +513,57 @@ export default function TeamManagementPage() {
             <div className="space-y-5 relative z-10">
               <div className="grid sm:grid-cols-2 gap-5">
                 <div className="space-y-1.5">
-                  <label className="text-[0.7rem] font-bold text-slate-500 uppercase tracking-wider ml-1">Full Name</label>
+                  <label className="text-[0.7rem] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Full Name</label>
                   <input
                     type="text"
                     required
                     value={newAdminForm.name}
                     onChange={(e) => setNewAdminForm(prev => ({ ...prev, name: e.target.value.replace(/[0-9]/g, '') }))}
                     placeholder="e.g. John Doe"
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-sm text-slate-800 font-medium outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-400"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/50 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 font-medium outline-none focus:bg-white dark:bg-slate-800/60 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-400"
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[0.7rem] font-bold text-slate-500 uppercase tracking-wider ml-1">Username</label>
+                  <label className="text-[0.7rem] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Username</label>
                   <input
                     type="text"
                     required
                     value={newAdminForm.username}
                     onChange={(e) => setNewAdminForm(prev => ({ ...prev, username: e.target.value }))}
                     placeholder="e.g. john_d"
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-sm text-slate-800 font-medium outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-400"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/50 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 font-medium outline-none focus:bg-white dark:bg-slate-800/60 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-400"
                   />
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[0.7rem] font-bold text-slate-500 uppercase tracking-wider ml-1">Email Address</label>
+                <label className="text-[0.7rem] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Email Address</label>
                 <input
                   type="email"
                   required
                   value={newAdminForm.email}
                   onChange={(e) => setNewAdminForm(prev => ({ ...prev, email: e.target.value }))}
                   placeholder="e.g. john@example.com"
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-sm text-slate-800 font-medium outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-400"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/50 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 font-medium outline-none focus:bg-white dark:bg-slate-800/60 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-400"
                 />
               </div>
 
               <div className="grid sm:grid-cols-2 gap-5">
                 <div className="space-y-1.5">
-                  <label className="text-[0.7rem] font-bold text-slate-500 uppercase tracking-wider ml-1">Password</label>
+                  <label className="text-[0.7rem] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Password</label>
                   <input
                     type="password"
                     required
                     value={newAdminForm.password}
                     onChange={(e) => setNewAdminForm(prev => ({ ...prev, password: e.target.value }))}
                     placeholder="Min 6 characters"
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-sm text-slate-800 font-medium outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-400"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/50 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 font-medium outline-none focus:bg-white dark:bg-slate-800/60 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-400"
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[0.7rem] font-bold text-slate-500 uppercase tracking-wider ml-1">Initial Credits</label>
+                  <label className="text-[0.7rem] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Initial Credits</label>
                   <div className="relative">
                     <Coins size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
@@ -571,18 +571,18 @@ export default function TeamManagementPage() {
                       min="0"
                       value={newAdminForm.credits}
                       onChange={(e) => setNewAdminForm(prev => ({ ...prev, credits: e.target.value }))}
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50/50 pl-10 pr-4 py-3 text-sm text-slate-800 font-bold outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-400"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/50 pl-10 pr-4 py-3 text-sm text-slate-800 dark:text-slate-100 font-bold outline-none focus:bg-white dark:bg-slate-800/60 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-400"
                     />
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="flex gap-4 pt-6 mt-6 border-t border-slate-100 relative z-10">
+            <div className="flex gap-4 pt-6 mt-6 border-t border-slate-100 dark:border-slate-800 relative z-10">
               <button
                 type="button"
                 onClick={() => setIsAddAdminOpen(false)}
-                className="flex-1 py-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-sm cursor-pointer transition-colors border-none"
+                className="flex-1 py-3.5 rounded-xl bg-slate-100 dark:bg-slate-800/50 hover:bg-slate-200 text-slate-600 dark:text-slate-400 font-bold text-sm cursor-pointer transition-colors border-none"
               >
                 Cancel
               </button>

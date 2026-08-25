@@ -363,163 +363,112 @@ export default function AdminLayout({
                     </span>
                   )}
                 </button>
-
-                {/* Notification Dropdown */}
-                {notifDropdownOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-80 bg-card border border-border rounded-2xl shadow-xl py-2 z-50">
-                    <div className="flex items-center justify-between px-4 py-2 border-b border-border">
-                      <span className="text-xs font-bold text-foreground font-sans">Recent Notifications</span>
-                      {unreadCount > 0 && (
-                        <button
-                          onClick={handleMarkAllRead}
-                          className="text-[10px] font-bold text-indigo-600 hover:underline cursor-pointer border-none bg-transparent"
-                        >
-                          Mark all read
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="max-h-64 overflow-y-auto divide-y divide-border">
-                      {notifications.length === 0 ? (
-                        <div className="py-8 text-center text-xs text-muted-foreground font-sans">No notifications</div>
-                      ) : (
-                        notifications.slice(0, 5).map(n => (
-                          <div
-                            key={n.id}
-                            onClick={() => {
-                              if (!n.read) handleMarkRead(n.id)
-                              setNotifDropdownOpen(false)
-                              navigate('/admin/notifications')
-                            }}
-                            className={`p-3 text-left hover:bg-muted cursor-pointer transition-colors flex gap-2.5 items-start ${!n.read ? 'bg-primary/10' : ''}`}
-                          >
-                            <div className="p-1.5 rounded-lg bg-muted flex-shrink-0 mt-0.5">
-                              {getNotifIcon(n.type)}
-                            </div>
-                            <div className="space-y-0.5 min-w-0">
-                              <div className="flex items-center gap-1.5 justify-between">
-                                <span className={`text-xs font-bold truncate block ${!n.read ? 'text-foreground' : 'text-muted-foreground'}`}>{n.title}</span>
-                                {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 shrink-0" />}
-                              </div>
-                              <p className="text-[11px] text-muted-foreground leading-normal line-clamp-2 font-sans">{n.message}</p>
-                              <span className="text-[9px] text-muted-foreground/80 block pt-0.5 font-sans">{formatRelativeTime(n.created_at)}</span>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-
-                    <div className="border-t border-border px-4 pt-2 pb-1 text-center">
-                      <NavLink
-                        to="/admin/notifications"
-                        onClick={() => setNotifDropdownOpen(false)}
-                        className="text-[11px] font-bold text-indigo-600 hover:underline no-underline block py-1 font-sans"
-                      >
-                        View All Notifications
-                      </NavLink>
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* Profile Dropdown */}
-              <div ref={profileRef} className="relative border-l border-border pl-5">
+              <div className="relative">
                 <button
                   onClick={() => setDropdownOpen(!dropdownOpen)}
-                  className="flex items-center gap-2 p-1.5 px-2 hover:bg-slate-50 rounded-xl shadow-sm transition-all cursor-pointer border border-slate-100 bg-white"
+                  className="flex items-center gap-2 p-1.5 px-2 hover:bg-slate-50 dark:hover:bg-slate-800/80 rounded-xl shadow-sm transition-all cursor-pointer border border-slate-200/60 dark:border-slate-700/60 bg-white dark:bg-slate-900/50"
                 >
                   <img
-                    src={adminUser?.profile_image || adminUser?.avatar || "https://ui-avatars.com/api/?name=Admin&background=random"}
+                    src={adminUser?.profile_image || adminUser?.avatar || "https://ui-avatars.com/api/?name=Recruiter&background=random"}
                     alt="Avatar"
-                    className="w-8 h-8 rounded-full object-cover border border-slate-200"
+                    className="w-8 h-8 rounded-full object-cover border border-slate-200 dark:border-slate-700"
                   />
                   <div className="text-left hidden sm:block">
-                    <div className="text-[13px] font-semibold text-slate-800 leading-none">{userName}</div>
-                    <span className="text-[10px] text-slate-400 font-medium">Admin</span>
+                    <div className="text-[13px] font-semibold text-slate-800 dark:text-slate-100 leading-none">
+                      {adminUser?.name || 'Recruiter'}
+                    </div>
+                    <span className="text-[10px] text-slate-400 font-medium">Recruiter</span>
                   </div>
                   <ChevronDown size={14} className="text-slate-400 ml-1" />
                 </button>
 
                 {dropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-lg py-1.5 z-50">
-                    <NavLink
-                      to="/admin/profile-settings"
-                      onClick={() => setDropdownOpen(false)}
-                      className="flex items-center gap-2.5 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 no-underline"
-                    >
-                      <User size={15} /> My Profile
-                    </NavLink>
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setDropdownOpen(false)} />
+                    <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-lg py-1.5 z-50">
+                      <NavLink
+                        to="/admin/profile-settings"
+                        onClick={() => setDropdownOpen(false)}
+                        className="flex items-center gap-2.5 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 no-underline"
+                      >
+                        <User size={15} /> My Profile
+                      </NavLink>
 
-                    <hr className="border-slate-100 my-1" />
-                    <button
-                      onClick={() => {
-                        setDropdownOpen(false);
-                        if (onLogout) onLogout();
-                      }}
-                      className="w-full text-left flex items-center gap-2.5 px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 font-medium cursor-pointer border-none bg-transparent"
-                    >
-                      <LogOut size={15} /> Logout
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </header>
+                      <hr className="border-slate-100 my-1" />
+                      <button
+                        onClick={() => {
+                          setDropdownOpen(false);
+                          if (onLogout) onLogout();
+                        }}
+                        className="w-full text-left flex items-center gap-2.5 px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 font-medium cursor-pointer border-none bg-transparent"
+                      >
+                        <LogOut size={15} /> Logout
+                      </button>
+                    </div>
+                    )
+  }
+                  </div >
+              </div >
+            </div >
+          </header >
 
           {/* Horizontal Navbar (Navbar Layout) */}
-          {layoutConfig?.layout_type === "navbar" && (
-            <div
-              className="flex items-center gap-1 px-6 h-14 border-t border-slate-200/40 overflow-x-auto hide-scrollbar"
-              style={{ background: sidebarBg }}
-            >
-              {navItems.map((item) => (
-                <NavLink
-                  key={item.id}
-                  to={item.path}
-                  className={({ isActive }) =>
-                    `flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 whitespace-nowrap shrink-0 ${
-                      isActive
+          {
+            layoutConfig?.layout_type === "navbar" && (
+              <div
+                className="flex items-center gap-1 px-6 h-14 border-t border-slate-200/40 overflow-x-auto hide-scrollbar bg-white dark:bg-[#0b1120]"
+              >
+                {navItems.map((item) => (
+                  <NavLink
+                    key={item.id}
+                    to={item.path}
+                    className={({ isActive }) =>
+                      `flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 whitespace-nowrap shrink-0 ${isActive
                         ? 'bg-indigo-600 text-white font-semibold shadow-md shadow-indigo-500/20'
                         : 'text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-800/80 hover:text-indigo-600 dark:hover:text-indigo-400'
-                    }`
-                  }
-                >
-                  {({ isActive }) => (
-                    <>
-                      {item.icon && <item.icon size={15} className={`shrink-0 ${isActive ? '!text-white text-white' : ''}`} />}
-                      <span>{item.label}</span>
-                    </>
-                  )}
-                </NavLink>
-              ))}
-              <div className="ml-auto flex items-center gap-2 pl-4 border-l border-slate-200/50">
-                <button
-                  onClick={() => dispatch(setLiveResultsModalOpen(true))}
-                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 text-slate-500 hover:bg-slate-100 hover:text-slate-800 whitespace-nowrap shrink-0"
-                >
-                  <Radio size={15} />
-                  Live Results
-                </button>
-                <button
-                  onClick={onAddCredits}
-                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 text-slate-500 hover:bg-slate-100 hover:text-slate-800 whitespace-nowrap shrink-0"
-                >
-                  <Coins size={15} />
-                  Request Credits
-                </button>
+                      }`
+                    }
+                  >
+                    {({ isActive }) => (
+                      <>
+                        {item.icon && <item.icon size={15} className={`shrink-0 ${isActive ? '!text-white text-white' : ''}`} />}
+                        <span>{item.label}</span>
+                      </>
+                    )}
+                  </NavLink>
+                ))}
+                <div className="ml-auto flex items-center gap-2 pl-4 border-l border-slate-200/50">
+                  <button
+                    onClick={() => dispatch(setLiveResultsModalOpen(true))}
+                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 text-slate-500 hover:bg-slate-100 hover:text-slate-800 whitespace-nowrap shrink-0"
+                  >
+                    <Radio size={15} />
+                    Live Results
+                  </button>
+                  <button
+                    onClick={onAddCredits}
+                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 text-slate-500 hover:bg-slate-100 hover:text-slate-800 whitespace-nowrap shrink-0"
+                  >
+                    <Coins size={15} />
+                    Request Credits
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )
+          }
+        </div >
 
         {/* Main Content */}
-        <main className="flex-1 overflow-y-auto bg-background/60 relative p-4 lg:p-8">
+        < main className="flex-1 overflow-y-auto bg-background/60 relative p-4 lg:p-8" >
           {children}
-        </main>
-      </div>
+        </main >
+      </div >
 
       {/* Global Admin Copilot */}
-      <AdminCopilot />
-    </div>
+      < AdminCopilot />
+    </div >
   )
 }

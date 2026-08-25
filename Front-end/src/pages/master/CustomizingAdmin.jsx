@@ -7,7 +7,7 @@ const CustomizingAdmin = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  
+
   const [admin, setAdmin] = useState(location.state?.admin || null);
   const [fetchingAdmin, setFetchingAdmin] = useState(!location.state?.admin);
   const [loading, setLoading] = useState(false);
@@ -110,7 +110,7 @@ const CustomizingAdmin = () => {
     return (
       <div className="p-16 flex flex-col items-center justify-center min-h-[50vh]">
         <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mb-4" />
-        <p className="text-sm font-medium text-slate-500">Loading organization configuration...</p>
+        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Loading organization configuration...</p>
       </div>
     );
   }
@@ -118,8 +118,8 @@ const CustomizingAdmin = () => {
   if (!admin) {
     return (
       <div className="p-8 text-center">
-        <p className="text-slate-500 mb-4">No organization details found.</p>
-        <button 
+        <p className="text-slate-500 dark:text-slate-400 mb-4">No organization details found.</p>
+        <button
           onClick={() => navigate(-1)}
           className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
         >
@@ -177,7 +177,7 @@ const CustomizingAdmin = () => {
   };
 
   const handleFeatureToggle = (feature) => {
-    setSelectedFeatures(prev => 
+    setSelectedFeatures(prev =>
       prev.includes(feature)
         ? prev.filter(f => f !== feature)
         : [...prev, feature]
@@ -207,19 +207,19 @@ const CustomizingAdmin = () => {
 
   return (
     <div className="p-6 md:p-8 max-w-5xl mx-auto animate-[fadeIn_0.3s_ease-out]">
-      <button 
+      <button
         onClick={() => navigate(-1)}
-        className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors mb-6 text-sm font-semibold"
+        className="flex items-center gap-2 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-100 transition-colors mb-6 text-sm font-semibold"
       >
         <ArrowLeft className="w-4 h-4" /> Back to Customization Hub
       </button>
 
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
           <User className="w-6 h-6 text-indigo-600" />
           Modify Organization: {admin.companyName}
         </h1>
-        <p className="text-sm text-slate-500 mt-2 font-medium">Update subscription tiers, extend active periods, and allocate AI credits.</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 font-medium">Update subscription tiers, extend active periods, and allocate AI credits.</p>
       </div>
 
       {error && (
@@ -236,19 +236,19 @@ const CustomizingAdmin = () => {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+      <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          
+
           {/* Subscription Plan */}
           <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
+            <label className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200">
               <Shield className="w-4 h-4 text-slate-400" /> Subscription Plan
             </label>
             <select
               name="subscription_plan"
               value={formData.subscription_plan}
               onChange={handleChange}
-              className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-800 px-4 py-3 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 transition-all"
+              className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-800 dark:text-slate-100 px-4 py-3 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 transition-all"
             >
               <option value="trial">Trial</option>
               <option value="basic">Basic</option>
@@ -261,7 +261,7 @@ const CustomizingAdmin = () => {
 
           {/* Add Days */}
           <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
+            <label className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200">
               <Clock className="w-4 h-4 text-slate-400" /> Extend Expiry (Days)
             </label>
             <input
@@ -270,14 +270,14 @@ const CustomizingAdmin = () => {
               value={formData.add_days}
               onChange={handleChange}
               min="0"
-              className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-800 px-4 py-3 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 transition-all"
+              className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-800 dark:text-slate-100 px-4 py-3 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 transition-all"
             />
             <p className="text-[10px] text-slate-400 font-medium">Adds the specified number of days to the current expiry date.</p>
           </div>
 
           {/* Add Credits */}
           <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
+            <label className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200">
               <CreditCard className="w-4 h-4 text-slate-400" /> Add Credits
             </label>
             <input
@@ -286,7 +286,7 @@ const CustomizingAdmin = () => {
               value={formData.add_credits}
               onChange={handleChange}
               min="0"
-              className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-800 px-4 py-3 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 transition-all"
+              className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-800 dark:text-slate-100 px-4 py-3 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 transition-all"
             />
             <p className="text-[10px] text-slate-400 font-medium">Additional AI or calling credits for the tenant.</p>
           </div>
@@ -295,19 +295,19 @@ const CustomizingAdmin = () => {
         {/* Custom Features */}
         {allFeatures.length > 0 && (
           <div className="space-y-3 mt-8">
-            <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
+            <label className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200">
               <Shield className="w-4 h-4 text-slate-400" /> Module Access
             </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 p-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl">
               {allFeatures.map(feature => (
-                <label key={feature} className="flex items-center gap-3 cursor-pointer p-2 hover:bg-white rounded-lg transition-colors border border-transparent hover:border-slate-200">
+                <label key={feature} className="flex items-center gap-3 cursor-pointer p-2 hover:bg-white dark:bg-slate-800/60 rounded-lg transition-colors border border-transparent hover:border-slate-200 dark:border-slate-700">
                   <input
                     type="checkbox"
                     checked={selectedFeatures.includes(feature)}
                     onChange={() => handleFeatureToggle(feature)}
                     className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
                   />
-                  <span className="text-sm font-semibold text-slate-700 capitalize">{feature.replace(/_/g, ' ')}</span>
+                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 capitalize">{feature.replace(/_/g, ' ')}</span>
                 </label>
               ))}
             </div>
@@ -317,7 +317,7 @@ const CustomizingAdmin = () => {
 
 
 
-        <div className="mt-8 pt-6 border-t border-slate-100 flex justify-end">
+        <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800 flex justify-end">
           <button
             type="submit"
             disabled={loading}

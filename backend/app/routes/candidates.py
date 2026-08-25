@@ -414,6 +414,8 @@ def create_session(data: CreateSession, current_admin: dict = Depends(get_curren
         "current_company": data.current_company,
         "notice_period": data.notice_period,
         "resume_text": data.resume_text,
+        "resume_url": data.resume_url,
+        "resume_filename": data.resume_filename,
         "job_description": data.job_description,
         "custom_email_html": data.custom_email_html,
         "jd_file_url": data.jd_file_url,
@@ -1662,22 +1664,76 @@ def send_decision_email(email: str, name: str, decision: str, jd: str):
     
     if decision == 'selected':
         html = f"""
-        <html><body>
-            <h3>Congratulations {name}!</h3>
-            <p>We are pleased to inform you that you have successfully cleared the AI interview for the role.</p>
-            <p><b>Next Steps:</b> Our recruitment team will reach out to you shortly for the final technical/HR round. Please stay reachable on this email.</p>
-            <p>Best Regards,<br/>Hire IQ Recruiting Team</p>
-        </body></html>
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="utf-8"></head>
+        <body style="font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; background-color: #f8f9fa;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8f9fa; padding: 40px 20px;">
+                <tr><td align="center">
+                    <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; background-color: #ffffff; border: 1px solid #dadce0; border-radius: 8px; overflow: hidden;">
+                        <tr><td style="padding: 32px 40px; text-align: center; border-bottom: 1px solid #f1f3f4;">
+                            <h1 style="color: #1a73e8; margin: 0; font-size: 28px; font-weight: 500; letter-spacing: -0.5px;">HireIQ</h1>
+                        </td></tr>
+                        <tr><td style="padding: 40px;">
+                            <h2 style="color: #202124; font-size: 20px; font-weight: 400; margin: 0 0 24px 0;">Interview Result - Next Steps</h2>
+                            <p style="color: #3c4043; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">Dear {name},</p>
+                            <p style="color: #3c4043; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+                                We are pleased to inform you that you have successfully cleared the AI interview assessment. Congratulations!
+                            </p>
+                            <div style="background-color: #e6f4ea; border-radius: 8px; padding: 20px; margin: 24px 0;">
+                                <p style="margin: 0; color: #137333; font-size: 15px; line-height: 1.6;">
+                                    <strong>Next Steps:</strong> Our recruitment team will reach out to you shortly to schedule the final technical or HR round. Please ensure you remain reachable on this email address.
+                                </p>
+                            </div>
+                            <p style="color: #3c4043; font-size: 15px; line-height: 1.6; margin: 32px 0 0 0;">
+                                Best regards,<br><strong>HireIQ Recruiting Team</strong>
+                            </p>
+                        </td></tr>
+                        <tr><td style="background-color: #f1f3f4; padding: 24px 40px; text-align: center;">
+                            <p style="color: #5f6368; font-size: 12px; line-height: 1.5; margin: 0;">&copy; 2026 HireIQ. All rights reserved.</p>
+                        </td></tr>
+                    </table>
+                </td></tr>
+            </table>
+        </body>
+        </html>
         """
     else:
         html = f"""
-        <html><body>
-            <h3>Application Update</h3>
-            <p>Dear {name},</p>
-            <p>Thank you for taking the time to interview with us. Unfortunately, we have decided not to move forward with your application at this time.</p>
-            <p>We were impressed with your background, but we had many qualified candidates for this role. We wish you the very best in your job search.</p>
-            <p>Best Regards,<br/>Hire IQ Recruiting Team</p>
-        </body></html>
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="utf-8"></head>
+        <body style="font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; background-color: #f8f9fa;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8f9fa; padding: 40px 20px;">
+                <tr><td align="center">
+                    <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; background-color: #ffffff; border: 1px solid #dadce0; border-radius: 8px; overflow: hidden;">
+                        <tr><td style="padding: 32px 40px; text-align: center; border-bottom: 1px solid #f1f3f4;">
+                            <h1 style="color: #1a73e8; margin: 0; font-size: 28px; font-weight: 500; letter-spacing: -0.5px;">HireIQ</h1>
+                        </td></tr>
+                        <tr><td style="padding: 40px;">
+                            <h2 style="color: #202124; font-size: 20px; font-weight: 400; margin: 0 0 24px 0;">Application Status Update</h2>
+                            <p style="color: #3c4043; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">Dear {name},</p>
+                            <p style="color: #3c4043; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+                                Thank you for taking the time to complete the AI interview assessment and for your interest in joining our team.
+                            </p>
+                            <p style="color: #3c4043; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+                                While we were impressed with your background, we have decided to move forward with other candidates whose qualifications more closely match our current needs for this role.
+                            </p>
+                            <p style="color: #3c4043; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+                                We appreciate your time and effort, and we wish you the absolute best in your future career endeavors.
+                            </p>
+                            <p style="color: #3c4043; font-size: 15px; line-height: 1.6; margin: 32px 0 0 0;">
+                                Best regards,<br><strong>HireIQ Recruiting Team</strong>
+                            </p>
+                        </td></tr>
+                        <tr><td style="background-color: #f1f3f4; padding: 24px 40px; text-align: center;">
+                            <p style="color: #5f6368; font-size: 12px; line-height: 1.5; margin: 0;">&copy; 2026 HireIQ. All rights reserved.</p>
+                        </td></tr>
+                    </table>
+                </td></tr>
+            </table>
+        </body>
+        </html>
         """
 
     payload = {

@@ -183,39 +183,6 @@ export default function SuperAdminLayout() {
     }
   }, [token, dispatch])
 
-  // Real-time WebSocket profile synchronization for Super Admin
-  useEffect(() => {
-    if (!token || !API_BASE_URL) return
-
-    const wsUrl = API_BASE_URL.replace(/^http/, 'ws') + `/ws/dashboard?token=${encodeURIComponent(token)}`
-    const ws = new WebSocket(wsUrl)
-
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data)
-        if (data.type === 'profile_update') {
-          const currentAdminId = adminUser?.admin_id || adminUser?.id || adminUser?._id
-          const currentCompanyId = adminUser?.company_id
-
-          const isMatchingAdmin = data.admin_id && String(data.admin_id) === String(currentAdminId)
-          const isMatchingTenant = data.company_id && currentCompanyId && String(data.company_id) === String(currentCompanyId)
-
-          if (isMatchingAdmin || isMatchingTenant) {
-            const { admin_id, company_id, type, ...fieldsToUpdate } = data
-            dispatch(updateAdminUser(fieldsToUpdate))
-          }
-          window.dispatchEvent(new CustomEvent('superadmin_profile_updated', { detail: data }))
-        }
-      } catch (err) {
-        console.error('Error parsing superadmin ws message:', err)
-      }
-    }
-
-    return () => {
-      ws.close()
-    }
-  }, [dispatch, token, API_BASE_URL, adminUser, role])
-
 
 
   // Lock document-level scroll so only the inner <main> scrolls, not the page
@@ -377,7 +344,7 @@ export default function SuperAdminLayout() {
       link.rel = 'icon';
       document.head.appendChild(link);
     }
-    
+
     if (layoutConfig?.favicon) {
       link.href = layoutConfig.favicon;
     } else {
@@ -551,76 +518,76 @@ export default function SuperAdminLayout() {
             className="border-r border-slate-200/80 dark:border-slate-800 z-20 overflow-hidden bg-white dark:bg-[#0b1120]"
             collapsible="icon"
           >
-          <SidebarHeader className="h-16 px-6 py-0 flex items-center justify-center shrink-0 border-b border-slate-200/80 dark:border-slate-800 transition-colors">
-            <div className="flex items-center gap-3 w-full overflow-hidden">
-              <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-white shadow-sm bg-indigo-600">
-                <Zap className="h-4 w-4 text-white" />
-              </div>
-              <div className="leading-tight group-data-[collapsible=icon]:hidden truncate">
-                <div className="text-sm font-semibold truncate text-slate-800 dark:text-slate-100">HireIQ</div>
-                <div className="text-[11px] font-medium truncate text-indigo-600 dark:text-indigo-400">
-                  Super Admin
+            <SidebarHeader className="h-16 px-6 py-0 flex items-center justify-center shrink-0 border-b border-slate-200/80 dark:border-slate-800 transition-colors">
+              <div className="flex items-center gap-3 w-full overflow-hidden">
+                <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-white shadow-sm bg-indigo-600">
+                  <Zap className="h-4 w-4 text-white" />
+                </div>
+                <div className="leading-tight group-data-[collapsible=icon]:hidden truncate">
+                  <div className="text-sm font-semibold truncate text-slate-800 dark:text-slate-100">HireIQ</div>
+                  <div className="text-[11px] font-medium truncate text-indigo-600 dark:text-indigo-400">
+                    Super Admin
+                  </div>
                 </div>
               </div>
-            </div>
-          </SidebarHeader>
+            </SidebarHeader>
 
-          <SidebarContent className="p-3">
-            <SidebarGroup className="p-0">
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {navItems.map((item) => {
-                    const isActive = location.pathname.startsWith(item.path);
-                    return (
-                      <SidebarMenuItem key={item.id}>
-                        <SidebarMenuButton
-                          asChild
-                          isActive={isActive}
-                          tooltip={item.label}
-                          className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${isActive
+            <SidebarContent className="p-3">
+              <SidebarGroup className="p-0">
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {navItems.map((item) => {
+                      const isActive = location.pathname.startsWith(item.path);
+                      return (
+                        <SidebarMenuItem key={item.id}>
+                          <SidebarMenuButton
+                            asChild
+                            isActive={isActive}
+                            tooltip={item.label}
+                            className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${isActive
                               ? '!bg-indigo-600 !text-white font-semibold shadow-md shadow-indigo-500/20'
                               : 'text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-800/80 hover:text-indigo-600 dark:hover:text-indigo-400'
-                            }`}
-                        >
-                          <NavLink
-                            to={item.path}
-                            className={`flex items-center w-full min-w-0 ${isActive ? 'text-white font-semibold' : ''}`}
+                              }`}
                           >
-                            {item.icon ? (
-                              <item.icon size={16} className={`shrink-0 group-data-[collapsible=icon]:mr-0 mr-3 ${isActive ? '!text-white text-white' : ''}`} />
-                            ) : (
-                              <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-white' : 'bg-current opacity-60'} shrink-0 group-data-[collapsible=icon]:mr-0 mr-3`} />
-                            )}
-                            <span className={`truncate group-data-[collapsible=icon]:hidden ${isActive ? '!text-white text-white font-semibold' : ''}`}>{item.label}</span>
-                          </NavLink>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    );
-                  })}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          </SidebarContent>
+                            <NavLink
+                              to={item.path}
+                              className={`flex items-center w-full min-w-0 ${isActive ? 'text-white font-semibold' : ''}`}
+                            >
+                              {item.icon ? (
+                                <item.icon size={16} className={`shrink-0 group-data-[collapsible=icon]:mr-0 mr-3 ${isActive ? '!text-white text-white' : ''}`} />
+                              ) : (
+                                <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-white' : 'bg-current opacity-60'} shrink-0 group-data-[collapsible=icon]:mr-0 mr-3`} />
+                              )}
+                              <span className={`truncate group-data-[collapsible=icon]:hidden ${isActive ? '!text-white text-white font-semibold' : ''}`}>{item.label}</span>
+                            </NavLink>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    })}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            </SidebarContent>
 
-          <SidebarFooter className="p-3 border-t border-slate-200/80 dark:border-slate-800 space-y-0.5 shrink-0 transition-colors">
-            <button
-              onClick={() => dispatch(setLiveResultsModalOpen(true))}
-              className="flex items-center justify-center md:justify-start gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 text-slate-600 dark:text-slate-400 hover:bg-indigo-50 dark:hover:bg-slate-800/80 hover:text-indigo-600 dark:hover:text-indigo-400 border-none bg-transparent cursor-pointer text-left overflow-hidden"
-              title="Live Results"
-            >
-              <Radio size={16} className="shrink-0" />
-              <span className="group-data-[collapsible=icon]:hidden truncate">Live Results</span>
-            </button>
-            <button
-              onClick={() => setShowCreditsModal(true)}
-              className="flex items-center justify-center md:justify-start gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 text-slate-600 dark:text-slate-400 hover:bg-indigo-50 dark:hover:bg-slate-800/80 hover:text-indigo-600 dark:hover:text-indigo-400 border-none bg-transparent cursor-pointer text-left overflow-hidden"
-              title="Available Credits"
-            >
-              <Coins size={16} className="shrink-0" />
-              <span className="group-data-[collapsible=icon]:hidden truncate">Available Credits</span>
-            </button>
-          </SidebarFooter>
-        </Sidebar>
+            <SidebarFooter className="p-3 border-t border-slate-200/80 dark:border-slate-800 space-y-0.5 shrink-0 transition-colors">
+              <button
+                onClick={() => dispatch(setLiveResultsModalOpen(true))}
+                className="flex items-center justify-center md:justify-start gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 text-slate-600 dark:text-slate-400 hover:bg-indigo-50 dark:hover:bg-slate-800/80 hover:text-indigo-600 dark:hover:text-indigo-400 border-none bg-transparent cursor-pointer text-left overflow-hidden"
+                title="Live Results"
+              >
+                <Radio size={16} className="shrink-0" />
+                <span className="group-data-[collapsible=icon]:hidden truncate">Live Results</span>
+              </button>
+              <button
+                onClick={() => setShowCreditsModal(true)}
+                className="flex items-center justify-center md:justify-start gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 text-slate-600 dark:text-slate-400 hover:bg-indigo-50 dark:hover:bg-slate-800/80 hover:text-indigo-600 dark:hover:text-indigo-400 border-none bg-transparent cursor-pointer text-left overflow-hidden"
+                title="Available Credits"
+              >
+                <Coins size={16} className="shrink-0" />
+                <span className="group-data-[collapsible=icon]:hidden truncate">Available Credits</span>
+              </button>
+            </SidebarFooter>
+          </Sidebar>
         )}
 
         {/* Main Content Wrapper */}
@@ -632,7 +599,7 @@ export default function SuperAdminLayout() {
               {layoutConfig?.layout_type !== "navbar" && (
                 <SidebarTrigger className="-ml-2 md:mr-2 text-slate-500 hover:text-slate-800 transition-colors" />
               )}
-              
+
               {layoutConfig?.layout_type === "navbar" && (
                 <div className="flex items-center gap-3 border-r border-slate-200/60 dark:border-slate-800 pr-6 mr-2">
                   <div className="grid h-8 w-8 place-items-center rounded-lg text-white shadow-sm bg-indigo-600">
@@ -757,25 +724,25 @@ export default function SuperAdminLayout() {
 
                 {dropdownOpen && (
                   <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-lg py-1.5 z-50">
-                      <NavLink
-                        to="/superadmin/profile-settings"
-                        onClick={() => setDropdownOpen(false)}
-                        className="flex items-center gap-2.5 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 no-underline"
-                      >
-                        <User size={15} /> My Profile
-                      </NavLink>
+                    <NavLink
+                      to="/superadmin/profile-settings"
+                      onClick={() => setDropdownOpen(false)}
+                      className="flex items-center gap-2.5 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 no-underline"
+                    >
+                      <User size={15} /> My Profile
+                    </NavLink>
 
-                      <hr className="border-slate-100 my-1" />
-                      <button
-                        onClick={() => {
-                          setDropdownOpen(false);
-                          handleLogout();
-                        }}
-                        className="w-full text-left flex items-center gap-2.5 px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 font-medium cursor-pointer border-none bg-transparent"
-                      >
-                        <LogOut size={15} /> Logout
-                      </button>
-                    </div>
+                    <hr className="border-slate-100 my-1" />
+                    <button
+                      onClick={() => {
+                        setDropdownOpen(false);
+                        handleLogout();
+                      }}
+                      className="w-full text-left flex items-center gap-2.5 px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 font-medium cursor-pointer border-none bg-transparent"
+                    >
+                      <LogOut size={15} /> Logout
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -783,9 +750,8 @@ export default function SuperAdminLayout() {
 
           {/* Horizontal Navbar (Navbar Layout) */}
           {layoutConfig?.layout_type === "navbar" && (
-            <div 
-              className="flex items-center gap-1 px-6 h-14 border-t border-slate-200/40 overflow-x-auto hide-scrollbar z-30 sticky top-[64px]" 
-              style={{ background: sidebarBg }}
+            <div
+              className="flex items-center gap-1 px-6 h-14 border-t border-slate-200/40 overflow-x-auto hide-scrollbar z-30 sticky top-[64px] bg-white dark:bg-[#0b1120]"
             >
               {navItems.map((item) => {
                 const isActive = location.pathname.startsWith(item.path);
@@ -793,11 +759,10 @@ export default function SuperAdminLayout() {
                   <NavLink
                     key={item.id}
                     to={item.path}
-                    className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 whitespace-nowrap shrink-0 ${
-                      isActive
+                    className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 whitespace-nowrap shrink-0 ${isActive
                         ? 'bg-indigo-600 text-white font-semibold shadow-md shadow-indigo-500/20'
                         : 'text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-800/80 hover:text-indigo-600 dark:hover:text-indigo-400'
-                    }`}
+                      }`}
                   >
                     {item.icon && <item.icon size={15} className={`shrink-0 ${isActive ? 'text-white' : ''}`} />}
                     <span>{item.label}</span>

@@ -225,6 +225,52 @@ def get_public_job(job_id: str):
     job["_id"] = str(job["_id"])
     return {"status": "success", "job": job}
 
+@router.get("/api/public/jobs/company/{company_id}")
+def get_public_company_jobs(company_id: str):
+    """
+    Fetch all active public jobs for a specific company.
+    Mirrors the dashboard logic by only selecting jobs created by authorized admins.
+    """
+    from bson import ObjectId
+    
+    # 1. Get the company name
+    company_name = "Unknown Company"
+    try:
+        company = companies_collection.find_one({"_id": ObjectId(company_id)})
+        if company:
+            company_name = company.get("name") or company.get("company_name", "Unknown Company")
+    except Exception:
+        pass
+        
+    # 2. Get all authorized admin IDs for this company
+    admin_ids = []
+    try:
+        org_admins = list(admins_collection.find({"company_id": company_id}, {"_id": 1}))
+        admin_ids = [str(a["_id"]) for a in org_admins]
+        # Also include the company_id itself just in case it acts as an admin_id in some legacy records
+        if company_id not in admin_ids:
+            admin_ids.append(company_id)
+    except Exception:
+        admin_ids = [company_id]
+        
+    # 3. Query jobs that belong to these admins (exactly how dashboard does it)
+    query = {
+        "admin_id": {"$in": admin_ids}
+    }
+    
+    jobs = list(jobs_collection.find(query).sort("created_at", -1))
+    
+    # 4. Clean up jobs for public consumption
+    public_jobs = []
+    for j in jobs:
+        j["_id"] = str(j["_id"])
+        public_jobs.append(j)
+        
+    return {
+        "status": "success", 
+        "company_name": company_name, 
+        "jobs": public_jobs
+    }
 UPLOAD_RESUMES_DIR = os.path.join(os.getcwd(), "uploads", "resumes")
 UPLOAD_COVER_LETTERS_DIR = os.path.join(os.getcwd(), "uploads", "cover_letters")
 os.makedirs(UPLOAD_RESUMES_DIR, exist_ok=True)
@@ -557,6 +603,8 @@ async def apply_for_job(
 
     app_dict = {
         "job_id": actual_job_id,
+        "company_id": job.get("company_id"),
+        "admin_id": job.get("admin_id"),
         "job_title": job.get("title"),
         "name": name,
         "email": email,

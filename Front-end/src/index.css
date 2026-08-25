@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@custom-variant dark (&:is(.dark *));
 @import "tw-animate-css";
 
 /* ── Admin Shell Scroll Lock ─────────────────────────────────────────────────

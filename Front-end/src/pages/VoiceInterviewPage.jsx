@@ -1633,21 +1633,21 @@ export default function VoiceInterviewPage() {
               whisperRecorderRef.current.stop()
             } catch (_) { }
           }
-        }, 12000)
+        }, 4000)
       } catch (err) {
         console.warn('Failed to start Whisper chunk recorder:', err)
         resolveWhisperStopRef.current?.()
       }
     }
 
-    // Grace period: if nothing heard initially, wait 20-30s before auto-submit
+    // Grace period: if nothing heard initially, wait 15-20s before auto-submit
     if (!preserveTranscript) {
       clearTimeout(silenceTimerRef.current)
       silenceTimerRef.current = setTimeout(() => {
         if (isListeningRef.current) {
           finishListening().then(fullAns => onFinish?.(fullAns))
         }
-      }, rec ? 20000 : 30000)
+      }, rec ? 15000 : 20000)
     }
 
     const mergeTranscripts = (accumulated, sessionFinal, sessionInterim) => {
@@ -1750,14 +1750,14 @@ export default function VoiceInterviewPage() {
       // Always update the interim ghost text for live feedback
       setInterimText(formattedInterim || '')
 
-      // Reset silence timer whenever speech is heard (8s of silence before auto-advance)
+      // Reset silence timer whenever speech is heard (3s of silence before auto-advance)
       hasSpokenThisSessionRef.current = true
       clearTimeout(silenceTimerRef.current)
       silenceTimerRef.current = setTimeout(() => {
         if (isListeningRef.current) {
           finishListening().then(fullAns => onFinish?.(fullAns))
         }
-      }, 8000)
+      }, 3000)
 
       clearTimeout(webSpeechWatchdogRef.current)
       // Chrome's continuous-recognition timer is approximately 60 seconds —
@@ -3241,7 +3241,7 @@ export default function VoiceInterviewPage() {
             { i: 'fa-volume-up', c: 'text-indigo-400', t: 'I speak each question aloud — listen before answering' },
             { i: 'fa-microphone', c: 'text-emerald-400', t: 'Just talk naturally — your mic captures everything' },
             { i: 'fa-comment-dots', c: 'text-violet-400', t: 'I\'ll ask follow-up questions based on your answers' },
-            { i: 'fa-arrow-right', c: 'text-amber-400', t: 'After 5 seconds of silence, the interview auto-advances' },
+            { i: 'fa-arrow-right', c: 'text-amber-400', t: 'After 3 seconds of silence, the interview auto-advances' },
           ].map((tip, idx) => (
             <div key={idx} className="flex items-center gap-3 bg-white/4 border border-white/6 rounded-xl px-5 py-3">
               <i className={`fas ${tip.i} ${tip.c} w-5 text-center`} />
