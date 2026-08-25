@@ -201,7 +201,7 @@ function Nav() {
 
 function Logo() {
   return (
-    <img src={logoImg} alt="Logo" className="h-30 w-auto object-contain" />
+    <img src={logoImg} alt="Logo" className="h-30 w-auto object-contain brand-logo-img" />
   );
 }
 

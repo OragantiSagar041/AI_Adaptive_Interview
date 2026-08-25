@@ -398,7 +398,8 @@ export default function MasterProfile() {
                   <button
                     type="submit"
                     disabled={updatingProfile}
-                    className="px-6 py-3 rounded-xl bg-primary hover:bg-primary-hover active:scale-[0.98] border-none text-white font-bold text-xs cursor-pointer disabled:opacity-50 transition-all shadow-md shadow-primary/10 hover:shadow-primary/20"
+                    style={{ backgroundColor: '#4f46e5', color: '#ffffff' }}
+                    className="px-6 py-3 rounded-xl font-extrabold text-sm shadow-md transition-all disabled:opacity-50 cursor-pointer border border-indigo-600 hover:opacity-90"
                   >
                     {updatingProfile ? 'Saving Details...' : 'Save Profile Changes'}
                   </button>
@@ -491,7 +492,8 @@ export default function MasterProfile() {
                   <button
                     type="submit"
                     disabled={updatingPassword}
-                    className="px-6 py-3 rounded-xl bg-primary hover:bg-primary-hover active:scale-[0.98] border-none text-white font-bold text-xs cursor-pointer disabled:opacity-50 transition-all shadow-md shadow-primary/10 hover:shadow-primary/20"
+                    style={{ backgroundColor: '#4f46e5', color: '#ffffff' }}
+                    className="px-6 py-3 rounded-xl font-extrabold text-sm shadow-md transition-all disabled:opacity-50 cursor-pointer border border-indigo-600 hover:opacity-90"
                   >
                     {updatingPassword ? 'Updating Password...' : 'Update Password'}
                   </button>

@@ -571,7 +571,6 @@ export default function LoginPage() {
       <style>{CSS}</style>
 
       <div className="lp-root relative">
-        <ThemeToggle className="absolute top-4 right-4 z-50" />
 
         {/* Waves — elevated ambient background layer */}
         <div className="lp-waves-bg">
@@ -602,7 +601,7 @@ export default function LoginPage() {
             {/* LEFT: Login Form */}
             <div className="lp-left">
               <div className="lp-brand">
-                <img src={logoImage} alt="Hire IQ" style={{ height: '44px', objectFit: 'contain', display: 'block', marginBottom: '28px' }} />
+                <img src={logoImage} alt="Hire IQ" className="brand-logo-img" style={{ height: '44px', objectFit: 'contain', display: 'block', marginBottom: '28px' }} />
                 <h1 className="lp-headline">Welcome back</h1>
                 <p className="lp-sub">
                   Sign in to your Hire IQ admin workspace and<br />

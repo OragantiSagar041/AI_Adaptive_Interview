@@ -32,19 +32,19 @@ export default function Modal({
       onClick={onClose}
     >
       <div
-        className={`w-full ${maxWidth} bg-white border border-slate-200 rounded-[8px] flex flex-col max-h-[90vh] overflow-hidden shadow-[0_24px_70px_rgba(15,23,42,0.18)] transition-all duration-300 ${className}`}
+        className={`w-full ${maxWidth} bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-[#26334d] text-slate-900 dark:text-slate-100 rounded-[8px] flex flex-col max-h-[90vh] overflow-hidden shadow-[0_24px_70px_rgba(15,23,42,0.18)] transition-all duration-300 ${className}`}
         onClick={(e) => e.stopPropagation()}
         {...props}
       >
         {/* Header */}
-        <div className="flex justify-between items-center px-6 py-4 border-b border-slate-200 bg-slate-50/80">
+        <div className="flex justify-between items-center px-6 py-4 border-b border-slate-200 dark:border-[#26334d] bg-slate-50/80 dark:bg-[#0f172a]/80">
           <div>
-            {title && <h3 className="text-lg font-bold text-slate-900 leading-none">{title}</h3>}
-            {subtitle && <p className="text-xs text-slate-500 mt-1">{subtitle}</p>}
+            {title && <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 leading-none">{title}</h3>}
+            {subtitle && <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{subtitle}</p>}
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-900 transition-colors cursor-pointer"
+            className="text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-pointer"
           >
             <X size={20} />
           </button>
@@ -57,7 +57,7 @@ export default function Modal({
 
         {/* Footer */}
         {footer && (
-          <div className="px-6 py-4 bg-slate-50/80 border-t border-slate-200 flex justify-end gap-3">
+          <div className="px-6 py-4 bg-slate-50/80 dark:bg-[#0f172a]/80 border-t border-slate-200 dark:border-[#26334d] flex justify-end gap-3">
             {footer}
           </div>
         )}

@@ -514,79 +514,75 @@ export default function SuperAdminLayout() {
         {/* NEW SHADCN SIDEBAR */}
         {layoutConfig?.layout_type !== "navbar" && (
           <Sidebar
-            className="border-r border-slate-200/80 dark:border-slate-800 z-20 overflow-hidden bg-white dark:bg-[#0b1120]"
+            className="border-r border-border z-20 overflow-hidden bg-sidebar"
             collapsible="icon"
           >
-          <SidebarHeader className="h-16 px-6 py-0 flex items-center justify-center shrink-0 border-b border-slate-200/80 dark:border-slate-800 transition-colors">
-            <div className="flex items-center gap-3 w-full overflow-hidden">
-              <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-white shadow-sm bg-indigo-600">
-                <Zap className="h-4 w-4 text-white" />
-              </div>
-              <div className="leading-tight group-data-[collapsible=icon]:hidden truncate">
-                <div className="text-sm font-semibold truncate text-slate-800 dark:text-slate-100">HireIQ</div>
-                <div className="text-[11px] font-medium truncate text-indigo-600 dark:text-indigo-400">
-                  Super Admin
+            <SidebarHeader className="h-16 px-6 py-0 flex items-center justify-center shrink-0 border-b border-border transition-colors">
+              <div className="flex items-center gap-3 w-full overflow-hidden">
+                <div
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-white p-1 cursor-pointer"
+                  style={{
+                    background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)'
+                  }}
+                >
+                  <Zap className="h-5 w-5 text-white fill-white/20" />
+                </div>
+                <div className="leading-tight group-data-[collapsible=icon]:hidden truncate">
+                  <div className="text-base font-extrabold tracking-tight truncate text-foreground">HireIQ</div>
+                  <div className="text-[11px] font-semibold truncate text-primary">
+                    Super Admin
+                  </div>
                 </div>
               </div>
-            </div>
-          </SidebarHeader>
+            </SidebarHeader>
 
-          <SidebarContent className="p-3">
-            <SidebarGroup className="p-0">
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {navItems.map((item) => {
-                    const isActive = location.pathname.startsWith(item.path);
-                    return (
-                      <SidebarMenuItem key={item.id}>
-                        <SidebarMenuButton
-                          asChild
-                          isActive={isActive}
-                          tooltip={item.label}
-                          className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${isActive
-                              ? '!bg-indigo-600 !text-white font-semibold shadow-md shadow-indigo-500/20'
-                              : 'text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-800/80 hover:text-indigo-600 dark:hover:text-indigo-400'
-                            }`}
-                        >
+            <SidebarContent className="p-3">
+              <SidebarGroup className="p-0">
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {navItems.map((item) => {
+                      const isActive = location.pathname.startsWith(item.path);
+                      return (
+                        <SidebarMenuItem key={item.id}>
                           <NavLink
                             to={item.path}
-                            className={`flex items-center w-full min-w-0 ${isActive ? 'text-white font-semibold' : ''}`}
+                            className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${isActive
+                              ? '!bg-indigo-600 !text-white font-semibold shadow-md shadow-indigo-500/20'
+                              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white !bg-transparent dark:!bg-transparent !border-none !shadow-none'
+                              }`}
                           >
                             {item.icon ? (
-                              <item.icon size={16} className={`shrink-0 group-data-[collapsible=icon]:mr-0 mr-3 ${isActive ? '!text-white text-white' : ''}`} />
+                              <item.icon size={16} className={`shrink-0 group-data-[collapsible=icon]:mr-0 mr-1 ${isActive ? '!text-white text-white' : ''}`} />
                             ) : (
-                              <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-white' : 'bg-current opacity-60'} shrink-0 group-data-[collapsible=icon]:mr-0 mr-3`} />
+                              <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-white' : 'bg-current opacity-60'} shrink-0 group-data-[collapsible=icon]:mr-0 mr-1`} />
                             )}
                             <span className={`truncate group-data-[collapsible=icon]:hidden ${isActive ? '!text-white text-white font-semibold' : ''}`}>{item.label}</span>
                           </NavLink>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    );
-                  })}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          </SidebarContent>
+                        </SidebarMenuItem>
+                      );
+                    })}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            </SidebarContent>
 
-          <SidebarFooter className="p-3 border-t border-slate-200/80 dark:border-slate-800 space-y-0.5 shrink-0 transition-colors">
-            <button
-              onClick={() => dispatch(setLiveResultsModalOpen(true))}
-              className="flex items-center justify-center md:justify-start gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 text-slate-600 dark:text-slate-400 hover:bg-indigo-50 dark:hover:bg-slate-800/80 hover:text-indigo-600 dark:hover:text-indigo-400 border-none bg-transparent cursor-pointer text-left overflow-hidden"
-              title="Live Results"
-            >
-              <Radio size={16} className="shrink-0" />
-              <span className="group-data-[collapsible=icon]:hidden truncate">Live Results</span>
-            </button>
-            <button
-              onClick={() => setShowCreditsModal(true)}
-              className="flex items-center justify-center md:justify-start gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 text-slate-600 dark:text-slate-400 hover:bg-indigo-50 dark:hover:bg-slate-800/80 hover:text-indigo-600 dark:hover:text-indigo-400 border-none bg-transparent cursor-pointer text-left overflow-hidden"
-              title="Available Credits"
-            >
-              <Coins size={16} className="shrink-0" />
-              <span className="group-data-[collapsible=icon]:hidden truncate">Available Credits</span>
-            </button>
-          </SidebarFooter>
-        </Sidebar>
+            <SidebarFooter className="p-3 border-t border-border space-y-0.5 shrink-0 transition-colors">
+              <button
+                onClick={() => dispatch(setLiveResultsModalOpen(true))}
+                className="flex items-center justify-center md:justify-start gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white !bg-transparent dark:!bg-transparent !border-none !shadow-none cursor-pointer text-left overflow-hidden"
+              >
+                <Radio size={16} className="shrink-0" />
+                <span className="group-data-[collapsible=icon]:hidden truncate">Live Results</span>
+              </button>
+              <button
+                onClick={() => setShowCreditsModal(true)}
+                className="flex items-center justify-center md:justify-start gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white !bg-transparent dark:!bg-transparent !border-none !shadow-none cursor-pointer text-left overflow-hidden"
+              >
+                <Coins size={16} className="shrink-0" />
+                <span className="group-data-[collapsible=icon]:hidden truncate">Available Credits</span>
+              </button>
+            </SidebarFooter>
+          </Sidebar>
         )}
 
         {/* Main Content Wrapper */}
@@ -596,33 +592,38 @@ export default function SuperAdminLayout() {
             {/* Left Side: Brand & Toggles */}
             <div className="flex items-center gap-6">
               {layoutConfig?.layout_type !== "navbar" && (
-                <SidebarTrigger className="-ml-2 md:mr-2 text-slate-500 hover:text-slate-800 transition-colors" />
+                <SidebarTrigger className="-ml-2 md:mr-2 p-2 rounded-xl text-foreground hover:text-indigo-500 bg-secondary border border-border transition-colors cursor-pointer shrink-0" />
               )}
               
               {layoutConfig?.layout_type === "navbar" && (
-                <div className="flex items-center gap-3 border-r border-slate-200/60 dark:border-slate-800 pr-6 mr-2">
-                  <div className="grid h-8 w-8 place-items-center rounded-lg text-white shadow-sm bg-indigo-600">
-                    <Zap className="h-4 w-4 text-white" />
+                <div className="flex items-center gap-3 border-r border-border pr-6 mr-2">
+                  <div
+                    className="grid h-9 w-9 place-items-center rounded-xl text-white p-1 cursor-pointer"
+                    style={{
+                      background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)'
+                    }}
+                  >
+                    <Zap className="h-5 w-5 text-white fill-white/20" />
                   </div>
                   <div className="leading-tight hidden sm:block">
-                    <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">HireIQ</div>
-                    <div className="text-[11px] font-medium text-indigo-600 dark:text-indigo-400">Super Admin</div>
+                    <div className="text-base font-extrabold text-foreground">HireIQ</div>
+                    <div className="text-[11px] font-semibold text-primary">Super Admin</div>
                   </div>
                 </div>
               )}
 
-              <h2 className="text-[17px] font-bold text-slate-800 hidden sm:block">SuperAdmin Management</h2>
+              <h2 className="text-[17px] font-bold text-foreground hidden sm:block">SuperAdmin Management</h2>
 
               {/* Active Plan Badge */}
               {adminUser?.subscription_plan && (
-                <div className="flex items-center gap-1.5 px-3 py-1 bg-indigo-50/50 border border-indigo-200/60 text-indigo-700 rounded-full text-xs font-bold shadow-sm">
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-600"></span>
-                  Active Plan: {adminUser.subscription_plan}
+                <div className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-100 dark:bg-indigo-950/80 border border-indigo-300 dark:border-indigo-500/60 text-indigo-800 dark:text-indigo-200 rounded-full text-xs font-black shadow-xs">
+                  <span className="w-2 h-2 rounded-full bg-indigo-600 dark:bg-indigo-400 animate-pulse"></span>
+                  Active Plan: <span className="capitalize">{adminUser.subscription_plan}</span>
                 </div>
               )}
 
               {/* Credits Badge */}
-              <div className="flex items-center gap-1.5 px-3 py-1 bg-cyan-50 border border-cyan-100 text-cyan-600 rounded-full text-xs font-bold shadow-sm">
+              <div className="flex items-center gap-1.5 px-3.5 py-1.5 bg-cyan-100 dark:bg-cyan-950/80 border border-cyan-300 dark:border-cyan-500/60 text-cyan-900 dark:text-cyan-200 rounded-full text-xs font-black shadow-xs">
                 <span className="text-[10px]">🔗</span>
                 {adminUser?.credits ?? 0} credits left
               </div>
@@ -634,7 +635,7 @@ export default function SuperAdminLayout() {
               <div className="relative" ref={notifRef}>
                 <button
                   onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
-                  className="relative p-2.5 text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 rounded-full transition-all cursor-pointer flex items-center justify-center shadow-xs"
+                  className="relative p-2.5 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-full transition-all cursor-pointer flex items-center justify-center shadow-xs"
                   title="Notifications"
                 >
                   <Bell size={18} className="text-slate-600" />
@@ -646,9 +647,9 @@ export default function SuperAdminLayout() {
                 </button>
 
                 {notifDropdownOpen && (
-                  <div className="absolute right-0 mt-3 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl py-2 z-50">
-                    <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100">
-                      <span className="text-xs font-bold text-slate-800 font-sans">Recent Notifications</span>
+                  <div className="absolute right-0 mt-3 w-80 bg-popover border border-border rounded-2xl shadow-xl py-2 z-50">
+                    <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100 dark:border-slate-700">
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-100 font-sans">Recent Notifications</span>
                       {unreadCount > 0 && (
                         <button
                           onClick={handleMarkAllRead}
@@ -659,7 +660,7 @@ export default function SuperAdminLayout() {
                       )}
                     </div>
 
-                    <div className="max-h-64 overflow-y-auto divide-y divide-slate-50">
+                    <div className="max-h-64 overflow-y-auto divide-y divide-slate-50 dark:divide-slate-700/50">
                       {notifications.length === 0 ? (
                         <div className="py-8 text-center text-xs text-slate-400 font-sans">No notifications</div>
                       ) : (
@@ -671,14 +672,14 @@ export default function SuperAdminLayout() {
                               setNotifDropdownOpen(false)
                               navigate('/superadmin/notifications')
                             }}
-                            className={`p-3 text-left hover:bg-slate-50 cursor-pointer transition-colors flex gap-2.5 items-start ${!n.read ? 'bg-indigo-50/30' : ''}`}
+                            className={`p-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer transition-colors flex gap-2.5 items-start ${!n.read ? 'bg-indigo-50/30 dark:bg-indigo-900/20' : ''}`}
                           >
                             <div className="p-1.5 rounded-lg bg-slate-50 flex-shrink-0 mt-0.5">
                               {getNotifIcon(n.type)}
                             </div>
                             <div className="space-y-0.5 min-w-0">
                               <div className="flex items-center gap-1.5 justify-between">
-                                <span className={`text-xs font-bold truncate block ${!n.read ? 'text-slate-800' : 'text-slate-600'}`}>{n.title}</span>
+                                <span className={`text-xs font-bold truncate block ${!n.read ? 'text-slate-800 dark:text-slate-100' : 'text-slate-600 dark:text-slate-300'}`}>{n.title}</span>
                                 {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 shrink-0" />}
                               </div>
                               <p className="text-[11px] text-slate-500 leading-normal line-clamp-2 font-sans">{n.message}</p>
@@ -689,7 +690,7 @@ export default function SuperAdminLayout() {
                       )}
                     </div>
 
-                    <div className="border-t border-slate-100 px-4 pt-2 pb-1 text-center">
+                    <div className="border-t border-slate-100 dark:border-slate-700 px-4 pt-2 pb-1 text-center">
                       <NavLink
                         to="/superadmin/notifications"
                         onClick={() => setNotifDropdownOpen(false)}
@@ -707,7 +708,7 @@ export default function SuperAdminLayout() {
               <div ref={profileRef} className="relative">
                 <button
                   onClick={() => setDropdownOpen(!dropdownOpen)}
-                  className="flex items-center gap-2 p-1.5 px-2 hover:bg-slate-50 rounded-xl shadow-sm transition-all cursor-pointer border border-slate-100 bg-white"
+                  className="flex items-center gap-2 p-1.5 px-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl shadow-sm transition-all cursor-pointer border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800/60"
                 >
                   <img
                     src={adminUser?.profile_image || adminUser?.avatar || "https://ui-avatars.com/api/?name=Super+Admin&background=random"}
@@ -715,33 +716,33 @@ export default function SuperAdminLayout() {
                     className="w-8 h-8 rounded-full object-cover border border-slate-200"
                   />
                   <div className="text-left hidden sm:block">
-                    <div className="text-[13px] font-semibold text-slate-800 leading-none">{userName}</div>
+                    <div className="text-[13px] font-semibold text-slate-800 dark:text-slate-100 leading-none">{userName}</div>
                     <span className="text-[10px] text-slate-400 font-medium">Super Admin</span>
                   </div>
                   <ChevronDown size={14} className="text-slate-400 ml-1" />
                 </button>
 
                 {dropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-lg py-1.5 z-50">
-                      <NavLink
-                        to="/superadmin/profile-settings"
-                        onClick={() => setDropdownOpen(false)}
-                        className="flex items-center gap-2.5 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 no-underline"
-                      >
-                        <User size={15} /> My Profile
-                      </NavLink>
+                  <div className="absolute right-0 mt-2 w-48 bg-popover border border-border rounded-xl shadow-lg py-1.5 z-50">
+                    <NavLink
+                      to="/superadmin/profile-settings"
+                      onClick={() => setDropdownOpen(false)}
+                      className="flex items-center gap-2.5 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/60 no-underline"
+                    >
+                      <User size={15} /> My Profile
+                    </NavLink>
 
-                      <hr className="border-slate-100 my-1" />
-                      <button
-                        onClick={() => {
-                          setDropdownOpen(false);
-                          handleLogout();
-                        }}
-                        className="w-full text-left flex items-center gap-2.5 px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 font-medium cursor-pointer border-none bg-transparent"
-                      >
-                        <LogOut size={15} /> Logout
-                      </button>
-                    </div>
+                    <hr className="border-slate-100 dark:border-slate-700 my-1" />
+                    <button
+                      onClick={() => {
+                        setDropdownOpen(false);
+                        handleLogout();
+                      }}
+                      className="w-full text-left flex items-center gap-2.5 px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 font-medium cursor-pointer border-none bg-transparent"
+                    >
+                      <LogOut size={15} /> Logout
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -749,8 +750,8 @@ export default function SuperAdminLayout() {
 
           {/* Horizontal Navbar (Navbar Layout) */}
           {layoutConfig?.layout_type === "navbar" && (
-            <div 
-              className="flex items-center gap-1 px-6 h-14 border-t border-slate-200/40 overflow-x-auto hide-scrollbar z-30 sticky top-[64px] bg-white dark:bg-[#0b1120]" 
+            <div
+              className="flex items-center gap-1 px-6 h-14 border-t border-border overflow-x-auto hide-scrollbar z-30 sticky top-[64px] bg-background"
             >
               {navItems.map((item) => {
                 const isActive = location.pathname.startsWith(item.path);
@@ -758,11 +759,10 @@ export default function SuperAdminLayout() {
                   <NavLink
                     key={item.id}
                     to={item.path}
-                    className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 whitespace-nowrap shrink-0 ${
-                      isActive
-                        ? 'bg-indigo-600 text-white font-semibold shadow-md shadow-indigo-500/20'
-                        : 'text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-800/80 hover:text-indigo-600 dark:hover:text-indigo-400'
-                    }`}
+                    className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 whitespace-nowrap shrink-0 ${isActive
+                      ? 'bg-indigo-600 text-white font-semibold shadow-md shadow-indigo-500/20'
+                      : 'text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-800/80 hover:text-indigo-600 dark:hover:text-indigo-400'
+                      }`}
                   >
                     {item.icon && <item.icon size={15} className={`shrink-0 ${isActive ? 'text-white' : ''}`} />}
                     <span>{item.label}</span>

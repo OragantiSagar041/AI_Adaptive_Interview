@@ -233,15 +233,14 @@ function RegisterPage() {
         {/* Top Navigation Header */}
         <header className="mb-10 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 bg-white/80 dark:bg-[#1e293b]/70 px-6 py-4 shadow-lg backdrop-blur-xl">
           <Link to="/" className="flex items-center gap-3 no-underline">
-            <img src={logo} alt="Hire IQ Logo" className="h-10 w-auto object-contain" />
+            <img src={logo} alt="Hire IQ Logo" className="h-10 w-auto object-contain brand-logo-img" />
             <span className="text-xs leading-snug text-slate-500 dark:text-slate-400 hidden sm:inline-block">
               AI interview infrastructure<br />for modern hiring teams
             </span>
           </Link>
           <div className="flex items-center gap-3">
-            <ThemeToggle />
-            <Link 
-              to="/" 
+            <Link
+              to="/"
               className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all shadow-xs"
             >
               <ArrowLeft size={14} /> Back to platform

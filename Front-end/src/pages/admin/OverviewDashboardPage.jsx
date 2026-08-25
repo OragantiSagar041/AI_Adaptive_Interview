@@ -353,7 +353,7 @@ export default function OverviewDashboardPage() {
                     handleOpenRecordsModal(k.filterType, k.label);
                   }
                 }}
-                className={`group relative overflow-hidden border-border/60 p-5 shadow-[var(--shadow-card)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-glow)] bg-white dark:bg-slate-800/60 ${
+                className={`group relative overflow-hidden p-5 border border-slate-200 dark:border-slate-700 transition-all hover:-translate-y-0.5 hover:shadow-md bg-white dark:bg-slate-800 ${
                   isClickable ? "cursor-pointer hover:border-primary/40" : ""
                 }`}
               >
@@ -388,7 +388,7 @@ export default function OverviewDashboardPage() {
         </section>
 
         {/* Pipeline */}
-        <Card className="border-border/60 p-6 shadow-[var(--shadow-card)] bg-white dark:bg-slate-800/60">
+        <Card className="p-6 border border-slate-200 dark:border-slate-700 shadow-sm bg-white dark:bg-slate-800">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-base font-semibold">Candidate Pipeline</h2>

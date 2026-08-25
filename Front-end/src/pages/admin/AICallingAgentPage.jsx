@@ -1503,21 +1503,18 @@ function RecentCallsTab({ calls, loading, onViewDetails }) {
                 </div>
               </div>
 
-              {/* Right Column */}
-              <div className="flex flex-col items-end gap-2 ml-auto">
-                <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 px-2.5 py-1 rounded-md text-[0.7rem] text-slate-500 dark:text-slate-400 font-bold font-mono">
-                  ID: #{call.id}
-                  <Copy size={12} className="cursor-pointer hover:text-indigo-600 transition-colors" />
+                {/* Right Column */}
+                <div className="flex flex-col items-end gap-2 ml-auto">
+                  <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 px-2.5 py-1 rounded-md text-[0.7rem] text-slate-500 dark:text-slate-400 font-bold font-mono">
+                    ID: #{call.id}
+                    <Copy size={12} className="cursor-pointer hover:text-indigo-600 transition-colors" />
+                  </div>
                 </div>
-                <div className={`px-2 py-0.5 rounded border text-[0.65rem] uppercase font-bold tracking-widest ${badgeColor}`}>
-                  {badgeLabel}
-                </div>
-              </div>
-            </motion.div>
-          )
-        }))}
-      </div>
-    </div>
+              </motion.div>
+            )
+          }))}
+      </div >
+    </div >
   )
 }
 

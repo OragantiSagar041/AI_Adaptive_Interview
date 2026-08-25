@@ -20,7 +20,8 @@ import {
   ClipboardList,
   Palette,
   ChevronDown,
-  User
+  User,
+  PanelLeft
 } from 'lucide-react'
 import logoImage from '../../assets/logo.png'
 import AdminCopilot from './copilot/AdminCopilot'
@@ -229,18 +230,19 @@ export default function AdminLayout({
   const isDark = theme === 'dark'
 
   const layoutConfig = adminUser?.layout_config;
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   return (
     <div className="h-screen text-slate-900 dark:text-slate-100 flex font-sans overflow-hidden relative bg-slate-50 dark:bg-slate-950">
       {/* Sidebar (Vertical Layout) */}
       {layoutConfig?.layout_type !== "navbar" && (
-        <aside className="hidden w-64 shrink-0 border-r border-slate-200/80 dark:border-slate-800 md:flex flex-col h-screen relative z-10 transition-colors duration-300 overflow-hidden bg-white dark:bg-[#0b1120]">
+        <aside className={`hidden ${isSidebarCollapsed ? 'w-[80px] p-2 items-center' : 'w-64 p-3'} shrink-0 border-r border-border md:flex flex-col h-screen relative z-10 transition-all duration-300 overflow-hidden bg-sidebar`}>
           {/* Brand / Logo */}
-          <div className="flex items-center gap-3 px-6 h-16 border-b border-slate-200/80 dark:border-slate-800 shrink-0">
+          <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'gap-3 px-6'} h-16 border-b border-border shrink-0 w-full`}>
             <div
-              className="flex items-center justify-center h-8 rounded-lg text-white shadow-sm overflow-hidden bg-indigo-600"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-white p-1 cursor-pointer"
               style={{
-                width: layoutConfig?.navbar_logo ? 'auto' : '2rem'
+                background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)'
               }}
             >
               {layoutConfig?.navbar_logo ? (
@@ -248,40 +250,45 @@ export default function AdminLayout({
               ) : layoutConfig?.favicon ? (
                 <img src={layoutConfig.favicon} alt="Logo" className="h-full w-full object-contain" />
               ) : (
-                <Zap className="h-4 w-4 text-white" />
+                <Zap className="h-5 w-5 text-white fill-white/20" />
               )}
             </div>
-            <div className="leading-tight truncate">
-              <div className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate" title={adminUser?.company_name || 'HireIQ'}>
-                {adminUser?.company_name || 'HireIQ'}
+            {!isSidebarCollapsed && (
+              <div className="leading-tight truncate">
+                <div className="text-base font-extrabold text-foreground truncate" title={adminUser?.company_name || 'HireIQ'}>
+                  {adminUser?.company_name || 'HireIQ'}
+                </div>
+                <div className="text-[11px] font-semibold text-primary">
+                  Recruiter
+                </div>
               </div>
-              <div className="text-[11px] font-medium text-indigo-600 dark:text-indigo-400">
-                Recruiter
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Navigation Items */}
-          <div className="space-y-0.5 p-3 overflow-y-auto flex-1">
+          <div className="space-y-0.5 py-3 overflow-y-auto flex-1 w-full">
             {navItems.map((item) => (
               <NavLink
                 key={item.id}
                 to={item.path}
+                title={isSidebarCollapsed ? item.label : undefined}
                 className={({ isActive }) =>
-                  `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${isActive
+                  `flex items-center ${isSidebarCollapsed ? 'justify-center px-2' : 'gap-3 px-3'} py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${isActive
                     ? '!bg-indigo-600 !text-white font-semibold shadow-md shadow-indigo-500/20'
-                    : 'text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-800/80 hover:text-indigo-600 dark:hover:text-indigo-400'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white !bg-transparent dark:!bg-transparent !border-none !shadow-none'
                   }`
                 }
               >
                 {({ isActive }) => (
                   <>
                     {item.icon ? (
-                      <item.icon size={16} className={`shrink-0 ${isActive ? '!text-white text-white' : ''}`} />
+                      <item.icon size={18} className={`shrink-0 ${isActive ? '!text-white text-white' : ''}`} />
                     ) : (
                       <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-white' : 'bg-current opacity-60'} shrink-0`} />
                     )}
-                    <span className={isActive ? '!text-white text-white font-semibold' : ''}>{item.label}</span>
+                    {!isSidebarCollapsed && (
+                      <span className={isActive ? '!text-white text-white font-semibold truncate' : 'truncate'}>{item.label}</span>
+                    )}
                   </>
                 )}
               </NavLink>
@@ -289,20 +296,22 @@ export default function AdminLayout({
           </div>
 
           {/* Bottom Sidebar Actions */}
-          <div className="p-3 border-t space-y-0.5 shrink-0 transition-colors border-slate-200/80 dark:border-slate-800">
+          <div className="py-3 border-t border-border space-y-0.5 shrink-0 transition-colors w-full">
             <button
               onClick={() => dispatch(setLiveResultsModalOpen(true))}
-              className="flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 text-slate-600 dark:text-slate-400 hover:bg-indigo-50 dark:hover:bg-slate-800/80 hover:text-indigo-600 dark:hover:text-indigo-400 border-none bg-transparent cursor-pointer text-left"
+              title={isSidebarCollapsed ? "Live Results" : undefined}
+              className={`flex items-center ${isSidebarCollapsed ? 'justify-center px-2' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-200 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white !bg-transparent dark:!bg-transparent !border-none !shadow-none cursor-pointer text-left`}
             >
-              <Radio size={16} />
-              Live Results
+              <Radio size={18} className="shrink-0" />
+              {!isSidebarCollapsed && <span>Live Results</span>}
             </button>
             <button
               onClick={onAddCredits}
-              className="flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 text-slate-600 dark:text-slate-400 hover:bg-indigo-50 dark:hover:bg-slate-800/80 hover:text-indigo-600 dark:hover:text-indigo-400 border-none bg-transparent cursor-pointer text-left"
+              title={isSidebarCollapsed ? "Request Credits" : undefined}
+              className={`flex items-center ${isSidebarCollapsed ? 'justify-center px-2' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-200 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white !bg-transparent dark:!bg-transparent !border-none !shadow-none cursor-pointer text-left`}
             >
-              <Coins size={16} />
-              Request Credits
+              <Coins size={18} className="shrink-0" />
+              {!isSidebarCollapsed && <span>Request Credits</span>}
             </button>
           </div>
         </aside>
@@ -316,14 +325,23 @@ export default function AdminLayout({
           <header className="flex items-center justify-between px-6 h-16 w-full">
             {/* Left Side: Brand & Toggles */}
             <div className="flex items-center gap-6">
-              
+              {layoutConfig?.layout_type !== "navbar" && (
+                <button
+                  onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                  title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+                  className="-ml-2 md:mr-2 p-2 rounded-xl text-foreground hover:text-indigo-500 bg-secondary border border-border transition-colors cursor-pointer shrink-0"
+                >
+                  <PanelLeft className="h-4 w-4" />
+                </button>
+              )}
+
               {/* If Navbar mode, show logo in the top bar */}
               {layoutConfig?.layout_type === "navbar" && (
-                <div className="flex items-center gap-3 border-r border-slate-200/60 dark:border-slate-800 pr-6 mr-2">
+                <div className="flex items-center gap-3 border-r border-border pr-6 mr-2">
                   <div
-                    className="flex items-center justify-center h-8 rounded-lg text-white shadow-sm transition-all duration-500 overflow-hidden bg-indigo-600"
+                    className="grid h-9 w-9 place-items-center rounded-xl text-white p-1 cursor-pointer"
                     style={{
-                      width: layoutConfig?.navbar_logo ? 'auto' : '2rem',
+                      background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)'
                     }}
                   >
                     {layoutConfig?.navbar_logo ? (
@@ -331,14 +349,14 @@ export default function AdminLayout({
                     ) : layoutConfig?.favicon ? (
                       <img src={layoutConfig.favicon} alt="Logo" className="h-full w-full object-contain" />
                     ) : (
-                      <Zap className="h-4 w-4 text-white" />
+                      <Zap className="h-5 w-5 text-white fill-white/20" />
                     )}
                   </div>
                   <div className="leading-tight hidden sm:block truncate max-w-[150px]">
-                    <div className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate" title={adminUser?.company_name || 'HireIQ'}>
+                    <div className="text-base font-extrabold text-foreground truncate" title={adminUser?.company_name || 'HireIQ'}>
                       {adminUser?.company_name || 'HireIQ'}
                     </div>
-                    <div className="text-[11px] font-medium text-indigo-600 dark:text-indigo-400">Recruiter</div>
+                    <div className="text-[11px] font-semibold text-primary">Recruiter</div>
                   </div>
                 </div>
               )}
@@ -353,7 +371,7 @@ export default function AdminLayout({
               <div ref={notifRef} className="relative">
                 <button
                   onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
-                  className="relative p-2.5 text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 rounded-full transition-all cursor-pointer flex items-center justify-center shadow-xs"
+                  className="relative p-2.5 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-full transition-all cursor-pointer flex items-center justify-center shadow-xs"
                   title="Notifications"
                 >
                   <Bell size={18} className="text-slate-600" />
@@ -385,49 +403,49 @@ export default function AdminLayout({
                   <ChevronDown size={14} className="text-slate-400 ml-1" />
                 </button>
 
-              {dropdownOpen && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setDropdownOpen(false)} />
-                  <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-lg py-1.5 z-50">
-                    <NavLink
-                      to="/admin/profile-settings"
-                      onClick={() => setDropdownOpen(false)}
-                      className="flex items-center gap-2.5 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 no-underline"
-                    >
-                      <User size={15} /> My Profile
-                    </NavLink>
+                {dropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setDropdownOpen(false)} />
+                    <div className="absolute right-0 mt-2 w-48 bg-popover border border-border rounded-xl shadow-lg py-1.5 z-50">
+                      <NavLink
+                        to="/admin/profile-settings"
+                        onClick={() => setDropdownOpen(false)}
+                        className="flex items-center gap-2.5 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/60 no-underline"
+                      >
+                        <User size={15} /> My Profile
+                      </NavLink>
 
-                    <hr className="border-slate-100 my-1" />
-                    <button
-                      onClick={() => {
-                        setDropdownOpen(false);
-                        if (onLogout) onLogout();
-                      }}
-                      className="w-full text-left flex items-center gap-2.5 px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 font-medium cursor-pointer border-none bg-transparent"
-                    >
-                      <LogOut size={15} /> Logout
-                    </button>
-                  </div>
-                </>
-              )}
+                      <hr className="border-slate-100 dark:border-slate-700 my-1" />
+                      <button
+                        onClick={() => {
+                          setDropdownOpen(false);
+                          if (onLogout) onLogout();
+                        }}
+                        className="w-full text-left flex items-center gap-2.5 px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 font-medium cursor-pointer border-none bg-transparent"
+                      >
+                        <LogOut size={15} /> Logout
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-        </header>
+          </header>
+
           
           {/* Horizontal Navbar (Navbar Layout) */}
           {layoutConfig?.layout_type === "navbar" && (
-            <div 
-              className="flex items-center gap-1 px-6 h-14 border-t border-slate-200/40 overflow-x-auto hide-scrollbar bg-white dark:bg-[#0b1120]" 
+            <div
+              className="flex items-center gap-1 px-6 h-14 border-t border-border overflow-x-auto hide-scrollbar bg-background"
             >
               {navItems.map((item) => (
                 <NavLink
                   key={item.id}
                   to={item.path}
                   className={({ isActive }) =>
-                    `flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 whitespace-nowrap shrink-0 ${
-                      isActive
-                        ? 'bg-indigo-600 text-white font-semibold shadow-md shadow-indigo-500/20'
-                        : 'text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-800/80 hover:text-indigo-600 dark:hover:text-indigo-400'
+                    `flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 whitespace-nowrap shrink-0 ${isActive
+                      ? 'bg-indigo-600 text-white font-semibold shadow-md shadow-indigo-500/20'
+                      : 'text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-800/80 hover:text-indigo-600 dark:hover:text-indigo-400'
                     }`
                   }
                 >

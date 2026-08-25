@@ -977,14 +977,20 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
     <>
       <div className="flex flex-col gap-8">
         {/* Page Header */}
-        <div className="flex flex-col gap-1.5 md:flex-row md:justify-between md:items-center bg-white dark:bg-slate-800/60/40 p-6 rounded-2xl border border-slate-200 dark:border-slate-700/60 backdrop-blur-md shadow-[0_8px_30px_rgb(0,0,0,0.02)]">
+        <div className="flex flex-col gap-1.5 md:flex-row md:justify-between md:items-center bg-card p-6 rounded-2xl border border-border shadow-sm">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-primary shadow-sm">
-              <i className="fas fa-file-signature text-xl"></i>
+            <div
+              className="w-12 h-12 rounded-2xl flex items-center justify-center text-white shrink-0 border border-indigo-400/30"
+              style={{
+                background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
+                boxShadow: '0 4px 20px rgba(99, 102, 241, 0.45)'
+              }}
+            >
+              <i className="fas fa-file-signature text-xl text-white"></i>
             </div>
             <div>
-              <h2 className="text-xl font-extrabold text-slate-800 dark:text-slate-100 tracking-tight">Create Interview Session</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Configure settings, parse resumes, and invite candidates to AI-conducted adaptive interviews.</p>
+              <h2 className="text-xl font-extrabold text-foreground tracking-tight">Create Interview Session</h2>
+              <p className="text-xs text-muted-foreground font-medium">Configure settings, parse resumes, and invite candidates to AI-conducted adaptive interviews.</p>
             </div>
           </div>
         </div>
@@ -1019,14 +1025,17 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
             {/* Left Column: Candidate & Material Details (Col Span 7) */}
             <div className="lg:col-span-7 flex flex-col gap-6">
               {/* Card 1: Candidate Basic Info */}
-              <Card className="bg-white dark:bg-slate-800/60/82 backdrop-blur-md border border-[#e5edf7] text-slate-800 dark:text-slate-100 flex flex-col gap-5">
-                <div className="flex gap-3.5 items-center border-b border-slate-100 dark:border-slate-800/80 pb-4">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-50 border border-indigo-100 text-primary shadow-inner">
-                    <i className="fas fa-user-tie text-base"></i>
+              <Card className="bg-card border border-border text-foreground flex flex-col gap-5">
+                <div className="flex gap-3.5 items-center border-b border-border pb-4">
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-md border border-indigo-400/30"
+                    style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)' }}
+                  >
+                    <i className="fas fa-user-tie text-base text-white"></i>
                   </div>
                   <div>
-                    <h3 className="text-sm font-extrabold text-slate-800 dark:text-slate-100 tracking-tight">Candidate Information</h3>
-                    <p className="text-[0.7rem] text-slate-400 font-medium">Provide basic contact and login credentials</p>
+                    <h3 className="text-sm font-extrabold text-foreground tracking-tight">Candidate Information</h3>
+                    <p className="text-[0.7rem] text-muted-foreground font-medium">Provide basic contact and login credentials</p>
                   </div>
                 </div>
 
@@ -1105,14 +1114,17 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
               </Card>
 
               {/* Card 2: Resume & Job Requirements */}
-              <Card className="bg-white dark:bg-slate-800/60/82 backdrop-blur-md border border-[#e5edf7] text-slate-800 dark:text-slate-100 flex flex-col gap-5">
-                <div className="flex gap-3.5 items-center border-b border-slate-100 dark:border-slate-800/80 pb-4">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-50 border border-indigo-100 text-primary shadow-inner">
-                    <i className="fas fa-file-invoice text-base"></i>
+              <Card className="bg-card border border-border text-foreground flex flex-col gap-5">
+                <div className="flex gap-3.5 items-center border-b border-border pb-4">
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-md border border-indigo-400/30"
+                    style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)' }}
+                  >
+                    <i className="fas fa-file-invoice text-base text-white"></i>
                   </div>
                   <div>
-                    <h3 className="text-sm font-extrabold text-slate-800 dark:text-slate-100 tracking-tight">Resume & Job Profile</h3>
-                    <p className="text-[0.7rem] text-slate-400 font-medium">Input documents for automated AI assessment</p>
+                    <h3 className="text-sm font-extrabold text-foreground tracking-tight">Resume & Job Profile</h3>
+                    <p className="text-[0.7rem] text-muted-foreground font-medium">Input documents for automated AI assessment</p>
                   </div>
                 </div>
 
@@ -1614,14 +1626,17 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
             {/* Right Column: Settings, Customization & Actions (Col Span 5) */}
             <div className="lg:col-span-5 flex flex-col gap-6">
               {/* Card 1: Configuration Parameters */}
-              <Card className="bg-white dark:bg-slate-800/60/82 backdrop-blur-md border border-[#e5edf7] text-slate-800 dark:text-slate-100 flex flex-col gap-5">
-                <div className="flex gap-3.5 items-center border-b border-slate-100 dark:border-slate-800/80 pb-4">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-50 border border-indigo-100 text-primary shadow-inner">
-                    <i className="fas fa-sliders text-base"></i>
+              <Card className="bg-card border border-border text-foreground flex flex-col gap-5">
+                <div className="flex gap-3.5 items-center border-b border-border pb-4">
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-md border border-indigo-400/30"
+                    style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)' }}
+                  >
+                    <i className="fas fa-sliders text-base text-white"></i>
                   </div>
                   <div>
-                    <h3 className="text-sm font-extrabold text-slate-800 dark:text-slate-100 tracking-tight">Interview Settings</h3>
-                    <p className="text-[0.7rem] text-slate-400 font-medium">Configure parameters, timing, and languages</p>
+                    <h3 className="text-sm font-extrabold text-foreground tracking-tight">Interview Settings</h3>
+                    <p className="text-[0.7rem] text-muted-foreground font-medium">Configure parameters, timing, and languages</p>
                   </div>
                 </div>
 
@@ -1754,14 +1769,17 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
               </Card>
 
               {/* Card 2: Scheduling Options */}
-              <Card className="bg-white dark:bg-slate-800/60/82 backdrop-blur-md border border-[#e5edf7] text-slate-800 dark:text-slate-100 flex flex-col gap-4">
-                <div className="flex gap-3.5 items-center border-b border-slate-100 dark:border-slate-800/80 pb-3.5">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-50 border border-indigo-100 text-primary shadow-inner">
-                    <i className="fas fa-calendar-check text-base"></i>
+              <Card className="bg-card border border-border text-foreground flex flex-col gap-4">
+                <div className="flex gap-3.5 items-center border-b border-border pb-3.5">
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-md border border-indigo-400/30"
+                    style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)' }}
+                  >
+                    <i className="fas fa-calendar-check text-base text-white"></i>
                   </div>
                   <div>
-                    <h3 className="text-sm font-extrabold text-slate-800 dark:text-slate-100 tracking-tight">Interview Schedule</h3>
-                    <p className="text-[0.7rem] text-slate-400 font-medium">Enable time restrictions (Optional)</p>
+                    <h3 className="text-sm font-extrabold text-foreground tracking-tight">Interview Schedule</h3>
+                    <p className="text-[0.7rem] text-muted-foreground font-medium">Enable time restrictions (Optional)</p>
                   </div>
                 </div>
 
@@ -1790,10 +1808,13 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
               </Card>
 
               {/* Card 3: Camera Video Config */}
-              <div className="bg-white dark:bg-slate-800/60/82 backdrop-blur-md border border-[#e5edf7] rounded-2xl p-5 text-slate-800 dark:text-slate-100 flex justify-between items-center shadow-[0_18px_40px_rgba(17,24,39,0.06)] hover:border-slate-300 transition-all duration-200">
+              <div className="bg-card border border-border rounded-2xl p-5 text-foreground flex justify-between items-center shadow-sm hover:border-slate-300 transition-all duration-200">
                 <div className="flex items-center gap-3.5">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-50 border border-indigo-100 text-primary shadow-inner">
-                    <i className="fas fa-video text-sm"></i>
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-md border border-indigo-400/30"
+                    style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)' }}
+                  >
+                    <i className="fas fa-video text-sm text-white"></i>
                   </div>
                   <div className="flex flex-col gap-0.5">
                     <label htmlFor="singleRecordVideo" className="text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-200 cursor-pointer">
@@ -1856,14 +1877,17 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
               </div>
 
               {/* Card 4: HR Screening Parameters (Toggles) */}
-              <Card className="bg-white dark:bg-slate-800/60/82 backdrop-blur-md border border-[#e5edf7] text-slate-800 dark:text-slate-100 flex flex-col gap-4">
-                <div className="flex gap-3.5 items-center border-b border-slate-100 dark:border-slate-800/80 pb-3.5">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-50 border border-indigo-100 text-primary shadow-inner">
-                    <i className="fas fa-clipboard-question text-base"></i>
+              <Card className="bg-card border border-border text-foreground flex flex-col gap-4">
+                <div className="flex gap-3.5 items-center border-b border-border pb-3.5">
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-md border border-indigo-400/30"
+                    style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)' }}
+                  >
+                    <i className="fas fa-clipboard-question text-base text-white"></i>
                   </div>
                   <div>
-                    <h3 className="text-sm font-extrabold text-slate-800 dark:text-slate-100 tracking-tight">HR Screening Questions</h3>
-                    <p className="text-[0.7rem] text-slate-400 font-medium">Collect candidate preferences (Optional)</p>
+                    <h3 className="text-sm font-extrabold text-foreground tracking-tight">HR Screening Questions</h3>
+                    <p className="text-[0.7rem] text-muted-foreground font-medium">Collect candidate preferences (Optional)</p>
                   </div>
                 </div>
 
@@ -1993,14 +2017,17 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
             {/* Left Column: Requirements & Material Details (Col Span 7) */}
             <div className="lg:col-span-7 flex flex-col gap-6">
               {/* Card 1: Requirement Documents */}
-              <Card className="bg-white dark:bg-slate-800/60/82 backdrop-blur-md border border-[#e5edf7] text-slate-800 dark:text-slate-100 flex flex-col gap-5">
-                <div className="flex gap-3.5 items-center border-b border-slate-100 dark:border-slate-800/80 pb-4">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-50 border border-indigo-100 text-primary shadow-inner">
-                    <i className="fas fa-file-invoice text-base"></i>
+              <Card className="bg-card border border-border text-foreground flex flex-col gap-5">
+                <div className="flex gap-3.5 items-center border-b border-border pb-4">
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-md border border-indigo-400/30"
+                    style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)' }}
+                  >
+                    <i className="fas fa-file-invoice text-base text-white"></i>
                   </div>
                   <div>
-                    <h3 className="text-sm font-extrabold text-slate-800 dark:text-slate-100 tracking-tight">Job Description Profile</h3>
-                    <p className="text-[0.7rem] text-slate-400 font-medium">Provide description to target questions dynamically</p>
+                    <h3 className="text-sm font-extrabold text-foreground tracking-tight">Job Description Profile</h3>
+                    <p className="text-[0.7rem] text-muted-foreground font-medium">Provide description to target questions dynamically</p>
                   </div>
                 </div>
 
@@ -2300,14 +2327,17 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
             {/* Right Column: Settings, Candidates & Submission (Col Span 5) */}
             <div className="lg:col-span-5 flex flex-col gap-6">
               {/* Card 1: Configuration */}
-              <Card className="bg-white dark:bg-slate-800/60/82 backdrop-blur-md border border-[#e5edf7] text-slate-800 dark:text-slate-100 flex flex-col gap-5">
-                <div className="flex gap-3.5 items-center border-b border-slate-100 dark:border-slate-800/80 pb-4">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-50 border border-indigo-100 text-primary shadow-inner">
-                    <i className="fas fa-sliders text-base"></i>
+              <Card className="bg-card border border-border text-foreground flex flex-col gap-5">
+                <div className="flex gap-3.5 items-center border-b border-border pb-4">
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-md border border-indigo-400/30"
+                    style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)' }}
+                  >
+                    <i className="fas fa-sliders text-base text-white"></i>
                   </div>
                   <div>
-                    <h3 className="text-sm font-extrabold text-slate-800 dark:text-slate-100 tracking-tight">Interview Settings (Bulk)</h3>
-                    <p className="text-[0.7rem] text-slate-400 font-medium">Parameters apply globally to all candidates</p>
+                    <h3 className="text-sm font-extrabold text-foreground tracking-tight">Interview Settings (Bulk)</h3>
+                    <p className="text-[0.7rem] text-muted-foreground font-medium">Parameters apply globally to all candidates</p>
                   </div>
                 </div>
 
@@ -2416,14 +2446,17 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
               </Card>
 
               {/* Card 2: Scheduling Options (Bulk) */}
-              <Card className="bg-white dark:bg-slate-800/60/82 backdrop-blur-md border border-[#e5edf7] text-slate-800 dark:text-slate-100 flex flex-col gap-4">
-                <div className="flex gap-3.5 items-center border-b border-slate-100 dark:border-slate-800/80 pb-3.5">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-50 border border-indigo-100 text-primary shadow-inner">
-                    <i className="fas fa-calendar-check text-base"></i>
+              <Card className="bg-card border border-border text-foreground flex flex-col gap-4">
+                <div className="flex gap-3.5 items-center border-b border-border pb-3.5">
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-md border border-indigo-400/30"
+                    style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)' }}
+                  >
+                    <i className="fas fa-calendar-check text-base text-white"></i>
                   </div>
                   <div>
-                    <h3 className="text-sm font-extrabold text-slate-800 dark:text-slate-100 tracking-tight">Interview Schedule</h3>
-                    <p className="text-[0.7rem] text-slate-400 font-medium">Global access window restrictions</p>
+                    <h3 className="text-sm font-extrabold text-foreground tracking-tight">Interview Schedule</h3>
+                    <p className="text-[0.7rem] text-muted-foreground font-medium">Global access window restrictions</p>
                   </div>
                 </div>
 
@@ -2452,10 +2485,13 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
               </Card>
 
               {/* Card 3: Camera Video Options (Bulk) */}
-              <div className="bg-white dark:bg-slate-800/60/82 backdrop-blur-md border border-[#e5edf7] rounded-2xl p-5 text-slate-800 dark:text-slate-100 flex justify-between items-center shadow-[0_18px_40px_rgba(17,24,39,0.06)] hover:border-slate-300 transition-all duration-200">
+              <div className="bg-card border border-border rounded-2xl p-5 text-foreground flex justify-between items-center shadow-sm hover:border-slate-300 transition-all duration-200">
                 <div className="flex items-center gap-3.5">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-50 border border-indigo-100 text-primary shadow-inner">
-                    <i className="fas fa-video text-sm"></i>
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-md border border-indigo-400/30"
+                    style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)' }}
+                  >
+                    <i className="fas fa-video text-sm text-white"></i>
                   </div>
                   <div className="flex flex-col gap-0.5">
                     <label htmlFor="bulkRecordVideo" className="text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-200 cursor-pointer">
@@ -2518,14 +2554,17 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
               </div>
 
               {/* Card 4: HR Screening Parameters (Bulk toggles) */}
-              <Card className="bg-white dark:bg-slate-800/60/82 backdrop-blur-md border border-[#e5edf7] text-slate-800 dark:text-slate-100 flex flex-col gap-4">
-                <div className="flex gap-3.5 items-center border-b border-slate-100 dark:border-slate-800/80 pb-3.5">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-50 border border-indigo-100 text-primary shadow-inner">
-                    <i className="fas fa-clipboard-question text-base"></i>
+              <Card className="bg-card border border-border text-foreground flex flex-col gap-4">
+                <div className="flex gap-3.5 items-center border-b border-border pb-3.5">
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-md border border-indigo-400/30"
+                    style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)' }}
+                  >
+                    <i className="fas fa-clipboard-question text-base text-white"></i>
                   </div>
                   <div>
-                    <h3 className="text-sm font-extrabold text-slate-800 dark:text-slate-100 tracking-tight">HR Screening Questions</h3>
-                    <p className="text-[0.7rem] text-slate-400 font-medium">Collect candidate preferences (Optional)</p>
+                    <h3 className="text-sm font-extrabold text-foreground tracking-tight">HR Screening Questions</h3>
+                    <p className="text-[0.7rem] text-muted-foreground font-medium">Collect candidate preferences (Optional)</p>
                   </div>
                 </div>
 
@@ -2825,14 +2864,17 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
 
         {/* Created Links Section */}
         {createTab === 'single' && (
-          <Card className="bg-white dark:bg-slate-800/60/82 backdrop-blur-md border border-[#e5edf7] text-slate-800 dark:text-slate-100 flex flex-col gap-4 mt-2">
-            <div className="flex gap-3.5 items-center border-b border-slate-100 dark:border-slate-800 pb-3">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-emerald-50 border border-emerald-100 text-emerald-500 shadow-inner">
-                <i className="fas fa-link text-base"></i>
+          <Card className="bg-card border border-border text-foreground flex flex-col gap-4 mt-2">
+            <div className="flex gap-3.5 items-center border-b border-border pb-3">
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-md border border-indigo-400/30"
+                style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)' }}
+              >
+                <i className="fas fa-link text-base text-white"></i>
               </div>
               <div>
-                <h3 className="text-sm font-extrabold text-slate-800 dark:text-slate-100 tracking-tight">Generated Links</h3>
-                <p className="text-[0.7rem] text-slate-450 font-medium">Share these with candidates to start interviews</p>
+                <h3 className="text-sm font-extrabold text-foreground tracking-tight">Generated Links</h3>
+                <p className="text-[0.7rem] text-muted-foreground font-medium">Share these with candidates to start interviews</p>
               </div>
             </div>
 

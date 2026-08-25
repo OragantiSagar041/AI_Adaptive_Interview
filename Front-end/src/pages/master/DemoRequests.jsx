@@ -272,8 +272,8 @@ HireIQ Client Relations Team`
           }`}
         >
           <span>Book Demo Requests</span>
-          <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
-            activeTab === 'demos' ? 'bg-white dark:bg-slate-800/60/20 text-white' : 'bg-slate-200 text-slate-700 dark:text-slate-200'
+          <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+            activeTab === 'demos' ? 'bg-white/20 text-white shadow-xs' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200'
           }`}>
             {demoRequests.length}
           </span>
@@ -288,8 +288,8 @@ HireIQ Client Relations Team`
           }`}
         >
           <span>Connect with Us Messages</span>
-          <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
-            activeTab === 'contacts' ? 'bg-white dark:bg-slate-800/60/20 text-white' : 'bg-slate-200 text-slate-700 dark:text-slate-200'
+          <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+            activeTab === 'contacts' ? 'bg-white/20 text-white shadow-xs' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200'
           }`}>
             {contactRequests.length}
           </span>

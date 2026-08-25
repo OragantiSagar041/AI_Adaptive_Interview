@@ -95,6 +95,7 @@ function App() {
             <Route path="/case-study" element={<CaseStudyPage />} />
             <Route path="/customer-story/:id" element={<HireIQCaseStudyPage />} />
             <Route path="/voice-interview/:linkId" element={<VoiceInterviewPage />} />
+            <Route path="/careers/:companyId" element={<JobPortalPage />} />
             <Route path="/apply/:jobId" element={<JobApplicationPage />} />
             <Route path="/spectate/:linkId" element={<SpectatorPage />} />
             {/* Master routes */}
