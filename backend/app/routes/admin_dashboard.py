@@ -1384,7 +1384,7 @@ for _route in router.routes:
     if getattr(_route, "path", "") == "/admin/preview-email" and "POST" in getattr(_route, "methods", set()):
         _route.endpoint = preview_email_v2
         break
-def send_submission_notification(candidate_email: str, candidate_name: str, admin_email: str, avg_score: float, total_questions: int):
+def send_submission_notification(candidate_email: str, candidate_name: str, admin_email: str, avg_score: float, total_questions: int, company_name: str = 'HireIQ'):
     """Send test submission notification to both admin and candidate."""
     env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
     load_dotenv(env_path, override=False)
@@ -1403,11 +1403,13 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
         <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8f9fa; padding: 40px 20px;">
             <tr><td align="center">
                 <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; background-color: #ffffff; border: 1px solid #dadce0; border-radius: 8px; overflow: hidden;">
-                    <tr><td style="padding: 32px 40px; text-align: center; border-bottom: 1px solid #f1f3f4;">
-                        <h1 style="color: #1a73e8; margin: 0; font-size: 28px; font-weight: 500; letter-spacing: -0.5px;">HireIQ</h1>
-                    </td></tr>
+                    <tr>
+                        <td style="background: linear-gradient(135deg, #000033 0%, #003366 100%); padding: 32px 40px; text-align: left; border-bottom: 1px solid #e5e7eb;">
+                            <img src="https://raw.githubusercontent.com/OragantiSagar041/AI_Adaptive_Interview/pavan/Front-end/public/hireiq_new_logo.png" alt="HireIQ" style="height: 110px; max-width: 100%; display: inline-block; object-fit: contain;" />
+                        </td>
+                    </tr>
                     <tr><td style="padding: 40px;">
-                        <h2 style="color: #202124; font-size: 20px; font-weight: 400; margin: 0 0 24px 0;">Interview Submitted Successfully</h2>
+                        <h2 style="color: #202124; font-size: 20px; font-weight: 400; margin: 0 0 24px 0;">Interview Submitted Successfully &ndash; {company_name.title()}</h2>
                         <p style="color: #3c4043; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">Dear {candidate_name},</p>
                         <p style="color: #3c4043; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
                             Thank you for completing your AI-powered interview. Your responses have been successfully submitted and are now being reviewed.
@@ -1421,7 +1423,7 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
                             Our recruitment team will review your performance and get back to you shortly. Please keep an eye on your email for further updates.
                         </p>
                         <p style="color: #3c4043; font-size: 15px; line-height: 1.6; margin: 32px 0 0 0;">
-                            Best regards,<br><strong>HireIQ Recruiting Team</strong>
+                            Best regards,<br><strong>HIREIQ Recruiting Team</strong>
                         </p>
                     </td></tr>
                     <tr><td style="background-color: #f1f3f4; padding: 24px 40px; text-align: center;">
@@ -1444,9 +1446,11 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
         <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8f9fa; padding: 40px 20px;">
             <tr><td align="center">
                 <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; background-color: #ffffff; border: 1px solid #dadce0; border-radius: 8px; overflow: hidden;">
-                    <tr><td style="padding: 32px 40px; text-align: center; border-bottom: 1px solid #f1f3f4;">
-                        <h1 style="color: #1a73e8; margin: 0; font-size: 28px; font-weight: 500; letter-spacing: -0.5px;">HireIQ Admin</h1>
-                    </td></tr>
+                    <tr>
+                        <td style="background: linear-gradient(135deg, #000033 0%, #003366 100%); padding: 32px 40px; text-align: left; border-bottom: 1px solid #e5e7eb;">
+                            <img src="https://raw.githubusercontent.com/OragantiSagar041/AI_Adaptive_Interview/pavan/Front-end/public/hireiq_new_logo.png" alt="HireIQ" style="height: 110px; max-width: 100%; display: inline-block; object-fit: contain;" />
+                        </td>
+                    </tr>
                     <tr><td style="padding: 40px;">
                         <h2 style="color: #202124; font-size: 20px; font-weight: 400; margin: 0 0 24px 0;">New Interview Submission</h2>
                         <p style="color: #3c4043; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">A candidate has just completed their interview assessment:</p>
