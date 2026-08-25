@@ -122,7 +122,7 @@ export default function QualifiedCandidatesPage() {
 
   // Calculate dynamic stats
   const avgScore = qualifiedCandidates.length > 0
-    ? (qualifiedCandidates.reduce((acc, c) => acc + Number(c.score || 0), 0) / qualifiedCandidates.length).toFixed(1)
+    ? (qualifiedCandidates.reduce((acc, c) => acc + Number(c.score ?? c.avg_score ?? 0), 0) / qualifiedCandidates.length).toFixed(1)
     : "0.0"
 
   const STATS = [
@@ -130,7 +130,7 @@ export default function QualifiedCandidatesPage() {
     { label: "Avg AI Score", value: `${avgScore}%`, icon: Star, tone: "info", colorClass: "bg-blue-100 text-blue-600" },
     { label: "Total Qualified Candidates", value: qualifiedCandidates.length.toString(), icon: UserCheck, tone: "chart-2", colorClass: "bg-emerald-100 text-emerald-600" },
     { label: "Pending Review", value: qualifiedCandidates.filter(c => !c.reviewed).length.toString(), icon: ClipboardCheck, tone: "warning", colorClass: "bg-amber-100 text-amber-600" },
-    { label: "Ready to Hire", value: qualifiedCandidates.filter(c => Number(c.score || 0) >= 85).length.toString(), icon: Target, tone: "success", colorClass: "bg-teal-100 text-teal-600" },
+    { label: "Ready to Hire", value: qualifiedCandidates.filter(c => Number(c.score ?? c.avg_score ?? 0) >= 85).length.toString(), icon: Target, tone: "success", colorClass: "bg-teal-100 text-teal-600" },
     { label: "Offers Released", value: "0", icon: FileSignature, tone: "chart-5", colorClass: "bg-purple-100 text-purple-600" },
   ]
 
@@ -273,7 +273,7 @@ export default function QualifiedCandidatesPage() {
               </thead>
               <tbody className="divide-y divide-slate-100/80">
                 {filtered.map((c) => {
-                  const scoreNum = Number(c.score || 0)
+                  const scoreNum = Number(c.score ?? c.avg_score ?? 0)
                   const adminObj = subAdmins.find(adm => adm.id === c.created_by || adm._id === c.created_by)
                   let adminName = c.admin_name || (adminObj ? (adminObj.name || adminObj.username) : null)
                   if (!adminName && adminUser && (adminUser._id === c.created_by || adminUser.id === c.created_by)) {
