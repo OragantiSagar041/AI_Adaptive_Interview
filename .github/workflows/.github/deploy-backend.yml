@@ -1,0 +1,126 @@
+name: Backend CI/CD to ECS
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: backend-production
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: simple-docker-service-12cd8c1234bd
+  ECS_CLUSTER: arah-backend-cluster
+  ECS_SERVICE: arah-backend-service
+  ECS_TASK_DEFINITION_FAMILY: hire-iq-3
+  CONTAINER_NAME: Main
+
+jobs:
+  test-backend:
+    name: Test FastAPI backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout backend source
+        uses: actions/checkout@v4
+
+      - name: Build backend test image
+        run: docker build --file backend/Dockerfile --tag fastapi-backend-ci:${{ github.sha }} backend
+
+      - name: Start backend test container
+        run: docker run --detach --name fastapi-backend-ci --publish 8000:8000 fastapi-backend-ci:${{ github.sha }}
+
+      - name: Wait for FastAPI health endpoint
+        shell: bash
+        run: |
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error http://127.0.0.1:8000/health; then
+              echo "Backend health check passed."
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs fastapi-backend-ci
+          exit 1
+
+      - name: Remove test container
+        if: always()
+        run: docker rm --force fastapi-backend-ci
+
+  deploy-backend:
+    name: Build, push, and deploy backend
+    needs: test-backend
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout backend source
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials with GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-backend-${{ github.run_id }}
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push immutable backend image
+        id: image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        shell: bash
+        run: |
+          IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker build --file backend/Dockerfile --tag "$IMAGE_URI" backend
+          docker push "$IMAGE_URI"
+          echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
+
+      - name: Download latest active task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition "$ECS_TASK_DEFINITION_FAMILY" \
+            --query taskDefinition \
+            --output json > task-definition.json
+
+      - name: Render new image into task definition
+        id: render-task-definition
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ steps.image.outputs.image_uri }}
+
+      - name: Deploy backend task definition to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render-task-definition.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+          wait-for-minutes: 30
+          propagate-tags: SERVICE
+
+      - name: Verify ECS deployment
+        run: |
+          aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE" \
+            --query 'services[0].{Desired:desiredCount,Running:runningCount,Pending:pendingCount,TaskDefinition:taskDefinition,Rollout:deployments[0].rolloutState}' \
+            --output table
