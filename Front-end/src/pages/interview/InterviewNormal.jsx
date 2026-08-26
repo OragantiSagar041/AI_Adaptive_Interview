@@ -183,6 +183,29 @@ export const InterviewNormal = () => {
 
   const session = useInterviewSession(sessionId, interviewType, startRoundTwo)
 
+  useEffect(() => {
+    // Force light mode for standard interviews, overriding any global dark mode settings
+    const enforceLightMode = () => {
+      document.documentElement.classList.remove('dark')
+      document.documentElement.setAttribute('data-theme', 'light')
+    }
+    enforceLightMode()
+    
+    // Setup observer to prevent ThemeContext or other scripts from reverting it
+    const observer = new MutationObserver((mutations) => {
+      let shouldRevert = false;
+      mutations.forEach(m => {
+        if (m.attributeName === 'class' && document.documentElement.classList.contains('dark')) shouldRevert = true;
+        if (m.attributeName === 'data-theme' && document.documentElement.getAttribute('data-theme') === 'dark') shouldRevert = true;
+      });
+      if (shouldRevert) enforceLightMode();
+    })
+    
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme'] })
+    
+    return () => observer.disconnect()
+  }, [])
+
   const {
     loading,
     showAllSet,
