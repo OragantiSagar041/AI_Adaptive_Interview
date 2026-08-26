@@ -168,8 +168,10 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0a0f1e]/90 backdrop-blur-sm p-4">
-      <div className="bg-[#161c2d] border border-white/10 rounded-2xl shadow-2xl max-w-2xl w-full p-8 text-white relative overflow-hidden">
-
+      <div 
+        className="bg-[#161c2d] border rounded-2xl shadow-2xl max-w-2xl w-full p-8 text-white relative overflow-hidden"
+        style={{ backgroundColor: '#161c2d', borderColor: 'rgba(255,255,255,0.1)', color: '#ffffff' }}
+      >
         <div className="mb-6 text-center">
           <h2 className="text-2xl font-bold mb-2">Hardware Check</h2>
           <p className="text-slate-400 text-sm mb-3">Let's make sure your camera and microphone are working properly before we begin.</p>

@@ -18,6 +18,7 @@ export default function Select({
         </label>
       )}
       <select
+        id={props.id || props.name}
         value={value}
         onChange={onChange}
         required={required}

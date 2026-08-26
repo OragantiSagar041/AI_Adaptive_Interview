@@ -93,8 +93,8 @@ export default function RejectedCandidatesPage() {
 
   // Calculate Stats
   const totalRejected = rejectedCandidates.length
-  const avgScore = totalRejected > 0 ? (rejectedCandidates.reduce((acc, c) => acc + Number(c.score || 0), 0) / totalRejected).toFixed(1) : 0
-  const reconsiderCount = rejectedCandidates.filter(c => Number(c.score || 0) >= 50).length // mock metric
+  const avgScore = totalRejected > 0 ? (rejectedCandidates.reduce((acc, c) => acc + Number(c.score ?? c.avg_score ?? 0), 0) / totalRejected).toFixed(1) : 0
+  const reconsiderCount = rejectedCandidates.filter(c => Number(c.score ?? c.avg_score ?? 0) >= 50).length // mock metric
   const thisMonthCount = rejectedCandidates.filter(c => {
     if (!c.created_at) return false;
     const date = new Date(c.created_at);
@@ -243,7 +243,7 @@ export default function RejectedCandidatesPage() {
             </thead>
             <tbody className="divide-y divide-slate-100/80">
               {filtered.map((c) => {
-                const scoreNum = Number(c.score || 0)
+                const scoreNum = Number(c.score ?? c.avg_score ?? 0)
 
                 return (
                   <tr key={c.id || c.link_id || c.email} onClick={() => setSelectedCandidate(c)} className="hover:bg-rose-50/30 transition-colors group whitespace-nowrap cursor-pointer">

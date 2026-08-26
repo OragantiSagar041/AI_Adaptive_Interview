@@ -243,7 +243,7 @@ function Hero() {
               Book a Live Demo <ArrowRight className="h-4 w-4" />
             </a>
             <a
-              href="#tour"
+              href="#how"
               className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full glass-strong font-semibold hover:bg-white/10 transition"
             >
               <Play className="h-4 w-4" /> Watch Product Tour

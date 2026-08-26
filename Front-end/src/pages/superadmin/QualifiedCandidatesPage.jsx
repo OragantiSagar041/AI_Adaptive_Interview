@@ -122,21 +122,21 @@ export default function QualifiedCandidatesPage() {
 
   // Calculate dynamic stats
   const avgScore = qualifiedCandidates.length > 0
-    ? (qualifiedCandidates.reduce((acc, c) => acc + Number(c.score || 0), 0) / qualifiedCandidates.length).toFixed(1)
+    ? (qualifiedCandidates.reduce((acc, c) => acc + Number(c.score ?? c.avg_score ?? 0), 0) / qualifiedCandidates.length).toFixed(1)
     : "0.0"
 
   const STATS = [
-    { label: "Total Candidates", value: qualifiedCandidates.length.toString(), icon: Users, tone: "primary", colorClass: "bg-indigo-500/15 dark:bg-indigo-500/25 border border-indigo-400/30 text-indigo-600 dark:text-indigo-400" },
-    { label: "Avg AI Score", value: `${avgScore}%`, icon: Star, tone: "info", colorClass: "bg-blue-500/15 dark:bg-blue-500/25 border border-blue-400/30 text-blue-600 dark:text-blue-400" },
-    { label: "Total Qualified Candidates", value: qualifiedCandidates.length.toString(), icon: UserCheck, tone: "chart-2", colorClass: "bg-emerald-500/15 dark:bg-emerald-500/25 border border-emerald-400/30 text-emerald-600 dark:text-emerald-400" },
-    { label: "Pending Review", value: qualifiedCandidates.filter(c => !c.reviewed).length.toString(), icon: ClipboardCheck, tone: "warning", colorClass: "bg-amber-500/15 dark:bg-amber-500/25 border border-amber-400/30 text-amber-600 dark:text-amber-400" },
-    { label: "Ready to Hire", value: qualifiedCandidates.filter(c => Number(c.score || 0) >= 85).length.toString(), icon: Target, tone: "success", colorClass: "bg-teal-500/15 dark:bg-teal-500/25 border border-teal-400/30 text-teal-600 dark:text-teal-400" },
-    { label: "Offers Released", value: "0", icon: FileSignature, tone: "chart-5", colorClass: "bg-purple-500/15 dark:bg-purple-500/25 border border-purple-400/30 text-purple-600 dark:text-purple-400" },
+    { label: "Total Candidates", value: qualifiedCandidates.length.toString(), icon: Users, tone: "primary", colorClass: "bg-indigo-100 text-indigo-600" },
+    { label: "Avg AI Score", value: `${avgScore}%`, icon: Star, tone: "info", colorClass: "bg-blue-100 text-blue-600" },
+    { label: "Total Qualified Candidates", value: qualifiedCandidates.length.toString(), icon: UserCheck, tone: "chart-2", colorClass: "bg-emerald-100 text-emerald-600" },
+    { label: "Pending Review", value: qualifiedCandidates.filter(c => !c.reviewed).length.toString(), icon: ClipboardCheck, tone: "warning", colorClass: "bg-amber-100 text-amber-600" },
+    { label: "Ready to Hire", value: qualifiedCandidates.filter(c => Number(c.score ?? c.avg_score ?? 0) >= 85).length.toString(), icon: Target, tone: "success", colorClass: "bg-teal-100 text-teal-600" },
+    { label: "Offers Released", value: "0", icon: FileSignature, tone: "chart-5", colorClass: "bg-purple-100 text-purple-600" },
   ]
 
   return (
-    <div className="min-h-[calc(100vh-64px)] bg-slate-50 dark:bg-slate-900/50">
-      <main className="w-full px-4 sm:px-6 py-8 space-y-8">
+    <div className="min-h-[calc(100vh-64px)]">
+      <main className="mx-auto max-w-7xl px-4 sm:px-6 py-8 space-y-8">
         {/* Header Section */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -272,7 +272,7 @@ export default function QualifiedCandidatesPage() {
               </thead>
               <tbody className="divide-y divide-slate-100/80">
                 {filtered.map((c) => {
-                  const scoreNum = Number(c.score || 0)
+                  const scoreNum = Number(c.score ?? c.avg_score ?? 0)
                   const adminObj = subAdmins.find(adm => adm.id === c.created_by || adm._id === c.created_by)
                   let adminName = c.admin_name || (adminObj ? (adminObj.name || adminObj.username) : null)
                   if (!adminName && adminUser && (adminUser._id === c.created_by || adminUser.id === c.created_by)) {

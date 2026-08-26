@@ -284,12 +284,14 @@ def complete_session(
                                 logger.warning(f"Failed to insert completion notification: {notif_e}")
                             
                         if candidate_email:
+                            company_name_val = admin.get("company_name", "HireIQ") if 'admin' in locals() and admin else "HireIQ"
                             send_submission_notification(
                                 candidate_email=candidate_email,
                                 candidate_name=candidate_name,
                                 admin_email=admin_email,
                                 avg_score=avg_score,
-                                total_questions=len(answers)
+                                total_questions=len(answers),
+                                company_name=company_name_val
                             )
                             print(f"✅ Submission notification sent for {candidate_name} from complete_session")
                             

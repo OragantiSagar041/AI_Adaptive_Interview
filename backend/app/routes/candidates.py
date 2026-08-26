@@ -651,7 +651,7 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
             "interview_duration": data.interview_duration,
             "interview_format": data.interview_format,
             "interview_type": data.interview_type,
-            "industry_type": data.industry_type,
+            "industry": data.industry_type,
             "language": data.language,
             "case_study_count": data.case_study_count,
             "record_video": candidate.record_video,  # Task 5: Per-candidate video
@@ -1596,7 +1596,8 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
             email_sent = False
             email_reason = "No candidate email found"
             if email:
-                email_sent = send_decision_email(email, name, data.decision, jd)
+                company_val = current_admin.get('company_name', 'HireIQ')
+                email_sent = send_decision_email(email, name, data.decision, jd, company_name=company_val)
                 email_reason = "Success" if email_sent else "Email service error (Brevo API failed)"
 
             return {"status": "success", "decision": data.decision, "email_sent": email_sent, "email_reason": email_reason}
@@ -1639,7 +1640,8 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
         email_sent = False
         email_reason = "No candidate email found"
         if email:
-            email_sent = send_decision_email(email, name, data.decision, jd)
+            company_val = current_admin.get('company_name', 'HireIQ')
+            email_sent = send_decision_email(email, name, data.decision, jd, company_name=company_val)
             print(f" Email sent: {email_sent}")
             email_reason = "Success" if email_sent else "Email service error (Brevo API failed)"
         else:
@@ -1650,7 +1652,7 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
         print(f" Decision update error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-def send_decision_email(email: str, name: str, decision: str, jd: str):
+def send_decision_email(email: str, name: str, decision: str, jd: str, company_name: str = 'HireIQ'):
     import requests
     env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
     load_dotenv(env_path, override=False)
@@ -1660,7 +1662,7 @@ def send_decision_email(email: str, name: str, decision: str, jd: str):
     
     if not api_key: return False
 
-    subject = "Interview Result - Invitation for next steps" if decision == 'selected' else "Application Status Update"
+    subject = f"Interview Result - Invitation for next steps from {company_name.title()}" if decision == 'selected' else f"Application Status Update &ndash; {company_name.title()} from {company_name.title()}"
     
     if decision == 'selected':
         html = f"""
@@ -1671,11 +1673,13 @@ def send_decision_email(email: str, name: str, decision: str, jd: str):
             <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8f9fa; padding: 40px 20px;">
                 <tr><td align="center">
                     <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; background-color: #ffffff; border: 1px solid #dadce0; border-radius: 8px; overflow: hidden;">
-                        <tr><td style="padding: 32px 40px; text-align: center; border-bottom: 1px solid #f1f3f4;">
-                            <h1 style="color: #1a73e8; margin: 0; font-size: 28px; font-weight: 500; letter-spacing: -0.5px;">HireIQ</h1>
-                        </td></tr>
+                        <tr>
+                        <td style="background: linear-gradient(135deg, #000033 0%, #003366 100%); padding: 32px 40px; text-align: left; border-bottom: 1px solid #e5e7eb;">
+                            <img src="https://raw.githubusercontent.com/OragantiSagar041/AI_Adaptive_Interview/pavan/Front-end/public/hireiq_new_logo.png" alt="HireIQ" style="height: 110px; max-width: 100%; display: inline-block; object-fit: contain;" />
+                        </td>
+                    </tr>
                         <tr><td style="padding: 40px;">
-                            <h2 style="color: #202124; font-size: 20px; font-weight: 400; margin: 0 0 24px 0;">Interview Result - Next Steps</h2>
+                            <h2 style="color: #202124; font-size: 20px; font-weight: 400; margin: 0 0 24px 0;">Interview Result &ndash; Next Steps with {company_name.title()}</h2>
                             <p style="color: #3c4043; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">Dear {name},</p>
                             <p style="color: #3c4043; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
                                 We are pleased to inform you that you have successfully cleared the AI interview assessment. Congratulations!
@@ -1686,7 +1690,7 @@ def send_decision_email(email: str, name: str, decision: str, jd: str):
                                 </p>
                             </div>
                             <p style="color: #3c4043; font-size: 15px; line-height: 1.6; margin: 32px 0 0 0;">
-                                Best regards,<br><strong>HireIQ Recruiting Team</strong>
+                                Best regards,<br><strong>HIREIQ Recruiting Team</strong>
                             </p>
                         </td></tr>
                         <tr><td style="background-color: #f1f3f4; padding: 24px 40px; text-align: center;">
@@ -1707,11 +1711,13 @@ def send_decision_email(email: str, name: str, decision: str, jd: str):
             <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8f9fa; padding: 40px 20px;">
                 <tr><td align="center">
                     <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; background-color: #ffffff; border: 1px solid #dadce0; border-radius: 8px; overflow: hidden;">
-                        <tr><td style="padding: 32px 40px; text-align: center; border-bottom: 1px solid #f1f3f4;">
-                            <h1 style="color: #1a73e8; margin: 0; font-size: 28px; font-weight: 500; letter-spacing: -0.5px;">HireIQ</h1>
-                        </td></tr>
+                        <tr>
+                        <td style="background: linear-gradient(135deg, #000033 0%, #003366 100%); padding: 32px 40px; text-align: left; border-bottom: 1px solid #e5e7eb;">
+                            <img src="https://raw.githubusercontent.com/OragantiSagar041/AI_Adaptive_Interview/pavan/Front-end/public/hireiq_new_logo.png" alt="HireIQ" style="height: 110px; max-width: 100%; display: inline-block; object-fit: contain;" />
+                        </td>
+                    </tr>
                         <tr><td style="padding: 40px;">
-                            <h2 style="color: #202124; font-size: 20px; font-weight: 400; margin: 0 0 24px 0;">Application Status Update</h2>
+                            <h2 style="color: #202124; font-size: 20px; font-weight: 400; margin: 0 0 24px 0;">Application Status Update &ndash; {company_name.title()}</h2>
                             <p style="color: #3c4043; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">Dear {name},</p>
                             <p style="color: #3c4043; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
                                 Thank you for taking the time to complete the AI interview assessment and for your interest in joining our team.
@@ -1723,7 +1729,7 @@ def send_decision_email(email: str, name: str, decision: str, jd: str):
                                 We appreciate your time and effort, and we wish you the absolute best in your future career endeavors.
                             </p>
                             <p style="color: #3c4043; font-size: 15px; line-height: 1.6; margin: 32px 0 0 0;">
-                                Best regards,<br><strong>HireIQ Recruiting Team</strong>
+                                Best regards,<br><strong>HIREIQ Recruiting Team</strong>
                             </p>
                         </td></tr>
                         <tr><td style="background-color: #f1f3f4; padding: 24px 40px; text-align: center;">

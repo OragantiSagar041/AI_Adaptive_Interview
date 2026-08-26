@@ -393,7 +393,8 @@ export default function VoiceInterviewPage() {
 
     function connectWs() {
       if (!monitoringToken) return
-      const wsBase = API_BASE_URL.replace(/^http/, 'ws')
+      const base = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL
+      const wsBase = base.replace(/^http/, 'ws')
       const wsUrl = `${wsBase}/ws/interview/${linkId}?token=${encodeURIComponent(monitoringToken)}`
       const ws = new WebSocket(wsUrl)
 
@@ -1626,14 +1627,14 @@ export default function VoiceInterviewPage() {
             }
           }
         }
-        mr.start(1000)
+        mr.start(3000)
         whisperFlushTimerRef.current = setInterval(() => {
           if (whisperRecorderRef.current && whisperRecorderRef.current.state === 'recording') {
             try {
               whisperRecorderRef.current.stop()
             } catch (_) { }
           }
-        }, 4000)
+        }, 3000)
       } catch (err) {
         console.warn('Failed to start Whisper chunk recorder:', err)
         resolveWhisperStopRef.current?.()

@@ -184,7 +184,7 @@ export default function CreateInterviewPage() {
   const [editingSingleQuestionText, setEditingSingleQuestionText] = useState('')
   const [editingSingleInstructionIndex, setEditingSingleInstructionIndex] = useState(null)
   const [editingSingleInstructionText, setEditingSingleInstructionText] = useState('')
-  
+
   const [editingBulkQuestionIndex, setEditingBulkQuestionIndex] = useState(null)
   const [editingBulkQuestionText, setEditingBulkQuestionText] = useState('')
   const [editingBulkInstructionIndex, setEditingBulkInstructionIndex] = useState(null)
@@ -1077,8 +1077,13 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
         {/* Page Header */}
         <div className="flex flex-col gap-1.5 md:flex-row md:justify-between md:items-center bg-card p-6 rounded-2xl border border-border shadow-sm">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-indigo-500/15 dark:bg-indigo-500/25 border border-indigo-400/30 text-indigo-600 dark:text-indigo-400 shrink-0">
-              <i className="fas fa-file-signature text-xl text-indigo-600 dark:text-indigo-400"></i>
+            <div
+              className="w-12 h-12 rounded-2xl flex items-center justify-center text-white shrink-0 border border-indigo-400/30"
+              style={{
+                background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)'
+              }}
+            >
+              <i className="fas fa-file-signature text-xl text-white"></i>
             </div>
             <div>
               <h2 className="text-xl font-extrabold text-foreground tracking-tight">Create Interview Session</h2>
@@ -1093,8 +1098,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
             type="button"
             onClick={() => setCreateTab('single')}
             className={`flex-1 py-2.5 px-4 rounded-xl font-extrabold text-xs cursor-pointer transition-all duration-300 outline-none flex items-center justify-center gap-2 z-10 ${createTab === 'single'
-                ? 'bg-primary text-white shadow-[0_4px_12px_rgba(99,102,241,0.25)]'
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-100 hover:bg-slate-200/50'
+              ? 'bg-primary text-white shadow-[0_4px_12px_rgba(99,102,241,0.25)]'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-100 hover:bg-slate-200/50'
               }`}
           >
             <i className="fas fa-user text-xs"></i> Single Candidate
@@ -1103,8 +1108,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
             type="button"
             onClick={() => setCreateTab('bulk')}
             className={`flex-1 py-2.5 px-4 rounded-xl font-extrabold text-xs cursor-pointer transition-all duration-300 outline-none flex items-center justify-center gap-2 z-10 ${createTab === 'bulk'
-                ? 'bg-primary text-white shadow-[0_4px_12px_rgba(99,102,241,0.25)]'
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-100 hover:bg-slate-200/50'
+              ? 'bg-primary text-white shadow-[0_4px_12px_rgba(99,102,241,0.25)]'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-100 hover:bg-slate-200/50'
               }`}
           >
             <i className="fas fa-users text-xs"></i> Bulk Send
@@ -1171,8 +1176,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     )}
                   </select>
                   <p className="text-[0.65rem] text-indigo-500 font-medium mt-1">
-                    {callLogs.length === 0 
-                      ? "Ensure candidates are marked as 'Interested' in the AI Calling Agent to see them here." 
+                    {callLogs.length === 0
+                      ? "Ensure candidates are marked as 'Interested' in the AI Calling Agent to see them here."
                       : "Selecting a candidate will automatically fill their name, email, phone, resume, and job description!"}
                   </p>
                 </div>
@@ -1232,14 +1237,14 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                   </div>
                   <div
                     className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all duration-300 flex flex-col items-center justify-center gap-2.5 group relative overflow-hidden ${singleCandidate.resumeText
-                        ? 'border-emerald-200 bg-emerald-50/20 hover:bg-emerald-50/40 shadow-sm shadow-emerald-500/5'
-                        : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/40 hover:bg-white dark:bg-slate-800/60 hover:border-primary/80 hover:shadow-md hover:shadow-indigo-500/5 hover:-translate-y-0.5'
+                      ? 'border-emerald-200 bg-emerald-50/20 hover:bg-emerald-50/40 shadow-sm shadow-emerald-500/5'
+                      : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/40 hover:bg-white dark:bg-slate-800/60 hover:border-primary/80 hover:shadow-md hover:shadow-indigo-500/5 hover:-translate-y-0.5'
                       }`}
                     onClick={() => document.getElementById('singleResumeInput').click()}
                   >
                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 ${singleCandidate.resumeText
-                        ? 'bg-emerald-100 text-emerald-650 animate-[pulse_2s_infinite]'
-                        : 'bg-indigo-50 text-indigo-600 group-hover:bg-indigo-100 group-hover:scale-110'
+                      ? 'bg-emerald-100 text-emerald-650 animate-[pulse_2s_infinite]'
+                      : 'bg-indigo-50 text-indigo-600 group-hover:bg-indigo-100 group-hover:scale-110'
                       }`}>
                       <i className={`text-xl ${singleCandidate.resumeText ? 'fas fa-file-circle-check' : 'fas fa-file-arrow-up'}`}></i>
                     </div>
@@ -1551,41 +1556,41 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                         {singleCandidate.customQuestions.map((q, idx) => (
                           <li key={idx} className="text-sm text-slate-700 dark:text-slate-200 font-medium">
                             {editingSingleQuestionIndex === idx ? (
-                                <div className="flex gap-2 items-center w-full">
-                                  <input
-                                    type="text"
-                                    className="flex-1 bg-slate-50 dark:bg-slate-900/50/95 border border-slate-200 dark:border-slate-700 rounded-[5px] px-3 py-1.5 text-slate-900 dark:text-white text-sm outline-none focus:border-primary focus:bg-white dark:bg-slate-800/60"
-                                    value={editingSingleQuestionText}
-                                    onChange={(e) => setEditingSingleQuestionText(e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        if (editingSingleQuestionText.trim()) {
-                                          const updated = [...singleCandidate.customQuestions];
-                                          updated[idx] = editingSingleQuestionText.trim();
-                                          handleSingleChange('customQuestions', updated);
-                                        }
-                                        setEditingSingleQuestionIndex(null);
-                                      } else if (e.key === 'Escape') {
-                                        setEditingSingleQuestionIndex(null);
+                              <div className="flex gap-2 items-center w-full">
+                                <input
+                                  type="text"
+                                  className="flex-1 bg-slate-50 dark:bg-slate-900/50/95 border border-slate-200 dark:border-slate-700 rounded-[5px] px-3 py-1.5 text-slate-900 dark:text-white text-sm outline-none focus:border-primary focus:bg-white dark:bg-slate-800/60"
+                                  value={editingSingleQuestionText}
+                                  onChange={(e) => setEditingSingleQuestionText(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      if (editingSingleQuestionText.trim()) {
+                                        const updated = [...singleCandidate.customQuestions];
+                                        updated[idx] = editingSingleQuestionText.trim();
+                                        handleSingleChange('customQuestions', updated);
                                       }
-                                    }}
-                                    autoFocus
-                                    onBlur={() => setEditingSingleQuestionIndex(null)}
-                                  />
-                                </div>
-                              ) : (
-                                <div className="flex justify-between items-start gap-4 group" onDoubleClick={() => { setEditingSingleQuestionIndex(idx); setEditingSingleQuestionText(singleCandidate.customQuestions[idx]); }}>
-                              <span className="break-all">{q}</span>
-                              <button
-                                type="button"
-                                onClick={() => deleteSingleQuestion(idx)}
-                                className="text-rose-500 hover:text-rose-700 transition-colors p-1 cursor-pointer flex-shrink-0 bg-transparent border-none"
-                              >
-                                <i className="fas fa-trash"></i>
-                              </button>
-                            </div>
-                              )}
+                                      setEditingSingleQuestionIndex(null);
+                                    } else if (e.key === 'Escape') {
+                                      setEditingSingleQuestionIndex(null);
+                                    }
+                                  }}
+                                  autoFocus
+                                  onBlur={() => setEditingSingleQuestionIndex(null)}
+                                />
+                              </div>
+                            ) : (
+                              <div className="flex justify-between items-start gap-4 group" onDoubleClick={() => { setEditingSingleQuestionIndex(idx); setEditingSingleQuestionText(singleCandidate.customQuestions[idx]); }}>
+                                <span className="break-all">{q}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => deleteSingleQuestion(idx)}
+                                  className="text-rose-500 hover:text-rose-700 transition-colors p-1 cursor-pointer flex-shrink-0 bg-transparent border-none"
+                                >
+                                  <i className="fas fa-trash"></i>
+                                </button>
+                              </div>
+                            )}
                           </li>
                         ))}
                       </ol>
@@ -1671,41 +1676,41 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                         {singleCandidate.aiInstructions.map((inst, idx) => (
                           <li key={idx} className="text-sm text-slate-700 dark:text-slate-200 font-medium">
                             {editingSingleInstructionIndex === idx ? (
-                                <div className="flex gap-2 items-center w-full">
-                                  <input
-                                    type="text"
-                                    className="flex-1 bg-slate-50 dark:bg-slate-900/50/95 border border-slate-200 dark:border-slate-700 rounded-[5px] px-3 py-1.5 text-slate-900 dark:text-white text-sm outline-none focus:border-primary focus:bg-white dark:bg-slate-800/60"
-                                    value={editingSingleInstructionText}
-                                    onChange={(e) => setEditingSingleInstructionText(e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        if (editingSingleInstructionText.trim()) {
-                                          const updated = [...singleCandidate.aiInstructions];
-                                          updated[idx] = editingSingleInstructionText.trim();
-                                          handleSingleChange('aiInstructions', updated);
-                                        }
-                                        setEditingSingleInstructionIndex(null);
-                                      } else if (e.key === 'Escape') {
-                                        setEditingSingleInstructionIndex(null);
+                              <div className="flex gap-2 items-center w-full">
+                                <input
+                                  type="text"
+                                  className="flex-1 bg-slate-50 dark:bg-slate-900/50/95 border border-slate-200 dark:border-slate-700 rounded-[5px] px-3 py-1.5 text-slate-900 dark:text-white text-sm outline-none focus:border-primary focus:bg-white dark:bg-slate-800/60"
+                                  value={editingSingleInstructionText}
+                                  onChange={(e) => setEditingSingleInstructionText(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      if (editingSingleInstructionText.trim()) {
+                                        const updated = [...singleCandidate.aiInstructions];
+                                        updated[idx] = editingSingleInstructionText.trim();
+                                        handleSingleChange('aiInstructions', updated);
                                       }
-                                    }}
-                                    autoFocus
-                                    onBlur={() => setEditingSingleInstructionIndex(null)}
-                                  />
-                                </div>
-                              ) : (
-                                <div className="flex justify-between items-start gap-4 group" onDoubleClick={() => { setEditingSingleInstructionIndex(idx); setEditingSingleInstructionText(singleCandidate.aiInstructions[idx]); }}>
-                              <span className="break-all">{inst}</span>
-                              <button
-                                type="button"
-                                onClick={() => deleteSingleInstruction(idx)}
-                                className="text-rose-500 hover:text-rose-700 transition-colors p-1 cursor-pointer flex-shrink-0 bg-transparent border-none"
-                              >
-                                <i className="fas fa-trash"></i>
-                              </button>
-                            </div>
-                              )}
+                                      setEditingSingleInstructionIndex(null);
+                                    } else if (e.key === 'Escape') {
+                                      setEditingSingleInstructionIndex(null);
+                                    }
+                                  }}
+                                  autoFocus
+                                  onBlur={() => setEditingSingleInstructionIndex(null)}
+                                />
+                              </div>
+                            ) : (
+                              <div className="flex justify-between items-start gap-4 group" onDoubleClick={() => { setEditingSingleInstructionIndex(idx); setEditingSingleInstructionText(singleCandidate.aiInstructions[idx]); }}>
+                                <span className="break-all">{inst}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => deleteSingleInstruction(idx)}
+                                  className="text-rose-500 hover:text-rose-700 transition-colors p-1 cursor-pointer flex-shrink-0 bg-transparent border-none"
+                                >
+                                  <i className="fas fa-trash"></i>
+                                </button>
+                              </div>
+                            )}
                           </li>
                         ))}
                       </ol>
@@ -1792,13 +1797,13 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     max="120"
                     value={singleCandidate.duration}
                     onChange={(e) => {
-                        let val = e.target.value;
-                        if (val !== '') {
-                          val = parseInt(val);
-                          if (val > 120) val = 120;
-                        }
-                        handleSingleChange('duration', val)
-                                          }}
+                      let val = e.target.value;
+                      if (val !== '') {
+                        val = parseInt(val);
+                        if (val > 120) val = 120;
+                      }
+                      handleSingleChange('duration', val)
+                    }}
                   />
 
                   <div className="sm:col-span-2">
@@ -1935,12 +1940,12 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       <span className="text-[0.7rem] text-slate-400 font-medium">AI will speak in a custom Cartesia voice</span>
                     </div>
                   </div>
-                <CustomToggleSwitch
-                  checked={singleCandidate.voiceCloning}
-                  onChange={(val) => handleSingleChange('voiceCloning', val)}
-                />
+                  <CustomToggleSwitch
+                    checked={singleCandidate.voiceCloning}
+                    onChange={(val) => handleSingleChange('voiceCloning', val)}
+                  />
                 </div>
-                
+
                 {singleCandidate.voiceCloning && (
                   <div className="mt-2 pt-4 border-t border-slate-100 dark:border-slate-800">
                     <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2 block">Select Voice</label>
@@ -1982,10 +1987,10 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       <label htmlFor="singleAskWorkMode" className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 cursor-pointer">
                         <i className="fas fa-building text-slate-400 text-xs"></i> Work Mode Preference
                       </label>
-                        <CustomToggleSwitch
-                          checked={singleCandidate.hrScreening.askWorkMode}
-                          onChange={(val) => handleSingleHrChange('askWorkMode', val)}
-                        />
+                      <CustomToggleSwitch
+                        checked={singleCandidate.hrScreening.askWorkMode}
+                        onChange={(val) => handleSingleHrChange('askWorkMode', val)}
+                      />
                     </div>
                     {singleCandidate.hrScreening.askWorkMode && (
                       <div className="flex gap-2 border-t border-slate-100 dark:border-slate-800 pt-2.5 flex-wrap">
@@ -1995,8 +2000,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                             type="button"
                             onClick={() => handleSingleHrChange('workModeType', mode)}
                             className={`px-3 py-1 rounded-full text-[0.7rem] font-bold transition-all cursor-pointer ${singleCandidate.hrScreening.workModeType === mode
-                                ? 'bg-primary text-white shadow-sm'
-                                : 'bg-white dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700'
+                              ? 'bg-primary text-white shadow-sm'
+                              : 'bg-white dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700'
                               }`}
                           >
                             {mode}
@@ -2012,10 +2017,10 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       <label htmlFor="singleAskLocation" className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 cursor-pointer">
                         <i className="fas fa-map-location-dot text-slate-400 text-xs"></i> Location Check
                       </label>
-                        <CustomToggleSwitch
-                          checked={singleCandidate.hrScreening.askLocation}
-                          onChange={(val) => handleSingleHrChange('askLocation', val)}
-                        />
+                      <CustomToggleSwitch
+                        checked={singleCandidate.hrScreening.askLocation}
+                        onChange={(val) => handleSingleHrChange('askLocation', val)}
+                      />
                     </div>
                     {singleCandidate.hrScreening.askLocation && (
                       <div className="flex gap-2 border-t border-slate-100 dark:border-slate-800 pt-2.5 flex-wrap">
@@ -2025,8 +2030,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                             type="button"
                             onClick={() => handleSingleHrChange('locationType', loc)}
                             className={`px-3 py-1 rounded-full text-[0.7rem] font-bold transition-all cursor-pointer ${singleCandidate.hrScreening.locationType === loc
-                                ? 'bg-primary text-white shadow-sm'
-                                : 'bg-white dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700'
+                              ? 'bg-primary text-white shadow-sm'
+                              : 'bg-white dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700'
                               }`}
                           >
                             {loc === 'Current' ? 'Current Location' : 'Preferred Location'}
@@ -2041,10 +2046,10 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     <label htmlFor="singleAskBond" className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 cursor-pointer">
                       <i className="fas fa-file-signature text-slate-400 text-xs"></i> Bond / Notice Period Info
                     </label>
-                      <CustomToggleSwitch
-                        checked={singleCandidate.hrScreening.askBond}
-                        onChange={(val) => handleSingleHrChange('askBond', val)}
-                      />
+                    <CustomToggleSwitch
+                      checked={singleCandidate.hrScreening.askBond}
+                      onChange={(val) => handleSingleHrChange('askBond', val)}
+                    />
                   </div>
                 </div>
               </Card>
@@ -2222,41 +2227,41 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                         {bulkConfig.customQuestions.map((q, idx) => (
                           <li key={idx} className="text-sm text-slate-700 dark:text-slate-200 font-medium">
                             {editingBulkQuestionIndex === idx ? (
-                                <div className="flex gap-2 items-center w-full">
-                                  <input
-                                    type="text"
-                                    className="flex-1 bg-slate-50 dark:bg-slate-900/50/95 border border-slate-200 dark:border-slate-700 rounded-[5px] px-3 py-1.5 text-slate-900 dark:text-white text-sm outline-none focus:border-primary focus:bg-white dark:bg-slate-800/60"
-                                    value={editingBulkQuestionText}
-                                    onChange={(e) => setEditingBulkQuestionText(e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        if (editingBulkQuestionText.trim()) {
-                                          const updated = [...bulkConfig.customQuestions];
-                                          updated[idx] = editingBulkQuestionText.trim();
-                                          handleBulkConfigChange('customQuestions', updated);
-                                        }
-                                        setEditingBulkQuestionIndex(null);
-                                      } else if (e.key === 'Escape') {
-                                        setEditingBulkQuestionIndex(null);
+                              <div className="flex gap-2 items-center w-full">
+                                <input
+                                  type="text"
+                                  className="flex-1 bg-slate-50 dark:bg-slate-900/50/95 border border-slate-200 dark:border-slate-700 rounded-[5px] px-3 py-1.5 text-slate-900 dark:text-white text-sm outline-none focus:border-primary focus:bg-white dark:bg-slate-800/60"
+                                  value={editingBulkQuestionText}
+                                  onChange={(e) => setEditingBulkQuestionText(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      if (editingBulkQuestionText.trim()) {
+                                        const updated = [...bulkConfig.customQuestions];
+                                        updated[idx] = editingBulkQuestionText.trim();
+                                        handleBulkConfigChange('customQuestions', updated);
                                       }
-                                    }}
-                                    autoFocus
-                                    onBlur={() => setEditingBulkQuestionIndex(null)}
-                                  />
-                                </div>
-                              ) : (
-                                <div className="flex justify-between items-start gap-4 group" onDoubleClick={() => { setEditingBulkQuestionIndex(idx); setEditingBulkQuestionText(bulkConfig.customQuestions[idx]); }}>
-                              <span className="break-all">{q}</span>
-                              <button
-                                type="button"
-                                onClick={() => deleteBulkQuestion(idx)}
-                                className="text-rose-500 hover:text-rose-700 transition-colors p-1 cursor-pointer flex-shrink-0 bg-transparent border-none"
-                              >
-                                <i className="fas fa-trash"></i>
-                              </button>
-                            </div>
-                              )}
+                                      setEditingBulkQuestionIndex(null);
+                                    } else if (e.key === 'Escape') {
+                                      setEditingBulkQuestionIndex(null);
+                                    }
+                                  }}
+                                  autoFocus
+                                  onBlur={() => setEditingBulkQuestionIndex(null)}
+                                />
+                              </div>
+                            ) : (
+                              <div className="flex justify-between items-start gap-4 group" onDoubleClick={() => { setEditingBulkQuestionIndex(idx); setEditingBulkQuestionText(bulkConfig.customQuestions[idx]); }}>
+                                <span className="break-all">{q}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => deleteBulkQuestion(idx)}
+                                  className="text-rose-500 hover:text-rose-700 transition-colors p-1 cursor-pointer flex-shrink-0 bg-transparent border-none"
+                                >
+                                  <i className="fas fa-trash"></i>
+                                </button>
+                              </div>
+                            )}
                           </li>
                         ))}
                       </ol>
@@ -2342,41 +2347,41 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                         {bulkConfig.aiInstructions.map((inst, idx) => (
                           <li key={idx} className="text-sm text-slate-700 dark:text-slate-200 font-medium">
                             {editingBulkInstructionIndex === idx ? (
-                                <div className="flex gap-2 items-center w-full">
-                                  <input
-                                    type="text"
-                                    className="flex-1 bg-slate-50 dark:bg-slate-900/50/95 border border-slate-200 dark:border-slate-700 rounded-[5px] px-3 py-1.5 text-slate-900 dark:text-white text-sm outline-none focus:border-primary focus:bg-white dark:bg-slate-800/60"
-                                    value={editingBulkInstructionText}
-                                    onChange={(e) => setEditingBulkInstructionText(e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        if (editingBulkInstructionText.trim()) {
-                                          const updated = [...bulkConfig.aiInstructions];
-                                          updated[idx] = editingBulkInstructionText.trim();
-                                          handleBulkConfigChange('aiInstructions', updated);
-                                        }
-                                        setEditingBulkInstructionIndex(null);
-                                      } else if (e.key === 'Escape') {
-                                        setEditingBulkInstructionIndex(null);
+                              <div className="flex gap-2 items-center w-full">
+                                <input
+                                  type="text"
+                                  className="flex-1 bg-slate-50 dark:bg-slate-900/50/95 border border-slate-200 dark:border-slate-700 rounded-[5px] px-3 py-1.5 text-slate-900 dark:text-white text-sm outline-none focus:border-primary focus:bg-white dark:bg-slate-800/60"
+                                  value={editingBulkInstructionText}
+                                  onChange={(e) => setEditingBulkInstructionText(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      if (editingBulkInstructionText.trim()) {
+                                        const updated = [...bulkConfig.aiInstructions];
+                                        updated[idx] = editingBulkInstructionText.trim();
+                                        handleBulkConfigChange('aiInstructions', updated);
                                       }
-                                    }}
-                                    autoFocus
-                                    onBlur={() => setEditingBulkInstructionIndex(null)}
-                                  />
-                                </div>
-                              ) : (
-                                <div className="flex justify-between items-start gap-4 group" onDoubleClick={() => { setEditingBulkInstructionIndex(idx); setEditingBulkInstructionText(bulkConfig.aiInstructions[idx]); }}>
-                              <span className="break-all">{inst}</span>
-                              <button
-                                type="button"
-                                onClick={() => deleteBulkInstruction(idx)}
-                                className="text-rose-500 hover:text-rose-700 transition-colors p-1 cursor-pointer flex-shrink-0 bg-transparent border-none"
-                              >
-                                <i className="fas fa-trash"></i>
-                              </button>
-                            </div>
-                              )}
+                                      setEditingBulkInstructionIndex(null);
+                                    } else if (e.key === 'Escape') {
+                                      setEditingBulkInstructionIndex(null);
+                                    }
+                                  }}
+                                  autoFocus
+                                  onBlur={() => setEditingBulkInstructionIndex(null)}
+                                />
+                              </div>
+                            ) : (
+                              <div className="flex justify-between items-start gap-4 group" onDoubleClick={() => { setEditingBulkInstructionIndex(idx); setEditingBulkInstructionText(bulkConfig.aiInstructions[idx]); }}>
+                                <span className="break-all">{inst}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => deleteBulkInstruction(idx)}
+                                  className="text-rose-500 hover:text-rose-700 transition-colors p-1 cursor-pointer flex-shrink-0 bg-transparent border-none"
+                                >
+                                  <i className="fas fa-trash"></i>
+                                </button>
+                              </div>
+                            )}
                           </li>
                         ))}
                       </ol>
@@ -2463,13 +2468,13 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     max="120"
                     value={bulkConfig.duration}
                     onChange={(e) => {
-                        let val = e.target.value;
-                        if (val !== '') {
-                          val = parseInt(val);
-                          if (val > 120) val = 120;
-                        }
-                        handleBulkConfigChange('duration', val)
-                                          }}
+                      let val = e.target.value;
+                      if (val !== '') {
+                        val = parseInt(val);
+                        if (val > 120) val = 120;
+                      }
+                      handleBulkConfigChange('duration', val)
+                    }}
                   />
 
                   <div className="sm:col-span-2">
@@ -2587,7 +2592,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     onChange={(val) => handleBulkConfigChange('voiceCloning', val)}
                   />
                 </div>
-                
+
                 {bulkConfig.voiceCloning && (
                   <div className="mt-2 pt-4 border-t border-slate-100 dark:border-slate-800">
                     <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2 block">Select Voice</label>
@@ -2642,8 +2647,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                             type="button"
                             onClick={() => handleBulkHrChange('workModeType', mode)}
                             className={`px-3 py-1 rounded-full text-[0.7rem] font-bold transition-all cursor-pointer ${bulkConfig.hrScreening.workModeType === mode
-                                ? 'bg-primary text-white shadow-sm'
-                                : 'bg-white dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700'
+                              ? 'bg-primary text-white shadow-sm'
+                              : 'bg-white dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700'
                               }`}
                           >
                             {mode}
@@ -2672,8 +2677,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                             type="button"
                             onClick={() => handleBulkHrChange('locationType', loc)}
                             className={`px-3 py-1 rounded-full text-[0.7rem] font-bold transition-all cursor-pointer ${bulkConfig.hrScreening.locationType === loc
-                                ? 'bg-primary text-white shadow-sm'
-                                : 'bg-white dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700'
+                              ? 'bg-primary text-white shadow-sm'
+                              : 'bg-white dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700'
                               }`}
                           >
                             {loc === 'Current' ? 'Current Location' : 'Preferred Location'}

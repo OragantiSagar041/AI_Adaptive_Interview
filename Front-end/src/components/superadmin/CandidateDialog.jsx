@@ -701,8 +701,8 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                     <InfoRow icon={IndianRupee} label="Expected CTC" value={c.expected_ctc} />
                     <InfoRow icon={Clock} label="Notice Period" value={c.notice_period} />
                     <InfoRow icon={MapPin} label="Location" value={c.location} />
-                  </div >
-                </section >
+                  </div>
+                </section>
 
                 <section className="bg-card rounded-xl border border-border p-5 shadow-sm">
                   <h3 className="text-sm font-black text-foreground mb-3 flex items-center gap-2">
@@ -734,25 +734,23 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                     )}
                   </div>
                 </section>
+
                 {/* Integrity */}
-                {
-                  c.integrity && (
-                    <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
-                      <h3 className="text-sm font-black text-slate-800 mb-4 flex items-center gap-2">
-                        <ShieldAlert className="h-4 w-4 text-amber-500" /> Interview Integrity
-                      </h3>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <StatCard label="Tab Switches" value={c.integrity.total_tab_switches} />
-                        <StatCard label="Face Alerts" value={c.integrity.total_face_alerts} />
-                        <StatCard label="Noise Alerts" value={c.integrity.total_noise_alerts} />
-                        <StatCard label="Total Duration" value={`${c.integrity.total_time_minutes} min`} />
-                      </div>
-                    </section>
-                  )
-                }
-              </div >
-            )
-            }
+                {c.integrity && (
+                  <section className="bg-card rounded-xl border border-border p-5 shadow-sm">
+                    <h3 className="text-sm font-black text-foreground mb-4 flex items-center gap-2">
+                      <ShieldAlert className="h-4 w-4 text-amber-500" /> Interview Integrity
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <StatCard label="Tab Switches" value={c.integrity.total_tab_switches} />
+                      <StatCard label="Face Alerts" value={c.integrity.total_face_alerts} />
+                      <StatCard label="Noise Alerts" value={c.integrity.total_noise_alerts} />
+                      <StatCard label="Total Duration" value={`${c.integrity.total_time_minutes} min`} />
+                    </div>
+                  </section>
+                )}
+              </div>
+            )}
 
             {/* ─ Resume Tab ─ */}
             {
@@ -1091,7 +1089,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                 </div>
               )
             }
-          </div >
+          </div>
 
           {/* ─ Notes Side Panel ─ */}
           {
@@ -1162,14 +1160,14 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
               <Send size={16} /> Send Offer
             </button>
           </div>
-        </div >
+        </div>
 
         <ScheduleModal
           isOpen={showScheduleModal}
           onClose={() => setShowScheduleModal(false)}
           candidate={c}
         />
-      </div >
+      </div>
 
       {/* ── Resume Sub-Modal ── */}
       {
