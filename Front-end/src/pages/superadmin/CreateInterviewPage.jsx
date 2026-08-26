@@ -12,6 +12,59 @@ import { EmailPreviewModal, BulkResultsModal, convertHtmlToPlainText, convertPla
 import { loadSuperAdminDashboard } from '../../store/slices/dashboardSlice'
 import { createSuperAdminInterview } from '../../store/slices/interviewSlice'
 
+const CustomToggleSwitch = ({ checked, onChange }) => (
+  <button
+    type="button"
+    role="switch"
+    aria-checked={checked}
+    onClick={(e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onChange(!checked);
+    }}
+    style={{
+      width: '52px',
+      height: '28px',
+      backgroundColor: checked ? '#4f46e5' : '#1e293b',
+      border: checked ? '2px solid #818cf8' : '2px solid #475569',
+      boxShadow: checked ? '0 0 14px rgba(99, 102, 241, 0.75)' : 'none',
+      display: 'inline-flex',
+      alignItems: 'center',
+      padding: '3px',
+      borderRadius: '9999px',
+      cursor: 'pointer',
+      position: 'relative',
+      transition: 'all 0.3s ease',
+      flexShrink: 0,
+    }}
+  >
+    <div
+      style={{
+        width: '18px',
+        height: '18px',
+        backgroundColor: '#ffffff',
+        borderRadius: '9999px',
+        transform: checked ? 'translateX(24px)' : 'translateX(0px)',
+        transition: 'transform 0.3s ease, background-color 0.3s ease',
+        boxShadow: '0 2px 5px rgba(0,0,0,0.4)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+      }}
+    >
+      <div
+        style={{
+          width: '6px',
+          height: '6px',
+          backgroundColor: checked ? '#4f46e5' : '#64748b',
+          borderRadius: '9999px',
+        }}
+      />
+    </div>
+  </button>
+);
+
 export default function CreateInterviewPage() {
   const dispatch = useDispatch()
   const location = useLocation()
@@ -378,12 +431,12 @@ export default function CreateInterviewPage() {
           confirmButtonText: hasResume ? 'Yes, Autofill Profile & Resume' : 'Yes, Autofill Details',
           cancelButtonText: 'No, Keep Blank',
           confirmButtonColor: '#6366f1',
-          cancelButtonColor: '#94a3b8',
+          cancelButtonColor: '#1e293b',
           customClass: {
-            popup: 'rounded-2xl border border-slate-100 dark:border-slate-800 shadow-2xl p-6',
+            popup: 'rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl p-6 bg-white dark:bg-[#161c2d]',
             title: 'text-lg font-bold text-slate-800 dark:text-slate-100 font-sans tracking-tight pt-2',
-            confirmButton: 'px-5 py-2.5 rounded-xl font-semibold text-xs shadow-md transition-all hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 mr-2',
-            cancelButton: 'px-5 py-2.5 rounded-xl font-semibold text-xs shadow-sm transition-all hover:bg-slate-200 focus:outline-none'
+            confirmButton: 'px-5 py-2.5 rounded-xl font-bold text-xs !border-2 !border-indigo-400 dark:!border-indigo-400 text-white shadow-md transition-all hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 mr-2',
+            cancelButton: 'px-5 py-2.5 rounded-xl font-bold text-xs !border-2 !border-slate-400 dark:!border-slate-500 text-slate-800 dark:text-slate-200 shadow-sm transition-all hover:bg-slate-200 dark:hover:bg-slate-800 focus:outline-none'
           },
           buttonsStyling: true
         })
@@ -1024,13 +1077,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
         {/* Page Header */}
         <div className="flex flex-col gap-1.5 md:flex-row md:justify-between md:items-center bg-card p-6 rounded-2xl border border-border shadow-sm">
           <div className="flex items-center gap-4">
-            <div
-              className="w-12 h-12 rounded-2xl flex items-center justify-center text-white shrink-0 border border-indigo-400/30"
-              style={{
-                background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)'
-              }}
-            >
-              <i className="fas fa-file-signature text-xl text-white"></i>
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-indigo-500/15 dark:bg-indigo-500/25 border border-indigo-400/30 text-indigo-600 dark:text-indigo-400 shrink-0">
+              <i className="fas fa-file-signature text-xl text-indigo-600 dark:text-indigo-400"></i>
             </div>
             <div>
               <h2 className="text-xl font-extrabold text-foreground tracking-tight">Create Interview Session</h2>
@@ -1867,16 +1915,10 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     <span className="text-[0.7rem] text-slate-400 font-medium">Record candidate video via webcam during assessment</span>
                   </div>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    id="singleRecordVideo"
-                    checked={singleCandidate.recordVideo}
-                    onChange={(e) => handleSingleChange('recordVideo', e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-focus:outline-none peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:bg-slate-800/60 after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                </label>
+                <CustomToggleSwitch
+                  checked={singleCandidate.recordVideo}
+                  onChange={(val) => handleSingleChange('recordVideo', val)}
+                />
               </div>
 
               {/* Card 3b: Voice Cloning */}
@@ -1893,16 +1935,10 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       <span className="text-[0.7rem] text-slate-400 font-medium">AI will speak in a custom Cartesia voice</span>
                     </div>
                   </div>
-                  <label className="relative inline-flex items-center cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      id="singleVoiceCloning"
-                      checked={singleCandidate.voiceCloning}
-                      onChange={(e) => handleSingleChange('voiceCloning', e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-focus:outline-none peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:bg-slate-800/60 after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-600"></div>
-                  </label>
+                <CustomToggleSwitch
+                  checked={singleCandidate.voiceCloning}
+                  onChange={(val) => handleSingleChange('voiceCloning', val)}
+                />
                 </div>
                 
                 {singleCandidate.voiceCloning && (
@@ -1946,16 +1982,10 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       <label htmlFor="singleAskWorkMode" className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 cursor-pointer">
                         <i className="fas fa-building text-slate-400 text-xs"></i> Work Mode Preference
                       </label>
-                      <label className="relative inline-flex items-center cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          id="singleAskWorkMode"
+                        <CustomToggleSwitch
                           checked={singleCandidate.hrScreening.askWorkMode}
-                          onChange={(e) => handleSingleHrChange('askWorkMode', e.target.checked)}
-                          className="sr-only peer"
+                          onChange={(val) => handleSingleHrChange('askWorkMode', val)}
                         />
-                        <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:bg-slate-800/60 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
-                      </label>
                     </div>
                     {singleCandidate.hrScreening.askWorkMode && (
                       <div className="flex gap-2 border-t border-slate-100 dark:border-slate-800 pt-2.5 flex-wrap">
@@ -1982,16 +2012,10 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       <label htmlFor="singleAskLocation" className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 cursor-pointer">
                         <i className="fas fa-map-location-dot text-slate-400 text-xs"></i> Location Check
                       </label>
-                      <label className="relative inline-flex items-center cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          id="singleAskLocation"
+                        <CustomToggleSwitch
                           checked={singleCandidate.hrScreening.askLocation}
-                          onChange={(e) => handleSingleHrChange('askLocation', e.target.checked)}
-                          className="sr-only peer"
+                          onChange={(val) => handleSingleHrChange('askLocation', val)}
                         />
-                        <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:bg-slate-800/60 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
-                      </label>
                     </div>
                     {singleCandidate.hrScreening.askLocation && (
                       <div className="flex gap-2 border-t border-slate-100 dark:border-slate-800 pt-2.5 flex-wrap">
@@ -2017,16 +2041,10 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     <label htmlFor="singleAskBond" className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 cursor-pointer">
                       <i className="fas fa-file-signature text-slate-400 text-xs"></i> Bond / Notice Period Info
                     </label>
-                    <label className="relative inline-flex items-center cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        id="singleAskBond"
+                      <CustomToggleSwitch
                         checked={singleCandidate.hrScreening.askBond}
-                        onChange={(e) => handleSingleHrChange('askBond', e.target.checked)}
-                        className="sr-only peer"
+                        onChange={(val) => handleSingleHrChange('askBond', val)}
                       />
-                      <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:bg-slate-800/60 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
-                    </label>
                   </div>
                 </div>
               </Card>
@@ -2544,16 +2562,10 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     <span className="text-[0.7rem] text-slate-400 font-medium">Webcam video recording default for all bulk candidates</span>
                   </div>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    id="bulkRecordVideo"
-                    checked={bulkConfig.recordVideo}
-                    onChange={(e) => handleBulkConfigChange('recordVideo', e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-focus:outline-none peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:bg-slate-800/60 after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                </label>
+                <CustomToggleSwitch
+                  checked={bulkConfig.recordVideo}
+                  onChange={(val) => handleBulkConfigChange('recordVideo', val)}
+                />
               </div>
 
               {/* Card 3b: Voice Cloning (Bulk) */}
@@ -2570,16 +2582,10 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       <span className="text-[0.7rem] text-slate-400 font-medium">AI will speak in a custom Cartesia voice</span>
                     </div>
                   </div>
-                  <label className="relative inline-flex items-center cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      id="bulkVoiceCloning"
-                      checked={bulkConfig.voiceCloning}
-                      onChange={(e) => handleBulkConfigChange('voiceCloning', e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-focus:outline-none peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:bg-slate-800/60 after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-600"></div>
-                  </label>
+                  <CustomToggleSwitch
+                    checked={bulkConfig.voiceCloning}
+                    onChange={(val) => handleBulkConfigChange('voiceCloning', val)}
+                  />
                 </div>
                 
                 {bulkConfig.voiceCloning && (
@@ -2623,16 +2629,10 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       <label htmlFor="bulkAskWorkMode" className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 cursor-pointer">
                         <i className="fas fa-building text-slate-400 text-xs"></i> Work Mode Preference
                       </label>
-                      <label className="relative inline-flex items-center cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          id="bulkAskWorkMode"
-                          checked={bulkConfig.hrScreening.askWorkMode}
-                          onChange={(e) => handleBulkHrChange('askWorkMode', e.target.checked)}
-                          className="sr-only peer"
-                        />
-                        <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:bg-slate-800/60 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
-                      </label>
+                      <CustomToggleSwitch
+                        checked={bulkConfig.hrScreening.askWorkMode}
+                        onChange={(val) => handleBulkHrChange('askWorkMode', val)}
+                      />
                     </div>
                     {bulkConfig.hrScreening.askWorkMode && (
                       <div className="flex gap-2 border-t border-slate-100 dark:border-slate-800 pt-2.5 flex-wrap">
@@ -2659,16 +2659,10 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       <label htmlFor="bulkAskLocation" className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 cursor-pointer">
                         <i className="fas fa-map-location-dot text-slate-400 text-xs"></i> Location Check
                       </label>
-                      <label className="relative inline-flex items-center cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          id="bulkAskLocation"
-                          checked={bulkConfig.hrScreening.askLocation}
-                          onChange={(e) => handleBulkHrChange('askLocation', e.target.checked)}
-                          className="sr-only peer"
-                        />
-                        <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:bg-slate-800/60 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
-                      </label>
+                      <CustomToggleSwitch
+                        checked={bulkConfig.hrScreening.askLocation}
+                        onChange={(val) => handleBulkHrChange('askLocation', val)}
+                      />
                     </div>
                     {bulkConfig.hrScreening.askLocation && (
                       <div className="flex gap-2 border-t border-slate-100 dark:border-slate-800 pt-2.5 flex-wrap">
@@ -2694,16 +2688,10 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     <label htmlFor="bulkAskBond" className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 cursor-pointer">
                       <i className="fas fa-file-signature text-slate-400 text-xs"></i> Bond / Notice Period Info
                     </label>
-                    <label className="relative inline-flex items-center cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        id="bulkAskBond"
-                        checked={bulkConfig.hrScreening.askBond}
-                        onChange={(e) => handleBulkHrChange('askBond', e.target.checked)}
-                        className="sr-only peer"
-                      />
-                      <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:bg-slate-800/60 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
-                    </label>
+                    <CustomToggleSwitch
+                      checked={bulkConfig.hrScreening.askBond}
+                      onChange={(val) => handleBulkHrChange('askBond', val)}
+                    />
                   </div>
                 </div>
               </Card>
@@ -2885,7 +2873,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                               }}
                               className="sr-only peer"
                             />
-                            <div className="w-8 h-4 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:bg-slate-800/60 after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-primary"></div>
+                            <div className="w-8 h-4 bg-slate-300 dark:bg-slate-700 border border-slate-400 dark:border-slate-600 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-primary"></div>
                           </label>
                         </td>
                         <td className="px-4 py-3 text-xs text-center">
@@ -2940,10 +2928,11 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                         <span className="text-[0.7rem] text-slate-500 dark:text-slate-400 font-medium">{link.email}</span>
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="secondary"
-                        className="px-3.5 py-1.5 text-xs h-[32px] border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800/60 shadow-sm"
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        style={{ backgroundColor: '#f1f5f9', color: '#1e293b', border: '1px solid #cbd5e1' }}
+                        className="px-3.5 py-2 text-xs font-bold rounded-lg hover:bg-slate-200 shadow-xs cursor-pointer transition-all flex items-center gap-1.5"
                         onClick={() => {
                           navigator.clipboard.writeText(`${window.location.origin}/interview?session_id=${link.id}`)
                           Swal.fire({
@@ -2957,14 +2946,16 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                           })
                         }}
                       >
-                        Copy Link
-                      </Button>
+                        <i className="far fa-copy text-xs"></i> Copy Link
+                      </button>
                       <a
                         href={`/interview?session_id=${link.id}`}
+                        target="_blank"
                         rel="noreferrer"
-                        className="px-3.5 py-1.5 bg-primary hover:bg-primary-hover text-white text-xs font-semibold rounded-lg border border-transparent shadow-[0_2px_8px_rgba(99,102,241,0.1)] hover:-translate-y-0.5 transition-all text-center flex items-center justify-center text-white no-underline leading-none"
+                        style={{ backgroundColor: '#4f46e5', color: '#ffffff', border: '1.5px solid #818cf8' }}
+                        className="px-4 py-2 text-xs font-extrabold rounded-lg shadow-sm hover:bg-indigo-700 hover:-translate-y-0.5 transition-all text-center flex items-center justify-center no-underline cursor-pointer gap-1.5 ring-1 ring-indigo-400/50"
                       >
-                        Start Interview
+                        <i className="fas fa-play text-[10px] text-white"></i> Start Interview
                       </a>
                     </div>
                   </div>

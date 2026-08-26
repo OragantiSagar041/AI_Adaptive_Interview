@@ -312,7 +312,7 @@ export default function RecruitersPage() {
   };
 
   return (
-    <div className="p-6 lg:p-8 w-full max-w-7xl mx-auto space-y-8">
+    <div className="p-6 lg:p-8 w-full space-y-8">
       {/* ── Page Header ── */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-slate-800/60 p-6 rounded-2xl shadow-xs border border-slate-100 dark:border-slate-800">
         <div>

@@ -265,7 +265,7 @@ export default function Subscribers() {
   })
 
   return (
-    <div className="space-y-6 max-w-6xl">
+    <div className="space-y-6 w-full">
       {/* Filters bar */}
       <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 p-4 sm:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:shadow-none grid grid-cols-2 sm:flex sm:flex-wrap gap-4 items-end">
         <div className="col-span-2 sm:flex-1 sm:min-w-[200px]">
