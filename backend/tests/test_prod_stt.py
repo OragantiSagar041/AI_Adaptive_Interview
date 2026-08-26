@@ -9,11 +9,19 @@ Run with:
 
 import io
 import os
+import sys
 import time
 import struct
 import wave
 import pytest
 import requests
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load backend/.env so tests pick up GROQ_API_KEYS without hardcoding
+sys.path.insert(0, str(Path(__file__).parent.parent))
+_env_path = Path(__file__).parent.parent / ".env"
+load_dotenv(dotenv_path=_env_path, override=False)
 
 # Production backend URL
 PROD_URL = "https://si-833f8dc5b3744730a6d03e74c2be9486.ecs.us-east-1.on.aws"
@@ -125,15 +133,13 @@ class TestGroqKeyManagerUnit:
     """Direct unit tests of GroqKeyManager against the local fixed code."""
 
     def test_keys_are_loaded(self):
-        """GroqKeyManager should load keys from env at runtime."""
-        # Real keys are read from the GROQ_API_KEYS environment variable.
-        # Never hardcode secrets in test files — set them as env vars or CI secrets.
+        """GroqKeyManager should load keys from backend/.env at runtime."""
         if not os.getenv("GROQ_API_KEYS") and not os.getenv("GROQ_API_KEY"):
-            pytest.skip("GROQ_API_KEYS not set in environment — skipping key count check")
+            pytest.skip("GROQ_API_KEYS not found in .env or environment")
         from app.ai.groq_manager import groq_key_manager
         count = groq_key_manager.get_total_keys()
         assert count > 0, f"No Groq keys loaded! Count={count}"
-        print(f"\n[PASS] GroqKeyManager loaded {count} key(s)")
+        print(f"\n[PASS] GroqKeyManager loaded {count} key(s) from .env")
 
     def test_single_auth_failure_does_not_kill_key(self):
         """Core bug fix: a single AuthenticationError must NOT remove the key."""
