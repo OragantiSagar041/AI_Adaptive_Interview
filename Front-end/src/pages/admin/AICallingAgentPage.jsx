@@ -336,10 +336,14 @@ function CyanToggleSwitch({ checked, onChange, label = "" }) {
   return (
     <div className="flex items-center gap-2.5 select-none cursor-pointer" onClick={() => onChange(!checked)}>
       {label && <span className={`text-xs font-bold ${checked ? "text-slate-800 dark:text-slate-100" : "text-slate-400"}`}>{label}</span>}
-      <div className={`w-9 h-4.5 rounded-full p-0.5 transition-colors flex items-center ${
-        checked ? "bg-indigo-600 justify-end" : "bg-slate-300 justify-start"
+      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+        checked ? "bg-emerald-500/20 text-emerald-500 border-emerald-500/40" : "bg-slate-700/50 text-slate-400 border-slate-600"
       }`}>
-        <div className="w-3.5 h-3.5 bg-white dark:bg-slate-800/60 rounded-full shadow-md" />
+        {checked ? "ON" : "OFF"}
+      </span>
+      <div className={`w-9 h-4.5 rounded-full p-0.5 transition-colors flex items-center border ${checked ? "bg-indigo-600 border-indigo-500 justify-end" : "bg-slate-600 border-slate-500 justify-start"
+        }`}>
+        <div className="w-3.5 h-3.5 bg-white rounded-full shadow-md" />
       </div>
     </div>
   )
@@ -449,7 +453,7 @@ function CallConfigTab({ config, loading, omniApiKey, onRefresh }) {
   if (loading) return <SectionLoader />
 
   return (
-    <form onSubmit={handleSaveConfig} className="space-y-5 max-w-5xl mx-auto text-slate-800 dark:text-slate-100">
+    <form onSubmit={handleSaveConfig} className="space-y-5 w-full text-slate-800 dark:text-slate-100">
       {/* Alert Messages */}
       {saveSuccess && (
         <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 text-xs font-semibold flex items-center justify-between animate-in fade-in">
@@ -1170,7 +1174,7 @@ function PostCallTab({ configs, loading, onRefresh }) {
   ]
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto text-slate-800 dark:text-slate-100">
+    <div className="space-y-6 w-full text-slate-800 dark:text-slate-100">
       {saveSuccess && (
         <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 text-sm font-semibold flex items-center justify-between animate-in fade-in">
           <span>{saveSuccess}</span>
@@ -1419,7 +1423,7 @@ function RecentCallsTab({ calls, loading, onViewDetails }) {
   if (loading) return <SectionLoader />
   if (!calls || calls.length === 0) {
     return (
-      <div className="max-w-[1200px] mx-auto">
+      <div className="w-full">
         <div className="flex flex-col items-center justify-center bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-3xl h-[400px] gap-5 text-slate-400 shadow-sm">
           <div className="p-4 bg-indigo-50 rounded-full border border-indigo-100 text-indigo-400">
             <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1486,7 +1490,7 @@ function RecentCallsTab({ calls, loading, onViewDetails }) {
   });
 
   return (
-    <div className="max-w-[1200px] mx-auto min-h-[500px]">
+    <div className="w-full min-h-[500px]">
       {/* Filter Bar */}
       <div className="flex items-center gap-3 mb-6 bg-white dark:bg-slate-800/60 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex-wrap">
         <span className="text-slate-800 dark:text-slate-100 font-extrabold mr-2 ml-2">Recent Calls ({displayCalls.length})</span>
@@ -1638,7 +1642,7 @@ function ApprovalCallsTab({ calls, loading, onViewDetails, onDecision, actionLoa
   })
 
   return (
-    <div className="max-w-[1200px] mx-auto min-h-[500px]">
+    <div className="w-full min-h-[500px]">
       <div className="flex flex-col gap-4 mb-6">
         <div className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
           <div>
@@ -2447,7 +2451,7 @@ export default function AICallingAgentPage() {
   ]
 
   return (
-    <div className="w-full max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8 pb-24 relative">
+    <div className="w-full p-4 sm:p-6 lg:p-8 pb-24 relative">
       {/* Header */}
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
@@ -2614,7 +2618,7 @@ export default function AICallingAgentPage() {
                 />
               )}
               {activeTab === 'dialer' && (
-                <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-6">
+                <div className="p-4 sm:p-6 w-full space-y-6">
                   {/* Header & Mode Selector */}
                   <div className="bg-white dark:bg-slate-800/60 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>

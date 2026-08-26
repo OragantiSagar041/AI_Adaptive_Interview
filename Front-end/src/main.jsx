@@ -9,7 +9,7 @@ import App from './App.jsx'
 import axios from 'axios'
 import { logout } from './store/slices/authSlice'
 import Swal from 'sweetalert2'
-
+     
 // Configure Monaco Editor loader to use high-availability CDN with worker support
 loader.config({
   paths: {

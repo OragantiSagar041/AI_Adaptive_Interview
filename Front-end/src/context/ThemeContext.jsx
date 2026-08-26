@@ -3,15 +3,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react'
 const ThemeContext = createContext()
 
 export function ThemeProvider({ children }) {
-  const [theme, setThemeState] = useState(() => {
-    try {
-      const saved = localStorage.getItem('uiTheme')
-      if (saved === 'dark' || saved === 'light') return saved
-    } catch (e) {
-      console.error(e)
-    }
-    return 'light'
-  })
+  const [theme, setThemeState] = useState('light')
 
   useEffect(() => {
     const root = document.documentElement

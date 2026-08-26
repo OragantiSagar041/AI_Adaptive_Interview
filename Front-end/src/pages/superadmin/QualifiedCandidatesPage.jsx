@@ -160,7 +160,7 @@ export default function QualifiedCandidatesPage() {
               key={s.label}
               className="rounded-2xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-800/60 p-5 shadow-sm hover:shadow-md transition-shadow flex flex-col items-start"
             >
-              <div className={cn("inline-flex h-10 w-10 items-center justify-center rounded-xl mb-3", s.colorClass)}>
+              <div className={cn("inline-flex h-10 w-10 items-center justify-center rounded-[0.75rem] mb-3", s.colorClass)}>
                 <s.icon className="h-5 w-5" />
               </div>
               <div className="text-2xl font-black text-slate-900 dark:text-white tabular-nums">{s.value}</div>
@@ -264,7 +264,6 @@ export default function QualifiedCandidatesPage() {
                   <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Job Applied</th>
                   <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">AI Score</th>
                   <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Skills Match</th>
-                  <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Interview</th>
                   <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Assigned Recruiter</th>
                   <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Interview Date & Time</th>
                   <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Status</th>
@@ -300,12 +299,6 @@ export default function QualifiedCandidatesPage() {
                       <td className="px-5 py-4 text-sm font-bold text-slate-700 dark:text-slate-200 tabular-nums">{scoreNum.toFixed(0)}%</td>
                       <td className="px-5 py-4 text-sm font-medium text-slate-500 dark:text-slate-400">
                         {c.ats_score != null ? `${c.ats_score}%` : (c.skills_match || '--')}
-                      </td>
-                      <td className="px-5 py-4">
-                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400">
-                          <span className={cn("h-1.5 w-1.5 rounded-full", c.decision === 'selected' ? "bg-emerald-500" : "bg-amber-500")} />
-                          {c.interview_status || "Completed"}
-                        </span>
                       </td>
                       <td className="px-5 py-4 text-sm font-medium text-slate-500 dark:text-slate-400">{adminName}</td>
                       <td className="px-5 py-4 text-sm font-medium text-slate-500 dark:text-slate-400">

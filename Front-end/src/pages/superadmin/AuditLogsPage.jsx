@@ -44,7 +44,7 @@ export default function AuditLogsPage() {
 
   return (
     <div
-      className="p-8 max-w-7xl mx-auto space-y-8"
+      className="p-6 md:p-8 w-full space-y-8"
     >
       <div className="flex justify-between items-center">
         <div>

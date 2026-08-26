@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
-import { Users, Star, Phone, ClipboardCheck, Target, FileSignature, Search, Filter, Eye, Download, Sparkles } from 'lucide-react'
+import { Users, Star, Phone, UserCheck, ClipboardCheck, Target, FileSignature, Search, Filter, Eye, Download, Sparkles } from 'lucide-react'
 import axios from 'axios'
 import { formatShortDate, formatScore } from '../../utils/adminFormatters'
 import { loadAdminQualifiedCandidates, handleExportExcel } from '../../store/slices/candidatesSlice'
@@ -53,16 +53,16 @@ export default function QualifiedCandidatesPage() {
   const adminUser = useSelector(state => state.auth.adminUser)
 
   const candidates = useSelector(state => state.candidates.candidates) || []
-    const reqStatus = useSelector(state => state.candidates.status)
+  const reqStatus = useSelector(state => state.candidates.status)
   const reqError = useSelector(state => state.candidates.error)
 
-    const [pipelineFilter, setPipelineFilter] = useState('all')
+  const [pipelineFilter, setPipelineFilter] = useState('all')
 
   const [search, setSearch] = useState("")
   const [jobFilter, setJobFilter] = useState("all")
   const [dateFilter, setDateFilter] = useState("")
 
-  
+
 
   useEffect(() => {
     dispatch(loadAdminQualifiedCandidates({ pipeline: pipelineFilter }))
@@ -144,7 +144,7 @@ export default function QualifiedCandidatesPage() {
               key={s.label}
               className="rounded-2xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-800/60 p-5 shadow-sm hover:shadow-md transition-shadow flex flex-col items-start"
             >
-              <div className={cn("inline-flex h-10 w-10 items-center justify-center rounded-xl mb-3", s.colorClass)}>
+              <div className={cn("inline-flex h-10 w-10 items-center justify-center rounded-[0.75rem] mb-3", s.colorClass)}>
                 <s.icon className="h-5 w-5" />
               </div>
               <div className="text-2xl font-black text-slate-900 dark:text-white tabular-nums">{s.value}</div>
@@ -181,7 +181,7 @@ export default function QualifiedCandidatesPage() {
               </select>
             </div>
 
-            
+
 
             <div className="relative">
               <select
@@ -235,8 +235,6 @@ export default function QualifiedCandidatesPage() {
                   <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Job Applied</th>
                   <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">AI Score</th>
                   <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Skills Match</th>
-                  <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Interview</th>
-                  
                   <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Interview Date & Time</th>
                   <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Status</th>
                   <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider text-right">Actions</th>
@@ -264,13 +262,6 @@ export default function QualifiedCandidatesPage() {
                       <td className="px-5 py-4 text-sm font-medium text-slate-500 dark:text-slate-400">
                         {c.ats_score != null ? `${c.ats_score}%` : (c.skills_match || '--')}
                       </td>
-                      <td className="px-5 py-4">
-                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400">
-                          <span className={cn("h-1.5 w-1.5 rounded-full", c.decision === 'selected' ? "bg-emerald-500" : "bg-amber-500")} />
-                          {c.interview_status || "Completed"}
-                        </span>
-                      </td>
-                      
                       <td className="px-5 py-4 text-sm font-medium text-slate-500 dark:text-slate-400">
                         {c.created_at ? (
                           <div className="flex flex-col">
@@ -311,10 +302,10 @@ export default function QualifiedCandidatesPage() {
         </section>
       </main>
 
-      <CandidateDialog 
-        candidate={selectedCandidate} 
-        open={!!selectedCandidate} 
-        onOpenChange={(v) => !v && setSelectedCandidate(null)} 
+      <CandidateDialog
+        candidate={selectedCandidate}
+        open={!!selectedCandidate}
+        onOpenChange={(v) => !v && setSelectedCandidate(null)}
       />
     </div>
   )

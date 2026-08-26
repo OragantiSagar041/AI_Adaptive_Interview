@@ -720,11 +720,16 @@ export default function SuperDashboardPage() {
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Funnel */}
-        <Card className="lg:col-span-2 bg-white dark:bg-slate-800/60 text-slate-900 dark:text-white border-slate-200 dark:border-slate-700 shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">AI Recruitment Funnel</CardTitle>
-            <CardDescription>Stage-by-stage conversion tracking.</CardDescription>
+        {/* Candidate Recruitment Pipeline */}
+        <Card className="lg:col-span-2 bg-card border border-border dark:border-slate-700/80 shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base font-bold">Candidate Recruitment Pipeline</CardTitle>
+                <CardDescription className="text-xs text-muted-foreground mt-0.5">Stage-by-stage conversion tracking across candidate pipeline.</CardDescription>
+              </div>
+              <Badge variant="outline" className="text-xs font-semibold">Live Conversion</Badge>
+            </div>
           </CardHeader>
           <div className="px-6 pb-6">
             <div className="h-[320px]">

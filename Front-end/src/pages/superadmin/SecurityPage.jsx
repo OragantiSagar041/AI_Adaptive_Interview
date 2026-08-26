@@ -4,9 +4,34 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recha
 import { ShieldCheck, ShieldAlert, Key, Users, AlertTriangle, X } from 'lucide-react';
 
 const ToggleSwitch = ({ checked, onChange }) => (
-  <div onClick={onChange} className={`w-11 h-6 rounded-full flex items-center p-1 cursor-pointer transition-colors ${checked ? 'bg-indigo-600' : 'bg-slate-300'}`}>
-    <div className={`bg-white dark:bg-slate-800/60 w-4 h-4 rounded-full shadow-md transform transition-transform ${checked ? 'translate-x-5' : 'translate-x-0'}`}></div>
-  </div>
+  <button
+    type="button"
+    role="switch"
+    aria-checked={checked}
+    onClick={onChange}
+    style={{
+      backgroundColor: checked ? '#4f46e5' : '#334155',
+      border: checked ? '2px solid #818cf8' : '2px solid #64748b',
+      boxShadow: checked ? '0 0 10px rgba(99, 102, 241, 0.5)' : 'inset 0 1px 2px rgba(0,0,0,0.3)',
+    }}
+    className="w-12 h-6.5 rounded-full flex items-center p-0.5 cursor-pointer transition-all duration-300 shrink-0"
+  >
+    <div
+      style={{
+        backgroundColor: '#ffffff',
+        transform: checked ? 'translateX(20px)' : 'translateX(0px)',
+        boxShadow: '0 2px 5px rgba(0,0,0,0.4)',
+      }}
+      className="w-5 h-5 rounded-full transition-transform duration-300 flex items-center justify-center"
+    >
+      <span
+        style={{
+          backgroundColor: checked ? '#4f46e5' : '#94a3b8',
+        }}
+        className="w-1.5 h-1.5 rounded-full"
+      />
+    </div>
+  </button>
 );
 import api, { dedupedGet } from '../../lib/api';
 import { API_BASE_URL } from '../../apiConfig';
@@ -101,7 +126,7 @@ export default function SecurityPage() {
 
   return (
     <div
-      className="p-8 max-w-7xl mx-auto space-y-8"
+      className="p-6 md:p-8 w-full space-y-8"
     >
       <div className="flex justify-between items-center">
         <div>
@@ -318,7 +343,8 @@ export default function SecurityPage() {
               </span>
               <button 
                 onClick={() => setIsModalOpen(false)}
-                className="px-6 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-medium transition-colors shadow-sm hover:shadow-md"
+                style={{ backgroundColor: '#1e293b', color: '#ffffff', border: '1.5px solid #818cf8' }}
+                className="px-6 py-2 hover:bg-slate-900 rounded-xl font-bold transition-all shadow-md ring-1 ring-indigo-400/50 cursor-pointer"
               >
                 Close Settings
               </button>
