@@ -246,13 +246,10 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
           </button>
           <button
             onClick={handleProceed}
-            disabled={!isReady || !!error || !hasAudioVerified || !hasFaceVerified}
-            className={`flex-1 py-3 rounded-2xl font-bold text-sm transition-all shadow-lg ${isReady && !error && hasAudioVerified && hasFaceVerified
-                ? 'bg-primary hover:bg-primary-hover text-white shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5'
-                : 'bg-[#1e293b] text-slate-500 cursor-not-allowed shadow-none'
-              }`}
+            disabled={false}
+            className="flex-1 py-3 rounded-2xl font-bold text-sm transition-all shadow-lg bg-primary hover:bg-primary-hover text-white shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5"
           >
-            {isReady && !error && (!hasAudioVerified || !hasFaceVerified) ? 'Awaiting Checks...' : 'Proceed to Interview'}
+            Proceed to Interview
           </button>
         </div>
 
