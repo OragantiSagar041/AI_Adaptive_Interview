@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
-import { Users, Star, Phone, ClipboardCheck, Target, FileSignature, Search, Filter, Eye, Download, Sparkles } from 'lucide-react'
+import { Users, Star, Phone, UserCheck, ClipboardCheck, Target, FileSignature, Search, Filter, Eye, Download, Sparkles } from 'lucide-react'
 import axios from 'axios'
 import { formatShortDate, formatScore } from '../../utils/adminFormatters'
 import { loadAdminQualifiedCandidates, handleExportExcel } from '../../store/slices/candidatesSlice'
@@ -53,16 +53,16 @@ export default function QualifiedCandidatesPage() {
   const adminUser = useSelector(state => state.auth.adminUser)
 
   const candidates = useSelector(state => state.candidates.candidates) || []
-    const reqStatus = useSelector(state => state.candidates.status)
+  const reqStatus = useSelector(state => state.candidates.status)
   const reqError = useSelector(state => state.candidates.error)
 
-    const [pipelineFilter, setPipelineFilter] = useState('all')
+  const [pipelineFilter, setPipelineFilter] = useState('all')
 
   const [search, setSearch] = useState("")
   const [jobFilter, setJobFilter] = useState("all")
   const [dateFilter, setDateFilter] = useState("")
 
-  
+
 
   useEffect(() => {
     dispatch(loadAdminQualifiedCandidates({ pipeline: pipelineFilter }))
@@ -119,8 +119,8 @@ export default function QualifiedCandidatesPage() {
   ]
 
   return (
-    <div className="min-h-[calc(100vh-64px)] bg-slate-50 dark:bg-slate-900/50">
-      <main className="w-full px-4 sm:px-6 py-8 space-y-8">
+    <div className="min-h-[calc(100vh-64px)]">
+      <main className="mx-auto max-w-7xl px-4 sm:px-6 py-8 space-y-8">
         {/* Header Section */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -144,7 +144,7 @@ export default function QualifiedCandidatesPage() {
               key={s.label}
               className="rounded-2xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-800/60 p-5 shadow-sm hover:shadow-md transition-shadow flex flex-col items-start"
             >
-              <div className={cn("inline-flex h-10 w-10 items-center justify-center rounded-xl mb-3", s.colorClass)}>
+              <div className={cn("inline-flex h-10 w-10 items-center justify-center rounded-[0.75rem] mb-3", s.colorClass)}>
                 <s.icon className="h-5 w-5" />
               </div>
               <div className="text-2xl font-black text-slate-900 dark:text-white tabular-nums">{s.value}</div>
@@ -181,7 +181,7 @@ export default function QualifiedCandidatesPage() {
               </select>
             </div>
 
-            
+
 
             <div className="relative">
               <select
@@ -302,10 +302,10 @@ export default function QualifiedCandidatesPage() {
         </section>
       </main>
 
-      <CandidateDialog 
-        candidate={selectedCandidate} 
-        open={!!selectedCandidate} 
-        onOpenChange={(v) => !v && setSelectedCandidate(null)} 
+      <CandidateDialog
+        candidate={selectedCandidate}
+        open={!!selectedCandidate}
+        onOpenChange={(v) => !v && setSelectedCandidate(null)}
       />
     </div>
   )

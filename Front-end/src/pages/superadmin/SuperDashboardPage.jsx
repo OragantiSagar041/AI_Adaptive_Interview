@@ -732,90 +732,32 @@ export default function SuperDashboardPage() {
             </div>
           </CardHeader>
           <div className="px-6 pb-6">
-            {maxFunnelValue > 0 ? (
-              <div className="space-y-4">
-                {/* 4-Column Centered Stage Cards */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {funnelData.map((item, idx) => {
-                    const firstVal = Number(funnelData[0]?.value) || 1;
-                    const stageVal = Number(item.value) || 0;
-                    const pct = firstVal > 0 ? ((stageVal / firstVal) * 100).toFixed(1) : 0;
-                    const colors = [
-                      "from-indigo-500 to-indigo-600 border-indigo-400/30 text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 dark:bg-indigo-500/20",
-                      "from-amber-500 to-amber-600 border-amber-400/30 text-amber-600 dark:text-amber-400 bg-amber-500/10 dark:bg-amber-500/20",
-                      "from-emerald-500 to-emerald-600 border-emerald-400/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/20",
-                      "from-teal-500 to-teal-600 border-teal-400/30 text-teal-600 dark:text-teal-400 bg-teal-500/10 dark:bg-teal-500/20"
-                    ];
-                    const colorStyle = colors[idx % colors.length];
-
-                    return (
-                      <div
-                        key={item.name}
-                        className="flex flex-col items-center justify-between text-center p-3.5 rounded-xl border border-border dark:border-slate-700/80 bg-background/60 hover:bg-muted/40 transition-all"
-                      >
-                        <span className={`text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full border ${colorStyle}`}>
-                          STAGE {idx + 1}
-                        </span>
-                        <div className="my-2">
-                          <div className="text-2xl font-black text-foreground tracking-tight">
-                            {formatNum(stageVal)}
-                          </div>
-                          <div className="text-xs font-bold text-slate-800 dark:text-slate-100 mt-1 text-center line-clamp-2 leading-tight min-h-[32px] flex items-center justify-center px-1">
-                            {item.name}
-                          </div>
-                        </div>
-                        <div className="w-full">
-                          <div className="flex items-center justify-between text-[10px] text-muted-foreground font-semibold mb-1 px-0.5">
-                            <span>Conversion</span>
-                            <span>{pct}%</span>
-                          </div>
-                          <div className="w-full bg-secondary h-1.5 rounded-full overflow-hidden">
-                            <div
-                              className="bg-indigo-600 dark:bg-indigo-400 h-full rounded-full transition-all duration-500"
-                              style={{ width: `${Math.min(Number(pct), 100)}%` }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Visual Left-to-Right Pipeline Progress Bars */}
-                <div className="space-y-2 pt-2">
-                  {funnelData.map((item, idx) => {
-                    const firstVal = Number(funnelData[0]?.value) || 1;
-                    const stageVal = Number(item.value) || 0;
-                    const ratio = Math.max((stageVal / firstVal) * 100, 25);
-                    const barGradients = [
-                      "from-indigo-600 to-indigo-500",
-                      "from-blue-600 to-sky-500",
-                      "from-emerald-600 to-teal-500",
-                      "from-violet-600 to-purple-500"
-                    ];
-
-                    return (
-                      <div key={`bar-${item.name}`} className="flex items-center justify-start w-full">
-                        <div
-                          className={`h-10 rounded-xl bg-gradient-to-r ${barGradients[idx % barGradients.length]} text-white flex items-center justify-between px-4 text-xs font-bold shadow-xs transition-all duration-500 min-w-[260px]`}
-                          style={{ width: `${ratio}%` }}
-                        >
-                          <span className="whitespace-nowrap mr-3 text-xs font-extrabold text-white">{item.name}</span>
-                          <span className="font-extrabold shrink-0 bg-black/25 text-white px-2.5 py-0.5 rounded-lg text-xs">
-                            {formatNum(stageVal)}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-12 text-slate-400">
-                <div className="text-3xl mb-2">📊</div>
-                <div className="text-sm font-medium">No candidate data yet</div>
-              </div>
-            )}
+            <div className="h-[320px]">
+              <ResponsiveContainer width="100%" height="100%">
+                {maxFunnelValue > 0 ? (
+                  <FunnelChart>
+                    <RTooltip
+                      formatter={(v) => formatNum(v)}
+                      contentStyle={{
+                        background: "#ffffff",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: 8,
+                        fontSize: 12
+                      }}
+                    />
+                    <Funnel dataKey="value" data={funnelData} isAnimationActive>
+                      <LabelList position="right" fill="var(--foreground)" stroke="none" dataKey="name" fontSize={12} />
+                      <LabelList position="center" fill="#fff" stroke="none" dataKey="value" fontSize={12} formatter={(v) => formatNum(v)} />
+                    </Funnel>
+                  </FunnelChart>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-slate-400">
+                    <div className="text-3xl mb-2">📊</div>
+                    <div className="text-sm font-medium">No candidate data yet</div>
+                  </div>
+                )}
+              </ResponsiveContainer>
+            </div>
           </div>
         </Card>
 

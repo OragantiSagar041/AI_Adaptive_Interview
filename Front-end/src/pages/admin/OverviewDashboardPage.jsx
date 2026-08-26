@@ -377,7 +377,7 @@ export default function OverviewDashboardPage() {
                     )}
                   </div>
                   <div
-                    className={`grid h-10 w-10 place-items-center rounded-lg ${tintClasses[k.tint]}`}
+                    className={`grid h-10 w-10 place-items-center rounded-[0.5rem] ${tintClasses[k.tint]}`}
                   >
                     <Icon className="h-5 w-5" />
                   </div>
@@ -403,8 +403,8 @@ export default function OverviewDashboardPage() {
             {pipeline.map((p, i) => (
               <div key={p.stage} className="relative">
                 <div
-                  className="rounded-xl p-3.5 text-white text-center shadow-xs flex flex-col items-center justify-between min-h-[110px]"
-                  style={{ background: p.color }}
+                  className="p-3.5 text-white text-center shadow-xs flex flex-col items-center justify-between min-h-[110px]"
+                  style={{ background: p.color, borderRadius: '0.75rem' }}
                 >
                   <div className="text-[10px] font-extrabold uppercase tracking-wider opacity-90 bg-black/20 px-2 py-0.5 rounded-full inline-block">
                     Stage {i + 1}

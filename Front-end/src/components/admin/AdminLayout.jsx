@@ -492,7 +492,6 @@ export default function AdminLayout({
             </div>
           </header>
 
-          
           {/* Horizontal Navbar (Navbar Layout) */}
           {layoutConfig?.layout_type === "navbar" && (
             <div

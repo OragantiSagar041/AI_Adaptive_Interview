@@ -23,7 +23,7 @@ function StatCard({ icon: Icon, label, value, accent }) {
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{label}</p>
           <p className="mt-2 text-2xl font-black text-foreground tracking-tight">{value}</p>
         </div>
-        <div className={`rounded-xl p-2.5 ${accent}`}>
+        <div className={`rounded-[0.75rem] p-2.5 ${accent}`}>
           <Icon className="h-5 w-5" strokeWidth={2.5} />
         </div>
       </div>
@@ -249,7 +249,7 @@ export default function RejectedCandidatesPage() {
                   <tr key={c.id || c.link_id || c.email} onClick={() => setSelectedCandidate(c)} className="hover:bg-rose-50/30 transition-colors group whitespace-nowrap cursor-pointer">
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 font-bold shrink-0 shadow-sm border border-slate-200 dark:border-slate-700/50">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-[0.75rem] bg-slate-100 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 font-bold shrink-0 shadow-sm border border-slate-200 dark:border-slate-700/50">
                           {(c.candidate_name || "U")[0].toUpperCase()}
                         </div>
                         <div>

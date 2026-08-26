@@ -690,11 +690,11 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                     </div>
                   </section>
 
-                  <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
-                    <h3 className="text-sm font-black text-slate-800 mb-3 flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-indigo-600" /> AI Recommendation
+                  <section className="bg-card rounded-xl border border-border p-5 shadow-sm">
+                    <h3 className="text-sm font-black text-foreground mb-3 flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-indigo-500" /> AI Recommendation
                     </h3>
-                    <div className="rounded-xl border border-slate-100 bg-gradient-to-br from-indigo-50/40 to-white p-4">
+                    <div className="rounded-xl border border-border bg-secondary p-4">
                       <div className="flex items-center gap-2 mb-3">
                         <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${isQualified ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
                           {c.overall_recommendation || (isQualified ? 'Hire' : 'Reject')}
@@ -1015,7 +1015,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                     }
 
                     return (
-                      <div className="bg-gradient-to-r from-indigo-50/60 via-white to-blue-50/40 rounded-xl border border-indigo-100/80 p-4 shadow-sm flex items-center justify-between gap-4">
+                      <div className="bg-secondary rounded-xl border border-border p-4 shadow-sm flex items-center justify-between gap-4">
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-lg bg-indigo-600/10 text-indigo-600 flex items-center justify-center font-bold">
                             <Mic size={18} />
