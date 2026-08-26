@@ -29,6 +29,11 @@ jobs:
   test-backend:
     name: Test FastAPI backend
     runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
     steps:
       - name: Checkout backend source
         uses: actions/checkout@v4
@@ -37,7 +42,7 @@ jobs:
         run: docker build --file backend/Dockerfile --tag fastapi-backend-ci:${{ github.sha }} backend
 
       - name: Start backend test container
-        run: docker run --detach --name fastapi-backend-ci --publish 8000:8000 fastapi-backend-ci:${{ github.sha }}
+        run: docker run --detach --name fastapi-backend-ci --publish 8000:8000 --network host fastapi-backend-ci:${{ github.sha }}
 
       - name: Wait for FastAPI health endpoint
         shell: bash
