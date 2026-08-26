@@ -177,11 +177,7 @@ export default function VoiceInterviewPage() {
     ? _savedRound
     : 'pre_checks'
 
-  // Enforce Light Theme for Voice Interview
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', 'light')
-    document.documentElement.classList.remove('dark')
-  }, [])
+
 
   // Session
   const [loading, setLoading] = useState(true)
@@ -315,6 +311,7 @@ export default function VoiceInterviewPage() {
   const languageRef = useRef('English')
   const currentAudioRef = useRef(null)    // ← tracks active TTS audio so stopAudio() can kill it
   const isTransitioningRef = useRef(false)
+  const isTTSPlayingRef = useRef(false)
   const transitionToNextRoundRef = useRef(null)
 
   // ── Browser online/offline detection ────────────────────────────
@@ -396,7 +393,8 @@ export default function VoiceInterviewPage() {
 
     function connectWs() {
       if (!monitoringToken) return
-      const wsBase = API_BASE_URL.replace(/^http/, 'ws')
+      const base = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL
+      const wsBase = base.replace(/^http/, 'ws')
       const wsUrl = `${wsBase}/ws/interview/${linkId}?token=${encodeURIComponent(monitoringToken)}`
       const ws = new WebSocket(wsUrl)
 
@@ -715,6 +713,7 @@ export default function VoiceInterviewPage() {
 
         const qs = normalizeInterviewQuestions(sd)
           .filter(q => q.type !== 'coding' && q.type !== 'case_study') // verbal only
+          .slice(0, 22)
 
         if (!qs.length) throw new Error('No questions found for this session.')
         setQuestions(qs)
@@ -741,6 +740,7 @@ export default function VoiceInterviewPage() {
 
   // ── TTS with female voice ──────────────────────────────────────────────────
   const stopAudio = useCallback(() => {
+    isTTSPlayingRef.current = false
     if (activeAudioRef.current) {
       activeAudioRef.current.onended = null
       activeAudioRef.current.onerror = null
@@ -758,6 +758,7 @@ export default function VoiceInterviewPage() {
   }, [])
   const speak = useCallback(async (text, onEnd) => {
     stopAudio()  // cancel any previous audio first
+    isTTSPlayingRef.current = true
     try {
       setAiStatus('speaking')
       const res = await candidateFetch(`${API_BASE_URL}/tts`, {
@@ -779,6 +780,7 @@ export default function VoiceInterviewPage() {
       const audio = new Audio(url)
       activeAudioRef.current = audio
       audio.onended = () => {
+        isTTSPlayingRef.current = false
         currentAudioRef.current = null
         setAiStatus('listening')
         URL.revokeObjectURL(url)
@@ -786,17 +788,20 @@ export default function VoiceInterviewPage() {
         onEnd?.()
       }
       audio.onerror = () => {
+        isTTSPlayingRef.current = false
         currentAudioRef.current = null
         setAiStatus('idle')
         activeAudioRef.current = null
         onEnd?.()
       }
       audio.play().catch(() => {
+        isTTSPlayingRef.current = false
         currentAudioRef.current = null
         setAiStatus('idle')
         onEnd?.()
       })
     } catch (e) {
+      isTTSPlayingRef.current = false
       setAiStatus('idle')
       onEnd?.()
     }
@@ -1180,6 +1185,7 @@ export default function VoiceInterviewPage() {
 
   // Send /stt request with HTTP 429 exponential backoff retry
   const sendSttRequestWithRetry = useCallback(async (seq, validAudioBlob, langCode, retriesLeft = 1, backoffMs = 800) => {
+    if (isTTSPlayingRef.current) return '' // Hard gate: ignore audio chunks captured while TTS is reading a question
     const fd = new FormData()
     const extension = validAudioBlob.type.includes('ogg')
       ? 'ogg'
@@ -1187,6 +1193,30 @@ export default function VoiceInterviewPage() {
         ? 'mp4'
         : 'webm'
     fd.append('file', validAudioBlob, `utterance_${seq}.${extension}`)
+    if (sessionDetailRef.current?.candidate_name) {
+      fd.append('candidate_name', sessionDetailRef.current.candidate_name)
+    }
+    fd.append('language', languageRef.current || 'English')
+    const webSpeechFallback = (accumulatedTranscriptRef.current || interimTextRef.current || '').trim()
+    if (webSpeechFallback) {
+      fd.append('fallback_text', webSpeechFallback)
+    }
+
+    // Append known_terms (skills, role, company name) to steer Whisper vocabulary
+    const rawTerms = [
+      sessionDetailRef.current?.company_name,
+      sessionDetailRef.current?.company,
+      sessionDetailRef.current?.role,
+      sessionDetailRef.current?.job_role,
+      sessionDetailRef.current?.interview_title,
+      ...(Array.isArray(sessionDetailRef.current?.skills) ? sessionDetailRef.current.skills : (sessionDetailRef.current?.skills ? sessionDetailRef.current.skills.split(',') : [])),
+      ...(Array.isArray(sessionDetailRef.current?.known_terms) ? sessionDetailRef.current.known_terms : [])
+    ].filter(Boolean).map(s => String(s).trim()).filter(s => s.length > 1)
+    const cleanKnownTerms = Array.from(new Set(rawTerms)).join(', ')
+    if (cleanKnownTerms) {
+      fd.append('known_terms', cleanKnownTerms)
+    }
+
     const t0 = performance.now()
 
     try {
@@ -1416,6 +1446,7 @@ export default function VoiceInterviewPage() {
   }, [getAuthoritativeTranscript])
 
   const startListening = useCallback(async (onFinish, preserveTranscript = false) => {
+    if (isListeningRef.current && !preserveTranscript) return // Prevent duplicate STT listeners
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
     clearInterval(whisperFlushTimerRef.current)
     whisperFlushTimerRef.current = null
@@ -1596,28 +1627,28 @@ export default function VoiceInterviewPage() {
             }
           }
         }
-        mr.start(1000)
+        mr.start(3000)
         whisperFlushTimerRef.current = setInterval(() => {
           if (whisperRecorderRef.current && whisperRecorderRef.current.state === 'recording') {
             try {
               whisperRecorderRef.current.stop()
             } catch (_) { }
           }
-        }, 12000)
+        }, 3000)
       } catch (err) {
         console.warn('Failed to start Whisper chunk recorder:', err)
         resolveWhisperStopRef.current?.()
       }
     }
 
-    // Grace period: if nothing heard initially, wait 20-30s before auto-submit
+    // Grace period: if nothing heard initially, wait 15-20s before auto-submit
     if (!preserveTranscript) {
       clearTimeout(silenceTimerRef.current)
       silenceTimerRef.current = setTimeout(() => {
         if (isListeningRef.current) {
           finishListening().then(fullAns => onFinish?.(fullAns))
         }
-      }, rec ? 20000 : 30000)
+      }, rec ? 15000 : 20000)
     }
 
     const mergeTranscripts = (accumulated, sessionFinal, sessionInterim) => {
@@ -1684,7 +1715,7 @@ export default function VoiceInterviewPage() {
     }
 
     if (rec) rec.onresult = ev => {
-      if (!isListeningRef.current) return
+      if (!isListeningRef.current || isTTSPlayingRef.current) return
       let finalStr = '', interimStr = ''
       for (let i = 0; i < ev.results.length; i++) {
         if (ev.results[i].isFinal) {
@@ -1720,14 +1751,14 @@ export default function VoiceInterviewPage() {
       // Always update the interim ghost text for live feedback
       setInterimText(formattedInterim || '')
 
-      // Reset silence timer whenever speech is heard (8s of silence before auto-advance)
+      // Reset silence timer whenever speech is heard (3s of silence before auto-advance)
       hasSpokenThisSessionRef.current = true
       clearTimeout(silenceTimerRef.current)
       silenceTimerRef.current = setTimeout(() => {
         if (isListeningRef.current) {
           finishListening().then(fullAns => onFinish?.(fullAns))
         }
-      }, 8000)
+      }, 3000)
 
       clearTimeout(webSpeechWatchdogRef.current)
       // Chrome's continuous-recognition timer is approximately 60 seconds —
@@ -1913,7 +1944,7 @@ export default function VoiceInterviewPage() {
         fupCount > 0
       )
 
-      if (askedFollowUpsCountRef.current < 5 && !isCurrentFollowUp && answer.trim()) {
+      if (qs.length < 22 && askedFollowUpsCountRef.current < 5 && !isCurrentFollowUp && answer.trim()) {
         setAiStatus('thinking')
         try {
           const res = await candidateFetch(`${API_BASE_URL}/generate-next-question`, {
@@ -1952,11 +1983,12 @@ export default function VoiceInterviewPage() {
                 category: data.category || 'Deep Dive'
               }
 
-              // Insert it at qIdx + 1
+              // Insert it at qIdx + 1 and cap total questions to exactly 22
               const updatedQs = [...qs]
               updatedQs.splice(qIdx + 1, 0, newQ)
-              setQuestions(updatedQs)
-              questionsRef.current = updatedQs
+              const cappedQs = updatedQs.slice(0, 22)
+              setQuestions(cappedQs)
+              questionsRef.current = cappedQs
               setCurrentQIdx(qIdx + 1)
 
               // Set AI to speaking and say the question
@@ -2008,7 +2040,7 @@ export default function VoiceInterviewPage() {
         if (prefetchedQuestionsRef.current.length > 0) {
           const batch = prefetchedQuestionsRef.current
           prefetchedQuestionsRef.current = []
-          const newQs = [...qs, ...batch]
+          const newQs = [...qs, ...batch].slice(0, 22)
           setQuestions(newQs)
           questionsRef.current = newQs
           setCurrentQIdx(nextIdx)
@@ -3210,7 +3242,7 @@ export default function VoiceInterviewPage() {
             { i: 'fa-volume-up', c: 'text-indigo-400', t: 'I speak each question aloud — listen before answering' },
             { i: 'fa-microphone', c: 'text-emerald-400', t: 'Just talk naturally — your mic captures everything' },
             { i: 'fa-comment-dots', c: 'text-violet-400', t: 'I\'ll ask follow-up questions based on your answers' },
-            { i: 'fa-arrow-right', c: 'text-amber-400', t: 'After 5 seconds of silence, the interview auto-advances' },
+            { i: 'fa-arrow-right', c: 'text-amber-400', t: 'After 3 seconds of silence, the interview auto-advances' },
           ].map((tip, idx) => (
             <div key={idx} className="flex items-center gap-3 bg-white/4 border border-white/6 rounded-xl px-5 py-3">
               <i className={`fas ${tip.i} ${tip.c} w-5 text-center`} />
@@ -3289,7 +3321,7 @@ export default function VoiceInterviewPage() {
               <i className="fas fa-exclamation-triangle text-[10px]" />{warningsCount}
             </div>
           )}
-t a          <span className="text-sm text-slate-400">Q <span className="text-white font-bold">{currentQIdx + 1}</span>/{questions.length}</span>
+          <span className="text-sm text-slate-400 font-medium">Q <span className="text-white font-bold">{currentQIdx + 1}</span>/{questions.length}</span>
         </div>
       </header>
 
@@ -3374,11 +3406,20 @@ t a          <span className="text-sm text-slate-400">Q <span className="text-wh
         <div className="w-full max-w-lg space-y-4 shrink-0 mt-6">
           <div className="flex gap-2">
             <button onClick={async () => {
+              if (isTransitioningRef.current) return
               if (aiStatus === 'listening') {
                 const fullAns = await finishListening()
+                if (!fullAns.trim()) {
+                  const t = VOICE_TRANSLATIONS[languageRef.current] || VOICE_TRANSLATIONS['English']
+                  const hint = t.csNeedMore || 'Please speak your answer before submitting, or say skip.'
+                  aiSay(hint, () => startListening(ans => handleAnswer(ans, currentQIdx, 0)))
+                  return
+                }
                 handleAnswer(fullAns, currentQIdx, 0)
+              } else {
+                stopAudio()
+                startListening(ans => handleAnswer(ans, currentQIdx, 0))
               }
-              else { startListening(ans => handleAnswer(ans, currentQIdx, 0)) }
             }} className={`flex-1 py-3.5 rounded-2xl text-sm font-bold transition-all flex items-center justify-center gap-2.5 ${aiStatus === 'listening'
               ? 'bg-rose-500/15 border border-rose-500/30 text-rose-400 shadow-[0_0_30px_rgba(239,68,68,.15)]'
               : 'bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20'

@@ -51,8 +51,11 @@ export default function ConversationalFlowPage() {
     try {
       setLoading(true);
       setError(null);
+      const configuredOmniApiKey = sessionStorage.getItem('omniDimensionApiKey') || '';
       const res = await axios.get(`${API_BASE_URL}/admin/agent-flow`, {
-        headers: {},
+        headers: {
+          ...(configuredOmniApiKey ? { 'X-Omni-Dimension-API-Key': configuredOmniApiKey } : {})
+        },
       });
       if (res.data.success && Array.isArray(res.data.flow) && res.data.flow.length > 0) {
         const normalizedFlow = res.data.flow.map((item, index) => normalizeFlowItem(item, item?.id ?? `sec-${index + 1}`));
@@ -68,23 +71,28 @@ export default function ConversationalFlowPage() {
     }
   }
 
-  const handleSave = async () => {
+  const handleSave = async (customFlow = null) => {
     try {
       setSaving(true);
       setError(null);
       setSuccess(false);
       
+      const targetFlow = Array.isArray(customFlow) ? customFlow : (Array.isArray(flowData) ? flowData : []);
+      const configuredOmniApiKey = sessionStorage.getItem('omniDimensionApiKey') || '';
       const payload = {
-        flow: flowData.map((section) => ({
+        flow: targetFlow.map((section) => ({
           title: section.context_title,
           body: section.context_body,
           context_title: section.context_title,
           context_body: section.context_body,
+          instruction: section.context_body,
           is_enabled: section.is_enabled,
         })),
       };
       const res = await axios.put(`${API_BASE_URL}/admin/agent-flow`, payload, {
-        headers: {},
+        headers: {
+          ...(configuredOmniApiKey ? { 'X-Omni-Dimension-API-Key': configuredOmniApiKey } : {})
+        },
       });
       
       if (res.data.success) {
@@ -138,9 +146,11 @@ export default function ConversationalFlowPage() {
     setDraggingId(null);
   };
 
-  const removeSection = (index) => {
+  const removeSection = async (index) => {
     const newData = flowData.filter((_, i) => i !== index);
     setFlowData(newData);
+    // Immediately sync deleted section removal to Omni Dimension & local DB
+    await handleSave(newData);
   };
 
   const addSection = () => {
@@ -158,14 +168,14 @@ export default function ConversationalFlowPage() {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin" />
-        <span className="ml-3 text-slate-500 font-semibold text-sm">Loading Conversational Flow...</span>
+        <span className="ml-3 text-slate-500 dark:text-slate-400 font-semibold text-sm">Loading Conversational Flow...</span>
       </div>
     );
   }
 
   return (
     <ErrorBoundary>
-      <div className="w-full max-w-[1200px] mx-auto py-4 px-2 sm:px-4 text-slate-800">
+      <div className="w-full max-w-[1200px] mx-auto py-4 px-2 sm:px-4 text-slate-800 dark:text-slate-100">
         
         {/* Alerts */}
         {error && (
@@ -183,22 +193,22 @@ export default function ConversationalFlowPage() {
         )}
 
         {/* Top Header */}
-        <div className="flex items-center justify-between mb-5 bg-white border border-slate-200 p-5 rounded-2xl shadow-sm">
+        <div className="flex items-center justify-between mb-5 bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 p-5 rounded-2xl shadow-sm">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-600">
               <ListOrdered size={20} />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-1.5">
+              <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
                 Conversational Flow <span className="text-slate-400 text-[0.65rem] font-mono">ⓘ</span>
               </h2>
-              <p className="text-xs text-slate-500 mt-0.5">Order and configure your AI agent's structured conversation sections.</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Order and configure your AI agent's structured conversation sections.</p>
             </div>
           </div>
           
           <div className="flex items-center gap-3">
             <button
-              onClick={handleSave}
+              onClick={() => handleSave()}
               disabled={saving}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition-all shadow-md shadow-indigo-600/20 flex items-center gap-2 cursor-pointer"
             >
@@ -207,7 +217,7 @@ export default function ConversationalFlowPage() {
             </button>
             <button 
               onClick={addSection}
-              className="px-4 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
+              className="px-4 py-2 bg-slate-50 dark:bg-slate-900/50 hover:bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
             >
               <Plus className="w-4 h-4 text-indigo-600" />
               Add Section
@@ -222,8 +232,8 @@ export default function ConversationalFlowPage() {
             return (
               <div
                 key={section.id || index}
-                className={`bg-white border rounded-2xl overflow-hidden transition-all shadow-sm ${
-                  isExpanded ? 'border-indigo-400 ring-2 ring-indigo-500/10' : 'border-slate-200 hover:border-slate-300'
+                className={`bg-white dark:bg-slate-800/60 border rounded-2xl overflow-hidden transition-all shadow-sm ${
+                  isExpanded ? 'border-indigo-400 ring-2 ring-indigo-500/10' : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
                 } ${draggingId === section.id ? 'opacity-40' : ''}`}
                 draggable
                 onDragStart={() => handleDragStart(index, section.id)}
@@ -232,7 +242,7 @@ export default function ConversationalFlowPage() {
                 onDragEnd={handleDragEnd}
               >
                 {/* Row Header */}
-                <div className="flex items-center justify-between px-5 py-4 bg-slate-50/80 border-b border-slate-100 select-none">
+                <div className="flex items-center justify-between px-5 py-4 bg-slate-50 dark:bg-slate-900/50/80 border-b border-slate-100 dark:border-slate-800 select-none">
                   <div className="flex items-center gap-3 min-w-0 flex-1">
                     {/* Expand/Collapse Chevron */}
                     <button
@@ -244,24 +254,24 @@ export default function ConversationalFlowPage() {
                     </button>
 
                     {/* Drag Grip Handle */}
-                    <div className="text-slate-400 hover:text-slate-600 cursor-move" title="Drag to reorder">
+                    <div className="text-slate-400 hover:text-slate-600 dark:text-slate-400 cursor-move" title="Drag to reorder">
                       <GripVertical size={16} />
                     </div>
 
                     {/* Section Number & Title */}
                     <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <span className="text-xs font-bold text-slate-500 font-mono shrink-0">{index + 1}.</span>
+                      <span className="text-xs font-bold text-slate-500 dark:text-slate-400 font-mono shrink-0">{index + 1}.</span>
                       {isExpanded ? (
                         <input
                           type="text"
                           value={section.context_title}
                           onChange={(e) => updateSection(index, 'context_title', e.target.value)}
-                          className="bg-white border border-slate-300 rounded-lg px-3 py-1 text-xs font-bold text-slate-800 w-full max-w-md focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                          className="bg-white dark:bg-slate-800/60 border border-slate-300 rounded-lg px-3 py-1 text-xs font-bold text-slate-800 dark:text-slate-100 w-full max-w-md focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                         />
                       ) : (
                         <span 
                           onClick={() => toggleSection(section.id)}
-                          className="text-sm font-bold text-slate-800 tracking-wide truncate cursor-pointer hover:text-indigo-600 transition-colors"
+                          className="text-sm font-bold text-slate-800 dark:text-slate-100 tracking-wide truncate cursor-pointer hover:text-indigo-600 transition-colors"
                         >
                           {section.context_title}
                         </span>
@@ -272,13 +282,13 @@ export default function ConversationalFlowPage() {
                   {/* Right Side Controls */}
                   <div className="flex items-center gap-4 shrink-0">
                     <div className="flex items-center gap-2 select-none cursor-pointer" onClick={() => updateSection(index, 'is_enabled', !section.is_enabled)}>
-                      <span className={`text-xs font-bold font-mono ${section.is_enabled ? 'text-slate-800' : 'text-slate-400'}`}>
+                      <span className={`text-xs font-bold font-mono ${section.is_enabled ? 'text-slate-800 dark:text-slate-100' : 'text-slate-400'}`}>
                         {section.is_enabled ? 'ON' : 'OFF'}
                       </span>
                       <div className={`w-8 h-4.5 rounded-full p-0.5 transition-colors flex items-center ${
                         section.is_enabled ? 'bg-indigo-600 justify-end' : 'bg-slate-300 justify-start'
                       }`}>
-                        <div className="w-3.5 h-3.5 bg-white rounded-full shadow-md" />
+                        <div className="w-3.5 h-3.5 bg-white dark:bg-slate-800/60 rounded-full shadow-md" />
                       </div>
                     </div>
 
@@ -294,14 +304,14 @@ export default function ConversationalFlowPage() {
 
                 {/* Expanded Content Area */}
                 {isExpanded && (
-                  <div className="p-5 bg-slate-50/50 border-t border-slate-100 space-y-3">
-                    <label className="block text-[0.7rem] font-bold text-slate-500 uppercase tracking-wider">
+                  <div className="p-5 bg-slate-50 dark:bg-slate-900/50/50 border-t border-slate-100 dark:border-slate-800 space-y-3">
+                    <label className="block text-[0.7rem] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                       Section Prompt Instructions & Context
                     </label>
                     <textarea
                       value={section.context_body}
                       onChange={(e) => updateSection(index, 'context_body', e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl p-4 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 min-h-[110px] resize-y font-mono leading-relaxed shadow-inner"
+                      className="w-full bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-4 text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 min-h-[110px] resize-y font-mono leading-relaxed shadow-inner"
                       placeholder="Enter detailed instructions for this flow section..."
                     />
                   </div>
@@ -314,7 +324,7 @@ export default function ConversationalFlowPage() {
         {/* Bottom Add Section Button */}
         <button
           onClick={addSection}
-          className="mt-5 w-full py-4 border-2 border-dashed border-slate-300 bg-white hover:bg-slate-50 hover:border-indigo-400 hover:text-indigo-600 text-slate-600 rounded-2xl flex items-center justify-center gap-2 text-xs font-bold transition-all cursor-pointer shadow-sm"
+          className="mt-5 w-full py-4 border-2 border-dashed border-slate-300 bg-white dark:bg-slate-800/60 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700 hover:border-indigo-400 hover:text-indigo-600 text-slate-600 dark:text-slate-400 rounded-2xl flex items-center justify-center gap-2 text-xs font-bold transition-all cursor-pointer shadow-sm"
         >
           <Plus size={16} /> Add Section
         </button>

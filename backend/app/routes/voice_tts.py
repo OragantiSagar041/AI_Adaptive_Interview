@@ -412,7 +412,6 @@ async def stt_endpoint(
             # on silence.
             sys_prompt = (
                 f"{name_hint}{known_terms_hint}"
-                "Transcribe verbatim. Do not fabricate content if audio is silent or unclear."
                 if iso_lang == "en" else ""
             )
 
@@ -545,7 +544,25 @@ async def stt_endpoint(
                 "thank you for your attention",
             }
 
+            
+            SUBSTRING_HALLUCINATIONS = [
+                "amara.org", "transcribe verbatim", "tanscribe verbatim",
+                "repented of the stupidity", "video clip", "the name of the person",
+                "i thought of putting it here", "not able to read it",
+                "adekitashi", "food, dhan", "subtitles by", "please subscribe",
+                "subscribe to my channel", "click the bell", "thanks for watching",
+                "thank you for watching", "like and subscribe"
+            ]
+
             if transcript_text:
+                # Substring scrub
+                t_lower = transcript_text.lower()
+                for bad_sub in SUBSTRING_HALLUCINATIONS:
+                    if bad_sub in t_lower:
+                        # If it contains massive hallucination blocks, just drop the whole text
+                        transcript_text = ""
+                        break
+
                 cleaned_lower = transcript_text.lower().rstrip(".,!? ")
                 # Drop the transcript entirely if it's a known hallucination
                 if cleaned_lower in HALLUCINATIONS or transcript_text.strip() == "":

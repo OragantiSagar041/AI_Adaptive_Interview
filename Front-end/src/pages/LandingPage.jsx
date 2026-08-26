@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import logoImg from "../assets/logo.png";
+import ThemeToggle from "../components/ThemeToggle";
 import "../snake.css";
 import useSEO from "../hooks/useSEO";
 
@@ -101,10 +102,6 @@ const FAQ_SCHEMA = {
 };
 
 export default function LandingPage() {
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', 'dark');
-    document.documentElement.classList.add('dark');
-  }, []);
 
   useSEO({
     title: "HireIQ — #1 AI Interview Platform & AI Recruitment Software India",
@@ -182,6 +179,7 @@ function Nav() {
           <a href="#faq" className="hover:text-foreground transition">FAQ</a>
         </nav>
         <div className="flex items-center gap-2">
+          <ThemeToggle />
           <Link
             to="/login"
             className="hidden sm:inline-flex text-sm px-4 py-2 rounded-full glass hover:bg-white/10 transition"
@@ -203,7 +201,7 @@ function Nav() {
 
 function Logo() {
   return (
-    <img src={logoImg} alt="Logo" className="h-30 w-auto object-contain" />
+    <img src={logoImg} alt="Logo" className="h-30 w-auto object-contain brand-logo-img" />
   );
 }
 
@@ -245,7 +243,7 @@ function Hero() {
               Book a Live Demo <ArrowRight className="h-4 w-4" />
             </a>
             <a
-              href="#tour"
+              href="#how"
               className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full glass-strong font-semibold hover:bg-white/10 transition"
             >
               <Play className="h-4 w-4" /> Watch Product Tour

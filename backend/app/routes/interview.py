@@ -104,6 +104,10 @@ def api_gen_next_question(
     interview = get_session(req.interview_id)
     followup_streak = interview.get("followup_streak", 0)
 
+    # ── Strict 22-question maximum limit check ──
+    if len(interview.get("questions", [])) >= 22:
+        return {"skip_followup": True, "reason": "Maximum limit of 22 questions reached"}
+
     # ── BUGFIX: Prevent Follow-ups from hijacking the interview ──
     # Find current question and evaluate skip conditions BEFORE calling the AI
     current_idx = -1
@@ -400,6 +404,8 @@ async def generate_more_questions_endpoint(
             profile_text = session.get("profile_text", "")
             source = session.get("source", "resume")
             existing_questions = session.get("questions", [])
+            if len(existing_questions) >= 22:
+                return {"questions": []}
 
             # Parse IDs of already-asked questions to avoid repeats
             asked_ids = set()
@@ -1596,9 +1602,14 @@ def _normalize_text_field(value: Any) -> str:
 def normalize_agent_flow_read_item(item: Dict[str, Any]) -> Dict[str, Any]:
     context_title = item.get("context_title") if item.get("context_title") is not None else item.get("title", "")
     context_body = item.get("context_body") if item.get("context_body") is not None else item.get("body", item.get("instruction", ""))
+    norm_title = _normalize_text_field(context_title)
+    norm_body = _normalize_text_field(context_body)
     return {
-        "context_title": _normalize_text_field(context_title),
-        "context_body": _normalize_text_field(context_body),
+        "context_title": norm_title,
+        "context_body": norm_body,
+        "title": norm_title,
+        "body": norm_body,
+        "instruction": norm_body,
         "is_enabled": bool(item.get("is_enabled", item.get("enabled", True))),
     }
 
@@ -1606,9 +1617,14 @@ def normalize_agent_flow_read_item(item: Dict[str, Any]) -> Dict[str, Any]:
 def normalize_agent_flow_write_item(item: Dict[str, Any]) -> Dict[str, Any]:
     title = item.get("context_title") if item.get("context_title") is not None else item.get("title", "")
     body = item.get("context_body") if item.get("context_body") is not None else item.get("body", item.get("instruction", ""))
+    norm_title = _normalize_text_field(title)
+    norm_body = _normalize_text_field(body)
     return {
-        "title": _normalize_text_field(title),
-        "body": _normalize_text_field(body),
+        "title": norm_title,
+        "body": norm_body,
+        "context_title": norm_title,
+        "context_body": norm_body,
+        "instruction": norm_body,
         "is_enabled": bool(item.get("is_enabled", item.get("enabled", True))),
     }
 

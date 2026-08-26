@@ -64,7 +64,7 @@ const Avatar = ({ className = "", children, ...props }) => (
 );
 
 const AvatarFallback = ({ className = "", children, ...props }) => (
-  <div className={`flex h-full w-full items-center justify-center rounded-full bg-slate-100 ${className}`} {...props}>
+  <div className={`flex h-full w-full items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800/50 ${className}`} {...props}>
     {children}
   </div>
 );
@@ -83,12 +83,12 @@ const quickActions = [
 ];
 
 const tintClasses = {
-  primary: "bg-primary/10 text-primary",
-  info: "bg-info/10 text-info",
-  accent: "bg-accent text-accent-foreground",
-  success: "bg-success/10 text-success",
-  warning: "bg-warning/15 text-warning-foreground",
-  destructive: "bg-destructive/10 text-destructive",
+  primary: "bg-indigo-500/15 dark:bg-indigo-500/25 border border-indigo-400/30 text-indigo-600 dark:text-indigo-400 shadow-xs",
+  info: "bg-sky-500/15 dark:bg-sky-500/25 border border-sky-400/30 text-sky-600 dark:text-sky-400 shadow-xs",
+  accent: "bg-violet-500/15 dark:bg-violet-500/25 border border-violet-400/30 text-violet-600 dark:text-violet-400 shadow-xs",
+  success: "bg-emerald-500/15 dark:bg-emerald-500/25 border border-emerald-400/30 text-emerald-600 dark:text-emerald-400 shadow-xs",
+  warning: "bg-amber-500/15 dark:bg-amber-500/25 border border-amber-400/30 text-amber-600 dark:text-amber-400 shadow-xs",
+  destructive: "bg-rose-500/15 dark:bg-rose-500/25 border border-rose-400/30 text-rose-600 dark:text-rose-400 shadow-xs",
 };
 
 function initials(name) {
@@ -320,7 +320,7 @@ export default function OverviewDashboardPage() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900/50">
       <main className="mx-auto max-w-[1600px] space-y-6 px-6 py-6">
         {/* Greeting */}
         <section className="flex flex-wrap items-end justify-between gap-4">
@@ -353,7 +353,7 @@ export default function OverviewDashboardPage() {
                     handleOpenRecordsModal(k.filterType, k.label);
                   }
                 }}
-                className={`group relative overflow-hidden border-border/60 p-5 shadow-[var(--shadow-card)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-glow)] bg-white ${
+                className={`group relative overflow-hidden p-5 border border-slate-200 dark:border-slate-700 transition-all hover:-translate-y-0.5 hover:shadow-md bg-white dark:bg-slate-800 ${
                   isClickable ? "cursor-pointer hover:border-primary/40" : ""
                 }`}
               >
@@ -388,7 +388,7 @@ export default function OverviewDashboardPage() {
         </section>
 
         {/* Pipeline */}
-        <Card className="border-border/60 p-6 shadow-[var(--shadow-card)] bg-white">
+        <Card className="p-6 border border-slate-200 dark:border-slate-700 shadow-sm bg-white dark:bg-slate-800">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-base font-semibold">Candidate Pipeline</h2>
@@ -412,7 +412,7 @@ export default function OverviewDashboardPage() {
                   <div className="mt-1 text-xl font-semibold">{p.count.toLocaleString()}</div>
                   <div className="mt-0.5 text-[11px] opacity-90">{p.stage}</div>
                 </div>
-                <div className="mt-2 h-1 overflow-hidden rounded-full bg-slate-100">
+                <div className="mt-2 h-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800/50">
                   <div
                     className="h-full rounded-full"
                     style={{ width: `${(p.count / maxPipeline) * 100}%`, background: p.color }}
@@ -424,7 +424,7 @@ export default function OverviewDashboardPage() {
         </Card>
 
         {/* Live Sessions Table */}
-        <Card className="border-border/60 shadow-[var(--shadow-card)] bg-white mb-6">
+        <Card className="border-border/60 shadow-[var(--shadow-card)] bg-white dark:bg-slate-800/60 mb-6">
           <div className="flex flex-wrap items-center justify-between gap-3 p-6 pb-4">
             <div>
               <h2 className="text-base font-semibold">Live Interview Sessions</h2>
@@ -436,7 +436,7 @@ export default function OverviewDashboardPage() {
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="border-y border-border/60 bg-slate-50 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
+                <TableRow className="border-y border-border/60 bg-slate-50 dark:bg-slate-900/50 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
                   <TableHead className="px-6 py-2.5 font-medium">Candidate</TableHead>
                   <TableHead className="px-3 py-2.5 font-medium">Interview</TableHead>
                   <TableHead className="px-3 py-2.5 font-medium">Status</TableHead>
@@ -448,7 +448,7 @@ export default function OverviewDashboardPage() {
               </TableHeader>
               <TableBody>
                 {liveSessions?.slice(0, 5).map((session, i) => (
-                  <TableRow key={i} className="border-b border-border/50 last:border-0 hover:bg-slate-50">
+                  <TableRow key={i} className="border-b border-border/50 last:border-0 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700">
                     <TableCell className="px-6 py-3 font-medium">{session.candidate_name || "Unknown"}</TableCell>
                     <TableCell className="px-3 py-3 text-muted-foreground">{session.interview_title || session.link_id}</TableCell>
                     <TableCell className="px-3 py-3">
@@ -464,7 +464,7 @@ export default function OverviewDashboardPage() {
                               {session.round_type}
                             </span>
                           )}
-                          <span className="text-xs font-semibold text-slate-700 bg-slate-100 px-2 py-1 rounded-md">
+                          <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800/50 px-2 py-1 rounded-md">
                             Q{session.current_question} / {session.total_questions || '-'}
                           </span>
                         </div>
@@ -481,7 +481,7 @@ export default function OverviewDashboardPage() {
                         size="sm" 
                         variant="outline" 
                         onClick={() => handleOpenLiveStreamAction && handleOpenLiveStreamAction(session)}
-                        className="h-8 text-xs font-semibold hover:bg-indigo-50 hover:text-indigo-600 border-indigo-100 transition-colors bg-white shadow-sm"
+                        className="h-8 text-xs font-semibold hover:bg-indigo-50 hover:text-indigo-600 border-indigo-100 transition-colors bg-white dark:bg-slate-800/60 shadow-sm"
                       >
                         <Eye className="w-3.5 h-3.5 mr-1.5" /> Monitor
                       </Button>
@@ -490,7 +490,7 @@ export default function OverviewDashboardPage() {
                 ))}
                 {(!liveSessions || liveSessions.length === 0) && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-slate-500 py-6">No active sessions being monitored</TableCell>
+                    <TableCell colSpan={7} className="text-center text-slate-500 dark:text-slate-400 py-6">No active sessions being monitored</TableCell>
                   </TableRow>
                 )}
               </TableBody>
@@ -499,7 +499,7 @@ export default function OverviewDashboardPage() {
         </Card>
 
         {/* Recruiter Table */}
-        <Card className="border-border/60 shadow-[var(--shadow-card)] bg-white">
+        <Card className="border-border/60 shadow-[var(--shadow-card)] bg-white dark:bg-slate-800/60">
           <div className="flex flex-wrap items-center justify-between gap-3 p-6 pb-4">
             <div>
               <h2 className="text-base font-semibold">
@@ -532,7 +532,7 @@ export default function OverviewDashboardPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-y border-border/60 bg-slate-50 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
+                <tr className="border-y border-border/60 bg-slate-50 dark:bg-slate-900/50 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
                   <th className="px-6 py-2.5 font-medium">Candidate</th>
                   <th className="px-3 py-2.5 font-medium">Role</th>
 
@@ -543,7 +543,7 @@ export default function OverviewDashboardPage() {
               </thead>
               <tbody>
                 {filteredTableCandidates && filteredTableCandidates.slice(0, 10).map((c, i) => (
-                  <tr key={c.id || i} onClick={() => setSelectedCandidate(c)} className="border-b border-border/50 last:border-0 hover:bg-slate-50 cursor-pointer">
+                  <tr key={c.id || i} onClick={() => setSelectedCandidate(c)} className="border-b border-border/50 last:border-0 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700 cursor-pointer">
                     <td className="px-6 py-3">
                       <div className="flex items-center gap-2.5">
                         <Avatar className="h-8 w-8">
@@ -552,7 +552,7 @@ export default function OverviewDashboardPage() {
                           </AvatarFallback>
                         </Avatar>
                         <div className="font-medium">
-                          {c.candidate_id && <span className="text-[0.65rem] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold mr-1">{c.candidate_id}</span>}
+                          {c.candidate_id && <span className="text-[0.65rem] bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded font-bold mr-1">{c.candidate_id}</span>}
                           {c.candidate_name || c.name || "Candidate"}
                         </div>
                       </div>
@@ -599,7 +599,7 @@ export default function OverviewDashboardPage() {
 
         {/* Tasks / Recommendations / Live */}
         <section className="grid gap-4 lg:grid-cols-3">
-          <Card className="border-border/60 p-6 shadow-[var(--shadow-card)] bg-white">
+          <Card className="border-border/60 p-6 shadow-[var(--shadow-card)] bg-white dark:bg-slate-800/60">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-base font-semibold">Action Items</h3>
@@ -619,7 +619,7 @@ export default function OverviewDashboardPage() {
                   <li
                     key={t.label}
                     onClick={() => handleOpenRecordsModal(filterType, t.label)}
-                    className="flex items-center justify-between rounded-lg border border-border/50 bg-white px-3 py-2.5 transition-colors cursor-pointer hover:border-primary/40 hover:bg-slate-50"
+                    className="flex items-center justify-between rounded-lg border border-border/50 bg-white dark:bg-slate-800/60 px-3 py-2.5 transition-colors cursor-pointer hover:border-primary/40 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700"
                   >
                     <div className="flex items-center gap-2.5">
                       <div className="grid h-8 w-8 place-items-center rounded-md bg-primary/10 text-primary">
@@ -639,7 +639,7 @@ export default function OverviewDashboardPage() {
             </ul>
           </Card>
 
-          <Card className="border-border/60 p-6 shadow-[var(--shadow-card)] bg-white">
+          <Card className="border-border/60 p-6 shadow-[var(--shadow-card)] bg-white dark:bg-slate-800/60">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div
@@ -659,7 +659,7 @@ export default function OverviewDashboardPage() {
                   <li
                     key={i}
                     onClick={() => handleOpenRecordsModal(r.type, r.text)}
-                    className="group flex items-start gap-3 rounded-lg border border-border/50 bg-white p-3 transition-all cursor-pointer hover:border-primary/40 hover:shadow-sm"
+                    className="group flex items-start gap-3 rounded-lg border border-border/50 bg-white dark:bg-slate-800/60 p-3 transition-all cursor-pointer hover:border-primary/40 hover:shadow-sm"
                   >
                     <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
                       <Icon className="h-4 w-4" />
@@ -674,12 +674,12 @@ export default function OverviewDashboardPage() {
                 );
               })}
               {recommendations.length === 0 && (
-                <div className="text-sm text-slate-500 py-4 text-center">No new recommendations</div>
+                <div className="text-sm text-slate-500 dark:text-slate-400 py-4 text-center">No new recommendations</div>
               )}
             </ul>
           </Card>
 
-          <Card className="border-border/60 p-6 shadow-[var(--shadow-card)] bg-white">
+          <Card className="border-border/60 p-6 shadow-[var(--shadow-card)] bg-white dark:bg-slate-800/60">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-base font-semibold">AI Interview Activity</h3>
@@ -692,7 +692,7 @@ export default function OverviewDashboardPage() {
                 return (
                   <div
                     key={s.label}
-                    className="rounded-lg border border-border/50 bg-gradient-to-br from-white to-slate-50 p-3.5"
+                    className="rounded-lg border border-border dark:border-slate-700 bg-card p-3.5"
                   >
                     <div className="flex items-center gap-2">
                       <span className="relative flex h-2 w-2">
@@ -701,9 +701,9 @@ export default function OverviewDashboardPage() {
                         )}
                         <span className={`relative inline-flex h-2 w-2 rounded-full ${s.dot}`} />
                       </span>
-                      <span className="text-[11px] font-medium text-muted-foreground">{s.label}</span>
+                      <span className="text-[11px] font-bold text-muted-foreground">{s.label}</span>
                     </div>
-                    <div className="mt-1.5 text-2xl font-semibold tabular-nums">{s.count}</div>
+                    <div className="mt-1.5 text-2xl font-black text-foreground tabular-nums">{s.count}</div>
                   </div>
                 );
               })}
@@ -727,17 +727,17 @@ export default function OverviewDashboardPage() {
         </section>
 
         {/* Recruiter Analytics */}
-        <Card className="border-border/60 p-6 shadow-[var(--shadow-card)] bg-white">
+        <Card className="border-border/60 p-6 shadow-[var(--shadow-card)] bg-white dark:bg-slate-800/60">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-base font-semibold">Recruiter Analytics</h2>
               <p className="text-xs text-muted-foreground">Key performance indicators across the team</p>
             </div>
-            <div className="flex items-center gap-1.5 rounded-md border border-border/60 bg-slate-50 p-0.5 text-xs">
+            <div className="flex items-center gap-1.5 rounded-md border border-border/60 bg-slate-50 dark:bg-slate-900/50 p-0.5 text-xs">
               {["All Time"].map((t, i) => (
                 <button
                   key={t}
-                  className={`rounded px-2.5 py-1 ${i === 0 ? "bg-slate-50 shadow-sm font-medium" : "text-muted-foreground"}`}
+                  className={`rounded px-2.5 py-1 ${i === 0 ? "bg-slate-50 dark:bg-slate-900/50 shadow-sm font-medium" : "text-muted-foreground"}`}
                 >
                   {t}
                 </button>
@@ -748,11 +748,11 @@ export default function OverviewDashboardPage() {
             {analyticsKpis.map((a) => (
               <div
                 key={a.label}
-                className="rounded-lg border border-border/50 bg-gradient-to-br from-white to-slate-50 p-4"
+                className="rounded-lg border border-border dark:border-slate-700 bg-card p-4"
               >
-                <div className="text-[11px] font-medium text-muted-foreground">{a.label}</div>
+                <div className="text-[11px] font-bold text-muted-foreground">{a.label}</div>
                 <div className="mt-1.5 flex items-baseline gap-2">
-                  <span className="text-xl font-semibold tabular-nums">{a.value}</span>
+                  <span className="text-2xl font-black text-foreground tabular-nums">{a.value}</span>
                   {a.trend && <span className="text-[11px] font-medium text-success">{a.trend}</span>}
                 </div>
                 <div className="mt-3 flex h-6 items-end gap-0.5">
@@ -771,7 +771,7 @@ export default function OverviewDashboardPage() {
 
         {/* Activity + Quick Actions */}
         <section className="grid gap-4 lg:grid-cols-3">
-          <Card className="border-border/60 p-6 shadow-[var(--shadow-card)] lg:col-span-2 bg-white">
+          <Card className="border-border/60 p-6 shadow-[var(--shadow-card)] lg:col-span-2 bg-white dark:bg-slate-800/60">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-base font-semibold">Recent Activity</h3>
@@ -793,13 +793,13 @@ export default function OverviewDashboardPage() {
                   </li>
                 );
               }) : (
-                <div className="text-sm text-slate-500 py-4 text-center">No recent activity</div>
+                <div className="text-sm text-slate-500 dark:text-slate-400 py-4 text-center">No recent activity</div>
               )}
             </ol>
           </Card>
 
           <div className="space-y-4">
-            <Card className="border-border/60 p-6 shadow-[var(--shadow-card)] bg-white">
+            <Card className="border-border/60 p-6 shadow-[var(--shadow-card)] bg-white dark:bg-slate-800/60">
               <div className="flex items-center gap-2">
                 <Zap className="h-4 w-4 text-primary" />
                 <h3 className="text-base font-semibold">Quick Actions</h3>
@@ -811,7 +811,7 @@ export default function OverviewDashboardPage() {
                     <button
                       key={a.label}
                       onClick={() => navigate(a.path)}
-                      className="group flex flex-col items-start gap-2 rounded-lg border border-border/60 bg-white p-3 text-left transition-all hover:border-primary/50 hover:bg-primary/5 hover:shadow-sm"
+                      className="group flex flex-col items-start gap-2 rounded-lg border border-border/60 bg-white dark:bg-slate-800/60 p-3 text-left transition-all hover:border-primary/50 hover:bg-primary/5 hover:shadow-sm"
                     >
                       <div className="grid h-8 w-8 place-items-center rounded-md bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                         <Icon className="h-4 w-4" />
@@ -827,7 +827,7 @@ export default function OverviewDashboardPage() {
               className="relative overflow-hidden border-0 p-6 text-primary-foreground shadow-[var(--shadow-glow)]"
               style={{ background: "var(--gradient-primary)" }}
             >
-              <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
+              <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white dark:bg-slate-800/60/10 blur-2xl" />
               <AlertCircle className="h-5 w-5 opacity-90" />
               <h3 className="mt-3 text-base font-semibold">AI Hiring Insight</h3>
               <p className="mt-1.5 text-sm opacity-90">
@@ -836,7 +836,7 @@ export default function OverviewDashboardPage() {
               <Button 
                 size="sm" 
                 variant="secondary" 
-                className="mt-4 bg-white text-primary hover:bg-white/90"
+                className="mt-4 bg-white dark:bg-slate-800/60 text-primary hover:bg-white dark:bg-slate-800/60/90"
                 onClick={() => handleOpenRecordsModal('high_scores', 'High-Scoring Candidates')}
               >
                 Explore cohort
@@ -868,7 +868,7 @@ export default function OverviewDashboardPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left">
                 <thead>
-                  <tr className="border-b border-slate-200 text-slate-500 text-xs font-semibold uppercase tracking-wider bg-slate-50">
+                  <tr className="border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-xs font-semibold uppercase tracking-wider bg-slate-50 dark:bg-slate-900/50">
                     <th className="px-4 py-3">Candidate</th>
                     <th className="px-4 py-3">Role</th>
                     <th className="px-4 py-3">AI Score</th>
@@ -878,15 +878,15 @@ export default function OverviewDashboardPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {listModalCandidates.map((c) => (
-                    <tr key={c.id || c._id} className="hover:bg-slate-50">
+                    <tr key={c.id || c._id} className="hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700">
                       <td className="px-4 py-3.5">
-                        <div className="font-semibold text-slate-800">
-                          {c.candidate_id && <span className="text-[0.65rem] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold mr-1">{c.candidate_id}</span>}
+                        <div className="font-semibold text-slate-800 dark:text-slate-100">
+                          {c.candidate_id && <span className="text-[0.65rem] bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded font-bold mr-1">{c.candidate_id}</span>}
                           {c.candidate_name || c.name || "Candidate"}
                         </div>
                         <div className="text-xs text-muted-foreground">{c.candidate_email || c.email}</div>
                       </td>
-                      <td className="px-4 py-3.5 text-slate-600">{c.interview_title || c.job_title || "N/A"}</td>
+                      <td className="px-4 py-3.5 text-slate-600 dark:text-slate-400">{c.interview_title || c.job_title || "N/A"}</td>
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-2">
                           <Progress value={Math.round(c.score || c.avg_score || 0)} className="h-1.5 w-16" />
@@ -926,7 +926,7 @@ export default function OverviewDashboardPage() {
           ) : (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <AlertCircle className="h-10 w-10 text-slate-300 animate-pulse" />
-              <p className="mt-4 text-sm text-slate-500 font-medium">No matching records found.</p>
+              <p className="mt-4 text-sm text-slate-500 dark:text-slate-400 font-medium">No matching records found.</p>
             </div>
           )}
         </Modal>

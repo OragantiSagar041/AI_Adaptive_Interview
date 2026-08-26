@@ -36,7 +36,7 @@ const StatusBadge = ({ value }) => {
   const statusColor = value === 'Offer Released' ? 'bg-indigo-100 text-indigo-700'
     : value === 'Shortlisted' ? 'bg-emerald-100 text-emerald-700'
       : value === 'Review Pending' ? 'bg-amber-100 text-amber-700'
-        : 'bg-slate-100 text-slate-700'
+        : 'bg-slate-100 dark:bg-slate-800/50 text-slate-700 dark:text-slate-200'
 
   return (
     <span className={cn("px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wide uppercase border border-white/50 shadow-sm", statusColor)}>
@@ -106,32 +106,32 @@ export default function QualifiedCandidatesPage() {
 
   // Calculate dynamic stats
   const avgScore = qualifiedCandidates.length > 0
-    ? (qualifiedCandidates.reduce((acc, c) => acc + Number(c.score || 0), 0) / qualifiedCandidates.length).toFixed(1)
+    ? (qualifiedCandidates.reduce((acc, c) => acc + Number(c.score ?? c.avg_score ?? 0), 0) / qualifiedCandidates.length).toFixed(1)
     : "0.0"
 
   const STATS = [
-    { label: "Total Candidates", value: qualifiedCandidates.length.toString(), icon: Users, tone: "primary", colorClass: "bg-indigo-100 text-indigo-600" },
-    { label: "Avg AI Score", value: `${avgScore}%`, icon: Star, tone: "info", colorClass: "bg-blue-100 text-blue-600" },
-    { label: "AI Interviews", value: candidates.length.toString(), icon: Phone, tone: "chart-2", colorClass: "bg-emerald-100 text-emerald-600" },
-    { label: "Pending Review", value: qualifiedCandidates.filter(c => !c.reviewed).length.toString(), icon: ClipboardCheck, tone: "warning", colorClass: "bg-amber-100 text-amber-600" },
-    { label: "Ready to Hire", value: qualifiedCandidates.filter(c => Number(c.score || 0) >= 85).length.toString(), icon: Target, tone: "success", colorClass: "bg-teal-100 text-teal-600" },
-    { label: "Offers Released", value: "0", icon: FileSignature, tone: "chart-5", colorClass: "bg-purple-100 text-purple-600" },
+    { label: "Total Candidates", value: qualifiedCandidates.length.toString(), icon: Users, tone: "primary", colorClass: "bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400" },
+    { label: "Avg AI Score", value: `${avgScore}%`, icon: Star, tone: "info", colorClass: "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400" },
+    { label: "Total Qualified Candidates", value: qualifiedCandidates.length.toString(), icon: UserCheck, tone: "chart-2", colorClass: "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400" },
+    { label: "Pending Review", value: qualifiedCandidates.filter(c => !c.reviewed).length.toString(), icon: ClipboardCheck, tone: "warning", colorClass: "bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400" },
+    { label: "Ready to Hire", value: qualifiedCandidates.filter(c => Number(c.score ?? c.avg_score ?? 0) >= 85).length.toString(), icon: Target, tone: "success", colorClass: "bg-teal-100 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400" },
+    { label: "Offers Released", value: "0", icon: FileSignature, tone: "chart-5", colorClass: "bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400" },
   ]
 
   return (
-    <div className="min-h-[calc(100vh-64px)] bg-slate-50">
+    <div className="min-h-[calc(100vh-64px)]">
       <main className="mx-auto max-w-7xl px-4 sm:px-6 py-8 space-y-8">
         {/* Header Section */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-black tracking-tight text-slate-900">Qualified Candidates</h1>
-            <p className="text-slate-500 font-medium mt-1 max-w-2xl">
+            <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white">Qualified Candidates</h1>
+            <p className="text-slate-500 dark:text-slate-400 font-medium mt-1 max-w-2xl">
               View, compare, and manage AI-qualified candidates shortlisted by recruiters across your organization.
             </p>
           </div>
           <button
             onClick={handleExportAction}
-            className="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-xl font-bold shadow-sm hover:bg-slate-50 transition-all cursor-pointer"
+            className="inline-flex items-center gap-2 bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 px-4 py-2 rounded-xl font-bold shadow-sm hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700 transition-all cursor-pointer"
           >
             <Download size={16} /> Export CSV
           </button>
@@ -142,22 +142,22 @@ export default function QualifiedCandidatesPage() {
           {STATS.map((s) => (
             <div
               key={s.label}
-              className="rounded-2xl border border-slate-200/60 bg-white p-5 shadow-sm hover:shadow-md transition-shadow flex flex-col items-start"
+              className="rounded-2xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-800/60 p-5 shadow-sm hover:shadow-md transition-shadow flex flex-col items-start"
             >
               <div className={cn("inline-flex h-10 w-10 items-center justify-center rounded-xl mb-3", s.colorClass)}>
                 <s.icon className="h-5 w-5" />
               </div>
-              <div className="text-2xl font-black text-slate-900 tabular-nums">{s.value}</div>
-              <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-1">{s.label}</div>
+              <div className="text-2xl font-black text-slate-900 dark:text-white tabular-nums">{s.value}</div>
+              <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-1">{s.label}</div>
             </div>
           ))}
         </section>
 
         {/* Search & Filters */}
-        <section className="rounded-2xl border border-slate-200/60 bg-white p-5 shadow-sm">
+        <section className="rounded-2xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-800/60 p-5 shadow-sm">
           <div className="flex items-center gap-2 mb-4">
             <Filter className="h-4 w-4 text-slate-400" />
-            <span className="text-sm font-bold text-slate-700 uppercase tracking-wider">Search & Filters</span>
+            <span className="text-sm font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Search & Filters</span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
             <div className="relative lg:col-span-2">
@@ -166,7 +166,7 @@ export default function QualifiedCandidatesPage() {
                 placeholder="Search candidate name or email..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 text-sm font-medium outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
               />
             </div>
 
@@ -174,7 +174,7 @@ export default function QualifiedCandidatesPage() {
               <select
                 value={jobFilter}
                 onChange={(e) => setJobFilter(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer appearance-none"
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 text-sm font-medium outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer appearance-none"
               >
                 <option value="all">All Positions</option>
                 {jobs.map((j) => <option key={j} value={j}>{j}</option>)}
@@ -187,7 +187,7 @@ export default function QualifiedCandidatesPage() {
               <select
                 value={pipelineFilter}
                 onChange={(e) => setPipelineFilter(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer appearance-none text-slate-700"
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 text-sm font-medium outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer appearance-none text-slate-700 dark:text-slate-200"
               >
                 <option value="all">All Pipelines</option>
                 <option value="ai_calling">AI Calling Agent</option>
@@ -200,7 +200,7 @@ export default function QualifiedCandidatesPage() {
                 type="date"
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer text-slate-700"
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 text-sm font-medium outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer text-slate-700 dark:text-slate-200"
               />
             </div>
           </div>
@@ -219,18 +219,18 @@ export default function QualifiedCandidatesPage() {
         )}
 
         {/* Table Section */}
-        <section className="rounded-2xl border border-slate-200/60 bg-white shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50/50">
+        <section className="rounded-2xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-800/60 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50/50">
             <div className="text-sm">
-              <span className="font-bold text-slate-800">{filtered.length}</span>
-              <span className="text-slate-500 font-medium"> candidates</span>
+              <span className="font-bold text-slate-800 dark:text-slate-100">{filtered.length}</span>
+              <span className="text-slate-500 dark:text-slate-400 font-medium"> candidates</span>
             </div>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse min-w-[900px]">
               <thead>
-                <tr className="border-b border-slate-100 bg-white whitespace-nowrap">
+                <tr className="border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-800/60 whitespace-nowrap">
                   <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Candidate</th>
                   <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Job Applied</th>
                   <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">AI Score</th>
@@ -244,37 +244,37 @@ export default function QualifiedCandidatesPage() {
               </thead>
               <tbody className="divide-y divide-slate-100/80">
                 {filtered.map((c) => {
-                  const scoreNum = Number(c.score || 0)
+                  const scoreNum = Number(c.score ?? c.avg_score ?? 0)
                                     
                   return (
-                    <tr key={c.id || c.link_id || c.email} onClick={() => setSelectedCandidate(c)} className="hover:bg-slate-50/50 transition-colors group whitespace-nowrap cursor-pointer">
+                    <tr key={c.id || c.link_id || c.email} onClick={() => setSelectedCandidate(c)} className="hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700/50 transition-colors group whitespace-nowrap cursor-pointer">
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
                           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 font-bold shrink-0 shadow-sm border border-indigo-100/50">
                             {(c.candidate_name || "U")[0].toUpperCase()}
                           </div>
                           <div>
-                            <div className="font-bold text-slate-800 text-sm">{c.candidate_name}</div>
+                            <div className="font-bold text-slate-800 dark:text-slate-100 text-sm">{c.candidate_name}</div>
                             <div className="text-xs font-medium text-slate-400 mt-0.5">{c.candidate_email || c.email || 'No email provided'}</div>
                           </div>
                         </div>
                       </td>
-                      <td className="px-5 py-4 text-sm font-semibold text-slate-600">{c.interview_title || c.job_applied}</td>
-                      <td className="px-5 py-4 text-sm font-bold text-slate-700 tabular-nums">{scoreNum.toFixed(0)}%</td>
-                      <td className="px-5 py-4 text-sm font-medium text-slate-500">
+                      <td className="px-5 py-4 text-sm font-semibold text-slate-600 dark:text-slate-400">{c.interview_title || c.job_applied}</td>
+                      <td className="px-5 py-4 text-sm font-bold text-slate-700 dark:text-slate-200 tabular-nums">{scoreNum.toFixed(0)}%</td>
+                      <td className="px-5 py-4 text-sm font-medium text-slate-500 dark:text-slate-400">
                         {c.ats_score != null ? `${c.ats_score}%` : (c.skills_match || '--')}
                       </td>
                       <td className="px-5 py-4">
-                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600">
+                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400">
                           <span className={cn("h-1.5 w-1.5 rounded-full", c.decision === 'selected' ? "bg-emerald-500" : "bg-amber-500")} />
                           {c.interview_status || "Completed"}
                         </span>
                       </td>
                       
-                      <td className="px-5 py-4 text-sm font-medium text-slate-500">
+                      <td className="px-5 py-4 text-sm font-medium text-slate-500 dark:text-slate-400">
                         {c.created_at ? (
                           <div className="flex flex-col">
-                            <span className="text-slate-700 font-semibold">{new Date(c.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                            <span className="text-slate-700 dark:text-slate-200 font-semibold">{new Date(c.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                             <span className="text-[11px] text-slate-400 mt-0.5">{new Date(c.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</span>
                           </div>
                         ) : 'N/A'}
@@ -285,7 +285,7 @@ export default function QualifiedCandidatesPage() {
                       <td className="px-5 py-4 text-right">
                         <button
                           onClick={(e) => { e.stopPropagation(); setSelectedCandidate(c); }}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-white border border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 shadow-sm transition-all cursor-pointer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 shadow-sm transition-all cursor-pointer"
                         >
                           <Eye className="h-3.5 w-3.5" /> View
                         </button>
@@ -297,7 +297,7 @@ export default function QualifiedCandidatesPage() {
                   <tr>
                     <td colSpan="9" className="text-center text-sm font-medium text-slate-400 py-16">
                       <div className="flex flex-col items-center justify-center gap-3">
-                        <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-300">
+                        <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800/50 flex items-center justify-center text-slate-300">
                           <Search size={24} />
                         </div>
                         <p>No candidates match the current filters.</p>

@@ -257,12 +257,12 @@ export function CandidateScorecardModal({
           <span className="text-sm font-semibold">Loading evaluation detail logs...</span>
         </div>
       ) : (
-        <div id="pdf-content" className="flex flex-col gap-8 text-slate-800 bg-white pt-2">
+        <div id="pdf-content" className="flex flex-col gap-8 text-foreground bg-card pt-2">
 
           {/* Top Stats Row */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 avoid-break">
-            <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-5">
-              <span className="text-[0.68rem] text-slate-400 font-bold uppercase tracking-wider block mb-2">Average Score</span>
+            <div className="bg-card border border-border shadow-sm rounded-xl p-5">
+              <span className="text-[0.68rem] text-muted-foreground font-bold uppercase tracking-wider block mb-2">Average Score</span>
               <div className="flex items-baseline gap-1">
                 {(() => {
                   const s = calculateOverallAverage(candidateDetail, selectedCandidate);
@@ -273,8 +273,8 @@ export function CandidateScorecardModal({
                 })()}
               </div>
             </div>
-            <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-5">
-              <span className="text-[0.68rem] text-slate-400 font-bold uppercase tracking-wider block mb-2">Communication Score</span>
+            <div className="bg-card border border-border shadow-sm rounded-xl p-5">
+              <span className="text-[0.68rem] text-muted-foreground font-bold uppercase tracking-wider block mb-2">Communication Score</span>
               <div className="flex items-baseline gap-1">
                 {(() => {
                   const s = selectedCandidate?.communication_score ?? candidateDetail?.communication_score ?? selectedCandidate?.score ?? selectedCandidate?.avg_score
@@ -285,21 +285,21 @@ export function CandidateScorecardModal({
                 })()}
               </div>
             </div>
-            <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-5">
-              <span className="text-[0.68rem] text-slate-400 font-bold uppercase tracking-wider block mb-2">Detected Language & Accent</span>
-              <span className="text-xl font-black text-slate-800 tracking-tight block mt-1">
+            <div className="bg-card border border-border shadow-sm rounded-xl p-5">
+              <span className="text-[0.68rem] text-muted-foreground font-bold uppercase tracking-wider block mb-2">Detected Language & Accent</span>
+              <span className="text-xl font-black text-foreground tracking-tight block mt-1">
                 {selectedCandidate?.detected_accent ?? candidateDetail?.detected_accent ?? (candidateDetail?.language ? `${candidateDetail.language} (Neutral Accent)` : 'English (Indian Accent)')}
               </span>
             </div>
-            <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-5">
-              <span className="text-[0.68rem] text-slate-400 font-bold uppercase tracking-wider block mb-2">Questions Answered</span>
-              <span className="text-4xl font-black text-slate-800 tracking-tight">{candidateDetail?.answers?.length || 0}</span>
+            <div className="bg-card border border-border shadow-sm rounded-xl p-5">
+              <span className="text-[0.68rem] text-muted-foreground font-bold uppercase tracking-wider block mb-2">Questions Answered</span>
+              <span className="text-4xl font-black text-foreground tracking-tight">{candidateDetail?.answers?.length || 0}</span>
             </div>
-            <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-5">
-              <span className="text-[0.68rem] text-slate-400 font-bold uppercase tracking-wider block mb-2">Time Taken</span>
+            <div className="bg-card border border-border shadow-sm rounded-xl p-5">
+              <span className="text-[0.68rem] text-muted-foreground font-bold uppercase tracking-wider block mb-2">Time Taken</span>
               <div className="flex items-baseline gap-1 mt-1">
-                <span className="text-4xl font-black text-slate-800 tracking-tight">{candidateDetail?.integrity?.total_time_minutes || 0}</span>
-                <span className="text-sm font-bold text-slate-800">m</span>
+                <span className="text-4xl font-black text-foreground tracking-tight">{candidateDetail?.integrity?.total_time_minutes || 0}</span>
+                <span className="text-sm font-bold text-foreground">m</span>
               </div>
             </div>
           </div>
