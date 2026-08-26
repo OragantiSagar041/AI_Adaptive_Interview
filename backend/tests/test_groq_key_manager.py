@@ -112,7 +112,7 @@ def test_auto_recovery_when_all_keys_blacklisted(monkeypatch):
     for key in ["key_A", "key_B"]:
         mgr.mark_invalid(key)
         mgr.mark_invalid(key)
-
+   
     # After auto-recovery, keys should be available again
     assert mgr.get_total_keys() > 0, (
         "BUG: All keys are blacklisted with no recovery. "
