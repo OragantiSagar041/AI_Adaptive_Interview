@@ -1418,10 +1418,10 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
       : [];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-fadeIn">
+    <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-fadeIn">
       <div className="bg-white dark:bg-slate-800/60 rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-scaleUp">
         {/* Header */}
-        <div className="px-7 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white">
+        <div className="px-7 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white dark:from-slate-800/90 dark:to-slate-900/90">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white font-extrabold text-lg shadow-md shadow-indigo-500/20">
               {(application.name || '?')[0].toUpperCase()}
@@ -1457,7 +1457,7 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
         </div>
 
         {/* Tab Switcher & Actions */}
-        <div className="px-7 pt-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/50/50 flex-wrap gap-2">
+        <div className="px-7 pt-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/50 flex-wrap gap-2">
           <div className="flex items-center gap-2">
             {(application.resume_url || application.resume_text) && (
               <button
@@ -1538,7 +1538,7 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
         </div>
 
         {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-900/50/30">
+        <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-900/50">
           {activeTab === 'resume' && (
             <div>
               {resumeFullUrl && isPdf ? (
