@@ -403,18 +403,18 @@ export default function OverviewDashboardPage() {
             {pipeline.map((p, i) => (
               <div key={p.stage} className="relative">
                 <div
-                  className="rounded-lg p-3.5 text-white"
+                  className="rounded-xl p-3.5 text-white text-center shadow-xs flex flex-col items-center justify-between min-h-[110px]"
                   style={{ background: p.color }}
                 >
-                  <div className="text-[10px] font-medium uppercase tracking-wider opacity-80">
+                  <div className="text-[10px] font-extrabold uppercase tracking-wider opacity-90 bg-black/20 px-2 py-0.5 rounded-full inline-block">
                     Stage {i + 1}
                   </div>
-                  <div className="mt-1 text-xl font-semibold">{p.count.toLocaleString()}</div>
-                  <div className="mt-0.5 text-[11px] opacity-90">{p.stage}</div>
+                  <div className="my-1.5 text-2xl font-black">{p.count.toLocaleString()}</div>
+                  <div className="text-xs font-bold opacity-95 truncate max-w-full px-1">{p.stage}</div>
                 </div>
-                <div className="mt-2 h-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800/50">
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
                   <div
-                    className="h-full rounded-full"
+                    className="h-full rounded-full transition-all duration-500"
                     style={{ width: `${(p.count / maxPipeline) * 100}%`, background: p.color }}
                   />
                 </div>

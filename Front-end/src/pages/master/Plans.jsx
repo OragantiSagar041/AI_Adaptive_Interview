@@ -139,7 +139,7 @@ export default function Plans() {
   ]))
 
   return (
-    <div className="space-y-6 max-w-6xl">
+    <div className="space-y-6 w-full">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-slate-800/60 p-6 rounded-2xl border border-slate-200 dark:border-slate-700/60 shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:shadow-none">
         <div>
           <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Subscription Plans</h2>

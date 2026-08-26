@@ -119,8 +119,8 @@ export default function QualifiedCandidatesPage() {
   ]
 
   return (
-    <div className="min-h-[calc(100vh-64px)]">
-      <main className="mx-auto max-w-7xl px-4 sm:px-6 py-8 space-y-8">
+    <div className="min-h-[calc(100vh-64px)] bg-slate-50 dark:bg-slate-900/50">
+      <main className="w-full px-4 sm:px-6 py-8 space-y-8">
         {/* Header Section */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -235,8 +235,6 @@ export default function QualifiedCandidatesPage() {
                   <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Job Applied</th>
                   <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">AI Score</th>
                   <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Skills Match</th>
-                  <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Interview</th>
-                  
                   <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Interview Date & Time</th>
                   <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Status</th>
                   <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider text-right">Actions</th>
@@ -264,13 +262,6 @@ export default function QualifiedCandidatesPage() {
                       <td className="px-5 py-4 text-sm font-medium text-slate-500 dark:text-slate-400">
                         {c.ats_score != null ? `${c.ats_score}%` : (c.skills_match || '--')}
                       </td>
-                      <td className="px-5 py-4">
-                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400">
-                          <span className={cn("h-1.5 w-1.5 rounded-full", c.decision === 'selected' ? "bg-emerald-500" : "bg-amber-500")} />
-                          {c.interview_status || "Completed"}
-                        </span>
-                      </td>
-                      
                       <td className="px-5 py-4 text-sm font-medium text-slate-500 dark:text-slate-400">
                         {c.created_at ? (
                           <div className="flex flex-col">

@@ -419,15 +419,15 @@ export default function SuperAdminJobsPage() {
   };
 
   return (
-    <div className="superadmin-jobs-page w-full max-w-7xl text-slate-900 dark:text-white">
+    <div className="superadmin-jobs-page w-full text-slate-900 dark:text-white">
 
       {/* ── Header ─────────────────────────────────────── */}
       <div className="bg-card border border-border dark:border-slate-700/80 rounded-3xl shadow-sm p-6 sm:p-8 mb-8 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-32 bg-indigo-500/5 pointer-events-none" />
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-5">
           <div className="flex gap-4 items-center">
-            <div className="w-16 h-16 rounded-2xl flex items-center justify-center bg-indigo-600 text-white shadow-md border border-indigo-500/30 shrink-0">
-              <Briefcase size={30} strokeWidth={2.5} />
+            <div className="w-16 h-16 rounded-2xl flex items-center justify-center bg-indigo-500/15 dark:bg-indigo-500/25 border border-indigo-400/30 text-indigo-600 dark:text-indigo-400 shrink-0">
+              <Briefcase size={32} strokeWidth={2.5} className="text-indigo-600 dark:text-indigo-400" />
             </div>
             <div>
               <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
