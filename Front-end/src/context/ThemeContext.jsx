@@ -21,13 +21,13 @@ export function ThemeProvider({ children }) {
     }
   }, [theme])
 
-  const setTheme = (newTheme) => {
+  const setTheme = React.useCallback((newTheme) => {
     setThemeState(newTheme)
-  }
+  }, [])
 
-  const toggleTheme = () => {
+  const toggleTheme = React.useCallback(() => {
     setThemeState(prev => (prev === 'dark' ? 'light' : 'dark'))
-  }
+  }, [])
 
   return (
     <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>

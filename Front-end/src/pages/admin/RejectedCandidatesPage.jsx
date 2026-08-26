@@ -249,7 +249,10 @@ export default function RejectedCandidatesPage() {
                   <tr key={c.id || c.link_id || c.email} onClick={() => setSelectedCandidate(c)} className="hover:bg-rose-50/30 transition-colors group whitespace-nowrap cursor-pointer">
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-[0.75rem] bg-slate-100 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 font-bold shrink-0 shadow-sm border border-slate-200 dark:border-slate-700/50">
+                        <div
+                          className="flex h-10 w-10 items-center justify-center rounded-xl font-black text-white shrink-0 shadow-md border border-white/20"
+                          style={{ backgroundColor: ['#4f46e5', '#6366f1', '#4338ca', '#3b82f6', '#2563eb', '#1d4ed8'][(c.candidate_name || 'U').charCodeAt(0) % 6], color: '#ffffff' }}
+                        >
                           {(c.candidate_name || "U")[0].toUpperCase()}
                         </div>
                         <div>

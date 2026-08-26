@@ -769,13 +769,13 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
 
                         {/* Sub-tabs — only show if both url and text exist */}
                         {resumeUrl && resumeText && (
-                          <div className="flex items-center gap-2 px-4 pt-3 bg-slate-50/50 border-b border-slate-100">
+                          <div className="flex items-center gap-2 px-4 pt-3 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800">
                             <button
                               type="button"
                               onClick={() => setResumeSubTab('document')}
                               className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 ${resumeSubTab === 'document'
-                                  ? 'border-indigo-600 text-indigo-700 bg-white shadow-sm'
-                                  : 'border-transparent text-slate-500 hover:text-slate-800'
+                                  ? 'border-indigo-600 text-indigo-700 bg-white dark:bg-slate-800/60 shadow-sm'
+                                  : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200'
                                 }`}
                             >
                               <FileText size={13} /> Resume Document
@@ -784,8 +784,8 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                               type="button"
                               onClick={() => setResumeSubTab('parsedText')}
                               className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 ${resumeSubTab === 'parsedText'
-                                  ? 'border-indigo-600 text-indigo-700 bg-white shadow-sm'
-                                  : 'border-transparent text-slate-500 hover:text-slate-800'
+                                  ? 'border-indigo-600 text-indigo-700 bg-white dark:bg-slate-800/60 shadow-sm'
+                                  : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200'
                                 }`}
                             >
                               <Check size={13} /> Extracted Text
@@ -802,16 +802,16 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                                 <iframe
                                   src={resumeFullUrl}
                                   title="Candidate Resume"
-                                  className="w-full h-[600px] border-none bg-white"
+                                  className="w-full h-[600px] border-none bg-white dark:bg-slate-900"
                                 />
                               ) : (
-                                <div className="p-8 text-center bg-white space-y-4">
+                                <div className="p-8 text-center bg-white dark:bg-slate-800/60 space-y-4">
                                   <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto shadow-inner">
                                     <FileText size={32} />
                                   </div>
                                   <div>
-                                    <h4 className="font-extrabold text-slate-800 text-base">Resume File Attached</h4>
-                                    <p className="text-xs text-slate-500 mt-1 font-mono">{resumeFilename || resumeUrl}</p>
+                                    <h4 className="font-extrabold text-slate-800 dark:text-slate-200 text-base">Resume File Attached</h4>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-mono">{resumeFilename || resumeUrl}</p>
                                   </div>
                                   <a
                                     href={resumeFullUrl}
@@ -828,8 +828,8 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
 
                           {/* Show extracted text when: tab is 'parsedText' OR only resumeText exists (no url) */}
                           {(resumeSubTab === 'parsedText' || (!resumeUrl && resumeText)) && resumeText && (
-                            <div className="p-6">
-                              <pre className="text-sm text-slate-700 bg-slate-50 rounded-xl p-5 whitespace-pre-wrap font-sans border border-slate-200 leading-relaxed max-h-[500px] overflow-y-auto">
+                            <div className="p-6 bg-white dark:bg-slate-800/60">
+                              <pre className="text-sm text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-900/50 rounded-xl p-5 whitespace-pre-wrap font-sans border border-slate-200 dark:border-slate-700 leading-relaxed max-h-[500px] overflow-y-auto">
                                 {resumeText}
                               </pre>
                             </div>
@@ -1094,7 +1094,15 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                   <textarea
                     value={newNote}
                     onChange={e => setNewNote(e.target.value)}
-                    placeholder="Type a note..."
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        if (!notesSaving && newNote.trim()) {
+                          handleAddNote();
+                        }
+                      }
+                    }}
+                    placeholder="Type a note (Press Enter to save)..."
                     className="w-full text-sm rounded-xl border-slate-200 resize-none focus:ring-indigo-500 focus:border-indigo-500 mb-2 p-3 text-slate-800"
                     rows={3}
                   />
@@ -1147,21 +1155,21 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
         {/* ── Resume Sub-Modal ── */}
         {showResumeModal && (
           <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4" onClick={() => setShowResumeModal(false)}>
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
+            <div className="bg-white dark:bg-slate-800/60 rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-700/80 w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0 bg-white dark:bg-slate-800/80">
                 <div className="flex items-center gap-2">
-                  <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><FileText size={18} /></div>
+                  <div className="p-2 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-lg"><FileText size={18} /></div>
                   <div>
-                    <h3 className="text-sm font-black text-slate-800">Resume / Profile Text</h3>
-                    <p className="text-xs text-slate-400 font-medium">{name}</p>
+                    <h3 className="text-sm font-black text-slate-800 dark:text-slate-100">Resume / Profile Text</h3>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">{name}</p>
                   </div>
                 </div>
-                <button onClick={() => setShowResumeModal(false)} className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
+                <button onClick={() => setShowResumeModal(false)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700/50 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors">
                   <X size={18} />
                 </button>
               </div>
-              <div className="flex-1 overflow-y-auto p-6">
-                <pre className="text-sm text-slate-700 bg-slate-50 rounded-xl p-5 whitespace-pre-wrap font-sans border border-slate-200 leading-relaxed">{resumeText}</pre>
+              <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-900/50">
+                <pre className="text-sm text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800/60 rounded-xl p-5 whitespace-pre-wrap font-sans border border-slate-200 dark:border-slate-700 leading-relaxed">{resumeText}</pre>
               </div>
             </div>
           </div>

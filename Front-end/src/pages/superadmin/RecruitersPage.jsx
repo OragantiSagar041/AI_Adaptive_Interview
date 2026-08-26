@@ -248,7 +248,7 @@ export default function RecruitersPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-slate-800/60 p-6 rounded-2xl shadow-xs border border-slate-100 dark:border-slate-800">
         <div>
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-xs">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 border-2 border-indigo-500/40 dark:border-indigo-400/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shadow-sm shrink-0">
               <Users className="w-6 h-6" />
             </div>
             <div>
@@ -845,7 +845,7 @@ function KPICard({ title, value, subtitle, icon, badge, badgeColor }) {
   return (
     <div className="bg-white dark:bg-slate-800/60 p-5 rounded-2xl shadow-xs border border-slate-100 dark:border-slate-800 hover:shadow-sm transition-all flex items-center justify-between gap-4">
       <div className="flex items-center gap-4 min-w-0">
-        <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 shrink-0">
+        <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/70 border-2 border-slate-200 dark:border-slate-700/80 shrink-0">
           {icon}
         </div>
         <div className="min-w-0">
