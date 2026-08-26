@@ -1039,7 +1039,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                 </div>
 
                 <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-4 flex flex-col gap-2">
-                  <label className="text-xs font-bold text-indigo-800 uppercase tracking-wider">Select Interested Candidate (From AI Calls)</label>
+                  <label className="text-xs font-bold text-indigo-800 uppercase tracking-wider">Select Approved Candidate (From AI Calls)</label>
                   <select
                     className="w-full px-4 py-2.5 bg-white dark:bg-slate-800/60 border border-indigo-200 rounded-lg text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm disabled:bg-slate-50 dark:bg-slate-900/50 disabled:text-slate-400 disabled:cursor-not-allowed"
                     disabled={callLogs.length === 0}
@@ -1065,13 +1065,13 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     }}
                   >
                     {callLogs.length === 0 ? (
-                      <option value="">No interested candidates found from AI Calls</option>
+                      <option value="">No approved candidates found from AI Calls</option>
                     ) : (
                       <>
-                        <option value="">-- Select a Candidate --</option>
+                        <option value="">-- Select an Approved Candidate --</option>
                         {callLogs.map(log => (
                           <option key={log._id || log.id} value={log._id || log.id}>
-                            {log.name} ({log.email}) - {log.job_title || 'Interested Candidate'}
+                            {log.name} ({log.email || log.phone}) - {log.job_title || 'Approved Candidate'}
                           </option>
                         ))}
                       </>
@@ -1079,8 +1079,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                   </select>
                   <p className="text-[0.65rem] text-indigo-500 font-medium mt-1">
                     {callLogs.length === 0 
-                      ? "Ensure candidates are marked as 'Interested' in the AI Calling Agent to see them here." 
-                      : "Selecting a candidate will automatically fill their name, email, phone, resume, and job description!"}
+                      ? "Approve candidates in the AI Calling Agent Approval Queue to see them here." 
+                      : "Selecting an approved candidate will automatically fill their name, email, phone, resume, and job description!"}
                   </p>
                 </div>
 
