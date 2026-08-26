@@ -1143,13 +1143,19 @@ body,
   box-shadow: 0 40px 120px -60px rgba(0, 0, 0, 0.8) !important;
 }
 
-/* Ensure rounded cards adopt dark card background when not using the glass utility */
-[data-theme="dark"] .rounded-2xl,
-[data-theme="dark"] .rounded-xl,
-[data-theme="dark"] .rounded-lg {
+/* Ensure rounded cards adopt dark card background when not using the glass utility or custom inline stage backgrounds */
+[data-theme="dark"] .rounded-2xl:not([style*="background"]),
+[data-theme="dark"] .rounded-xl:not([style*="background"]):not(.pipeline-stage-card),
+[data-theme="dark"] .rounded-lg:not([style*="background"]) {
   background-color: var(--card) !important;
   color: var(--card-foreground) !important;
   border-color: var(--border) !important;
+}
+
+[data-theme="dark"] .pipeline-stage-card {
+  background-color: var(--stage-bg) !important;
+  background: var(--stage-bg) !important;
+  color: #ffffff !important;
 }
 
 /* Ensure small card text uses muted-foreground for descriptions */

@@ -362,7 +362,7 @@ function KPICard({ title, value, icon, delay, valueClass = "" }) {
       className="bg-white dark:bg-slate-800/60 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 hover:shadow-md transition-shadow flex flex-col justify-between"
     >
       <div className="flex justify-between items-start mb-4">
-        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50">
+        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/70 border-2 border-slate-200 dark:border-slate-700/80 shadow-xs">
           {icon}
         </div>
       </div>

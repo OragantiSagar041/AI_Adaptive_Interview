@@ -2759,7 +2759,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                   <Button
                     type="button"
                     variant="primary"
-                    className="px-5 py-2.5 h-[42px] rounded-lg font-bold shadow-sm"
+                    className="px-6 py-2.5 h-[42px] rounded-lg font-bold shadow-md bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-500/60 dark:border-indigo-400/60 transition-all active:scale-95 cursor-pointer shrink-0"
                     onClick={() => {
                       const { name, email } = bulkCandidateInput
                       if (!name || !email) {

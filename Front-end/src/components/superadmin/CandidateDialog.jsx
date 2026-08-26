@@ -1094,7 +1094,15 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                   <textarea
                     value={newNote}
                     onChange={e => setNewNote(e.target.value)}
-                    placeholder="Type a note..."
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        if (!notesSaving && newNote.trim()) {
+                          handleAddNote();
+                        }
+                      }
+                    }}
+                    placeholder="Type a note (Press Enter to save)..."
                     className="w-full text-sm rounded-xl border-slate-200 resize-none focus:ring-indigo-500 focus:border-indigo-500 mb-2 p-3 text-slate-800"
                     rows={3}
                   />

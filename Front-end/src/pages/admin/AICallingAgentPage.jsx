@@ -2393,13 +2393,6 @@ export default function AICallingAgentPage() {
               }`}
             >
               <span className="relative z-10 flex items-center gap-2">{icon} {label}</span>
-              {activeTab === id && (
-                <motion.div
-                  layoutId="activeTabIndicatorLight"
-                  className="absolute inset-0 bg-indigo-50 border-b-2 border-indigo-500 rounded-t-xl"
-                  transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                />
-              )}
             </button>
           ))}
         </div>
