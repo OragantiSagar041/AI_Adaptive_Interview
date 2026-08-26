@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
-import { Users, Star, Phone, ClipboardCheck, Target, FileSignature, Search, Filter, Eye, Download, Sparkles } from 'lucide-react'
+import { Users, Star, UserCheck, Phone, ClipboardCheck, Target, FileSignature, Search, Filter, Eye, Download, Sparkles } from 'lucide-react'
 import axios from 'axios'
 import { formatShortDate, formatScore } from '../../utils/adminFormatters'
 import { loadAdminQualifiedCandidates, handleExportExcel } from '../../store/slices/candidatesSlice'
@@ -110,12 +110,12 @@ export default function QualifiedCandidatesPage() {
     : "0.0"
 
   const STATS = [
-    { label: "Total Candidates", value: qualifiedCandidates.length.toString(), icon: Users, tone: "primary", colorClass: "bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400" },
-    { label: "Avg AI Score", value: `${avgScore}%`, icon: Star, tone: "info", colorClass: "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400" },
-    { label: "Total Qualified Candidates", value: qualifiedCandidates.length.toString(), icon: UserCheck, tone: "chart-2", colorClass: "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400" },
-    { label: "Pending Review", value: qualifiedCandidates.filter(c => !c.reviewed).length.toString(), icon: ClipboardCheck, tone: "warning", colorClass: "bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400" },
-    { label: "Ready to Hire", value: qualifiedCandidates.filter(c => Number(c.score ?? c.avg_score ?? 0) >= 85).length.toString(), icon: Target, tone: "success", colorClass: "bg-teal-100 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400" },
-    { label: "Offers Released", value: "0", icon: FileSignature, tone: "chart-5", colorClass: "bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400" },
+    { label: "Total Candidates", value: qualifiedCandidates.length.toString(), icon: Users, tone: "primary", colorClass: "bg-indigo-100 text-indigo-600 dark:bg-indigo-950/70 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/60" },
+    { label: "Avg AI Score", value: `${avgScore}%`, icon: Star, tone: "info", colorClass: "bg-blue-100 text-blue-600 dark:bg-blue-950/70 dark:text-blue-400 border border-blue-200 dark:border-blue-800/60" },
+    { label: "Total Qualified Candidates", value: qualifiedCandidates.length.toString(), icon: UserCheck, tone: "chart-2", colorClass: "bg-emerald-100 text-emerald-600 dark:bg-emerald-950/70 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60" },
+    { label: "Pending Review", value: qualifiedCandidates.filter(c => !c.reviewed).length.toString(), icon: ClipboardCheck, tone: "warning", colorClass: "bg-amber-100 text-amber-600 dark:bg-amber-950/70 dark:text-amber-400 border border-amber-200 dark:border-amber-800/60" },
+    { label: "Ready to Hire", value: qualifiedCandidates.filter(c => Number(c.score ?? c.avg_score ?? 0) >= 85).length.toString(), icon: Target, tone: "success", colorClass: "bg-teal-100 text-teal-600 dark:bg-teal-950/70 dark:text-teal-400 border border-teal-200 dark:border-teal-800/60" },
+    { label: "Offers Released", value: "0", icon: FileSignature, tone: "chart-5", colorClass: "bg-purple-100 text-purple-600 dark:bg-purple-950/70 dark:text-purple-400 border border-purple-200 dark:border-purple-800/60" },
   ]
 
   return (
@@ -144,7 +144,7 @@ export default function QualifiedCandidatesPage() {
               key={s.label}
               className="rounded-2xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-800/60 p-5 shadow-sm hover:shadow-md transition-shadow flex flex-col items-start"
             >
-              <div className={cn("inline-flex h-10 w-10 items-center justify-center rounded-xl mb-3", s.colorClass)}>
+              <div className={cn("inline-flex h-10 w-10 items-center justify-center rounded-xl mb-3 shrink-0 border-2 border-slate-200/80 dark:border-slate-700/80 shadow-xs", s.colorClass)}>
                 <s.icon className="h-5 w-5" />
               </div>
               <div className="text-2xl font-black text-slate-900 dark:text-white tabular-nums">{s.value}</div>
@@ -248,7 +248,10 @@ export default function QualifiedCandidatesPage() {
                     <tr key={c.id || c.link_id || c.email} onClick={() => setSelectedCandidate(c)} className="hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700/50 transition-colors group whitespace-nowrap cursor-pointer">
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 font-bold shrink-0 shadow-sm border border-indigo-100/50">
+                          <div
+                            className="flex h-10 w-10 items-center justify-center rounded-xl font-black text-white shrink-0 shadow-md border border-white/20"
+                            style={{ backgroundColor: ['#4f46e5', '#6366f1', '#4338ca', '#3b82f6', '#2563eb', '#1d4ed8'][(c.candidate_name || 'U').charCodeAt(0) % 6], color: '#ffffff' }}
+                          >
                             {(c.candidate_name || "U")[0].toUpperCase()}
                           </div>
                           <div>

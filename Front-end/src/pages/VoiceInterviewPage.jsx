@@ -3186,31 +3186,31 @@ export default function VoiceInterviewPage() {
 
   // ── Intro Screen ──────────────────────────────────────────────────────────
   if (round === 'intro') return (
-    <div className="min-h-screen bg-[#0a0f1e] flex flex-col items-center justify-center text-white px-6" style={{ fontFamily: "'Inter',sans-serif" }}>
+    <div className="min-h-screen h-screen bg-[#0a0f1e] flex flex-col items-center justify-between text-white px-6 py-6 sm:py-8 overflow-y-auto" style={{ fontFamily: "'Inter',sans-serif" }}>
       <style>{`
         @keyframes pulse-ring{0%,100%{transform:scale(1);opacity:.5}50%{transform:scale(1.12);opacity:1}}
         @keyframes wave{0%{height:4px}100%{height:28px}}
       `}</style>
-      <div className="max-w-xl w-full text-center space-y-10">
-        <div className="flex items-center justify-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shadow-xl">
-            <i className="fas fa-brain text-lg text-white" />
+      <div className="max-w-xl w-full my-auto text-center space-y-4 sm:space-y-5">
+        <div className="flex items-center justify-center gap-3.5">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg">
+            <i className="fas fa-brain text-base text-white" />
           </div>
-          <span className="text-2xl font-black">HireIQ <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400 font-medium text-xl">Voice AI</span></span>
+          <span className="text-xl font-black">HireIQ <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400 font-medium text-lg">Voice AI</span></span>
         </div>
 
         {/* Avatar */}
-        <div className="relative flex items-center justify-center h-64 mb-4">
+        <div className="relative flex items-center justify-center h-44 sm:h-48 my-1">
           <style>{`
             @keyframes vidRingSpeak { 0%,100%{transform:scale(1);opacity:.8} 50%{transform:scale(1.08);opacity:1} }
             @keyframes vidRingListen { 0%{transform:scale(1);opacity:.5} 100%{transform:scale(1.04);opacity:1} }
           `}</style>
-          <VideoAvatar status="idle" size={220} />
+          <VideoAvatar status="idle" size={170} />
         </div>
 
         <div>
-          <h1 className="text-3xl font-black mb-3">Meet Zara, Your AI Interviewer</h1>
-          <p className="text-slate-400 leading-relaxed">
+          <h1 className="text-2xl sm:text-3xl font-black mb-2">Meet Zara, Your AI Interviewer</h1>
+          <p className="text-slate-400 text-xs sm:text-sm leading-relaxed max-w-lg mx-auto">
             Hi, <span className="text-white font-semibold">{sessionDetail?.candidate_name}</span>! I'm Zara. We'll have a natural voice conversation across {
               interviewType === 'Technical' ? '2 rounds — Verbal Q&A + Coding' :
                 interviewType === 'Non-Technical' ? '2 rounds — Verbal Q&A + Case Study' :
@@ -3220,39 +3220,39 @@ export default function VoiceInterviewPage() {
         </div>
 
         {/* Round badges */}
-        <div className="flex flex-wrap gap-3 justify-center">
-          <div className="flex items-center gap-2 px-4 py-2 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-sm">
+        <div className="flex flex-wrap gap-2 justify-center">
+          <div className="flex items-center gap-2 px-3.5 py-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-xs font-semibold text-indigo-300">
             <i className="fas fa-comments text-indigo-400" /> Verbal Q&A ({questions.length} questions)
           </div>
           {interviewType === 'Technical' && (
-            <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/20 rounded-full text-sm">
+            <div className="flex items-center gap-2 px-3.5 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-full text-xs font-semibold text-amber-300">
               <i className="fas fa-code text-amber-400" /> Live Coding
             </div>
           )}
           {interviewType === 'Non-Technical' && (
-            <div className="flex items-center gap-2 px-4 py-2 bg-violet-500/10 border border-violet-500/20 rounded-full text-sm">
+            <div className="flex items-center gap-2 px-3.5 py-1.5 bg-violet-500/10 border border-violet-500/20 rounded-full text-xs font-semibold text-violet-300">
               <i className="fas fa-briefcase text-violet-400" /> Case Study
             </div>
           )}
         </div>
 
         {/* Tips */}
-        <div className="grid gap-3 text-sm text-left">
+        <div className="grid gap-2 text-xs text-left max-w-lg mx-auto">
           {[
             { i: 'fa-volume-up', c: 'text-indigo-400', t: 'I speak each question aloud — listen before answering' },
             { i: 'fa-microphone', c: 'text-emerald-400', t: 'Just talk naturally — your mic captures everything' },
             { i: 'fa-comment-dots', c: 'text-violet-400', t: 'I\'ll ask follow-up questions based on your answers' },
             { i: 'fa-arrow-right', c: 'text-amber-400', t: 'After 3 seconds of silence, the interview auto-advances' },
           ].map((tip, idx) => (
-            <div key={idx} className="flex items-center gap-3 bg-white/4 border border-white/6 rounded-xl px-5 py-3">
-              <i className={`fas ${tip.i} ${tip.c} w-5 text-center`} />
-              <span className="text-slate-300">{tip.t}</span>
+            <div key={idx} className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5">
+              <i className={`fas ${tip.i} ${tip.c} w-4 text-center text-sm`} />
+              <span className="text-slate-300 font-medium">{tip.t}</span>
             </div>
           ))}
         </div>
 
         <button onClick={startInterview}
-          className="w-full py-4 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-bold text-lg shadow-[0_4px_30px_rgba(99,102,241,0.5)] hover:shadow-[0_4px_50px_rgba(99,102,241,0.8)] hover:scale-[1.02] transition-all flex items-center justify-center gap-3">
+          className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-bold text-base shadow-[0_4px_30px_rgba(99,102,241,0.5)] hover:shadow-[0_4px_50px_rgba(99,102,241,0.8)] hover:scale-[1.01] transition-all flex items-center justify-center gap-2.5 cursor-pointer mt-2">
           <i className="fas fa-microphone-alt" /> Begin Interview with Zara
         </button>
       </div>

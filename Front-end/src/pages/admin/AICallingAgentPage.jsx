@@ -2374,19 +2374,12 @@ export default function AICallingAgentPage() {
             <button
               key={id}
               onClick={() => setActiveTab(id)}
-              className={`relative flex items-center gap-2 px-5 py-3 text-sm font-bold rounded-t-xl transition-colors whitespace-nowrap outline-none ${activeTab === id
-                ? 'text-indigo-700'
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-100 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700'
+              className={`relative flex items-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-bold rounded-xl transition-all whitespace-nowrap outline-none cursor-pointer border ${activeTab === id
+                ? 'bg-indigo-600 text-white border-indigo-500/80 dark:border-indigo-400/80 shadow-md ring-2 ring-indigo-500/30 dark:bg-indigo-600'
+                : 'bg-slate-100/80 dark:bg-slate-900/60 text-slate-700 dark:text-slate-300 border-slate-200/80 dark:border-slate-700/80 hover:border-indigo-400/50 hover:bg-slate-200/60 dark:hover:bg-slate-800'
                 }`}
             >
               <span className="relative z-10 flex items-center gap-2">{icon} {label}</span>
-              {activeTab === id && (
-                <motion.div
-                  layoutId="activeTabIndicatorLight"
-                  className="absolute inset-0 bg-indigo-50 border-b-2 border-indigo-500 rounded-t-xl"
-                  transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                />
-              )}
             </button>
           ))}
         </div>
@@ -2907,7 +2900,7 @@ export default function AICallingAgentPage() {
                                       setCandidateResumeInfo(null);
                                       setPhoneError('');
                                     }}
-                                    className="bg-indigo-600 hover:bg-indigo-700 text-white text-[0.7rem] font-bold rounded-lg px-3 py-1.5 outline-none transition-colors shadow-sm"
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-500/60 dark:border-indigo-400/60 text-[0.7rem] font-bold rounded-lg px-3 py-1.5 outline-none transition-all active:scale-95 shadow-sm cursor-pointer"
                                   >
                                     Select All
                                   </button>
@@ -2989,7 +2982,7 @@ export default function AICallingAgentPage() {
                           <button
                             onClick={handleManualCall}
                             disabled={isCalling || !manualCall.phone}
-                            className="flex items-center gap-2 px-8 py-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-sm rounded-xl transition-colors shadow-lg shadow-indigo-600/30 w-full justify-center sm:w-auto"
+                            className="flex items-center gap-2 px-8 py-3.5 bg-indigo-600 hover:bg-indigo-700 border border-indigo-500/60 dark:border-indigo-400/60 disabled:opacity-50 text-white font-bold text-sm rounded-xl transition-all active:scale-95 hover:scale-[1.01] cursor-pointer shadow-lg shadow-indigo-600/30 w-full justify-center sm:w-auto"
                           >
                             {isCalling ? <><Activity size={16} className="animate-spin" /> Calling...</> : <><Phone size={16} /> Start AI Call</>}
                           </button>

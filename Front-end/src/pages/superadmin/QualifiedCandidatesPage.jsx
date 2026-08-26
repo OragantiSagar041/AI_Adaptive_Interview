@@ -126,12 +126,12 @@ export default function QualifiedCandidatesPage() {
     : "0.0"
 
   const STATS = [
-    { label: "Total Candidates", value: qualifiedCandidates.length.toString(), icon: Users, tone: "primary", colorClass: "bg-indigo-100 text-indigo-600" },
-    { label: "Avg AI Score", value: `${avgScore}%`, icon: Star, tone: "info", colorClass: "bg-blue-100 text-blue-600" },
-    { label: "Total Qualified Candidates", value: qualifiedCandidates.length.toString(), icon: UserCheck, tone: "chart-2", colorClass: "bg-emerald-100 text-emerald-600" },
-    { label: "Pending Review", value: qualifiedCandidates.filter(c => !c.reviewed).length.toString(), icon: ClipboardCheck, tone: "warning", colorClass: "bg-amber-100 text-amber-600" },
-    { label: "Ready to Hire", value: qualifiedCandidates.filter(c => Number(c.score ?? c.avg_score ?? 0) >= 85).length.toString(), icon: Target, tone: "success", colorClass: "bg-teal-100 text-teal-600" },
-    { label: "Offers Released", value: "0", icon: FileSignature, tone: "chart-5", colorClass: "bg-purple-100 text-purple-600" },
+    { label: "Total Candidates", value: qualifiedCandidates.length.toString(), icon: Users, tone: "primary", colorClass: "bg-indigo-100 text-indigo-600 dark:bg-indigo-950/70 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/60" },
+    { label: "Avg AI Score", value: `${avgScore}%`, icon: Star, tone: "info", colorClass: "bg-blue-100 text-blue-600 dark:bg-blue-950/70 dark:text-blue-400 border border-blue-200 dark:border-blue-800/60" },
+    { label: "Total Qualified Candidates", value: qualifiedCandidates.length.toString(), icon: UserCheck, tone: "chart-2", colorClass: "bg-emerald-100 text-emerald-600 dark:bg-emerald-950/70 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60" },
+    { label: "Pending Review", value: qualifiedCandidates.filter(c => !c.reviewed).length.toString(), icon: ClipboardCheck, tone: "warning", colorClass: "bg-amber-100 text-amber-600 dark:bg-amber-950/70 dark:text-amber-400 border border-amber-200 dark:border-amber-800/60" },
+    { label: "Ready to Hire", value: qualifiedCandidates.filter(c => Number(c.score ?? c.avg_score ?? 0) >= 85).length.toString(), icon: Target, tone: "success", colorClass: "bg-teal-100 text-teal-600 dark:bg-teal-950/70 dark:text-teal-400 border border-teal-200 dark:border-teal-800/60" },
+    { label: "Offers Released", value: "0", icon: FileSignature, tone: "chart-5", colorClass: "bg-purple-100 text-purple-600 dark:bg-purple-950/70 dark:text-purple-400 border border-purple-200 dark:border-purple-800/60" },
   ]
 
   return (
@@ -286,7 +286,10 @@ export default function QualifiedCandidatesPage() {
                     <tr key={c.id || c.link_id || c.email} onClick={() => setSelectedCandidate(c)} className="hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700/50 transition-colors group whitespace-nowrap cursor-pointer">
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 font-bold shrink-0 shadow-sm border border-indigo-100/50">
+                          <div
+                            className="flex h-10 w-10 items-center justify-center rounded-xl font-black text-white shrink-0 shadow-md border border-white/20"
+                            style={{ backgroundColor: ['#4f46e5', '#6366f1', '#4338ca', '#3b82f6', '#2563eb', '#1d4ed8'][(c.candidate_name || 'U').charCodeAt(0) % 6], color: '#ffffff' }}
+                          >
                             {(c.candidate_name || "U")[0].toUpperCase()}
                           </div>
                           <div>
