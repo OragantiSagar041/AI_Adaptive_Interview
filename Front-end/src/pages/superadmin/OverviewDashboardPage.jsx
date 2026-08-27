@@ -184,12 +184,12 @@ export default function OverviewDashboardPage() {
   return (
     <div className="flex flex-col gap-6 pb-24">
       <div className="flex justify-end items-center -mb-2 mt-2 px-2 z-10 relative">
-        <div className="flex items-center gap-3 bg-white px-4 py-1.5 rounded-xl border border-slate-200 shadow-sm hover:border-slate-300 transition-colors">
-          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Filter by Tenant Admin:</span>
+        <div className="flex items-center gap-3 bg-white dark:bg-slate-800/60 px-4 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:border-slate-300 transition-colors">
+          <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Filter by Tenant Admin:</span>
           <select
             value={selectedAdminFilter || ''}
             onChange={(e) => dispatch(setSelectedAdminFilter(e.target.value || null))}
-            className="w-full sm:w-auto rounded bg-slate-50 hover:bg-slate-100 px-3 py-1 text-xs text-slate-800 outline-none border border-transparent focus:border-indigo-500 transition-all font-semibold cursor-pointer"
+            className="w-full sm:w-auto rounded bg-slate-50 dark:bg-slate-900/50 hover:bg-slate-100 dark:bg-slate-800/50 px-3 py-1 text-xs text-slate-800 dark:text-slate-100 outline-none border border-transparent focus:border-indigo-500 transition-all font-semibold cursor-pointer"
           >
             <option value="">All Admins (Aggregated)</option>
             {subAdmins.map(adm => (
@@ -213,7 +213,7 @@ export default function OverviewDashboardPage() {
         onOpenQualified={() => navigate('/superadmin/qualified-candidates')}
       />
 
-      <Card className="bg-white/80 backdrop-blur-2xl border border-white/60 p-0 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-3xl flex flex-col gap-5 text-slate-800 overflow-hidden relative">
+      <Card className="bg-white dark:bg-slate-800/60/80 backdrop-blur-2xl border border-white/60 p-0 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-3xl flex flex-col gap-5 text-slate-800 dark:text-slate-100 overflow-hidden relative">
         <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-indigo-50/50 to-transparent pointer-events-none" />
         <div className="flex flex-col gap-6 px-5 pt-5 sm:px-7 sm:pt-7 relative z-10">
           <div className="flex items-center gap-4 border-b border-indigo-100/50 pb-5">
@@ -224,13 +224,13 @@ export default function OverviewDashboardPage() {
               <h3 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-slate-900 to-indigo-900 tracking-tight leading-tight">
                 Global Operations
               </h3>
-              <p className="text-sm text-slate-500 font-semibold tracking-wide mt-0.5">
+              <p className="text-sm text-slate-500 dark:text-slate-400 font-semibold tracking-wide mt-0.5">
                 SuperAdmin Dashboard Review
               </p>
             </div>
           </div>
 
-          <div className="w-full bg-slate-50/80 rounded-2xl border border-slate-200/60 p-3 shadow-inner overflow-hidden">
+          <div className="w-full bg-slate-50 dark:bg-slate-900/50/80 rounded-2xl border border-slate-200 dark:border-slate-700/60 p-3 shadow-inner overflow-hidden">
             <CandidateFilters
               searchTerm={searchTerm}
               setSearchTerm={(term) => dispatch(setSearchTerm(term))}
@@ -270,14 +270,14 @@ export default function OverviewDashboardPage() {
         />
 
         {creditRequests && creditRequests.length > 0 && (
-          <div className="mt-8 border-t border-slate-100 pt-8 px-6 pb-6 bg-slate-50 rounded-b-xl">
-            <h3 className="text-base font-bold text-slate-800 mb-4 flex items-center gap-2">
+          <div className="mt-8 border-t border-slate-100 dark:border-slate-800 pt-8 px-6 pb-6 bg-slate-50 dark:bg-slate-900/50 rounded-b-xl">
+            <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
               <i className="fas fa-layer-group text-indigo-500"></i> Pending Tenant Credit Requests
             </h3>
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse bg-white rounded-xl shadow-sm border border-slate-100">
+              <table className="w-full text-left border-collapse bg-white dark:bg-slate-800/60 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
                 <thead>
-                  <tr className="bg-slate-50/50 border-b border-slate-100 text-xs uppercase tracking-wider text-slate-500 font-semibold">
+                  <tr className="bg-slate-50 dark:bg-slate-900/50/50 border-b border-slate-100 dark:border-slate-800 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
                     <th className="p-4 rounded-tl-xl">Admin Name</th>
                     <th className="p-4">Requested Credits</th>
                     <th className="p-4">Date</th>
@@ -287,12 +287,12 @@ export default function OverviewDashboardPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {creditRequests.map(req => (
-                    <tr key={req.id || req._id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="p-4 text-sm font-semibold text-slate-700">
+                    <tr key={req.id || req._id} className="hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700/50 transition-colors">
+                      <td className="p-4 text-sm font-semibold text-slate-700 dark:text-slate-200">
                         {req.admin_name || req.admin_id} ({req.admin_email || 'No email'})
                       </td>
                       <td className="p-4 text-sm text-indigo-500 font-black">+{req.amount}</td>
-                      <td className="p-4 text-sm text-slate-500">{new Date(req.created_at).toLocaleDateString()}</td>
+                      <td className="p-4 text-sm text-slate-500 dark:text-slate-400">{new Date(req.created_at).toLocaleDateString()}</td>
                       <td className="p-4">
                         <span className="bg-amber-100 border border-amber-200 text-amber-700 text-xs font-bold px-2.5 py-1 rounded-full">Pending</span>
                       </td>
@@ -309,12 +309,12 @@ export default function OverviewDashboardPage() {
         )}
 
         {crashLogs && crashLogs.length > 0 && (
-          <div className="mt-8 border-t border-slate-100 pt-8 px-6 pb-6 bg-red-50/30 rounded-b-xl">
+          <div className="mt-8 border-t border-slate-100 dark:border-slate-800 pt-8 px-6 pb-6 bg-red-50/30 rounded-b-xl">
             <h3 className="text-base font-bold text-red-600 mb-4 flex items-center gap-2">
               <i className="fas fa-bug"></i> System Crash Logs
             </h3>
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse bg-white rounded-xl shadow-sm border border-red-100">
+              <table className="w-full text-left border-collapse bg-white dark:bg-slate-800/60 rounded-xl shadow-sm border border-red-100">
                 <thead>
                   <tr className="bg-red-50/50 border-b border-red-100 text-xs uppercase tracking-wider text-red-700 font-semibold">
                     <th className="p-4 rounded-tl-xl">Timestamp</th>
@@ -326,11 +326,11 @@ export default function OverviewDashboardPage() {
                 <tbody className="divide-y divide-red-100">
                   {crashLogs.map(log => (
                     <tr key={log._id} className="hover:bg-red-50/30 transition-colors">
-                      <td className="p-4 text-sm text-slate-600 whitespace-nowrap">
+                      <td className="p-4 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">
                         {new Date(log.timestamp).toLocaleString()}
                       </td>
-                      <td className="p-4 text-sm font-medium text-slate-800">
-                        <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded mr-2">{log.method}</span>
+                      <td className="p-4 text-sm font-medium text-slate-800 dark:text-slate-100">
+                        <span className="text-xs bg-slate-100 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 px-2 py-1 rounded mr-2">{log.method}</span>
                         {log.url}
                       </td>
                       <td className="p-4 text-sm text-red-600 font-bold">{log.error_type}</td>
@@ -354,38 +354,38 @@ export default function OverviewDashboardPage() {
       {/* Crash Log Modal */}
       {selectedCrashLog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-red-50">
+          <div className="bg-white dark:bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-red-50">
               <h2 className="text-xl font-bold text-red-600 flex items-center gap-2">
                 <i className="fas fa-exclamation-triangle"></i> Crash Details
               </h2>
               <button 
                 onClick={() => setSelectedCrashLog(null)}
-                className="text-slate-400 hover:text-slate-600 p-2 rounded-full hover:bg-white transition-colors"
+                className="text-slate-400 hover:text-slate-600 dark:text-slate-400 p-2 rounded-full hover:bg-white dark:bg-slate-800/60 transition-colors"
               >
                 <i className="fas fa-times"></i>
               </button>
             </div>
-            <div className="p-6 overflow-y-auto bg-slate-50">
+            <div className="p-6 overflow-y-auto bg-slate-50 dark:bg-slate-900/50">
               <div className="grid grid-cols-2 gap-4 mb-6">
-                <div className="bg-white p-4 rounded-xl border border-slate-200">
-                  <p className="text-xs text-slate-500 uppercase tracking-wider font-bold mb-1">Timestamp</p>
-                  <p className="text-sm font-medium text-slate-800">{new Date(selectedCrashLog.timestamp).toLocaleString()}</p>
+                <div className="bg-white dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider font-bold mb-1">Timestamp</p>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{new Date(selectedCrashLog.timestamp).toLocaleString()}</p>
                 </div>
-                <div className="bg-white p-4 rounded-xl border border-slate-200">
-                  <p className="text-xs text-slate-500 uppercase tracking-wider font-bold mb-1">Error Type</p>
+                <div className="bg-white dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider font-bold mb-1">Error Type</p>
                   <p className="text-sm font-bold text-red-600">{selectedCrashLog.error_type}</p>
                 </div>
-                <div className="bg-white p-4 rounded-xl border border-slate-200 col-span-2">
-                  <p className="text-xs text-slate-500 uppercase tracking-wider font-bold mb-1">Endpoint</p>
-                  <p className="text-sm font-medium text-slate-800 flex items-center gap-2">
-                    <span className="text-xs bg-slate-100 px-2 py-1 rounded">{selectedCrashLog.method}</span>
+                <div className="bg-white dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700 col-span-2">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider font-bold mb-1">Endpoint</p>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                    <span className="text-xs bg-slate-100 dark:bg-slate-800/50 px-2 py-1 rounded">{selectedCrashLog.method}</span>
                     {selectedCrashLog.url}
                   </p>
                 </div>
-                <div className="bg-white p-4 rounded-xl border border-slate-200 col-span-2">
-                  <p className="text-xs text-slate-500 uppercase tracking-wider font-bold mb-1">Error Message</p>
-                  <p className="text-sm font-medium text-slate-800">{selectedCrashLog.error_message}</p>
+                <div className="bg-white dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700 col-span-2">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider font-bold mb-1">Error Message</p>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{selectedCrashLog.error_message}</p>
                 </div>
               </div>
               

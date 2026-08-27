@@ -405,21 +405,56 @@ def sync_session_status(session: dict, current_time: datetime = None) -> str:
         return status
 
     # Check pending expiration
-    if status == "pending" and session.get("expires_at"):
-        try:
-            exp_dt = datetime.fromisoformat(session["expires_at"].replace('Z', '+00:00'))
-            if exp_dt.tzinfo is None:
-                exp_dt = exp_dt.replace(tzinfo=timezone.utc)
-            if current_time > exp_dt:
-                status = "expired"
-                if "_id" in session:
-                    interview_sessions_collection.update_one({"_id": session["_id"]}, {"$set": {"status": "expired"}})
-                session["status"] = status
-        except Exception:
-            pass
+    if status == "pending":
+        heartbeat_str = session.get("last_heartbeat_at")
+        if heartbeat_str:
+            try:
+                hb_time = datetime.fromisoformat(heartbeat_str.replace('Z', '+00:00'))
+                if hb_time.tzinfo is None:
+                    hb_time = hb_time.replace(tzinfo=timezone.utc)
+                # If they were on the setup screen and dropped out for > 5 mins
+                if (current_time - hb_time).total_seconds() > 300:
+                    status = "expired"
+                    if "_id" in session:
+                        interview_sessions_collection.update_one({"_id": session["_id"]}, {"$set": {"status": "expired", "completion_reason": "candidate_dropped_setup"}})
+                    session["status"] = status
+                    return status
+            except Exception:
+                pass
+
+        if session.get("expires_at"):
+            try:
+                exp_dt = datetime.fromisoformat(session["expires_at"].replace('Z', '+00:00'))
+                if exp_dt.tzinfo is None:
+                    exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+                if current_time > exp_dt:
+                    status = "expired"
+                    if "_id" in session:
+                        interview_sessions_collection.update_one({"_id": session["_id"]}, {"$set": {"status": "expired"}})
+                    session["status"] = status
+            except Exception:
+                pass
             
     # Check started expiration
     elif status == "started":
+        # 1. Fast Heartbeat-based Abandonment
+        heartbeat_str = session.get("last_heartbeat_at")
+        if heartbeat_str:
+            try:
+                hb_time = datetime.fromisoformat(heartbeat_str.replace('Z', '+00:00'))
+                if hb_time.tzinfo is None:
+                    hb_time = hb_time.replace(tzinfo=timezone.utc)
+                # If we haven't seen a heartbeat in 5 minutes (300s), mark it as completed (partial)
+                if (current_time - hb_time).total_seconds() > 300:
+                    status = "completed"
+                    if "_id" in session:
+                        interview_sessions_collection.update_one({"_id": session["_id"]}, {"$set": {"status": "completed", "completion_reason": "candidate_dropped"}})
+                    session["status"] = status
+                    return status
+            except Exception:
+                pass
+                
+        # 2. Hard timeout fallback
         time_ref_str = session.get("started_at") or session.get("created_at")
         if time_ref_str:
             try:
@@ -616,8 +651,8 @@ async def startup_event_db_and_email():
                 "subscription_plan": "master",
                 "created_at": datetime.now(timezone.utc).isoformat()
             })
-            print(f"Default master created: master / {master_pw} (Email: {default_email})")
-            
+            print(f"Default master account created. (Email: {default_email})")
+
         row = admins_collection.find_one({"username": "admin"})
         if not row:
             import secrets
@@ -635,7 +670,7 @@ async def startup_event_db_and_email():
                 "subscription_expiry": (datetime.now(timezone.utc) + timedelta(days=365)).isoformat(),
                 "created_at": datetime.now(timezone.utc).isoformat()
             })
-            print(f"Default admin created: admin / {admin_pw} (Email: {default_email})")
+            print(f"Default admin account created. (Email: {default_email})")
         else:
             # Upgrade legacy admin to tenant
             update_data = {}

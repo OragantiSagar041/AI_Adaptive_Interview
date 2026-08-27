@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useDispatch } from 'react-redux'
 import { setCredentials } from '../store/slices/authSlice'
 import { API_BASE_URL } from '../apiConfig'
-import logo from '../assets/logo.png'
+import logoImage from '../assets/logo.png'
+import ThemeToggle from '../components/ThemeToggle'
 import loginHero from '../assets/login_hero.png'
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
@@ -17,13 +18,22 @@ const CSS = `
 
   .lp-root {
     min-height: 100vh; width: 100%;
-    background: #080c14;
+    background: #f8fafc;
+    color: #0f172a;
     background-image:
-      radial-gradient(circle at 1px 1px, rgba(255,255,255,0.022) 1px, transparent 0);
+      radial-gradient(circle at 1px 1px, rgba(15,23,42,0.04) 1px, transparent 0);
     background-size: 36px 36px;
     overflow: hidden; position: relative;
     display: flex; flex-direction: column;
     font-family: 'Inter', -apple-system, sans-serif;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  .dark .lp-root {
+    background: #080c14;
+    color: #ffffff;
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(255,255,255,0.022) 1px, transparent 0);
   }
 
   /* ── Waves: ambient background layer elevated up the page ── */
@@ -62,31 +72,41 @@ const CSS = `
   }
   .lp-brand { margin-bottom: 36px; }
   .lp-headline {
-    font-size: clamp(2rem, 3.5vw, 2.65rem); font-weight: 800; color: #ffffff;
+    font-size: clamp(2rem, 3.5vw, 2.65rem); font-weight: 800; color: #0f172a;
     line-height: 1.12; letter-spacing: -0.035em; margin: 0 0 12px;
   }
+  .dark .lp-headline { color: #ffffff; }
+
   .lp-sub {
-    font-size: 0.95rem; color: rgba(203,213,225,0.58);
+    font-size: 0.95rem; color: #475569;
     line-height: 1.65; margin: 0; font-weight: 400;
   }
+  .dark .lp-sub { color: rgba(203,213,225,0.58); }
 
   /* ── Card ── */
   .lp-card {
     width: 100%;
     max-width: 420px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 20px; 
+    padding: 48px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+    position: relative;
+    overflow: hidden;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+  }
+
+  .dark .lp-card {
     background: linear-gradient(145deg, rgba(22, 22, 32, 0.45) 0%, rgba(10, 10, 15, 0.6) 100%);
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-top: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 20px; 
-    padding: 48px;
     backdrop-filter: blur(40px); 
     -webkit-backdrop-filter: blur(40px);
     box-shadow:
       0 4px 6px -1px rgba(0, 0, 0, 0.1),
       0 24px 48px -12px rgba(0, 0, 0, 0.6),
       inset 0 1px 0 rgba(255, 255, 255, 0.05);
-    position: relative;
-    overflow: hidden;
   }
   
   .lp-card::before {
@@ -107,23 +127,33 @@ const CSS = `
   .lp-field { display: flex; flex-direction: column; gap: 7px; }
   .lp-label {
     font-size: 0.72rem; font-weight: 700;
-    color: rgba(148,163,184,0.75);
+    color: #64748b;
     text-transform: uppercase; letter-spacing: 0.09em;
   }
+  .dark .lp-label { color: rgba(148,163,184,0.75); }
+
   .lp-input-wrap { position: relative; }
   .lp-input-icon {
     position: absolute; left: 15px; top: 50%; transform: translateY(-50%);
-    color: #a78bfa; font-size: 0.88rem; pointer-events: none; line-height: 1;
+    color: #6366f1; font-size: 0.88rem; pointer-events: none; line-height: 1;
     z-index: 1;
   }
+  .dark .lp-input-icon { color: #a78bfa; }
+
   .lp-input {
     width: 100%;
     padding: 14px 18px 14px 44px;
-    font-size: 0.92rem; font-family: inherit; color: #f1f5f9;
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.14);
+    font-size: 0.92rem; font-family: inherit; color: #0f172a;
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
     border-radius: 12px; outline: none;
     transition: border-color 0.22s ease, background 0.22s ease, box-shadow 0.22s ease;
+  }
+
+  .dark .lp-input {
+    color: #f1f5f9;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.14);
     box-shadow: 0 2px 8px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.06);
   }
   .lp-input::placeholder { color: rgba(148,163,184,0.5); font-size: 0.88rem; }
@@ -138,6 +168,11 @@ const CSS = `
   }
   .lp-input-pr { padding-right: 48px; }
   input:-webkit-autofill, input:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0 1000px #f1f5f9 inset !important;
+    -webkit-text-fill-color: #0f172a !important;
+    caret-color: #0f172a !important;
+  }
+  .dark input:-webkit-autofill, .dark input:-webkit-autofill:focus {
     -webkit-box-shadow: 0 0 0 1000px #0f0c1e inset !important;
     -webkit-text-fill-color: #f1f5f9 !important;
     caret-color: #f1f5f9 !important;
@@ -348,10 +383,7 @@ export default function LoginPage() {
   const [loading2FA, setLoading2FA] = useState(false)
   const [error2FA, setError2FA] = useState('')
 
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', 'dark')
-    document.documentElement.classList.add('dark')
-  }, [])
+
 
 
   const handleLogin = async (e) => {
@@ -538,7 +570,7 @@ export default function LoginPage() {
     <>
       <style>{CSS}</style>
 
-      <div className="lp-root">
+      <div className="lp-root relative">
 
         {/* Waves — elevated ambient background layer */}
         <div className="lp-waves-bg">
@@ -569,7 +601,7 @@ export default function LoginPage() {
             {/* LEFT: Login Form */}
             <div className="lp-left">
               <div className="lp-brand">
-                <img src={logo} alt="Hire IQ" style={{ height: '44px', objectFit: 'contain', display: 'block', marginBottom: '28px', filter: 'brightness(8) saturate(0.2)' }} />
+                <img src={logoImage} alt="Hire IQ" className="brand-logo-img" style={{ height: '44px', objectFit: 'contain', display: 'block', marginBottom: '28px' }} />
                 <h1 className="lp-headline">Welcome back</h1>
                 <p className="lp-sub">
                   Sign in to your Hire IQ admin workspace and<br />

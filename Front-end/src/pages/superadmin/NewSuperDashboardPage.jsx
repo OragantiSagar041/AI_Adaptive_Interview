@@ -26,8 +26,11 @@ import {
   ResponsiveContainer
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useTheme } from "../../context/ThemeContext";
 
 export default function NewSuperDashboardPage() {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const dbStats = useSelector((state) => state.dashboard.dbStats);
@@ -76,47 +79,52 @@ export default function NewSuperDashboardPage() {
   const PIE_COLORS = ["#10b981", "#ef4444"]; // Green for available, Red for used
 
   return (
-    <div className="p-8 h-full overflow-y-auto bg-slate-50">
+    <div className="p-8 h-full overflow-y-auto bg-background transition-colors duration-300">
       
       {/* Top Cards Row */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
         
+        {/* Available Credits */}
         <Card
-          className="bg-white border-none shadow-sm flex flex-col justify-center h-28 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md hover:border hover:border-emerald-200"
+          className="bg-card border border-border shadow-sm flex flex-col justify-center h-28 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md hover:border-emerald-500/50"
           onClick={() => navigate('/superadmin/dashboard')}
         >
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex flex-col">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">AVAILABLE CREDITS</span>
-              <span className="text-3xl font-bold text-emerald-500 tracking-tight">
+              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider mb-1">AVAILABLE CREDITS</span>
+              <span className="text-3xl font-extrabold text-emerald-500 dark:text-emerald-400 tracking-tight">
                 {dbStats?.credits_available ?? dbStats?.credits ?? '--'}
               </span>
+              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-0.5">Credits Left</span>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
-              <Coins className="w-5 h-5 text-emerald-500" />
+            <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 flex items-center justify-center shrink-0">
+              <Coins className="w-5 h-5 text-emerald-500 dark:text-emerald-400" />
             </div>
           </CardContent>
         </Card>
 
+        {/* Total Interviews */}
         <Card
-          className="bg-white border-none shadow-sm flex flex-col justify-center h-28 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md hover:border hover:border-indigo-200"
+          className="bg-card border border-border shadow-sm flex flex-col justify-center h-28 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md hover:border-indigo-500/50"
           onClick={() => navigate('/superadmin/dashboard')}
         >
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex flex-col">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">TOTAL INTERVIEWS</span>
-              <span className="text-3xl font-bold text-slate-800 tracking-tight">
+              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider mb-1">TOTAL INTERVIEWS</span>
+              <span className="text-3xl font-extrabold text-indigo-600 dark:text-indigo-400 tracking-tight">
                 {dbStats?.total ?? '--'}
               </span>
+              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-0.5">All Time</span>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
-              <Video className="w-5 h-5 text-indigo-500" />
+            <div className="w-11 h-11 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-500/20 flex items-center justify-center shrink-0">
+              <Video className="w-5 h-5 text-indigo-500 dark:text-indigo-400" />
             </div>
           </CardContent>
         </Card>
 
+        {/* Completed */}
         <Card
-          className="bg-white border-none shadow-sm flex flex-col justify-center h-28 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md hover:border hover:border-indigo-200"
+          className="bg-card border border-border shadow-sm flex flex-col justify-center h-28 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md hover:border-blue-500/50"
           onClick={() => {
             dispatch(setStatusFilter('completed'));
             navigate('/superadmin/interviews');
@@ -124,47 +132,52 @@ export default function NewSuperDashboardPage() {
         >
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex flex-col">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">COMPLETED</span>
-              <span className="text-3xl font-bold text-slate-800 tracking-tight">
+              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider mb-1">COMPLETED</span>
+              <span className="text-3xl font-extrabold text-blue-600 dark:text-blue-400 tracking-tight">
                 {dbStats?.completed ?? '--'}
               </span>
+              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-0.5">Completed Interviews</span>
             </div>
-            <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center shrink-0">
-              <CheckCircle2 className="w-5 h-5 text-indigo-500" />
+            <div className="w-11 h-11 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="w-5 h-5 text-blue-500 dark:text-blue-400" />
             </div>
           </CardContent>
         </Card>
 
+        {/* Pending */}
         <Card
-          className="bg-white border-none shadow-sm flex flex-col justify-center h-28 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md hover:border hover:border-amber-200"
+          className="bg-card border border-border shadow-sm flex flex-col justify-center h-28 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md hover:border-amber-500/50"
           onClick={() => navigate('/superadmin/dashboard')}
         >
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex flex-col">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">PENDING</span>
-              <span className="text-3xl font-bold text-slate-800 tracking-tight">
+              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider mb-1">PENDING</span>
+              <span className="text-3xl font-extrabold text-amber-500 dark:text-amber-400 tracking-tight">
                 {dbStats?.pending ?? '--'}
               </span>
+              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-0.5">Pending Interviews</span>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center shrink-0">
-              <Clock className="w-5 h-5 text-amber-500" />
+            <div className="w-11 h-11 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-100 dark:border-amber-500/20 flex items-center justify-center shrink-0">
+              <Clock className="w-5 h-5 text-amber-500 dark:text-amber-400" />
             </div>
           </CardContent>
         </Card>
 
+        {/* Recruiters */}
         <Card
-          className="bg-white border-none shadow-sm flex flex-col justify-center h-28 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md hover:border hover:border-blue-200"
+          className="bg-card border border-border shadow-sm flex flex-col justify-center h-28 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md hover:border-purple-500/50"
           onClick={() => navigate('/superadmin/team')}
         >
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex flex-col">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">RECRUITERS</span>
-              <span className="text-3xl font-bold text-slate-800 tracking-tight">
+              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider mb-1">RECRUITERS</span>
+              <span className="text-3xl font-extrabold text-purple-600 dark:text-purple-400 tracking-tight">
                 {dbStats?.recruiters_count ?? '--'}
               </span>
+              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-0.5">Total Recruiters</span>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
-              <Users className="w-5 h-5 text-blue-500" />
+            <div className="w-11 h-11 rounded-xl bg-purple-50 dark:bg-purple-500/10 border border-purple-100 dark:border-purple-500/20 flex items-center justify-center shrink-0">
+              <Users className="w-5 h-5 text-purple-500 dark:text-purple-400" />
             </div>
           </CardContent>
         </Card>
@@ -174,27 +187,33 @@ export default function NewSuperDashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Interviews Last 7 Days */}
-        <Card className="bg-white border-none shadow-sm h-[380px] flex flex-col">
+        <Card className="bg-card border border-border shadow-sm h-[380px] flex flex-col">
           <CardHeader className="pb-2">
-            <CardTitle className="text-[13px] font-bold text-slate-800 uppercase tracking-wide">
+            <CardTitle className="text-[13px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wide">
               INTERVIEWS LAST 7 DAYS
             </CardTitle>
           </CardHeader>
           <CardContent className="flex-1 min-h-0 pt-4">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={lineData} margin={{ top: 5, right: 20, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="date" tick={{fontSize: 10, fill: '#64748b'}} axisLine={false} tickLine={false} dy={10} />
-                <YAxis tick={{fontSize: 10, fill: '#64748b'}} axisLine={false} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? "rgba(255,255,255,0.06)" : "#f1f5f9"} />
+                <XAxis dataKey="date" tick={{fontSize: 10, fill: isDark ? '#94a3b8' : '#64748b'}} axisLine={false} tickLine={false} dy={10} />
+                <YAxis tick={{fontSize: 10, fill: isDark ? '#94a3b8' : '#64748b'}} axisLine={false} tickLine={false} />
                 <Tooltip 
-                  contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
+                  contentStyle={{
+                    backgroundColor: isDark ? '#131d35' : '#ffffff',
+                    borderColor: isDark ? '#223354' : '#e2e8f0',
+                    borderRadius: '12px',
+                    color: isDark ? '#ffffff' : '#0f172a',
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.4)'
+                  }}
                 />
                 <Line 
                   type="monotone" 
                   dataKey="interviews" 
                   stroke="#6366f1" 
                   strokeWidth={3}
-                  dot={{ r: 4, fill: '#fff', stroke: '#6366f1', strokeWidth: 2 }}
+                  dot={{ r: 4, fill: isDark ? '#111a2e' : '#fff', stroke: '#818cf8', strokeWidth: 2 }}
                   activeDot={{ r: 6 }}
                 />
               </LineChart>
@@ -203,19 +222,19 @@ export default function NewSuperDashboardPage() {
         </Card>
 
         {/* Interviews by Admin */}
-        <Card className="bg-white border-none shadow-sm h-[380px] flex flex-col">
+        <Card className="bg-card border border-border shadow-sm h-[380px] flex flex-col">
           <CardHeader className="pb-2">
-            <CardTitle className="text-[13px] font-bold text-slate-800 uppercase tracking-wide">
+            <CardTitle className="text-[13px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wide">
               INTERVIEWS BY ADMIN
             </CardTitle>
           </CardHeader>
           <CardContent className="flex-1 min-h-0 pt-4">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={barData} margin={{ top: 5, right: 20, left: -20, bottom: 40 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? "rgba(255,255,255,0.06)" : "#f1f5f9"} />
                 <XAxis 
                   dataKey="name" 
-                  tick={{fontSize: 10, fill: '#64748b'}} 
+                  tick={{fontSize: 10, fill: isDark ? '#94a3b8' : '#64748b'}} 
                   axisLine={false} 
                   tickLine={false} 
                   angle={-35}
@@ -223,10 +242,16 @@ export default function NewSuperDashboardPage() {
                   dx={-5}
                   dy={10}
                 />
-                <YAxis tick={{fontSize: 10, fill: '#64748b'}} axisLine={false} tickLine={false} />
+                <YAxis tick={{fontSize: 10, fill: isDark ? '#94a3b8' : '#64748b'}} axisLine={false} tickLine={false} />
                 <Tooltip 
-                  contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
-                  cursor={{fill: '#f8fafc'}}
+                  contentStyle={{
+                    backgroundColor: isDark ? '#131d35' : '#ffffff',
+                    borderColor: isDark ? '#223354' : '#e2e8f0',
+                    borderRadius: '12px',
+                    color: isDark ? '#ffffff' : '#0f172a',
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.4)'
+                  }}
+                  cursor={{fill: isDark ? 'rgba(255,255,255,0.03)' : '#f8fafc'}}
                 />
                 <Bar dataKey="value" fill="#6366f1" radius={[4, 4, 0, 0]} maxBarSize={40} />
               </BarChart>
@@ -235,9 +260,9 @@ export default function NewSuperDashboardPage() {
         </Card>
 
         {/* Credits Used vs Available */}
-        <Card className="bg-white border-none shadow-sm h-[380px] flex flex-col">
+        <Card className="bg-card border border-border shadow-sm h-[380px] flex flex-col">
           <CardHeader className="pb-2">
-            <CardTitle className="text-[13px] font-bold text-slate-800 uppercase tracking-wide">
+            <CardTitle className="text-[13px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wide">
               CREDITS USED VS AVAILABLE
             </CardTitle>
           </CardHeader>
@@ -247,10 +272,10 @@ export default function NewSuperDashboardPage() {
                 <Pie
                   data={pieData}
                   cx="50%"
-                  cy="50%"
-                  innerRadius={70}
-                  outerRadius={100}
-                  paddingAngle={2}
+                  cy="45%"
+                  innerRadius={65}
+                  outerRadius={95}
+                  paddingAngle={3}
                   dataKey="value"
                   stroke="none"
                 >
@@ -259,7 +284,13 @@ export default function NewSuperDashboardPage() {
                   ))}
                 </Pie>
                 <Tooltip 
-                  contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
+                  contentStyle={{
+                    backgroundColor: isDark ? '#131d35' : '#ffffff',
+                    borderColor: isDark ? '#223354' : '#e2e8f0',
+                    borderRadius: '12px',
+                    color: isDark ? '#ffffff' : '#0f172a',
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.4)'
+                  }}
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -267,12 +298,12 @@ export default function NewSuperDashboardPage() {
             {/* Custom Legend */}
             <div className="absolute bottom-6 left-0 right-0 flex justify-center items-center gap-6">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-2.5 bg-[#ef4444] rounded-[1px]"></div>
-                <span className="text-xs text-slate-600 font-medium">Credits Used</span>
+                <div className="w-6 h-2.5 bg-[#ef4444] rounded-[1px]"></div>
+                <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">Credits Used ({creditsUsed})</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-8 h-2.5 bg-[#10b981] rounded-[1px]"></div>
-                <span className="text-xs text-slate-600 font-medium">Credits Available</span>
+                <div className="w-6 h-2.5 bg-[#10b981] rounded-[1px]"></div>
+                <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">Credits Available ({creditsAvailable})</span>
               </div>
             </div>
           </CardContent>

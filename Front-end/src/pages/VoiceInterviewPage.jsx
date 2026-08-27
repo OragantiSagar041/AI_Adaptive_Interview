@@ -177,11 +177,7 @@ export default function VoiceInterviewPage() {
     ? _savedRound
     : 'pre_checks'
 
-  // Enforce Light Theme for Voice Interview
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', 'light')
-    document.documentElement.classList.remove('dark')
-  }, [])
+
 
   // Session
   const [loading, setLoading] = useState(true)
@@ -220,6 +216,7 @@ export default function VoiceInterviewPage() {
   const [securityAlert, setSecurityAlert] = useState('')
   const securityAlertTimerRef = useRef(null)
   const [interimText, setInterimText] = useState('')
+  const hasSpokenThisSessionRef = useRef(false)
   const [countdown, setCountdown] = useState(0)
   const countdownRef = useRef(0)
   const [roundDuration, setRoundDuration] = useState(900)
@@ -304,6 +301,7 @@ export default function VoiceInterviewPage() {
   const questionsRef = useRef([])
   const interviewIdRef = useRef('')
   const sessionDetailRef = useRef(null)
+  const candidateNameRef = useRef('')
   const roundRef = useRef('pre_checks')
   const chatBottomRef = useRef(null)
   const wsRef = useRef(null)
@@ -313,6 +311,7 @@ export default function VoiceInterviewPage() {
   const languageRef = useRef('English')
   const currentAudioRef = useRef(null)    // ← tracks active TTS audio so stopAudio() can kill it
   const isTransitioningRef = useRef(false)
+  const isTTSPlayingRef = useRef(false)
   const transitionToNextRoundRef = useRef(null)
 
   // ── Browser online/offline detection ────────────────────────────
@@ -381,6 +380,7 @@ export default function VoiceInterviewPage() {
   useEffect(() => { questionsRef.current = questions }, [questions])
   useEffect(() => { interviewIdRef.current = interviewId }, [interviewId])
   useEffect(() => { sessionDetailRef.current = sessionDetail }, [sessionDetail])
+  useEffect(() => { candidateNameRef.current = sessionDetail?.candidate_name || '' }, [sessionDetail])
   useEffect(() => { roundRef.current = round }, [round])
   useEffect(() => { languageRef.current = language }, [language])
   useEffect(() => { countdownRef.current = countdown }, [countdown])
@@ -393,7 +393,8 @@ export default function VoiceInterviewPage() {
 
     function connectWs() {
       if (!monitoringToken) return
-      const wsBase = API_BASE_URL.replace(/^http/, 'ws')
+      const base = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL
+      const wsBase = base.replace(/^http/, 'ws')
       const wsUrl = `${wsBase}/ws/interview/${linkId}?token=${encodeURIComponent(monitoringToken)}`
       const ws = new WebSocket(wsUrl)
 
@@ -712,6 +713,7 @@ export default function VoiceInterviewPage() {
 
         const qs = normalizeInterviewQuestions(sd)
           .filter(q => q.type !== 'coding' && q.type !== 'case_study') // verbal only
+          .slice(0, 22)
 
         if (!qs.length) throw new Error('No questions found for this session.')
         setQuestions(qs)
@@ -738,6 +740,7 @@ export default function VoiceInterviewPage() {
 
   // ── TTS with female voice ──────────────────────────────────────────────────
   const stopAudio = useCallback(() => {
+    isTTSPlayingRef.current = false
     if (activeAudioRef.current) {
       activeAudioRef.current.onended = null
       activeAudioRef.current.onerror = null
@@ -755,6 +758,7 @@ export default function VoiceInterviewPage() {
   }, [])
   const speak = useCallback(async (text, onEnd) => {
     stopAudio()  // cancel any previous audio first
+    isTTSPlayingRef.current = true
     try {
       setAiStatus('speaking')
       const res = await candidateFetch(`${API_BASE_URL}/tts`, {
@@ -776,6 +780,7 @@ export default function VoiceInterviewPage() {
       const audio = new Audio(url)
       activeAudioRef.current = audio
       audio.onended = () => {
+        isTTSPlayingRef.current = false
         currentAudioRef.current = null
         setAiStatus('listening')
         URL.revokeObjectURL(url)
@@ -783,17 +788,20 @@ export default function VoiceInterviewPage() {
         onEnd?.()
       }
       audio.onerror = () => {
+        isTTSPlayingRef.current = false
         currentAudioRef.current = null
         setAiStatus('idle')
         activeAudioRef.current = null
         onEnd?.()
       }
       audio.play().catch(() => {
+        isTTSPlayingRef.current = false
         currentAudioRef.current = null
         setAiStatus('idle')
         onEnd?.()
       })
     } catch (e) {
+      isTTSPlayingRef.current = false
       setAiStatus('idle')
       onEnd?.()
     }
@@ -848,8 +856,10 @@ export default function VoiceInterviewPage() {
         await document.documentElement.requestFullscreen().catch(() => { })
       }
 
+      const shouldRecord = sessionDetailRef.current?.record_video !== false
+
       // 1. Get Screen Stream - Always prompt candidate to share their screen
-      let screenStream
+      let screenStream = null
       try {
         screenStream = await navigator.mediaDevices.getDisplayMedia({
           video: { displaySurface: 'monitor', frameRate: 15, width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -895,27 +905,29 @@ export default function VoiceInterviewPage() {
           cameraStreamRef.current = micStream
         }
 
-        // Start Camera Recorder
-        const cameraMr = createVideoRecorder(micStream, [
-          'video/webm;codecs=vp8,opus',
-          'video/webm',
-          'video/mp4',
-        ])
-        cameraChunksRef.current = []
-        cameraBytesRef.current = 0
-        cameraRecordingTruncatedRef.current = false
-        cameraMr.ondataavailable = e => {
-          if (e.data.size <= 0) return
-          if (cameraBytesRef.current + e.data.size > MAX_RECORDING_BYTES_PER_STREAM) {
-            cameraRecordingTruncatedRef.current = true
-            if (cameraMr.state === 'recording') cameraMr.stop()
-            return
+        if (shouldRecord) {
+          // Start Camera Recorder
+          const cameraMr = createVideoRecorder(micStream, [
+            'video/webm;codecs=vp8,opus',
+            'video/webm',
+            'video/mp4',
+          ])
+          cameraChunksRef.current = []
+          cameraBytesRef.current = 0
+          cameraRecordingTruncatedRef.current = false
+          cameraMr.ondataavailable = e => {
+            if (e.data.size <= 0) return
+            if (cameraBytesRef.current + e.data.size > MAX_RECORDING_BYTES_PER_STREAM) {
+              cameraRecordingTruncatedRef.current = true
+              if (cameraMr.state === 'recording') cameraMr.stop()
+              return
+            }
+            cameraBytesRef.current += e.data.size
+            cameraChunksRef.current.push(e.data)
           }
-          cameraBytesRef.current += e.data.size
-          cameraChunksRef.current.push(e.data)
+          cameraMr.start(5000)
+          cameraRecorderRef.current = cameraMr
         }
-        cameraMr.start(5000)
-        cameraRecorderRef.current = cameraMr
 
         // Attach for Proctoring
         if (candidateVideoRef.current) {
@@ -927,72 +939,74 @@ export default function VoiceInterviewPage() {
         console.warn("Could not get camera/mic stream for recording:", err)
       }
 
-      // 3. Mix audio for Screen Recording (so screen has mic audio too)
-      if (micStream) {
-        const ctx = new AudioContext()
-        const dest = ctx.createMediaStreamDestination()
-        micStream.getAudioTracks().forEach(t => {
-          const src = ctx.createMediaStreamSource(new MediaStream([t]))
-          src.connect(dest)
-        })
-        screenStream.getAudioTracks().forEach(t => {
-          const src = ctx.createMediaStreamSource(new MediaStream([t]))
-          src.connect(dest)
-        })
-        const combinedScreen = new MediaStream([...screenStream.getVideoTracks(), ...dest.stream.getAudioTracks()])
-        mediaStreamRef.current = combinedScreen
+      if (shouldRecord) {
+        // 3. Mix audio for Screen Recording (so screen has mic audio too)
+        if (micStream) {
+          const ctx = new AudioContext()
+          const dest = ctx.createMediaStreamDestination()
+          micStream.getAudioTracks().forEach(t => {
+            const src = ctx.createMediaStreamSource(new MediaStream([t]))
+            src.connect(dest)
+          })
+          screenStream.getAudioTracks().forEach(t => {
+            const src = ctx.createMediaStreamSource(new MediaStream([t]))
+            src.connect(dest)
+          })
+          const combinedScreen = new MediaStream([...screenStream.getVideoTracks(), ...dest.stream.getAudioTracks()])
+          mediaStreamRef.current = combinedScreen
 
-        const mr = createVideoRecorder(combinedScreen, [
-          'video/webm;codecs=vp8,opus',
-          'video/webm',
-          'video/mp4',
-        ])
-        recordedChunksRef.current = []
-        recordedBytesRef.current = 0
-        screenRecordingTruncatedRef.current = false
-        mr.ondataavailable = e => {
-          if (e.data.size <= 0) return
-          if (recordedBytesRef.current + e.data.size > MAX_RECORDING_BYTES_PER_STREAM) {
-            screenRecordingTruncatedRef.current = true
-            if (mr.state === 'recording') mr.stop()
-            return
+          const mr = createVideoRecorder(combinedScreen, [
+            'video/webm;codecs=vp8,opus',
+            'video/webm',
+            'video/mp4',
+          ])
+          recordedChunksRef.current = []
+          recordedBytesRef.current = 0
+          screenRecordingTruncatedRef.current = false
+          mr.ondataavailable = e => {
+            if (e.data.size <= 0) return
+            if (recordedBytesRef.current + e.data.size > MAX_RECORDING_BYTES_PER_STREAM) {
+              screenRecordingTruncatedRef.current = true
+              if (mr.state === 'recording') mr.stop()
+              return
+            }
+            recordedBytesRef.current += e.data.size
+            recordedChunksRef.current.push(e.data)
           }
-          recordedBytesRef.current += e.data.size
-          recordedChunksRef.current.push(e.data)
-        }
-        mr.start(5000)
-        mediaRecorderRef.current = mr
-      } else {
-        mediaStreamRef.current = screenStream
-        const mr = createVideoRecorder(screenStream, [
-          'video/webm;codecs=vp8',
-          'video/webm',
-          'video/mp4',
-        ])
-        recordedChunksRef.current = []
-        recordedBytesRef.current = 0
-        screenRecordingTruncatedRef.current = false
-        mr.ondataavailable = e => {
-          if (e.data.size <= 0) return
-          if (recordedBytesRef.current + e.data.size > MAX_RECORDING_BYTES_PER_STREAM) {
-            screenRecordingTruncatedRef.current = true
-            if (mr.state === 'recording') mr.stop()
-            return
+          mr.start(5000)
+          mediaRecorderRef.current = mr
+        } else {
+          mediaStreamRef.current = screenStream
+          const mr = createVideoRecorder(screenStream, [
+            'video/webm;codecs=vp8',
+            'video/webm',
+            'video/mp4',
+          ])
+          recordedChunksRef.current = []
+          recordedBytesRef.current = 0
+          screenRecordingTruncatedRef.current = false
+          mr.ondataavailable = e => {
+            if (e.data.size <= 0) return
+            if (recordedBytesRef.current + e.data.size > MAX_RECORDING_BYTES_PER_STREAM) {
+              screenRecordingTruncatedRef.current = true
+              if (mr.state === 'recording') mr.stop()
+              return
+            }
+            recordedBytesRef.current += e.data.size
+            recordedChunksRef.current.push(e.data)
           }
-          recordedBytesRef.current += e.data.size
-          recordedChunksRef.current.push(e.data)
+          mr.start(5000)
+          mediaRecorderRef.current = mr
         }
-        mr.start(5000)
-        mediaRecorderRef.current = mr
       }
 
       setIsRecording(true)
       return true
     } catch (e) {
-      console.warn('Screen recording not available or denied:', e)
+      console.warn('Screen/Camera setup failed or denied:', e)
       await Swal.fire({
-        title: 'Screen Sharing Required',
-        text: e?.message || 'Share your entire screen to start this proctored interview.',
+        title: sessionDetailRef.current?.record_video !== false ? 'Screen Sharing Required' : 'Permissions Required',
+        text: e?.message || 'Please grant the required permissions to start this proctored interview.',
         icon: 'warning',
         background: '#161c2d',
         color: '#fff',
@@ -1171,6 +1185,7 @@ export default function VoiceInterviewPage() {
 
   // Send /stt request with HTTP 429 exponential backoff retry
   const sendSttRequestWithRetry = useCallback(async (seq, validAudioBlob, langCode, retriesLeft = 1, backoffMs = 800) => {
+    if (isTTSPlayingRef.current) return '' // Hard gate: ignore audio chunks captured while TTS is reading a question
     const fd = new FormData()
     const extension = validAudioBlob.type.includes('ogg')
       ? 'ogg'
@@ -1178,11 +1193,35 @@ export default function VoiceInterviewPage() {
         ? 'mp4'
         : 'webm'
     fd.append('file', validAudioBlob, `utterance_${seq}.${extension}`)
+    if (sessionDetailRef.current?.candidate_name) {
+      fd.append('candidate_name', sessionDetailRef.current.candidate_name)
+    }
+    fd.append('language', languageRef.current || 'English')
+    const webSpeechFallback = (accumulatedTranscriptRef.current || interimTextRef.current || '').trim()
+    if (webSpeechFallback) {
+      fd.append('fallback_text', webSpeechFallback)
+    }
+
+    // Append known_terms (skills, role, company name) to steer Whisper vocabulary
+    const rawTerms = [
+      sessionDetailRef.current?.company_name,
+      sessionDetailRef.current?.company,
+      sessionDetailRef.current?.role,
+      sessionDetailRef.current?.job_role,
+      sessionDetailRef.current?.interview_title,
+      ...(Array.isArray(sessionDetailRef.current?.skills) ? sessionDetailRef.current.skills : (sessionDetailRef.current?.skills ? sessionDetailRef.current.skills.split(',') : [])),
+      ...(Array.isArray(sessionDetailRef.current?.known_terms) ? sessionDetailRef.current.known_terms : [])
+    ].filter(Boolean).map(s => String(s).trim()).filter(s => s.length > 1)
+    const cleanKnownTerms = Array.from(new Set(rawTerms)).join(', ')
+    if (cleanKnownTerms) {
+      fd.append('known_terms', cleanKnownTerms)
+    }
+
     const t0 = performance.now()
 
     try {
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 15000)
+      const timeoutId = setTimeout(() => controller.abort(), 25000)
       let res
       try {
         res = await candidateFetch(
@@ -1215,6 +1254,13 @@ export default function VoiceInterviewPage() {
 
         if (data && data.transcript && data.transcript.trim()) {
           const freshWhisper = data.transcript.trim()
+          
+          const isHallucination = /^(transcribe verbatim\.?|thank you(?:\s+for\s+(?:watching|listening))?\.?|amara\.org\.?|subtitles by\s.*)$/i.test(freshWhisper)
+          if (isHallucination) {
+            console.debug(`[STT HALLUCINATION GATE] Ignored: "${freshWhisper}"`)
+            return ''
+          }
+
           // Each Whisper chunk is a 12-second audio slice — consecutive slices
           // OVERLAP at the boundary. We must APPEND only the new tail rather
           // than replace the whole transcript, otherwise every chunk wipes out
@@ -1399,7 +1445,8 @@ export default function VoiceInterviewPage() {
     return getAuthoritativeTranscript()
   }, [getAuthoritativeTranscript])
 
-  const startListening = useCallback((onFinish, preserveTranscript = false) => {
+  const startListening = useCallback(async (onFinish, preserveTranscript = false) => {
+    if (isListeningRef.current && !preserveTranscript) return // Prevent duplicate STT listeners
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
     clearInterval(whisperFlushTimerRef.current)
     whisperFlushTimerRef.current = null
@@ -1451,6 +1498,7 @@ export default function VoiceInterviewPage() {
     }
     isListeningRef.current = true
     if (!preserveTranscript) {
+      hasSpokenThisSessionRef.current = false
       accumulatedTranscriptRef.current = ''
       currentSessionFinalRef.current = ''
       currentTxRef.current = ''
@@ -1471,11 +1519,18 @@ export default function VoiceInterviewPage() {
     // ── Continuous 2.5s decodable audio stream recorder for Groq Whisper ──
     if (
       (!whisperRecorderRef.current || whisperRecorderRef.current.state === 'inactive') &&
-      cameraStreamRef.current &&
-      cameraStreamRef.current.getAudioTracks().length > 0
+      cameraStreamRef.current
     ) {
       try {
-        const audioStream = new MediaStream(cameraStreamRef.current.getAudioTracks())
+        // Get live audio tracks — fall back to a fresh mic stream if any are ended
+        let liveAudioTracks = (cameraStreamRef.current.getAudioTracks() || []).filter(t => t.readyState === 'live')
+        if (liveAudioTracks.length === 0) {
+          console.warn('[STT] Audio tracks ended, requesting fresh mic stream for Whisper')
+          const freshMic = await navigator.mediaDevices.getUserMedia({ audio: true })
+          liveAudioTracks = freshMic.getAudioTracks()
+          liveAudioTracks.forEach(t => cameraStreamRef.current.addTrack(t))
+        }
+        const audioStream = new MediaStream(liveAudioTracks)
         const mimeCandidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4']
         const mime = mimeCandidates.find(value => MediaRecorder.isTypeSupported(value)) || ''
         const mr = new MediaRecorder(audioStream, mime ? { mimeType: mime } : undefined)
@@ -1498,12 +1553,26 @@ export default function VoiceInterviewPage() {
           src.connect(analyser)
           const buf = new Float32Array(analyser.fftSize)
           let rafId = 0
+          let lastSilenceReset = 0
           const tickRms = () => {
             analyser.getFloatTimeDomainData(buf)
             let sumSq = 0
             for (let i = 0; i < buf.length; i++) sumSq += buf[i] * buf[i]
             const rms = Math.sqrt(sumSq / buf.length)
             if (rms > chunkPeakRmsRef.current) chunkPeakRmsRef.current = rms
+
+            const now = Date.now()
+            if (rms > CHUNK_SEND_RMS_THRESHOLD && now - lastSilenceReset > 500) {
+              hasSpokenThisSessionRef.current = true
+              lastSilenceReset = now
+              clearTimeout(silenceTimerRef.current)
+              silenceTimerRef.current = setTimeout(() => {
+                if (isListeningRef.current) {
+                  finishListening().then(fullAns => onFinish?.(fullAns))
+                }
+              }, 8000)
+            }
+
             rafId = requestAnimationFrame(tickRms)
           }
           tickRms()
@@ -1523,18 +1592,15 @@ export default function VoiceInterviewPage() {
           }
         }
         mr.onstop = async () => {
-          // Drop the callback if a newer recorder has already taken over
           if (myGeneration !== whisperRecorderGenerationRef.current) return
           if (rmsAnalyserCleanup) rmsAnalyserCleanup()
+          const stillListening = isListeningRef.current
           try {
             const validAudioBlob = new Blob(whisperChunksRef.current, {
               type: mr.mimeType || mime || 'audio/webm',
             })
             whisperChunksRef.current = []
             const peak = chunkPeakRmsRef.current
-            // Skip /stt entirely when the chunk was below the silence threshold.
-            // Whisper WILL hallucinate on silence no matter how we prompt it,
-            // so the only safe option is to not send at all.
             const isSilent = peak < CHUNK_SEND_RMS_THRESHOLD
             if (validAudioBlob.size > 1000 && !isSilent) {
               lastSttHadAudioRef.current = true
@@ -1554,33 +1620,36 @@ export default function VoiceInterviewPage() {
               whisperRecorderRef.current = null
               resolveWhisperStopRef.current?.()
               resolveWhisperStopRef.current = null
-              if (isListeningRef.current && whisperRecorderRef.current === null) {
+              // Only restart the recording loop if we are still actively listening
+              if (stillListening && isListeningRef.current) {
                 startListening(onFinish, true)
               }
             }
           }
         }
-        mr.start(1000)
+        mr.start(3000)
         whisperFlushTimerRef.current = setInterval(() => {
           if (whisperRecorderRef.current && whisperRecorderRef.current.state === 'recording') {
             try {
               whisperRecorderRef.current.stop()
             } catch (_) { }
           }
-        }, 12000)
+        }, 3000)
       } catch (err) {
         console.warn('Failed to start Whisper chunk recorder:', err)
         resolveWhisperStopRef.current?.()
       }
     }
 
-    // Grace period: if nothing heard in 12s, auto-submit
-    clearTimeout(silenceTimerRef.current)
-    silenceTimerRef.current = setTimeout(() => {
-      if (isListeningRef.current) {
-        finishListening().then(fullAns => onFinish?.(fullAns))
-      }
-    }, rec ? 12000 : 30000)
+    // Grace period: if nothing heard initially, wait 15-20s before auto-submit
+    if (!preserveTranscript) {
+      clearTimeout(silenceTimerRef.current)
+      silenceTimerRef.current = setTimeout(() => {
+        if (isListeningRef.current) {
+          finishListening().then(fullAns => onFinish?.(fullAns))
+        }
+      }, rec ? 15000 : 20000)
+    }
 
     const mergeTranscripts = (accumulated, sessionFinal, sessionInterim) => {
       const acc = (accumulated || '').trim()
@@ -1646,7 +1715,7 @@ export default function VoiceInterviewPage() {
     }
 
     if (rec) rec.onresult = ev => {
-      if (!isListeningRef.current) return
+      if (!isListeningRef.current || isTTSPlayingRef.current) return
       let finalStr = '', interimStr = ''
       for (let i = 0; i < ev.results.length; i++) {
         if (ev.results[i].isFinal) {
@@ -1682,13 +1751,14 @@ export default function VoiceInterviewPage() {
       // Always update the interim ghost text for live feedback
       setInterimText(formattedInterim || '')
 
-      // Reset silence timer whenever speech is heard (45s of silence before auto-advance)
+      // Reset silence timer whenever speech is heard (3s of silence before auto-advance)
+      hasSpokenThisSessionRef.current = true
       clearTimeout(silenceTimerRef.current)
       silenceTimerRef.current = setTimeout(() => {
         if (isListeningRef.current) {
           finishListening().then(fullAns => onFinish?.(fullAns))
         }
-      }, 45000)
+      }, 3000)
 
       clearTimeout(webSpeechWatchdogRef.current)
       // Chrome's continuous-recognition timer is approximately 60 seconds —
@@ -1874,7 +1944,7 @@ export default function VoiceInterviewPage() {
         fupCount > 0
       )
 
-      if (askedFollowUpsCountRef.current < 5 && !isCurrentFollowUp && answer.trim()) {
+      if (qs.length < 22 && askedFollowUpsCountRef.current < 5 && !isCurrentFollowUp && answer.trim()) {
         setAiStatus('thinking')
         try {
           const res = await candidateFetch(`${API_BASE_URL}/generate-next-question`, {
@@ -1913,11 +1983,12 @@ export default function VoiceInterviewPage() {
                 category: data.category || 'Deep Dive'
               }
 
-              // Insert it at qIdx + 1
+              // Insert it at qIdx + 1 and cap total questions to exactly 22
               const updatedQs = [...qs]
               updatedQs.splice(qIdx + 1, 0, newQ)
-              setQuestions(updatedQs)
-              questionsRef.current = updatedQs
+              const cappedQs = updatedQs.slice(0, 22)
+              setQuestions(cappedQs)
+              questionsRef.current = cappedQs
               setCurrentQIdx(qIdx + 1)
 
               // Set AI to speaking and say the question
@@ -1969,7 +2040,7 @@ export default function VoiceInterviewPage() {
         if (prefetchedQuestionsRef.current.length > 0) {
           const batch = prefetchedQuestionsRef.current
           prefetchedQuestionsRef.current = []
-          const newQs = [...qs, ...batch]
+          const newQs = [...qs, ...batch].slice(0, 22)
           setQuestions(newQs)
           questionsRef.current = newQs
           setCurrentQIdx(nextIdx)
@@ -2453,7 +2524,7 @@ export default function VoiceInterviewPage() {
   const proctoring = useProctoring({
     videoRef: candidateVideoRef,
     enabled: round !== 'done' && round !== 'pre_checks' && round !== 'intro' && round !== 'submitting',
-    maxAlerts: 10,
+    maxAlerts: 30,
     onViolation: (v) => {
       logProctoringAlert(v.type, v.message)
     },
@@ -2605,7 +2676,7 @@ export default function VoiceInterviewPage() {
       <>
         <ErrorBoundary>
           <React.Suspense fallback={<div className="flex h-screen items-center justify-center text-white text-xl bg-[#0a0f1e]">Loading coding environment...</div>}>
-            <VoiceCodingRound question={codingQuestion} interviewId={interviewId} linkId={linkId} duration={roundDuration}
+            <VoiceCodingRound question={codingQuestion} interviewId={interviewId} linkId={linkId} duration={roundDuration} warningsCount={warningsCount}
               sessionDetail={sessionDetail} language={language} wsRef={wsRef} onComplete={() => {
                 const type = interviewType
                 if (type === 'Non-Technical') {
@@ -2735,6 +2806,11 @@ export default function VoiceInterviewPage() {
           <div className={`text-sm font-mono font-bold px-4 py-1.5 rounded-full border ${countdown < 300 ? 'border-rose-500/50 text-rose-400 bg-rose-500/10' : 'border-indigo-500/30 text-indigo-300 bg-indigo-500/10'}`}>
             <i className="fas fa-clock mr-2" />{fmt(countdown)}
           </div>
+          {warningsCount > 0 && (
+            <div className="flex items-center gap-1 px-3 py-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-400 text-xs font-bold" title={`${warningsCount} proctoring alert${warningsCount > 1 ? 's' : ''} detected`}>
+              <i className="fas fa-exclamation-triangle text-[10px]" />{warningsCount}
+            </div>
+          )}
         </div>
       </header>
 
@@ -3166,7 +3242,7 @@ export default function VoiceInterviewPage() {
             { i: 'fa-volume-up', c: 'text-indigo-400', t: 'I speak each question aloud — listen before answering' },
             { i: 'fa-microphone', c: 'text-emerald-400', t: 'Just talk naturally — your mic captures everything' },
             { i: 'fa-comment-dots', c: 'text-violet-400', t: 'I\'ll ask follow-up questions based on your answers' },
-            { i: 'fa-arrow-right', c: 'text-amber-400', t: 'After 5 seconds of silence, the interview auto-advances' },
+            { i: 'fa-arrow-right', c: 'text-amber-400', t: 'After 3 seconds of silence, the interview auto-advances' },
           ].map((tip, idx) => (
             <div key={idx} className="flex items-center gap-3 bg-white/4 border border-white/6 rounded-xl px-5 py-3">
               <i className={`fas ${tip.i} ${tip.c} w-5 text-center`} />
@@ -3240,7 +3316,12 @@ export default function VoiceInterviewPage() {
           <div className={`text-sm font-mono font-bold px-4 py-1.5 rounded-full border ${countdown < 300 ? 'border-rose-500/50 text-rose-400 bg-rose-500/10' : 'border-indigo-500/30 text-indigo-300 bg-indigo-500/10'}`}>
             <i className="fas fa-clock mr-2" />{fmt(countdown)}
           </div>
-          <span className="text-sm text-slate-400">Q <span className="text-white font-bold">{currentQIdx + 1}</span>/{questions.length}</span>
+          {warningsCount > 0 && (
+            <div className="flex items-center gap-1 px-3 py-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-400 text-xs font-bold" title={`${warningsCount} proctoring alert${warningsCount > 1 ? 's' : ''} detected`}>
+              <i className="fas fa-exclamation-triangle text-[10px]" />{warningsCount}
+            </div>
+          )}
+          <span className="text-sm text-slate-400 font-medium">Q <span className="text-white font-bold">{currentQIdx + 1}</span>/{questions.length}</span>
         </div>
       </header>
 
@@ -3325,11 +3406,20 @@ export default function VoiceInterviewPage() {
         <div className="w-full max-w-lg space-y-4 shrink-0 mt-6">
           <div className="flex gap-2">
             <button onClick={async () => {
+              if (isTransitioningRef.current) return
               if (aiStatus === 'listening') {
                 const fullAns = await finishListening()
+                if (!fullAns.trim()) {
+                  const t = VOICE_TRANSLATIONS[languageRef.current] || VOICE_TRANSLATIONS['English']
+                  const hint = t.csNeedMore || 'Please speak your answer before submitting, or say skip.'
+                  aiSay(hint, () => startListening(ans => handleAnswer(ans, currentQIdx, 0)))
+                  return
+                }
                 handleAnswer(fullAns, currentQIdx, 0)
+              } else {
+                stopAudio()
+                startListening(ans => handleAnswer(ans, currentQIdx, 0))
               }
-              else { startListening(ans => handleAnswer(ans, currentQIdx, 0)) }
             }} className={`flex-1 py-3.5 rounded-2xl text-sm font-bold transition-all flex items-center justify-center gap-2.5 ${aiStatus === 'listening'
               ? 'bg-rose-500/15 border border-rose-500/30 text-rose-400 shadow-[0_0_30px_rgba(239,68,68,.15)]'
               : 'bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20'

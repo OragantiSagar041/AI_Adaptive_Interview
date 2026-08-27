@@ -16,6 +16,8 @@ describe('Frontend Core Sanity & WebRTC Config Tests', () => {
   test('apiConfig exports API_BASE_URL properly', async () => {
     const { API_BASE_URL } = await import('../src/apiConfig.js');
     assert.ok(typeof API_BASE_URL === 'string', 'API_BASE_URL should be a string');
-    assert.ok(API_BASE_URL.length > 0, 'API_BASE_URL should not be empty');
+    // In CI or production without env var, it correctly falls back to an empty string for relative paths
+    // In local environments, it uses http://127.0.0.1:8000
+    assert.ok(API_BASE_URL === '' || API_BASE_URL.includes('127.0.0.1') || API_BASE_URL.includes('localhost'), 'API_BASE_URL should fall back to empty string or local origin');
   });
 });

@@ -94,6 +94,30 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# ─────────────────────────────────────────────────────────────────────────────
+# TOKEN REFRESH  —  silently extend a valid session without re-entering creds
+# ─────────────────────────────────────────────────────────────────────────────
+@router.post("/token/refresh")
+def refresh_token(current_admin: dict = Depends(get_current_admin_details)):
+    """
+    Re-issue a fresh access token for the currently authenticated admin.
+    The existing token must still be valid (not yet expired) to call this.
+    The frontend should call this proactively (e.g. every 30 min) to keep
+    the session alive without requiring the user to log in again.
+    """
+    global_policies = security_policies_collection.find_one({"_id": "global_policies"}) or {}
+    expires_delta = timedelta(hours=8) if global_policies.get("strict_session_timeout", False) else None
+
+    new_token = create_access_token(
+        data={
+            "sub": str(current_admin["admin_id"]),
+            "role": current_admin.get("role", "tenant"),
+            "company_id": str(current_admin.get("company_id", "")),
+        },
+        expires_delta=expires_delta,
+    )
+    return {"token": new_token}
+
 @router.post("/admin/firebase-auth")
 def firebase_auth(data: FirebaseAuthRequest):
     normalized_email = data.email.strip().lower()
@@ -241,15 +265,19 @@ def admin_login(data: AdminLogin, request: Request):
             "admin_id": str(user["_id"])
         }
         
-    # 3. Strict Session Timeout (30 mins if enabled, else default 7 days)
-    expires_delta = timedelta(minutes=30) if global_policies.get("strict_session_timeout") else None
-        
+    # 3. Session Timeout
+    # strict_session_timeout defaults to False — only enabled if the superadmin explicitly turns it on.
+    # When ENABLED: 8 hours (enough for a full working day — the old 30min was auto-logging everyone out)
+    # When DISABLED (default): 7 days
+    expires_delta = timedelta(hours=8) if global_policies.get("strict_session_timeout", False) else None
+
     access_token = create_access_token(data={"sub": str(user["_id"]), "role": user.get("role", "tenant"), "company_id": str(user.get("company_id", ""))}, expires_delta=expires_delta)
     
     # Log successful login event
     security_logs_collection.insert_one({
         "event_type": "SUCCESSFUL_LOGIN",
         "username": user["username"],
+        "role": user.get("role", "tenant"),
         "ip_address": client_ip,
         "timestamp": datetime.now(timezone.utc).isoformat()
     })
@@ -347,7 +375,7 @@ def verify_2fa(data: Verify2FA, request: Request):
     admins_collection.update_one({"_id": user["_id"]}, {"$unset": {"otp": "", "otp_expiry": ""}})
     
     global_policies = security_policies_collection.find_one({"_id": "global_policies"}) or {}
-    expires_delta = timedelta(minutes=30) if global_policies.get("strict_session_timeout") else None
+    expires_delta = timedelta(hours=8) if global_policies.get("strict_session_timeout", False) else None
     
     access_token = create_access_token(data={"sub": str(user["_id"]), "role": user.get("role", "tenant"), "company_id": str(user.get("company_id", ""))}, expires_delta=expires_delta)
     
@@ -357,6 +385,7 @@ def verify_2fa(data: Verify2FA, request: Request):
     security_logs_collection.insert_one({
         "event_type": "SUCCESSFUL_LOGIN",
         "username": user["username"],
+        "role": user.get("role", "tenant"),
         "ip_address": client_ip,
         "timestamp": now_dt.isoformat()
     })

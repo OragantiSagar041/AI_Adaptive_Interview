@@ -77,25 +77,6 @@ export default function MasterPage() {
   const mrrChartInstance = useRef(null)
   const planDistChartInstance = useRef(null)
 
-  // Accent color switcher
-  const [accentColor, setAccentColor] = useState('indigo')
-  const colors = {
-    teal: { primary: '#0d9488', hover: '#0f766e' },
-    indigo: { primary: '#6366f1', hover: '#4f46e5' },
-    purple: { primary: '#9333ea', hover: '#7e22ce' },
-    red: { primary: '#e11d48', hover: '#be123c' },
-    green: { primary: '#16a34a', hover: '#15803d' },
-    blue: { primary: '#2563eb', hover: '#1d4ed8' }
-  }
-  const currentAccent = colors[accentColor] || colors.indigo
-
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', 'light')
-    document.documentElement.style.setProperty('--accent-theme-color', currentAccent.primary)
-    document.documentElement.style.setProperty('--primary-color', currentAccent.primary)
-    document.documentElement.style.setProperty('--primary-hover', currentAccent.hover)
-  }, [accentColor, currentAccent])
-
   // Sync / Load data
   useEffect(() => {
     if (adminRole === 'master') {
@@ -181,8 +162,8 @@ export default function MasterPage() {
           datasets: [{
             label: 'MRR (₹)',
             data: [0, 0, 0, 0, 0, companies.length * 4999],
-            borderColor: currentAccent.primary,
-            backgroundColor: `${currentAccent.primary}33`,
+            borderColor: '#4f46e5',
+            backgroundColor: 'rgba(79, 70, 229, 0.2)',
             borderWidth: 3,
             fill: true,
             tension: 0.4
@@ -497,7 +478,7 @@ export default function MasterPage() {
       >
         <div>
           <div className="p-6 border-b border-white/10 flex justify-center">
-            <img src={logo} alt="Hire IQ Logo" className="h-10 w-auto object-contain" />
+            <img src={logo} alt="Hire IQ Logo" className="h-10 w-auto object-contain brand-logo-img" />
           </div>
 
           <nav className="p-4 space-y-1.5">

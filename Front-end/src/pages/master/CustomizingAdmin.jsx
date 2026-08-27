@@ -32,6 +32,7 @@ const CustomizingAdmin = () => {
     primary_color: "#4f46e5",
     sidebar_bg_color: "#ffffff",
     favicon: "",
+    navbar_logo: "",
     layout_type: "sidebar"
   });
 
@@ -109,7 +110,7 @@ const CustomizingAdmin = () => {
     return (
       <div className="p-16 flex flex-col items-center justify-center min-h-[50vh]">
         <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mb-4" />
-        <p className="text-sm font-medium text-slate-500">Loading organization configuration...</p>
+        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Loading organization configuration...</p>
       </div>
     );
   }
@@ -117,7 +118,7 @@ const CustomizingAdmin = () => {
   if (!admin) {
     return (
       <div className="p-8 text-center">
-        <p className="text-slate-500 mb-4">No organization details found.</p>
+        <p className="text-slate-500 dark:text-slate-400 mb-4">No organization details found.</p>
         <button 
           onClick={() => navigate(-1)}
           className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
@@ -128,21 +129,6 @@ const CustomizingAdmin = () => {
     );
   }
 
-  const allFeatures = admin?.allFeatures || [];
-  const planFeaturesMap = admin?.planFeaturesMap || {};
-  const initialFeatures = admin?.features && admin.features.length > 0 
-    ? admin.features 
-    : (planFeaturesMap[admin?.plan?.toLowerCase() || "trial"] || []);
-
-  const [selectedFeatures, setSelectedFeatures] = useState(initialFeatures);
-
-  const [layoutConfig, setLayoutConfig] = useState(admin?.layout_config || {
-    primary_color: "#4f46e5",
-    sidebar_bg_color: "#ffffff",
-    favicon: "",
-    navbar_logo: "",
-    layout_type: "sidebar"
-  });
 
   const handleLayoutChange = (e) => {
     const { name, value } = e.target;
@@ -223,17 +209,17 @@ const CustomizingAdmin = () => {
     <div className="p-6 md:p-8 max-w-5xl mx-auto animate-[fadeIn_0.3s_ease-out]">
       <button 
         onClick={() => navigate(-1)}
-        className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors mb-6 text-sm font-semibold"
+        className="flex items-center gap-2 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-100 transition-colors mb-6 text-sm font-semibold"
       >
         <ArrowLeft className="w-4 h-4" /> Back to Customization Hub
       </button>
 
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
           <User className="w-6 h-6 text-indigo-600" />
           Modify Organization: {admin.companyName}
         </h1>
-        <p className="text-sm text-slate-500 mt-2 font-medium">Update subscription tiers, extend active periods, and allocate AI credits.</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 font-medium">Update subscription tiers, extend active periods, and allocate AI credits.</p>
       </div>
 
       {error && (
@@ -250,19 +236,19 @@ const CustomizingAdmin = () => {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+      <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           
           {/* Subscription Plan */}
           <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
+            <label className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200">
               <Shield className="w-4 h-4 text-slate-400" /> Subscription Plan
             </label>
             <select
               name="subscription_plan"
               value={formData.subscription_plan}
               onChange={handleChange}
-              className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-800 px-4 py-3 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 transition-all"
+              className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-800 dark:text-slate-100 px-4 py-3 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 transition-all"
             >
               <option value="trial">Trial</option>
               <option value="basic">Basic</option>
@@ -275,7 +261,7 @@ const CustomizingAdmin = () => {
 
           {/* Add Days */}
           <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
+            <label className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200">
               <Clock className="w-4 h-4 text-slate-400" /> Extend Expiry (Days)
             </label>
             <input
@@ -284,14 +270,14 @@ const CustomizingAdmin = () => {
               value={formData.add_days}
               onChange={handleChange}
               min="0"
-              className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-800 px-4 py-3 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 transition-all"
+              className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-800 dark:text-slate-100 px-4 py-3 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 transition-all"
             />
             <p className="text-[10px] text-slate-400 font-medium">Adds the specified number of days to the current expiry date.</p>
           </div>
 
           {/* Add Credits */}
           <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
+            <label className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200">
               <CreditCard className="w-4 h-4 text-slate-400" /> Add Credits
             </label>
             <input
@@ -300,7 +286,7 @@ const CustomizingAdmin = () => {
               value={formData.add_credits}
               onChange={handleChange}
               min="0"
-              className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-800 px-4 py-3 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 transition-all"
+              className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-800 dark:text-slate-100 px-4 py-3 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 transition-all"
             />
             <p className="text-[10px] text-slate-400 font-medium">Additional AI or calling credits for the tenant.</p>
           </div>
@@ -309,19 +295,19 @@ const CustomizingAdmin = () => {
         {/* Custom Features */}
         {allFeatures.length > 0 && (
           <div className="space-y-3 mt-8">
-            <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
+            <label className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200">
               <Shield className="w-4 h-4 text-slate-400" /> Module Access
             </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 p-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl">
               {allFeatures.map(feature => (
-                <label key={feature} className="flex items-center gap-3 cursor-pointer p-2 hover:bg-white rounded-lg transition-colors border border-transparent hover:border-slate-200">
+                <label key={feature} className="flex items-center gap-3 cursor-pointer p-2 hover:bg-white dark:bg-slate-800/60 rounded-lg transition-colors border border-transparent hover:border-slate-200 dark:border-slate-700">
                   <input
                     type="checkbox"
                     checked={selectedFeatures.includes(feature)}
                     onChange={() => handleFeatureToggle(feature)}
                     className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
                   />
-                  <span className="text-sm font-semibold text-slate-700 capitalize">{feature.replace(/_/g, ' ')}</span>
+                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 capitalize">{feature.replace(/_/g, ' ')}</span>
                 </label>
               ))}
             </div>
@@ -329,137 +315,9 @@ const CustomizingAdmin = () => {
           </div>
         )}
 
-        {/* Branding & Layout Config */}
-        <div className="space-y-4 mt-8 pt-6 border-t border-slate-100">
-          <label className="flex items-center gap-2 text-sm font-bold text-slate-700 mb-2">
-            <Palette className="w-5 h-5 text-indigo-500" /> Branding & Layout Settings
-          </label>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-6 rounded-xl border border-slate-200">
-            
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">Primary Accent Color</label>
-              <div className="flex items-center gap-3">
-                <input 
-                  type="color" 
-                  name="primary_color"
-                  value={layoutConfig.primary_color || "#4f46e5"} 
-                  onChange={handleLayoutChange}
-                  className="w-10 h-10 rounded cursor-pointer border-0 bg-transparent p-0"
-                />
-                <input 
-                  type="text" 
-                  name="primary_color"
-                  value={layoutConfig.primary_color || "#4f46e5"} 
-                  onChange={handleLayoutChange}
-                  className="bg-white border border-slate-200 text-sm font-semibold text-slate-800 px-3 py-2 rounded-lg flex-1 focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-              <p className="text-[10px] text-slate-400 font-medium">Controls buttons, active states, and gradients.</p>
-            </div>
 
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">Sidebar Background</label>
-              <div className="flex items-center gap-3">
-                <input 
-                  type="color" 
-                  name="sidebar_bg_color"
-                  value={layoutConfig.sidebar_bg_color || "#ffffff"} 
-                  onChange={handleLayoutChange}
-                  className="w-10 h-10 rounded cursor-pointer border-0 bg-transparent p-0"
-                />
-                <input 
-                  type="text" 
-                  name="sidebar_bg_color"
-                  value={layoutConfig.sidebar_bg_color || "#ffffff"} 
-                  onChange={handleLayoutChange}
-                  className="bg-white border border-slate-200 text-sm font-semibold text-slate-800 px-3 py-2 rounded-lg flex-1 focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-              <p className="text-[10px] text-slate-400 font-medium">Main background color for the tenant's sidebar.</p>
-            </div>
 
-            <div className="space-y-2 md:col-span-2">
-              <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">Layout Style</label>
-              <div className="flex items-center gap-4 bg-white p-2 rounded-lg border border-slate-200">
-                <label className="flex-1 flex items-center gap-3 cursor-pointer p-2 hover:bg-slate-50 rounded transition-colors">
-                  <input
-                    type="radio"
-                    name="layout_type"
-                    value="sidebar"
-                    checked={!layoutConfig.layout_type || layoutConfig.layout_type === "sidebar"}
-                    onChange={handleLayoutChange}
-                    className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-slate-300"
-                  />
-                  <span className="text-sm font-semibold text-slate-700">Sidebar (Vertical)</span>
-                </label>
-                <div className="w-px h-8 bg-slate-200"></div>
-                <label className="flex-1 flex items-center gap-3 cursor-pointer p-2 hover:bg-slate-50 rounded transition-colors">
-                  <input
-                    type="radio"
-                    name="layout_type"
-                    value="navbar"
-                    checked={layoutConfig.layout_type === "navbar"}
-                    onChange={handleLayoutChange}
-                    className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-slate-300"
-                  />
-                  <span className="text-sm font-semibold text-slate-700">Top Navbar (Horizontal)</span>
-                </label>
-              </div>
-              <p className="text-[10px] text-slate-400 font-medium">Choose whether the navigation menu appears on the left or at the top.</p>
-            </div>
-
-            <div className="space-y-2 md:col-span-1">
-              <label className="flex items-center gap-2 text-xs font-bold text-slate-600 uppercase tracking-wide">
-                <ImageIcon className="w-4 h-4 text-slate-400" /> Custom Favicon
-              </label>
-              <div className="flex flex-col gap-4">
-                <div className="h-12 w-12 rounded-xl bg-white border border-slate-200 flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
-                  {layoutConfig.favicon ? (
-                    <img src={layoutConfig.favicon} alt="Favicon" className="w-full h-full object-contain p-1" />
-                  ) : (
-                    <ImageIcon className="w-6 h-6 text-slate-300" />
-                  )}
-                </div>
-                <div className="flex-1">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFaviconUpload}
-                    className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 transition-colors"
-                  />
-                  <p className="text-[10px] text-slate-400 font-medium mt-1">Sidebar/Tab Logo. Max 200KB.</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-2 md:col-span-1">
-              <label className="flex items-center gap-2 text-xs font-bold text-slate-600 uppercase tracking-wide">
-                <ImageIcon className="w-4 h-4 text-slate-400" /> Navbar Logo
-              </label>
-              <div className="flex flex-col gap-4">
-                <div className="h-12 w-24 rounded-xl bg-white border border-slate-200 flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
-                  {layoutConfig.navbar_logo ? (
-                    <img src={layoutConfig.navbar_logo} alt="Navbar Logo" className="w-full h-full object-contain p-1" />
-                  ) : (
-                    <span className="text-xs text-slate-400 font-medium">No Logo</span>
-                  )}
-                </div>
-                <div className="flex-1">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleNavbarLogoUpload}
-                    className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 transition-colors"
-                  />
-                  <p className="text-[10px] text-slate-400 font-medium mt-1">Optional. Horizontal logo for Navbar layout.</p>
-                </div>
-              </div>
-            </div>
-
-          </div>
-        </div>
-
-        <div className="mt-8 pt-6 border-t border-slate-100 flex justify-end">
+        <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800 flex justify-end">
           <button
             type="submit"
             disabled={loading}

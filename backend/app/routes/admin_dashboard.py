@@ -732,6 +732,19 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
         except Exception as nlp_err:
             print(f"⚠️ Resume NLP extraction error in get_candidate_detail: {nlp_err}")
 
+    resume_url_val = session_data.get("resume_url", "")
+    resume_filename_val = session_data.get("resume_filename", "")
+    app_id = session_data.get("application_id")
+    if app_id:
+        from bson import ObjectId
+        try:
+            app_record = job_applications_collection.find_one({"_id": ObjectId(app_id)})
+            if app_record:
+                resume_url_val = app_record.get("resume_url") or resume_url_val
+                resume_filename_val = app_record.get("resume_filename") or resume_filename_val
+        except:
+            pass
+
     response_payload = {
         "interview_id": link_id,
         "actual_interview_id": actual_interview_id,
@@ -748,6 +761,8 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
         "current_company": comp_val,
         "status": sync_session_status(session_data),
         "decision": session_data.get("decision", ""),
+        "resume_url": resume_url_val,
+        "resume_filename": resume_filename_val,
         "resume_text": session_data.get("resume_text", ""),
         "job_description_text": session_data.get("job_description", ""),
         "date": created_at,
@@ -1369,8 +1384,7 @@ for _route in router.routes:
     if getattr(_route, "path", "") == "/admin/preview-email" and "POST" in getattr(_route, "methods", set()):
         _route.endpoint = preview_email_v2
         break
-
-def send_submission_notification(candidate_email: str, candidate_name: str, admin_email: str, avg_score: float, total_questions: int):
+def send_submission_notification(candidate_email: str, candidate_name: str, admin_email: str, avg_score: float, total_questions: int, company_name: str = 'HireIQ'):
     """Send test submission notification to both admin and candidate."""
     env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
     load_dotenv(env_path, override=False)
@@ -1382,50 +1396,98 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
 
     # Email to candidate
     candidate_html = f"""
-    <html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 40px 20px; background-color: #f1f5f9; min-height: 100%;">
-        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
-            <div style="background-color: #ffffff; border-bottom: 1px solid #e2e8f0; padding: 24px 32px; text-align: left;">
-                <h2 style="color: #0f172a; margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em;">✅ Interview Submitted Successfully</h2>
-            </div>
-            <div style="padding: 32px; background-color: #ffffff;">
-                <p style="font-size: 16px; color: #0f172a; text-align: left; margin: 0 0 20px 0;">Dear <b>{candidate_name}</b>,</p>
-                <p style="color: #475569; line-height: 1.6; font-size: 14px; margin: 10px 0; text-align: left;">Thank you for completing your AI-powered interview. Your responses have been successfully submitted and are now being reviewed.</p>
-                <div style="background-color: #f0fdf4; border-radius: 8px; padding: 15px; margin: 24px 0; border: 1px solid #bbf7d0; text-align: left;">
-                    <p style="margin: 0; color: #166534; font-size: 14px;">📊 <b>Questions Answered:</b> {total_questions}</p>
-                </div>
-                <p style="color: #475569; line-height: 1.6; font-size: 14px; margin: 10px 0; text-align: left;">Our recruitment team will review your performance and get back to you shortly. Please keep an eye on your email for further updates.</p>
-                <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 32px 0 24px 0;">
-                <p style="color: #64748b; font-size: 14px; margin: 0; text-align: left; line-height: 1.6;">Best regards,<br/><b style="color: #4f46e5;">Hire IQ Recruiting</b></p>
-            </div>
-        </div>
-        <div style="max-width: 600px; margin: 24px auto 0; text-align: center;">
-            <p style="color: #94a3b8; font-size: 12px; margin: 0;">Powered by Hire IQ AI Assessments</p>
-        </div>
-    </body></html>
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"></head>
+    <body style="font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; background-color: #f8f9fa;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8f9fa; padding: 40px 20px;">
+            <tr><td align="center">
+                <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; background-color: #ffffff; border: 1px solid #dadce0; border-radius: 8px; overflow: hidden;">
+                    <tr>
+                        <td style="background: linear-gradient(135deg, #000033 0%, #003366 100%); padding: 32px 40px; text-align: left; border-bottom: 1px solid #e5e7eb;">
+                            <img src="https://raw.githubusercontent.com/OragantiSagar041/AI_Adaptive_Interview/pavan/Front-end/public/hireiq_new_logo.png" alt="HireIQ" style="height: 110px; max-width: 100%; display: inline-block; object-fit: contain;" />
+                        </td>
+                    </tr>
+                    <tr><td style="padding: 40px;">
+                        <h2 style="color: #202124; font-size: 20px; font-weight: 400; margin: 0 0 24px 0;">Interview Submitted Successfully &ndash; {company_name.title()}</h2>
+                        <p style="color: #3c4043; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">Dear {candidate_name},</p>
+                        <p style="color: #3c4043; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+                            Thank you for completing your AI-powered interview. Your responses have been successfully submitted and are now being reviewed.
+                        </p>
+                        <div style="background-color: #f8f9fa; border-radius: 8px; padding: 20px; margin: 24px 0;">
+                            <p style="margin: 0; color: #5f6368; font-size: 15px; line-height: 1.6;">
+                                <strong>Questions Answered:</strong> {total_questions}
+                            </p>
+                        </div>
+                        <p style="color: #3c4043; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+                            Our recruitment team will review your performance and get back to you shortly. Please keep an eye on your email for further updates.
+                        </p>
+                        <p style="color: #3c4043; font-size: 15px; line-height: 1.6; margin: 32px 0 0 0;">
+                            Best regards,<br><strong>HIREIQ Recruiting Team</strong>
+                        </p>
+                    </td></tr>
+                    <tr><td style="background-color: #f1f3f4; padding: 24px 40px; text-align: center;">
+                        <p style="color: #5f6368; font-size: 12px; line-height: 1.5; margin: 0;">&copy; 2026 HireIQ. All rights reserved.</p>
+                    </td></tr>
+                </table>
+            </td></tr>
+        </table>
+    </body>
+    </html>
     """
 
     # Email to admin
-    score_color = "#10b981" if avg_score >= 60 else "#ef4444"
+    score_color = "#137333" if avg_score >= 60 else "#c5221f"
     admin_html = f"""
-    <html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 40px 20px; background-color: #f1f5f9; min-height: 100%;">
-        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
-            <div style="background-color: #ffffff; border-bottom: 1px solid #e2e8f0; padding: 24px 32px; text-align: left;">
-                <h2 style="color: #0f172a; margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em;">📋 New Interview Submission</h2>
-            </div>
-            <div style="padding: 32px; background-color: #ffffff;">
-                <p style="font-size: 16px; color: #0f172a; text-align: left; margin: 0 0 20px 0;">A candidate has completed their interview:</p>
-                <div style="background-color: #f8fafc; border-radius: 8px; padding: 20px; margin: 24px 0; border: 1px solid #e2e8f0; border-left: 4px solid #6366f1; text-align: left;">
-                    <p style="margin: 5px 0; color: #475569; font-size: 14px;"><b>👤 Candidate:</b> {candidate_name}</p>
-                    <p style="margin: 5px 0; color: #475569; font-size: 14px;"><b>📧 Email:</b> {candidate_email}</p>
-                    <p style="margin: 5px 0; color: #475569; font-size: 14px;"><b>📊 Questions Answered:</b> {total_questions}</p>
-                    <p style="margin: 5px 0; color: #475569; font-size: 14px;"><b>🏆 Average Score:</b> <span style="color: {score_color}; font-weight: 700; font-size: 18px;">{avg_score:.1f}/100</span></p>
-                </div>
-                <p style="color: #475569; line-height: 1.6; font-size: 14px; margin: 10px 0; text-align: left;">Login to the admin panel to review the full results, video recording, and AI analysis.</p>
-                <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 32px 0 24px 0;">
-                <p style="color: #64748b; font-size: 14px; margin: 0; text-align: left; line-height: 1.6;">— AI Interview System</p>
-            </div>
-        </div>
-    </body></html>
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"></head>
+    <body style="font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; background-color: #f8f9fa;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8f9fa; padding: 40px 20px;">
+            <tr><td align="center">
+                <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; background-color: #ffffff; border: 1px solid #dadce0; border-radius: 8px; overflow: hidden;">
+                    <tr>
+                        <td style="background: linear-gradient(135deg, #000033 0%, #003366 100%); padding: 32px 40px; text-align: left; border-bottom: 1px solid #e5e7eb;">
+                            <img src="https://raw.githubusercontent.com/OragantiSagar041/AI_Adaptive_Interview/pavan/Front-end/public/hireiq_new_logo.png" alt="HireIQ" style="height: 110px; max-width: 100%; display: inline-block; object-fit: contain;" />
+                        </td>
+                    </tr>
+                    <tr><td style="padding: 40px;">
+                        <h2 style="color: #202124; font-size: 20px; font-weight: 400; margin: 0 0 24px 0;">New Interview Submission</h2>
+                        <p style="color: #3c4043; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">A candidate has just completed their interview assessment:</p>
+                        
+                        <div style="background-color: #f8f9fa; border-radius: 8px; padding: 20px; margin: 24px 0;">
+                            <table width="100%" cellpadding="4" cellspacing="0" style="font-size: 15px; color: #3c4043;">
+                                <tr>
+                                    <td width="140"><strong>Candidate:</strong></td>
+                                    <td>{candidate_name}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Email:</strong></td>
+                                    <td>{candidate_email}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Questions:</strong></td>
+                                    <td>{total_questions}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Est. Score:</strong></td>
+                                    <td><strong style="color: {score_color};">{avg_score:.1f}%</strong></td>
+                                </tr>
+                            </table>
+                        </div>
+                        
+                        <p style="color: #3c4043; font-size: 15px; line-height: 1.6; margin: 32px 0 0 0;">
+                            Please log in to the HireIQ admin dashboard to review the detailed performance report and recordings.
+                        </p>
+                    </td></tr>
+                    <tr><td style="background-color: #f1f3f4; padding: 24px 40px; text-align: center;">
+                        <p style="color: #5f6368; font-size: 12px; line-height: 1.5; margin: 0;">&copy; 2026 HireIQ Platform Notifications</p>
+                    </td></tr>
+                </table>
+            </td></tr>
+        </table>
+    </body>
+    </html>
     """
 
     results = []
@@ -1859,109 +1921,7 @@ def invitation_email_scheduler_loop():
             print(f"Email scheduler error: {e}")
         time.sleep(30)
 
-# Startup functions (to be called by main.py lifespan)
-async def startup_event_db_and_email():
-    import app.db.mongo_db as mongo_db
-    await mongo_db.init_db_indexes()
-    global EMAIL_SCHEDULER_STARTED, MAIN_LOOP
-    MAIN_LOOP = asyncio.get_running_loop()
-    # Create default MASTER admin if not exists
-    try:
-        master_row = admins_collection.find_one({"username": "master"})
-        if not master_row:
-            import secrets
-            master_pw = os.getenv("DEFAULT_MASTER_PASSWORD") or secrets.token_urlsafe(12)
-            hashed_pw = hash_password(master_pw)
-            default_email = os.getenv("BREVO_SENDER_EMAIL", "no-reply@hireiq.co.in")
-            admins_collection.insert_one({
-        "custom_id": get_next_sequence_value("recruiter", "RC"),
-                "username": "master",
-                "password": hashed_pw,
-                "email": default_email,
-                "role": "master",
-                "subscription_plan": "master",
-                "created_at": datetime.now(timezone.utc).isoformat()
-            })
-            print(f"Default master created: master / {master_pw} (Email: {default_email})")
-            
-        row = admins_collection.find_one({"username": "admin"})
-        if not row:
-            import secrets
-            admin_pw = os.getenv("DEFAULT_ADMIN_PASSWORD") or secrets.token_urlsafe(12)
-            hashed_pw = hash_password(admin_pw)
-            default_email = os.getenv("BREVO_SENDER_EMAIL", "no-reply@hireiq.co.in")
-            admins_collection.insert_one({
-        "custom_id": get_next_sequence_value("recruiter", "RC"),
-                "username": "admin",
-                "password": hashed_pw,
-                "email": default_email,
-                "role": "super_admin",
-                "subscription_plan": "advance",
-                "subscription_start": datetime.now(timezone.utc).isoformat(),
-                "subscription_expiry": (datetime.now(timezone.utc) + timedelta(days=365)).isoformat(),
-                "created_at": datetime.now(timezone.utc).isoformat()
-            })
-            print(f"Default admin created: admin / {admin_pw} (Email: {default_email})")
-        else:
-            # Upgrade legacy admin to tenant
-            update_data = {}
-            if not row.get("email"): update_data["email"] = os.getenv("BREVO_SENDER_EMAIL", "no-reply@hireiq.co.in")
-            if not row.get("role"): update_data["role"] = "tenant"
-            if not row.get("subscription_plan"):
-                update_data["subscription_plan"] = "advance"
-                update_data["subscription_start"] = datetime.now(timezone.utc).isoformat()
-                update_data["subscription_expiry"] = (datetime.now(timezone.utc) + timedelta(days=365)).isoformat()
-            if update_data:
-                admins_collection.update_one({"username": "admin"}, {"$set": update_data})
-    except Exception as e:
-        print(f"Error checking/creating admin: {e}")
 
-    # Seed default plans if they don't exist
-    try:
-        default_plans = [
-            {
-                "plan_name": "Free Trial",
-                "credits_granted": get_plan_definition("trial")["credits_granted"],
-                "price": get_plan_definition("trial")["price"],
-                "features": get_plan_definition("trial")["features"],
-                "is_unlimited": False,
-                "is_owner_plan": False
-            },
-            {
-                "plan_name": "Basic",
-                "credits_granted": get_plan_definition("basic")["credits_granted"],
-                "price": get_plan_definition("basic")["price"],
-                "features": get_plan_definition("basic")["features"],
-                "is_unlimited": False,
-                "is_owner_plan": False
-            },
-            {
-                "plan_name": "Advance",
-                "credits_granted": get_plan_definition("advance")["credits_granted"],
-                "price": get_plan_definition("advance")["price"],
-                "features": get_plan_definition("advance")["features"],
-                "is_unlimited": False,
-                "is_owner_plan": False
-            },
-            {
-                "plan_name": "Owner",
-                "credits_granted": get_plan_definition("owner")["credits_granted"],
-                "price": get_plan_definition("owner")["price"],
-                "features": get_plan_definition("owner")["features"],
-                "is_unlimited": True,
-                "is_owner_plan": True
-            }
-        ]
-        for plan in default_plans:
-            existing = plans_collection.find_one({"plan_name": plan["plan_name"]})
-            if not existing:
-                plans_collection.insert_one(plan)
-                print(f"Seeded plan: {plan['plan_name']}")
-    except Exception as e:
-        print(f"Error seeding plans: {e}")
-
-    if not EMAIL_SCHEDULER_STARTED:
-        threading.Thread(target=invitation_email_scheduler_loop, daemon=True).start()
         EMAIL_SCHEDULER_STARTED = True
 
 @router.get("/api/interview/{interview_id}/insights")

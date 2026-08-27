@@ -2,17 +2,15 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 // ── Tunable thresholds ──────────────────────────────────────────────────
 const DETECT_INTERVAL_MS = 700          // how often a frame is sent to the worker
 
-const PHONE_ALERT_CONFIDENCE = 0.45     // raised to eliminate false positives for spectacles
-// from mugs, glasses, dark objects at low confidence
-const PHONE_CONSECUTIVE_FRAMES = 3      // 3 consecutive frames (~2.1s) — reduces false positives
-// a real phone in view persists; a misclassification does not
+const PHONE_ALERT_CONFIDENCE = 0.55     // raised to eliminate false positives
+const PHONE_CONSECUTIVE_FRAMES = 4      // 4 consecutive frames (~2.8s)
 
-const MULTI_FACE_CONSECUTIVE_FRAMES = 2 // 2 frames (~1.4s) before raising the alert
-const NO_FACE_CONSECUTIVE_FRAMES = 4    // ~2.8s of no face at 700ms interval
+const MULTI_FACE_CONSECUTIVE_FRAMES = 3 // 3 frames (~2.1s) before raising the alert
+const NO_FACE_CONSECUTIVE_FRAMES = 6    // ~4.2s of no face at 700ms interval
 
-const EYE_CONTACT_YAW_THRESHOLD = 0.25    // head turned left/right (lowered to be more sensitive)
-const EYE_CONTACT_PITCH_THRESHOLD = 0.20  // head tilted up/down
-const EYE_CONTACT_CONSECUTIVE_FRAMES = 4  // ~2.8s of sustained gaze-away
+const EYE_CONTACT_YAW_THRESHOLD = 0.40    // head turned left/right — looser to allow natural thinking
+const EYE_CONTACT_PITCH_THRESHOLD = 0.35  // head tilted up/down — looser to allow looking at screen
+const EYE_CONTACT_CONSECUTIVE_FRAMES = 8  // ~5.6s of sustained gaze-away before alerting
 
 const DEFAULT_MAX_ALERTS = 3
 

@@ -49,10 +49,10 @@ export const handleBulkDelete = createAsyncThunk(
 
 export const initiateAICall = createAsyncThunk(
   'candidates/initiateAICall',
-  async (sessionId, { getState, rejectWithValue }) => {
+  async ({ sessionId, phoneNumber }, { getState, rejectWithValue }) => {
     try {
       const { API_BASE_URL, token } = getState().auth
-      const res = await axios.post(`${API_BASE_URL}/api/calls/initiate/${sessionId}`, {}, {
+      const res = await axios.post(`${API_BASE_URL}/api/calls/initiate/${sessionId}`, { phone_number: phoneNumber }, {
         headers: { Authorization: `Bearer ${token}` }
       })
       return res.data

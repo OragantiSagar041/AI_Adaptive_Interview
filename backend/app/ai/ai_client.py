@@ -262,6 +262,11 @@ def _call_groq(
             last_status = resp.status_code
             last_error_text = resp.text[:300]
             continue # Try next key
+        elif resp.status_code == 401:
+            groq_key_manager.mark_invalid(api_key)
+            last_status = resp.status_code
+            last_error_text = resp.text[:300]
+            continue # Try next key
         else:
             raise RuntimeError(f"Groq error {resp.status_code}: {resp.text[:300]}")
             

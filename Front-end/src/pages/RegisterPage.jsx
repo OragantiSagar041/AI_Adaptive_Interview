@@ -2,9 +2,8 @@ import React, { useState, useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { API_BASE_URL } from '../apiConfig'
 import { User, Building2, Mail, Phone, Lock, ShieldCheck, ArrowLeft } from 'lucide-react'
-import Input from '../components/Input'
+import ThemeToggle from '../components/ThemeToggle'
 import Button from '../components/Button'
-import Card from '../components/Card'
 import logo from '../assets/logo.png'
 
 function RegisterPage() {
@@ -30,10 +29,7 @@ function RegisterPage() {
     "Advance": 2,
   }
 
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', 'dark')
-    document.documentElement.classList.add('dark')
-  }, [])
+
 
   useEffect(() => {
     async function loadPlans() {
@@ -217,111 +213,156 @@ function RegisterPage() {
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(192,132,252,0.34),transparent_32%),radial-gradient(circle_at_80%_12%,rgba(147,197,253,0.24),transparent_28%),linear-gradient(180deg,#f8fafc_0%,#ffffff_44%,#eef2f6_100%)] px-5 py-6 text-slate-900">
-      <div className="pointer-events-none fixed inset-0 bg-[linear-gradient(rgba(17,24,39,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(17,24,39,0.04)_1px,transparent_1px)] bg-[size:88px_88px] [mask-image:linear-gradient(180deg,rgba(0,0,0,0.82),transparent_96%)]" />
+    <main className="relative min-h-screen bg-slate-50 dark:bg-[#0f172a] text-slate-900 dark:text-slate-100 font-sans overflow-x-hidden px-4 py-8 md:px-8 transition-colors duration-300">
+      {/* Background Soft Glows */}
+      <div 
+        aria-hidden="true" 
+        className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[500px] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-500/15 via-purple-500/10 to-transparent blur-[100px]" 
+      />
+      {/* Soft Dot Grid Pattern */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 opacity-[0.12] dark:opacity-[0.12] opacity-[0.06]"
+        style={{
+          backgroundImage: "radial-gradient(currentColor 1px, transparent 1px)",
+          backgroundSize: "28px 28px"
+        }}
+      />
 
       <div className="relative z-10 mx-auto max-w-7xl">
-        <header className="mb-8 flex flex-wrap items-center justify-between gap-4 rounded-[28px] border border-white/70 bg-white/75 px-4 py-4 shadow-[0_18px_40px_rgba(17,24,39,0.08)] backdrop-blur-[22px]">
+        {/* Top Navigation Header */}
+        <header className="mb-10 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 bg-white/80 dark:bg-[#1e293b]/70 px-6 py-4 shadow-lg backdrop-blur-xl">
           <Link to="/" className="flex items-center gap-3 no-underline">
-            <img src={logo} alt="Hire IQ Logo" className="h-12 w-auto object-contain mix-blend-multiply" />
-            <span className="text-sm leading-snug text-slate-600">
+            <img src={logo} alt="Hire IQ Logo" className="h-10 w-auto object-contain brand-logo-img" />
+            <span className="text-xs leading-snug text-slate-500 dark:text-slate-400 hidden sm:inline-block">
               AI interview infrastructure<br />for modern hiring teams
             </span>
           </Link>
-          <Link to="/" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900">
-            <ArrowLeft size={16} /> Back to platform
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link
+              to="/"
+              className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all shadow-xs"
+            >
+              <ArrowLeft size={14} /> Back to platform
+            </Link>
+          </div>
         </header>
 
         <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1.2fr_0.8fr]">
           <div className="flex flex-col gap-7">
             <div>
-              <span className="inline-flex rounded-full border border-slate-900/10 bg-white/80 px-3.5 py-2 text-xs font-bold uppercase tracking-wide text-indigo-700">
-                Workspace registration
+              <span className="inline-flex items-center gap-2 rounded-full border border-indigo-500/30 bg-indigo-500/15 px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-300">
+                <ShieldCheck size={14} /> Workspace Registration
               </span>
-              <h1 className="mt-4 max-w-3xl text-4xl font-extrabold leading-none tracking-tight text-slate-900 sm:text-5xl">
-                Set up your company workspace.
+              <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100 sm:text-5xl lg:text-5xl">
+                Set up your <span className="bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-500 dark:from-slate-100 dark:via-indigo-200 dark:to-purple-300 bg-clip-text text-transparent">company workspace.</span>
               </h1>
-              <p className="mt-4 max-w-2xl leading-8 text-slate-600">
-                Choose a plan, create the admin account, and activate the interview console for your hiring team.
+              <p className="mt-3 max-w-2xl text-sm md:text-base text-slate-600 dark:text-slate-400 leading-relaxed">
+                Choose a plan, create your admin account, and activate the interview console for your hiring team.
               </p>
             </div>
 
             {status.message && (
               <div className={`rounded-[8px] border p-4 text-[0.95rem] font-medium ${
                 status.type === 'error'
-                  ? 'bg-danger/10 text-danger border-danger'
+                  ? 'bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-500/30'
                   : status.type === 'success'
-                  ? 'bg-success/10 text-success border-success'
-                  : 'bg-warning/10 text-warning border-warning'
+                  ? 'bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/30'
+                  : 'bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/30'
               }`}>
                 {status.message}
               </div>
             )}
 
             {loadingPlans ? (
-              <div className="text-slate-600">Loading subscription plans...</div>
+              <div className="py-12 text-center text-slate-500 dark:text-slate-400 text-sm">Loading subscription plans...</div>
             ) : (
-              <form onSubmit={handleSubmit} className="flex flex-col gap-6 rounded-[30px] border border-white/80 bg-white/85 p-6 shadow-[0_28px_80px_rgba(17,24,39,0.1)] backdrop-blur-md">
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <Input
-                    label={<span className="flex items-center gap-1.5"><User size={14} /> Full Name</span>}
-                    name="name"
-                    value={form.name}
+              <form onSubmit={handleSubmit} className="flex flex-col gap-6 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 bg-white/90 dark:bg-[#1e293b]/70 p-7 md:p-8 shadow-xl backdrop-blur-xl transition-colors">
+                <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                      <User size={14} className="text-indigo-600 dark:text-indigo-400" /> Full Name <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={form.name}
+                      onChange={handleInputChange}
+                      placeholder="e.g. John Doe"
+                      required
+                      className="w-full bg-slate-50 dark:bg-[#0f172a]/70 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-slate-100 text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none transition-all focus:border-indigo-500 focus:bg-white dark:focus:bg-[#0f172a] focus:ring-2 focus:ring-indigo-500/20"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                      <Building2 size={14} className="text-indigo-600 dark:text-indigo-400" /> Company Name
+                    </label>
+                    <input
+                      type="text"
+                      name="company_name"
+                      value={form.company_name}
+                      onChange={handleInputChange}
+                      placeholder="e.g. Acme Inc."
+                      className="w-full bg-slate-50 dark:bg-[#0f172a]/70 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-slate-100 text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none transition-all focus:border-indigo-500 focus:bg-white dark:focus:bg-[#0f172a] focus:ring-2 focus:ring-indigo-500/20"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                      <Mail size={14} className="text-indigo-600 dark:text-indigo-400" /> Work Email <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      name="email"
+                      value={form.email}
+                      onChange={handleInputChange}
+                      placeholder="e.g. you@company.com"
+                      required
+                      className="w-full bg-slate-50 dark:bg-[#0f172a]/70 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-slate-100 text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none transition-all focus:border-indigo-500 focus:bg-white dark:focus:bg-[#0f172a] focus:ring-2 focus:ring-indigo-500/20"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-between justify-between">
+                      <span className="flex items-center gap-2"><Phone size={14} className="text-indigo-600 dark:text-indigo-400" /> Phone Number</span>
+                      {form.phone.length > 0 && (
+                        <span className={`text-[0.75rem] font-semibold lowercase ${form.phone.length === 10 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                          {form.phone.length}/10 digits
+                        </span>
+                      )}
+                    </label>
+                    <input
+                      type="tel"
+                      name="phone"
+                      value={form.phone}
+                      onChange={handleInputChange}
+                      placeholder="e.g. 9876543210"
+                      className="w-full bg-slate-50 dark:bg-[#0f172a]/70 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-slate-100 text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none transition-all focus:border-indigo-500 focus:bg-white dark:focus:bg-[#0f172a] focus:ring-2 focus:ring-indigo-500/20"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                    <Lock size={14} className="text-indigo-600 dark:text-indigo-400" /> Password <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="password"
+                    name="password"
+                    value={form.password}
                     onChange={handleInputChange}
                     placeholder="e.g. John Doe"
                     required
-                  />
-                  <Input
-                    label={<span className="flex items-center gap-1.5"><Building2 size={14} /> Company Name</span>}
-                    name="company_name"
-                    value={form.company_name}
-                    onChange={handleInputChange}
-                    placeholder="e.g. Acme Inc."
+                    className="w-full bg-slate-50 dark:bg-[#0f172a]/70 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-slate-100 text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none transition-all focus:border-indigo-500 focus:bg-white dark:focus:bg-[#0f172a] focus:ring-2 focus:ring-indigo-500/20"
                   />
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <Input
-                    label={<span className="flex items-center gap-1.5"><Mail size={14} /> Work Email</span>}
-                    type="email"
-                    name="email"
-                    value={form.email}
-                    onChange={handleInputChange}
-                    placeholder="e.g. you@company.com"
-                    required
-                  />
-                  <Input
-                    label={
-                      <span className="flex w-full items-center justify-between">
-                        <span className="flex items-center gap-1.5"><Phone size={14} /> Phone Number</span>
-                        {form.phone.length > 0 && (
-                          <span className={`text-[0.75rem] font-semibold lowercase ${form.phone.length === 10 ? 'text-success' : 'text-slate-500'}`}>
-                            {form.phone.length}/10 digits
-                          </span>
-                        )}
-                      </span>
-                    }
-                    type="tel"
-                    name="phone"
-                    value={form.phone}
-                    onChange={handleInputChange}
-                    placeholder="e.g. 9876543210"
-                  />
-                </div>
-
-                <Input
-                  label={<span className="flex items-center gap-1.5"><Lock size={14} /> Password</span>}
-                  type="password"
-                  name="password"
-                  value={form.password}
-                  onChange={handleInputChange}
-                  placeholder="Create secure password"
-                  required
-                />
-
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Select Subscription Plan</label>
+                {/* Plan Selection Buttons */}
+                <div className="flex flex-col gap-3 pt-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-300">Select Subscription Plan</label>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     {plans.map((p, idx) => {
                       const isSelected = selectedPlan?.id === p.id
@@ -332,15 +373,25 @@ function RegisterPage() {
                           onClick={() => setSelectedPlan(p)}
                           className={`flex cursor-pointer flex-col gap-1.5 rounded-[8px] border p-4 text-left transition-all ${
                             isSelected
-                              ? 'border-primary bg-indigo-50 shadow-[0_12px_26px_rgba(99,102,241,0.12)]'
-                              : 'border-slate-200 bg-slate-50/80 hover:border-primary/30 hover:bg-white'
+                              ? 'border-2 border-indigo-600 dark:border-indigo-500 bg-indigo-50 dark:bg-indigo-500/15 shadow-[0_0_20px_rgba(99,102,241,0.2)] ring-1 ring-indigo-500'
+                              : 'border-slate-200 dark:border-slate-700/60 bg-slate-50/50 dark:bg-[#0f172a]/40 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-100 dark:hover:bg-[#0f172a]/70'
                           }`}
                         >
-                          <div className="flex w-full items-center justify-between">
-                            <strong className="font-bold text-slate-900">{p.plan_name}</strong>
-                            {p.price > 0 && idx === 1 && (
-                              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-wider text-primary">Popular</span>
-                            )}
+                          {isSelected && (
+                            <div className="absolute top-0 right-0 w-20 h-20 bg-indigo-500/15 blur-[20px] -mr-8 -mt-8 rounded-full pointer-events-none" />
+                          )}
+                          <div>
+                            <div className="flex items-center justify-between gap-1 mb-1">
+                              <strong className="font-bold text-slate-900 dark:text-slate-100 text-sm uppercase tracking-wide">{p.plan_name}</strong>
+                              {p.price > 0 && idx === 1 && (
+                                <span className="rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 px-2 py-0.5 text-[0.6rem] font-extrabold uppercase tracking-wider text-white">Popular</span>
+                              )}
+                            </div>
+                            <span className="text-xs text-slate-500 dark:text-slate-400">{p.credits === 0 ? 'Trial access' : `${p.credits} credits`}</span>
+                          </div>
+                          <div className="mt-3">
+                            <strong className="text-xl font-bold text-slate-900 dark:text-slate-100">{formatPrice(p.price)}</strong>
+                            {p.price > 0 && <span className="text-xs text-slate-500 dark:text-slate-400 ml-1">/mo</span>}
                           </div>
                           <span className="text-[0.75rem] text-slate-500">{p.credits === 0 ? 'Trial' : p.credits} credits</span>
                           <strong className="mt-1 text-lg text-slate-900">{formatPrice(p.price)}</strong>
@@ -354,8 +405,11 @@ function RegisterPage() {
                   {submitting ? "Processing..." : selectedPlan?.price === 0 ? "Start Free Trial Workspace" : `Pay ${formatPrice(selectedPlan?.price)} with Razorpay`}
                 </Button>
 
-                <div className="text-center text-xs text-slate-500">
-                  Secure checkout by Razorpay. Already have an admin account? <Link to="/admin" className="text-primary hover:underline">Sign in here</Link>
+                <div className="text-center text-xs text-slate-500 dark:text-slate-400 pt-1">
+                  Secure checkout powered by Razorpay. Already have an admin account?{' '}
+                  <Link to="/admin" className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 font-semibold underline underline-offset-4">
+                    Sign in here
+                  </Link>
                 </div>
               </form>
             )}
@@ -363,43 +417,48 @@ function RegisterPage() {
 
           <div>
             {selectedPlan && (
-              <Card className="sticky top-6 flex flex-col gap-5 rounded-[30px] border-white/80 p-7">
-                <div className="border-b border-slate-200 pb-4">
-                  <span className="mb-2 inline-block rounded-full bg-primary/10 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-primary">
-                    {selectedPlan.price === 0 ? "Trial ready" : "Checkout enabled"}
+              <div className="relative overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-700/60 bg-white/90 dark:bg-[#1e293b]/70 p-7 md:p-8 shadow-xl backdrop-blur-xl flex flex-col gap-6 transition-colors">
+                <div className="absolute top-0 right-0 w-36 h-36 bg-indigo-500/10 blur-[50px] -mr-16 -mt-16 rounded-full pointer-events-none" />
+
+                <div className="border-b border-slate-200 dark:border-slate-700/60 pb-5">
+                  <span className="mb-3 inline-block rounded-full border border-indigo-500/30 bg-indigo-500/15 px-3 py-1 text-[0.7rem] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-300">
+                    {selectedPlan.price === 0 ? "Free Trial Selected" : "Selected Subscription"}
                   </span>
-                  <h3 className="text-xl font-bold text-slate-900">{selectedPlan.plan_name} workspace</h3>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                  <h3 className="text-2xl font-bold uppercase tracking-wide text-slate-900 dark:text-slate-100">{selectedPlan.plan_name} Workspace</h3>
+                  <p className="mt-2 text-xs md:text-sm leading-relaxed text-slate-600 dark:text-slate-400">
                     {selectedPlan.price === 0
                       ? "A frictionless way to explore your interview operations before committing."
                       : "Built for teams that want paid activation with real hiring workflow controls."}
                   </p>
                 </div>
 
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">Subscription Price</span>
-                  <strong className="font-semibold text-slate-900">{formatPrice(selectedPlan.price)}</strong>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">Credits Included</span>
-                  <strong className="font-semibold text-slate-900">{selectedPlan.credits === 0 ? 'Trial' : selectedPlan.credits} credits</strong>
+                <div className="flex justify-between items-baseline text-sm">
+                  <span className="text-slate-500 dark:text-slate-400">Subscription Price</span>
+                  <div className="text-right">
+                    <span className="text-2xl font-bold text-slate-900 dark:text-slate-100">{formatPrice(selectedPlan.price)}</span>
+                    {selectedPlan.price > 0 && <span className="text-xs text-slate-500 dark:text-slate-400 ml-1">/ month</span>}
+                  </div>
                 </div>
 
-                <div className="border-t border-slate-200 pt-4">
-                  <h4 className="mb-3 text-sm font-bold text-slate-900">Included features:</h4>
-                  <div className="flex flex-col gap-4">
+                <div className="flex justify-between items-center text-sm border-t border-slate-200 dark:border-slate-700/40 pt-4">
+                  <span className="text-slate-500 dark:text-slate-400">Candidate Evaluation Credits</span>
+                  <span className="font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-500/15 px-3 py-1 rounded-full border border-indigo-200 dark:border-indigo-500/20 text-xs">
+                    {selectedPlan.credits === 0 ? 'Trial Credits' : `${selectedPlan.credits} Candidates`}
+                  </span>
+                </div>
+
+                <div className="border-t border-slate-200 dark:border-slate-700/60 pt-5">
+                  <h4 className="mb-4 text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Included Workspace Features</h4>
+                  <div className="flex flex-col gap-3.5">
                     {(selectedPlan.features || []).map((feat, idx) => (
-                      <div key={idx} className="flex gap-2.5 text-sm">
-                        <ShieldCheck size={16} className="mt-0.5 flex-shrink-0 text-success" />
-                        <div>
-                          <strong className="text-slate-900">{feat}</strong>
-                          <p className="mt-0.5 text-[0.78rem] text-slate-500">Includes this capability inside your admin workspace.</p>
-                        </div>
+                      <div key={idx} className="flex gap-3 text-xs md:text-sm text-slate-600 dark:text-slate-300 items-start">
+                        <ShieldCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
+                        <span>{feat}</span>
                       </div>
                     ))}
                   </div>
                 </div>
-              </Card>
+              </div>
             )}
           </div>
         </div>

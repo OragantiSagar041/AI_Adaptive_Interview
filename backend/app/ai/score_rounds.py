@@ -3,17 +3,14 @@ score_rounds.py
 ---------------
 Composite scoring helpers for coding round and case study round.
 
-Coding Score (Standard Interview):
-  100% based on test cases passed ratio → (all_passed / all_total) * 100
+Verbal Question-Answer Score:
+  60 marks max based on Q&A accuracy → (verbal_avg * 0.60)
 
-Coding Score (Voice Interview with Zara):
-  60% test cases ratio + 40% AI evaluation of verbal explanation
+Coding Score:
+  40 marks max based strictly on test cases passed ratio → (test_score * 0.40)
 
-Case Study Score:
-  AI evaluates each candidate answer against its scenario question → avg 0–100
-
-blend_scores():
-  Combines verbal, coding, case_study into a single weighted final score.
+Final Composite Score:
+  Out of 100 marks total → (verbal_avg * 0.60) + (coding_score * 0.40)
 """
 
 from typing import Optional, Dict, Any
@@ -30,26 +27,13 @@ def compute_coding_score(
     language: str = "English",
 ) -> float:
     """
-    Returns a 0–100 coding score.
-
-    For Standard interviews → purely based on test case pass ratio.
-    For Voice interviews    → 60% test cases + 40% verbal explanation quality.
+    Returns a 0–100 coding score based ONLY on test cases passed ratio.
     """
     if not coding_round:
         return 0.0
 
     # ── Test-case ratio ────────────────────────────────────
-    test_score = _compute_test_case_ratio(coding_round)
-
-    is_voice = (interview_format or "").lower() in ("voice", "zara")
-
-    if not is_voice:
-        return round(test_score, 1)
-
-    # ── Voice: add explanation quality ────────────────────
-    explanation_score = _evaluate_explanation(coding_round, language)
-    combined = (test_score * 0.60) + (explanation_score * 0.40)
-    return round(combined, 1)
+    return round(_compute_test_case_ratio(coding_round), 1)
 
 
 def _compute_test_case_ratio(coding_round: Dict[str, Any]) -> float:
@@ -235,21 +219,17 @@ def blend_scores(
     case_study_score: Optional[float] = None,
 ) -> float:
     """
-    Weighted blend:
-    - Only verbal          → 100% verbal
-    - verbal + coding      → 50% verbal + 50% coding
-    - verbal + case_study  → 50% verbal + 50% case_study
-    - all three            → 34% verbal + 33% coding + 33% case_study
+    Weighted blend (100 marks total):
+    - Q&A Accuracy (22 interview questions): 60 marks max (verbal_score * 0.60)
+    - Coding Accuracy (test cases passed):     40 marks max (coding_score * 0.40)
     """
     has_coding     = coding_score is not None
     has_case_study = case_study_score is not None
 
-    if has_coding and has_case_study:
-        blended = (verbal_score * 0.34) + (coding_score * 0.33) + (case_study_score * 0.33)
-    elif has_coding:
-        blended = (verbal_score * 0.50) + (coding_score * 0.50)
+    if has_coding:
+        blended = (verbal_score * 0.60) + (coding_score * 0.40)
     elif has_case_study:
-        blended = (verbal_score * 0.50) + (case_study_score * 0.50)
+        blended = (verbal_score * 0.60) + (case_study_score * 0.40)
     else:
         blended = verbal_score
 

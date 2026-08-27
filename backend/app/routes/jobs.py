@@ -23,6 +23,8 @@ import edge_tts
 import pypdf
 from bson import ObjectId
 from bson.errors import InvalidId
+from app.services.services import get_current_admin_details
+from bson.errors import InvalidId
 from docx import Document
 from dotenv import load_dotenv
 from groq import AsyncGroq
@@ -223,13 +225,59 @@ def get_public_job(job_id: str):
     job["_id"] = str(job["_id"])
     return {"status": "success", "job": job}
 
+@router.get("/api/public/jobs/company/{company_id}")
+def get_public_company_jobs(company_id: str):
+    """
+    Fetch all active public jobs for a specific company.
+    Mirrors the dashboard logic by only selecting jobs created by authorized admins.
+    """
+    from bson import ObjectId
+    
+    # 1. Get the company name
+    company_name = "Unknown Company"
+    try:
+        company = companies_collection.find_one({"_id": ObjectId(company_id)})
+        if company:
+            company_name = company.get("name") or company.get("company_name", "Unknown Company")
+    except Exception:
+        pass
+        
+    # 2. Get all authorized admin IDs for this company
+    admin_ids = []
+    try:
+        org_admins = list(admins_collection.find({"company_id": company_id}, {"_id": 1}))
+        admin_ids = [str(a["_id"]) for a in org_admins]
+        # Also include the company_id itself just in case it acts as an admin_id in some legacy records
+        if company_id not in admin_ids:
+            admin_ids.append(company_id)
+    except Exception:
+        admin_ids = [company_id]
+        
+    # 3. Query jobs that belong to these admins (exactly how dashboard does it)
+    query = {
+        "admin_id": {"$in": admin_ids}
+    }
+    
+    jobs = list(jobs_collection.find(query).sort("created_at", -1))
+    
+    # 4. Clean up jobs for public consumption
+    public_jobs = []
+    for j in jobs:
+        j["_id"] = str(j["_id"])
+        public_jobs.append(j)
+        
+    return {
+        "status": "success", 
+        "company_name": company_name, 
+        "jobs": public_jobs
+    }
 UPLOAD_RESUMES_DIR = os.path.join(os.getcwd(), "uploads", "resumes")
 UPLOAD_COVER_LETTERS_DIR = os.path.join(os.getcwd(), "uploads", "cover_letters")
 os.makedirs(UPLOAD_RESUMES_DIR, exist_ok=True)
 os.makedirs(UPLOAD_COVER_LETTERS_DIR, exist_ok=True)
 
 @router.get("/api/public/resumes/{filename}")
-def get_uploaded_resume_file(filename: str):
+def get_uploaded_resume_file(filename: str, current_admin: dict = Depends(get_current_admin_details)):
     """Serve locally stored resumes if not using Cloudinary."""
     safe_filename = os.path.basename(filename)
     file_path = os.path.join(UPLOAD_RESUMES_DIR, safe_filename)
@@ -239,14 +287,15 @@ def get_uploaded_resume_file(filename: str):
     return FileResponse(file_path, media_type=media_type, filename=safe_filename)
 
 @router.get("/api/public/cover_letters/{filename}")
-def get_uploaded_cover_letter_file(filename: str):
+def get_uploaded_cover_letter_file(filename: str, current_admin: dict = Depends(get_current_admin_details)):
     """Serve locally stored cover letters."""
     safe_filename = os.path.basename(filename)
     file_path = os.path.join(UPLOAD_COVER_LETTERS_DIR, safe_filename)
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Cover letter file not found")
     media_type = "application/pdf" if safe_filename.lower().endswith(".pdf") else "application/octet-stream"
-    return FileResponse(file_path, media_type=media_type, filename=safe_filename)
+    return FileResponse(file_path, media_type=media_type, filename=safe_filename, content_disposition_type="inline")
+
 
 @router.post("/api/public/jobs/{job_id}/apply")
 async def apply_for_job(
@@ -272,6 +321,8 @@ async def apply_for_job(
             from bson import ObjectId
             if ObjectId.is_valid(job_id):
                 job = jobs_collection.find_one({"_id": ObjectId(job_id)})
+    except InvalidId:
+        pass # Ignore InvalidId and proceed to 404
     except Exception as db_err:
         logger.error(f"[JobApply] Database error looking up job {job_id}: {db_err}")
         raise HTTPException(status_code=503, detail="Database temporarily unavailable. Please try again later.")
@@ -309,6 +360,29 @@ async def apply_for_job(
         resume_filename = resume_file.filename
         try:
             file_bytes = await resume_file.read()
+            if len(file_bytes) > 5 * 1024 * 1024:
+                raise HTTPException(status_code=400, detail="Resume file size exceeds 5MB limit")
+            
+            # Simple magic byte / extension check
+            ext = os.path.splitext(resume_filename)[1].lower()
+            if ext not in ['.pdf', '.docx', '.doc', '.txt']:
+                raise HTTPException(status_code=400, detail="Invalid resume file type. Allowed: PDF, DOCX, DOC, TXT")
+            
+            if len(file_bytes) >= 4:
+                header = file_bytes[:4]
+                is_valid_magic = False
+                if ext == '.pdf' and header == b'%PDF':
+                    is_valid_magic = True
+                elif ext == '.docx' and header == b'PK\x03\x04':
+                    is_valid_magic = True
+                elif ext == '.doc' and header == b'\xd0\xcf\x11\xe0':
+                    is_valid_magic = True
+                elif ext == '.txt':
+                    is_valid_magic = True
+                
+                if not is_valid_magic:
+                    raise HTTPException(status_code=400, detail="File content does not match its extension signature")
+                
             if file_bytes:
                 # Extract text
                 extracted = extract_text_from_file(file_bytes, resume_filename)
@@ -321,23 +395,38 @@ async def apply_for_job(
                     upload_res = cloudinary.uploader.upload(
                         file_bytes,
                         folder="job_resumes",
-                        resource_type="auto"
+                        resource_type="raw"
                     )
                     if upload_res and upload_res.get("secure_url"):
                         saved_resume_url = upload_res.get("secure_url")
                         cloud_uploaded = True
+                        logger.info(f"[JobApply] Resume uploaded to Cloudinary: {saved_resume_url}")
                 except Exception as cloud_err:
                     logger.warning(f"Cloudinary resume upload skipped/failed: {cloud_err}")
 
                 if not cloud_uploaded:
-                    unique_id = uuid.uuid4().hex[:10]
-                    safe_name = f"{unique_id}_{os.path.basename(resume_filename)}"
-                    local_path = os.path.join(UPLOAD_RESUMES_DIR, safe_name)
-                    with open(local_path, "wb") as f:
-                        f.write(file_bytes)
-                    saved_resume_url = f"/api/public/resumes/{safe_name}"
+                    try:
+                        unique_id = uuid.uuid4().hex[:10]
+                        safe_name = f"{unique_id}_{os.path.basename(resume_filename)}"
+                        local_path = os.path.join(UPLOAD_RESUMES_DIR, safe_name)
+                        logger.info(f"[JobApply] Saving resume locally to: {local_path}")
+                        with open(local_path, "wb") as f:
+                            f.write(file_bytes)
+                        saved_resume_url = f"/api/public/resumes/{safe_name}"
+                        logger.info(f"[JobApply] Resume saved locally. URL: {saved_resume_url}")
+                    except Exception as local_err:
+                        logger.error(f"[JobApply] Local resume save FAILED: {local_err}", exc_info=True)
+                        saved_resume_url = ""
+        except HTTPException:
+            raise
         except Exception as e:
-            logger.error(f"Error processing uploaded resume file: {e}")
+            logger.error(f"Error processing uploaded resume file: {e}", exc_info=True)
+            saved_resume_url = ""
+
+    # If saved_resume_url is a bare filename (not a URL or path), clear it
+    if saved_resume_url and not saved_resume_url.startswith(('http://', 'https://', '/')):
+        logger.warning(f"[JobApply] Clearing invalid resume_url (bare filename): '{saved_resume_url}'")
+        saved_resume_url = ""
 
     # Process uploaded cover letter file
     cover_letter_filename = None
@@ -346,6 +435,13 @@ async def apply_for_job(
         cover_letter_filename = cover_letter_file.filename
         try:
             cl_bytes = await cover_letter_file.read()
+            if len(cl_bytes) > 5 * 1024 * 1024:
+                raise HTTPException(status_code=400, detail="Cover letter file size exceeds 5MB limit")
+                
+            ext = os.path.splitext(cover_letter_filename)[1].lower()
+            if ext not in ['.pdf', '.docx', '.doc', '.txt']:
+                raise HTTPException(status_code=400, detail="Invalid cover letter file type. Allowed: PDF, DOCX, DOC, TXT")
+                
             if cl_bytes:
                 cl_extracted = extract_text_from_file(cl_bytes, cover_letter_filename)
                 if cl_extracted and not cover_letter:
@@ -384,6 +480,8 @@ async def apply_for_job(
 
     app_dict = {
         "job_id": actual_job_id,
+        "company_id": job.get("company_id"),
+        "admin_id": job.get("admin_id"),
         "job_title": job.get("title"),
         "name": name,
         "email": email,

@@ -75,11 +75,11 @@ export default function SuperAdminInterviewsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Interviews</h1>
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-slate-500 dark:text-slate-400">
           View all AI interviews and manage candidates.
         </p>
       </div>
-      <Card className="bg-white text-slate-900 border-slate-200 shadow-sm">
+      <Card className="bg-white dark:bg-slate-800/60 text-slate-900 dark:text-white border-slate-200 dark:border-slate-700 shadow-sm">
         <CardHeader className="pb-2">
           <CardTitle className="text-base">All Candidates</CardTitle>
           <CardDescription>Comprehensive list of evaluated candidates.</CardDescription>

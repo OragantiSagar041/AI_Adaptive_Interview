@@ -233,9 +233,9 @@ async def generate_tts(
     cartesia_api_key = os.getenv("CARTESIA_API_KEY", "").strip()
     session_voice_id = str(candidate_session.get("cloned_voice_id") or "").strip()
     requested_voice_id = str(req.voice_id or "").strip()
-    if requested_voice_id and not (
-        session_voice_id and hmac.compare_digest(requested_voice_id, session_voice_id)
-    ):
+    # Only reject if the session has its own cloned voice AND the requested ID doesn't match it.
+    # If there is no per-session clone, allow the request through to use the global CARTESIA_VOICE_ID.
+    if session_voice_id and requested_voice_id and not hmac.compare_digest(requested_voice_id, session_voice_id):
         raise HTTPException(status_code=403, detail="Voice ID does not belong to this interview session")
     # A per-session clone takes priority over the configured global voice.
     cartesia_voice_id = session_voice_id or os.getenv("CARTESIA_VOICE_ID", "").strip()
@@ -277,7 +277,7 @@ async def generate_tts(
             def _call_cartesia():
                 client = Cartesia(api_key=cartesia_api_key)
                 result = client.tts.generate(
-                    model_id="sonic-english",
+                    model_id="sonic-2",
                     transcript=req.text,
                     voice={"mode": "id", "id": actual_cartesia_voice_id},
                     output_format={
@@ -412,7 +412,6 @@ async def stt_endpoint(
             # on silence.
             sys_prompt = (
                 f"{name_hint}{known_terms_hint}"
-                "Transcribe verbatim. Do not fabricate content if audio is silent or unclear."
                 if iso_lang == "en" else ""
             )
 
@@ -489,21 +488,20 @@ async def stt_endpoint(
                 compression = segment.get("compression_ratio", 0) if isinstance(segment, dict) else getattr(segment, "compression_ratio", 0)
                 segment_text = segment.get("text", "") if isinstance(segment, dict) else getattr(segment, "text", "")
 
-                # ── Aggressive hallucination filters ──
-                # Whisper marks high-confidence hallucinations with:
-                #   • avg_logprob < -0.7   (the strongest signal — real speech is usually > -0.4)
-                #   • compression > 1.6     (repetition loops)
-                #   • no_speech > 0.4       (silence with phantom text)
-                # Drop aggressively, recover nothing on doubt.
-                if avg_logprob < -0.7:
+                # ── Hallucination filters (calibrated for fast/accented speech) ──
+                # avg_logprob < -1.5  — real speech (even fast/accented) stays above -1.2.
+                #                       -0.7 was far too strict and was dropping real sentences.
+                # compression > 2.4   — repetition loops only (normal speech ~1.0-1.8)
+                # no_speech > 0.6     — high confidence silence; 0.4 was dropping real soft speech
+                if avg_logprob < -1.5:
                     hallucinated_segments += 1
                     dropped_segment_texts.append(segment_text.strip())
                     continue
-                if compression > 1.6:
+                if compression > 2.4:
                     hallucinated_segments += 1
                     dropped_segment_texts.append(segment_text.strip())
                     continue
-                if no_speech > 0.4:
+                if no_speech > 0.6:
                     hallucinated_segments += 1
                     dropped_segment_texts.append(segment_text.strip())
                     continue
@@ -546,7 +544,25 @@ async def stt_endpoint(
                 "thank you for your attention",
             }
 
+            
+            SUBSTRING_HALLUCINATIONS = [
+                "amara.org", "transcribe verbatim", "tanscribe verbatim",
+                "repented of the stupidity", "video clip", "the name of the person",
+                "i thought of putting it here", "not able to read it",
+                "adekitashi", "food, dhan", "subtitles by", "please subscribe",
+                "subscribe to my channel", "click the bell", "thanks for watching",
+                "thank you for watching", "like and subscribe"
+            ]
+
             if transcript_text:
+                # Substring scrub
+                t_lower = transcript_text.lower()
+                for bad_sub in SUBSTRING_HALLUCINATIONS:
+                    if bad_sub in t_lower:
+                        # If it contains massive hallucination blocks, just drop the whole text
+                        transcript_text = ""
+                        break
+
                 cleaned_lower = transcript_text.lower().rstrip(".,!? ")
                 # Drop the transcript entirely if it's a known hallucination
                 if cleaned_lower in HALLUCINATIONS or transcript_text.strip() == "":
