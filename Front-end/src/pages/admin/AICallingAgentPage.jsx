@@ -7,7 +7,7 @@ import {
   BookOpen, Plug, Cog, MailCheck, Clock, Volume2, Globe, Zap, FileText,
   Mic, MessageSquare, RefreshCw, ChevronDown, ChevronUp, Timer,
   AlertCircle, User, Calendar, TrendingUp, Play, Plus, Trash2, Copy,
-  ArrowUpRight, ArrowDownLeft, Upload, Search, Filter, Users, Settings, 
+  ArrowUpRight, ArrowDownLeft, Upload, Search, Filter, Users, Settings, Save,
   CheckCircle, Eye, Brain, X, ExternalLink, Info, Download, FileSpreadsheet
 } from 'lucide-react'
 import Card from '../../components/Card'
@@ -80,29 +80,112 @@ function EmptyState({ message }) {
 
 // ─── Tab Components ─────────────────────────────────────────────────────────────
 
-function AssistantDetailsTab({ agentSettings, loading }) {
+function AssistantDetailsTab({ agentSettings, loading, token, omniApiKey, onRefresh }) {
   const defaultGreeting = "Hello {{candidate_name}}, this is Sarah, the AI Recruitment Assistant from HireIQ, calling on behalf of {{HIRE IQ}} regarding your application for the {{job_role}} position. I'd like to conduct a brief screening interview that will take about {{duration}} minutes. Would you like me to continue?"
 
-  const [isDynamic, setIsDynamic] = useState(true)
-  const [isInterruptible, setIsInterruptible] = useState(false)
-  const [greetingText, setGreetingText] = useState(agentSettings?.greeting_message || defaultGreeting)
+  const [isDynamic, setIsDynamic] = useState(
+    agentSettings?.is_welcome_message_dynamic !== undefined ? Boolean(agentSettings.is_welcome_message_dynamic) : true
+  )
+  const [isInterruptible, setIsInterruptible] = useState(
+    agentSettings?.is_welcome_message_interruption !== undefined ? Boolean(agentSettings.is_welcome_message_interruption) : false
+  )
+  const [greetingText, setGreetingText] = useState(
+    agentSettings?.welcome_message || agentSettings?.greeting_message || agentSettings?.first_ideal_message || defaultGreeting
+  )
+  const [saving, setSaving] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState('')
 
   useEffect(() => {
-    if (agentSettings?.greeting_message) {
-      setGreetingText(agentSettings.greeting_message)
+    if (agentSettings?.welcome_message || agentSettings?.greeting_message) {
+      setGreetingText(agentSettings.welcome_message || agentSettings.greeting_message)
+    }
+    if (agentSettings?.is_welcome_message_dynamic !== undefined) {
+      setIsDynamic(Boolean(agentSettings.is_welcome_message_dynamic))
+    }
+    if (agentSettings?.is_welcome_message_interruption !== undefined) {
+      setIsInterruptible(Boolean(agentSettings.is_welcome_message_interruption))
     }
   }, [agentSettings])
+
+  const handleSaveAssistantDetails = async () => {
+    setSaving(true)
+    setSaveSuccess('')
+    try {
+      const configuredOmniApiKey = omniApiKey || sessionStorage.getItem('omniDimensionApiKey') || ''
+      const res = await fetch(`${API_BASE_URL}/api/calls/agent-settings`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          ...(configuredOmniApiKey ? { 'X-Omni-Dimension-API-Key': configuredOmniApiKey } : {})
+        },
+        body: JSON.stringify({
+          welcome_message: greetingText,
+          greeting_message: greetingText,
+          is_dynamic: isDynamic,
+          is_interruptible: isInterruptible
+        })
+      })
+
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.detail || data.message || 'Failed to save assistant settings')
+      }
+
+      setSaveSuccess('Welcome Message & Assistant Settings saved successfully!')
+      setTimeout(() => setSaveSuccess(''), 3500)
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({
+          title: 'Settings Saved!',
+          text: 'Welcome Message & Assistant Settings saved to Omni Dimension!',
+          icon: 'success',
+          timer: 2500,
+          showConfirmButton: false
+        })
+      }
+      if (onRefresh) onRefresh()
+    } catch (err) {
+      console.error(err)
+      const msg = err.message || 'Failed to save assistant settings'
+      if (typeof Swal !== 'undefined') {
+        Swal.fire('Error', msg, 'error')
+      } else {
+        alert(msg)
+      }
+    } finally {
+      setSaving(false)
+    }
+  }
 
   if (loading) return <SectionLoader />
   if (!agentSettings) return <EmptyState message="No agent settings found. Check your Omni Dimension API key." />
 
   return (
     <div className="space-y-6">
+      {saveSuccess && (
+        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center text-emerald-600 text-xs font-semibold">
+          <CheckCircle2 className="w-4 h-4 mr-2 flex-shrink-0" />
+          <p>{saveSuccess}</p>
+        </div>
+      )}
+
       {/* Assistant Settings Section */}
-      <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm space-y-4">
-        <div className="flex items-center gap-1.5">
-          <h3 className="text-sm font-extrabold text-slate-800 dark:text-slate-100 tracking-tight">Assistant Settings</h3>
-          <Info size={14} className="text-slate-400 cursor-pointer hover:text-slate-600 dark:text-slate-400 transition-colors" />
+      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <h3 className="text-sm font-extrabold text-slate-800 tracking-tight">Assistant Settings</h3>
+            <Info size={14} className="text-slate-400 cursor-pointer hover:text-slate-600 transition-colors" />
+          </div>
+
+          <button
+            type="button"
+            onClick={handleSaveAssistantDetails}
+            disabled={saving}
+            className="rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 px-4 py-2 text-xs font-bold text-white transition-all shadow-md shadow-indigo-600/20 flex items-center gap-2 cursor-pointer"
+          >
+            {saving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
+            {saving ? 'Saving...' : 'Save Settings'}
+          </button>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
@@ -200,6 +283,18 @@ function AssistantDetailsTab({ agentSettings, loading }) {
             {greetingText.length}/600
           </div>
         </div>
+
+        <div className="flex justify-end pt-2">
+          <button
+            type="button"
+            onClick={handleSaveAssistantDetails}
+            disabled={saving}
+            className="rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 px-4 py-2 text-xs font-bold text-white transition-all shadow-md shadow-indigo-600/20 flex items-center gap-2 cursor-pointer"
+          >
+            {saving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
+            {saving ? 'Saving...' : 'Save Welcome Message'}
+          </button>
+        </div>
       </div>
 
       {/* System Prompt Section */}
@@ -241,10 +336,14 @@ function CyanToggleSwitch({ checked, onChange, label = "" }) {
   return (
     <div className="flex items-center gap-2.5 select-none cursor-pointer" onClick={() => onChange(!checked)}>
       {label && <span className={`text-xs font-bold ${checked ? "text-slate-800 dark:text-slate-100" : "text-slate-400"}`}>{label}</span>}
-      <div className={`w-9 h-4.5 rounded-full p-0.5 transition-colors flex items-center ${
-        checked ? "bg-indigo-600 justify-end" : "bg-slate-300 justify-start"
+      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+        checked ? "bg-emerald-500/20 text-emerald-500 border-emerald-500/40" : "bg-slate-700/50 text-slate-400 border-slate-600"
       }`}>
-        <div className="w-3.5 h-3.5 bg-white dark:bg-slate-800/60 rounded-full shadow-md" />
+        {checked ? "ON" : "OFF"}
+      </span>
+      <div className={`w-9 h-4.5 rounded-full p-0.5 transition-colors flex items-center border ${checked ? "bg-indigo-600 border-indigo-500 justify-end" : "bg-slate-600 border-slate-500 justify-start"
+        }`}>
+        <div className="w-3.5 h-3.5 bg-white rounded-full shadow-md" />
       </div>
     </div>
   )
@@ -354,7 +453,7 @@ function CallConfigTab({ config, loading, omniApiKey, onRefresh }) {
   if (loading) return <SectionLoader />
 
   return (
-    <form onSubmit={handleSaveConfig} className="space-y-5 max-w-5xl mx-auto text-slate-800 dark:text-slate-100">
+    <form onSubmit={handleSaveConfig} className="space-y-5 w-full text-slate-800 dark:text-slate-100">
       {/* Alert Messages */}
       {saveSuccess && (
         <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 text-xs font-semibold flex items-center justify-between animate-in fade-in">
@@ -1075,7 +1174,7 @@ function PostCallTab({ configs, loading, onRefresh }) {
   ]
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto text-slate-800 dark:text-slate-100">
+    <div className="space-y-6 w-full text-slate-800 dark:text-slate-100">
       {saveSuccess && (
         <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 text-sm font-semibold flex items-center justify-between animate-in fade-in">
           <span>{saveSuccess}</span>
@@ -1324,7 +1423,7 @@ function RecentCallsTab({ calls, loading, onViewDetails }) {
   if (loading) return <SectionLoader />
   if (!calls || calls.length === 0) {
     return (
-      <div className="max-w-[1200px] mx-auto">
+      <div className="w-full">
         <div className="flex flex-col items-center justify-center bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-3xl h-[400px] gap-5 text-slate-400 shadow-sm">
           <div className="p-4 bg-indigo-50 rounded-full border border-indigo-100 text-indigo-400">
             <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1391,7 +1490,7 @@ function RecentCallsTab({ calls, loading, onViewDetails }) {
   });
 
   return (
-    <div className="max-w-[1200px] mx-auto min-h-[500px]">
+    <div className="w-full min-h-[500px]">
       {/* Filter Bar */}
       <div className="flex items-center gap-3 mb-6 bg-white dark:bg-slate-800/60 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex-wrap">
         <span className="text-slate-800 dark:text-slate-100 font-extrabold mr-2 ml-2">Recent Calls ({displayCalls.length})</span>
@@ -1543,7 +1642,7 @@ function ApprovalCallsTab({ calls, loading, onViewDetails, onDecision, actionLoa
   })
 
   return (
-    <div className="max-w-[1200px] mx-auto min-h-[500px]">
+    <div className="w-full min-h-[500px]">
       <div className="flex flex-col gap-4 mb-6">
         <div className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
           <div>
@@ -1707,6 +1806,7 @@ function ApprovalCallsTab({ calls, loading, onViewDetails, onDecision, actionLoa
 
 export default function AICallingAgentPage() {
   const token = useSelector(state => state.auth.token)
+  const omniApiKey = sessionStorage.getItem('omniDimensionApiKey') || ''
 
   const [activeTab, setActiveTab] = useState('assistant')
   const [accountVersion, setAccountVersion] = useState(0)
@@ -1816,7 +1916,6 @@ export default function AICallingAgentPage() {
   }
 
   const fetchPostCall = async () => {
-    if (postCallConfigs.length) return
     setLoading('postcall', true)
     try {
       const r = await fetch(`${API_BASE_URL}/api/calls/post-call-config`, { headers })
@@ -1841,12 +1940,40 @@ export default function AICallingAgentPage() {
     } finally { setLoading('recentcalls', false) }
   }
 
-  const fetchAllOmniValues = async () => {
+  const fetchAllOmniValues = async (isManualSync = false) => {
     setLoadingMap({
       assistant: true, callconfig: true, knowledgebase: true,
       integrations: true, postcall: true, recentcalls: true
     })
     try {
+      if (isManualSync && token) {
+        try {
+          const configuredOmniApiKey = omniApiKey || sessionStorage.getItem('omniDimensionApiKey') || ''
+          const syncRes = await fetch(`${API_BASE_URL}/api/calls/sync-all`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+              ...(configuredOmniApiKey ? { 'X-Omni-Dimension-API-Key': configuredOmniApiKey } : {})
+            }
+          })
+          const syncData = await syncRes.json()
+          if (syncRes.ok && syncData.success) {
+            if (typeof Swal !== 'undefined') {
+              Swal.fire({
+                title: 'Omni Dimension Synced!',
+                text: 'Synced all data linked with your account & API key: Assistant Details, Conversation Flow, Call Config, Knowledge Base, Integrations, Post-Call, Recent Calls, Candidate Approvals & Bulk Dialer.',
+                icon: 'success',
+                timer: 3200,
+                showConfirmButton: false
+              })
+            }
+          }
+        } catch (syncErr) {
+          console.warn('[Sync Note] Backend sync-all error:', syncErr)
+        }
+      }
+
       await Promise.allSettled([
         fetchAssistant(),
         fetchCallConfig(),
@@ -2324,7 +2451,7 @@ export default function AICallingAgentPage() {
   ]
 
   return (
-    <div className="w-full max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8 pb-24 relative">
+    <div className="w-full p-4 sm:p-6 lg:p-8 pb-24 relative">
       {/* Header */}
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
@@ -2361,7 +2488,7 @@ export default function AICallingAgentPage() {
         <div className="w-full sm:w-auto flex sm:items-end justify-end">
           <button
             type="button"
-            onClick={fetchAllOmniValues}
+            onClick={() => fetchAllOmniValues(true)}
             className="rounded-xl bg-card border border-border px-4 py-2.5 text-xs font-bold text-foreground hover:bg-muted/40 transition-colors shadow-sm flex items-center gap-2 cursor-pointer"
           >
             <RefreshCw size={14} className="text-indigo-500 animate-spin-hover" /> Sync Agent Settings
@@ -2389,13 +2516,6 @@ export default function AICallingAgentPage() {
               }`}
             >
               <span className="relative z-10 flex items-center gap-2">{icon} {label}</span>
-              {activeTab === id && (
-                <motion.div
-                  layoutId="activeTabIndicatorLight"
-                  className="absolute inset-0 bg-indigo-50 border-b-2 border-indigo-500 rounded-t-xl"
-                  transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                />
-              )}
             </button>
           ))}
         </div>
@@ -2411,7 +2531,13 @@ export default function AICallingAgentPage() {
               transition={{ duration: 0.3, ease: "easeOut" }}
             >
               {activeTab === 'assistant' && (
-                <AssistantDetailsTab agentSettings={agentSettings} loading={loadingMap.assistant} />
+                <AssistantDetailsTab
+                  agentSettings={agentSettings}
+                  loading={loadingMap.assistant}
+                  token={token}
+                  omniApiKey={omniApiKey}
+                  onRefresh={fetchAssistant}
+                />
               )}
               {activeTab === 'conversationflow' && <ConversationalFlowPage />}
               {activeTab === 'callconfig' && (
@@ -2485,7 +2611,7 @@ export default function AICallingAgentPage() {
                 />
               )}
               {activeTab === 'dialer' && (
-                <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-6">
+                <div className="p-4 sm:p-6 w-full space-y-6">
                   {/* Header & Mode Selector */}
                   <div className="bg-white dark:bg-slate-800/60 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>

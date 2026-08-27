@@ -808,7 +808,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                 }
 
                 return (
-                  <div className="bg-gradient-to-r from-indigo-50/60 via-white to-blue-50/40 rounded-xl border border-indigo-100/80 p-4 shadow-sm flex items-center justify-between gap-4">
+                  <div className="bg-secondary rounded-xl border border-border p-4 shadow-sm flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3">
                       <div className="w-9 h-9 rounded-lg bg-indigo-600/10 text-indigo-600 flex items-center justify-center font-bold">
                         <Mic size={18} />
@@ -887,7 +887,15 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
               <textarea
                 value={newNote}
                 onChange={e => setNewNote(e.target.value)}
-                placeholder="Type a note..."
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (!notesSaving && newNote.trim()) {
+                      handleAddNote();
+                    }
+                  }
+                }}
+                placeholder="Type a note (Press Enter to save)..."
                 className="w-full text-sm rounded-xl border-slate-200 resize-none focus:ring-indigo-500 focus:border-indigo-500 mb-2 p-3 text-slate-800"
                 rows={3}
               />
@@ -928,7 +936,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
             <Send size={16} /> Send Offer
           </button>
         </div>
-      )}
+      </div>
 
       <ScheduleModal
         isOpen={showScheduleModal}
