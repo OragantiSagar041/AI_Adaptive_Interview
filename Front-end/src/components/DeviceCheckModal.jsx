@@ -167,10 +167,12 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0a0f1e]/90 backdrop-blur-sm p-4">
-      <div className="bg-[#161c2d] border border-white/10 rounded-2xl shadow-2xl max-w-2xl w-full p-8 text-white relative overflow-hidden">
-
-        <div className="mb-6 text-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0a0f1e]/90 backdrop-blur-sm p-4 overflow-y-auto">
+      <div 
+        className="bg-[#161c2d] border rounded-2xl shadow-2xl max-w-2xl w-full p-6 sm:p-8 text-white relative overflow-y-auto max-h-[94vh] my-auto flex flex-col justify-between"
+        style={{ backgroundColor: '#161c2d', borderColor: 'rgba(255,255,255,0.1)', color: '#ffffff' }}
+      >
+        <div className="mb-4 text-center">
           <h2 className="text-2xl font-bold mb-2">Hardware Check</h2>
           <p className="text-slate-400 text-sm mb-3">Let's make sure your camera and microphone are working properly before we begin.</p>
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full text-xs font-medium text-blue-400">
@@ -179,7 +181,7 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
           </div>
         </div>
 
-        <div className="relative w-full aspect-video bg-black rounded-3xl overflow-hidden mb-8 flex items-center justify-center">
+        <div className="relative w-full aspect-video max-h-[38vh] bg-black rounded-3xl overflow-hidden mb-5 flex items-center justify-center">
           {error ? (
             <div className="text-center p-6">
               <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-4">
@@ -205,8 +207,8 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
           )}
         </div>
 
-        <div className="bg-[#1e293b] rounded-2xl p-5 mb-6">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-[#1e293b] rounded-2xl p-4 sm:p-5 mb-4">
+          <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-bold text-slate-200 flex items-center gap-2">
               <i className="fas fa-microphone text-indigo-500"></i> Microphone Level
             </span>
@@ -224,7 +226,7 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
           </div>
         </div>
 
-        <div className="bg-[#1e293b] rounded-2xl p-5 mb-8 flex items-center justify-between">
+        <div className="bg-[#1e293b] rounded-2xl p-4 sm:p-5 mb-6 flex items-center justify-between">
           <span className="text-sm font-bold text-slate-200 flex items-center gap-2">
             <i className="fas fa-user-check text-indigo-500"></i> Face Detection
           </span>
@@ -237,7 +239,7 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
           ) : null}
         </div>
 
-        <div className="flex gap-4">
+        <div className="flex gap-4 pt-1">
           <button
             onClick={onCancel}
             className="flex-1 py-3 rounded-2xl font-bold text-sm bg-[#1e293b] hover:bg-[#334155] text-white transition-all"

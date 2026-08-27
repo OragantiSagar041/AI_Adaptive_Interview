@@ -292,7 +292,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const liveInterimGhostRef = useRef('')              // Web Speech "ghost" text, not committed
   const MIN_SEGMENT_MS = 700       // don't cut segments shorter than this
   const SEGMENT_SILENCE_MS = 900   // silence duration that triggers a cut
-  const SEGMENT_MIN_PEAK_RMS = 0.015 // below this, it's just room noise — never transcribe
+  const SEGMENT_MIN_PEAK_RMS = 0.04 // below this, it's just room noise — never transcribe
   // Refs that hold session-data values used in async transcription callbacks.
   // Using refs (not state) prevents the stale-closure / race-condition where
   // sessionDetail state is not yet populated when the MediaRecorder onstop fires.
@@ -1138,10 +1138,25 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       })
       // Second check: discard result if TTS fired while we were waiting for Whisper
       if (isTTSPlayingRef.current) return
-      const text = res.data?.transcript?.trim()
+      let text = res.data?.transcript?.trim()
       if (!text) return
 
+      // --- Hallucination Filter ---
+      // Whisper often hallucinates these phrases when fed background noise
+      const lowerText = text.toLowerCase().replace(/[^a-z\s]/g, '').trim()
       const cName = sessionDetail?.candidate_name || sessionDetail?.name || ''
+      
+      const isHallucination = [
+        'thank you', 'thanks for watching', 'thanks', 'subscribe', 
+        'bye', 'amara', 'you', 'i am', 'i am sorry', 'im sorry'
+      ].includes(lowerText) || 
+      (cName && lowerText === cName.toLowerCase().replace(/[^a-z\s]/g, '').trim()) || 
+      (cName && lowerText === `i am ${cName.toLowerCase().replace(/[^a-z\s]/g, '').trim()}`)
+
+      if (isHallucination) return
+      // -----------------------------
+
+
       const prev = whisperFinalizedTranscriptRef.current
       const merged = mergeSegmentChunks(prev, text)
       whisperFinalizedTranscriptRef.current = merged
@@ -1340,7 +1355,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
         // Web Speech is display-only "ghost" text for the *current* in-progress segment.
         // Gate: ignore Web Speech hallucination if no real acoustic energy occurred
-        if (segmentPeakRmsRef.current < 0.02 && audioRmsRef.current < 0.02) {
+        if (segmentPeakRmsRef.current < 0.04 && audioRmsRef.current < 0.04) {
           return
         }
 

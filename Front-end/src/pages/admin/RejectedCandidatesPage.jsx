@@ -23,7 +23,7 @@ function StatCard({ icon: Icon, label, value, accent }) {
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{label}</p>
           <p className="mt-2 text-2xl font-black text-foreground tracking-tight">{value}</p>
         </div>
-        <div className={`rounded-xl p-2.5 ${accent}`}>
+        <div className={`rounded-[0.75rem] p-2.5 ${accent}`}>
           <Icon className="h-5 w-5" strokeWidth={2.5} />
         </div>
       </div>
@@ -124,18 +124,18 @@ export default function RejectedCandidatesPage() {
 
       {/* Stats row 1 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard icon={Users} label="Rejected Candidates" value={totalRejected} accent="bg-rose-100 text-rose-700" />
-        <StatCard icon={Bot} label="AI Interviews Completed" value={totalRejected} accent="bg-indigo-100 text-indigo-700" />
-        <StatCard icon={Gauge} label="Average AI Score" value={`${avgScore}%`} accent="bg-amber-100 text-amber-700" />
-        <StatCard icon={RotateCcw} label="Eligible for Reconsideration" value={reconsiderCount} accent="bg-emerald-100 text-emerald-700" />
+        <StatCard icon={Users} label="Rejected Candidates" value={totalRejected} accent="bg-rose-500/15 dark:bg-rose-500/25 border border-rose-400/30 text-rose-600 dark:text-rose-400" />
+        <StatCard icon={Bot} label="AI Interviews Completed" value={totalRejected} accent="bg-indigo-500/15 dark:bg-indigo-500/25 border border-indigo-400/30 text-indigo-600 dark:text-indigo-400" />
+        <StatCard icon={Gauge} label="Average AI Score" value={`${avgScore}%`} accent="bg-amber-500/15 dark:bg-amber-500/25 border border-amber-400/30 text-amber-600 dark:text-amber-400" />
+        <StatCard icon={RotateCcw} label="Eligible for Reconsideration" value={reconsiderCount} accent="bg-emerald-500/15 dark:bg-emerald-500/25 border border-emerald-400/30 text-emerald-600 dark:text-emerald-400" />
       </div>
 
       {/* Stats row 2 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard icon={ClipboardList} label="Recruiter Decisions" value={totalRejected} accent="bg-slate-100 dark:bg-slate-800/50 text-slate-700 dark:text-slate-200" />
-        <StatCard icon={AlertTriangle} label="Technical Rejections" value={Math.floor(totalRejected * 0.4)} accent="bg-orange-100 text-orange-700" />
-        <StatCard icon={MessageSquare} label="Communication Rejections" value={Math.floor(totalRejected * 0.3)} accent="bg-sky-100 text-sky-700" />
-        <StatCard icon={Calendar} label="This Month" value={thisMonthCount} accent="bg-violet-100 text-violet-700" />
+        <StatCard icon={ClipboardList} label="Recruiter Decisions" value={totalRejected} accent="bg-blue-500/15 dark:bg-blue-500/25 border border-blue-400/30 text-blue-600 dark:text-blue-400" />
+        <StatCard icon={AlertTriangle} label="Technical Rejections" value={Math.floor(totalRejected * 0.4)} accent="bg-orange-500/15 dark:bg-orange-500/25 border border-orange-400/30 text-orange-600 dark:text-orange-400" />
+        <StatCard icon={MessageSquare} label="Communication Rejections" value={Math.floor(totalRejected * 0.3)} accent="bg-sky-500/15 dark:bg-sky-500/25 border border-sky-400/30 text-sky-600 dark:text-sky-400" />
+        <StatCard icon={Calendar} label="This Month" value={thisMonthCount} accent="bg-violet-500/15 dark:bg-violet-500/25 border border-violet-400/30 text-violet-600 dark:text-violet-400" />
       </div>
 
       {/* Search & Filters */}
@@ -233,7 +233,7 @@ export default function RejectedCandidatesPage() {
                 <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Job Applied</th>
                 <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">AI Score</th>
                 <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Skills Match</th>
-                <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Interview</th>
+                <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Status</th>
                 <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">AI Recommendation</th>
                 <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Rejection Reason</th>
                 
@@ -249,7 +249,10 @@ export default function RejectedCandidatesPage() {
                   <tr key={c.id || c.link_id || c.email} onClick={() => setSelectedCandidate(c)} className="hover:bg-rose-50/30 transition-colors group whitespace-nowrap cursor-pointer">
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 font-bold shrink-0 shadow-sm border border-slate-200 dark:border-slate-700/50">
+                        <div
+                          className="flex h-10 w-10 items-center justify-center rounded-xl font-black text-white shrink-0 shadow-md border border-white/20"
+                          style={{ backgroundColor: ['#4f46e5', '#6366f1', '#4338ca', '#3b82f6', '#2563eb', '#1d4ed8'][(c.candidate_name || 'U').charCodeAt(0) % 6], color: '#ffffff' }}
+                        >
                           {(c.candidate_name || "U")[0].toUpperCase()}
                         </div>
                         <div>
@@ -325,10 +328,10 @@ export default function RejectedCandidatesPage() {
           <p className="text-sm text-slate-500 dark:text-slate-400 font-medium mt-1">Not every rejected candidate should be permanently discarded.</p>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard icon={Users} label="Talent Pool Candidates" value={Math.floor(totalRejected * 0.2)} accent="bg-emerald-100 text-emerald-700" />
-          <StatCard icon={RotateCcw} label="Eligible for Future Roles" value={Math.floor(totalRejected * 0.15)} accent="bg-sky-100 text-sky-700" />
-          <StatCard icon={ArrowRightLeft} label="Reconsideration Requests" value={0} accent="bg-amber-100 text-amber-700" />
-          <StatCard icon={FileText} label="Archived Candidates" value={totalRejected} accent="bg-slate-100 dark:bg-slate-800/50 text-slate-700 dark:text-slate-200" />
+          <StatCard icon={Users} label="Talent Pool Candidates" value={Math.floor(totalRejected * 0.2)} accent="bg-emerald-500/15 dark:bg-emerald-500/25 border border-emerald-400/30 text-emerald-600 dark:text-emerald-400" />
+          <StatCard icon={RotateCcw} label="Eligible for Future Roles" value={Math.floor(totalRejected * 0.15)} accent="bg-sky-500/15 dark:bg-sky-500/25 border border-sky-400/30 text-sky-600 dark:text-sky-400" />
+          <StatCard icon={ArrowRightLeft} label="Reconsideration Requests" value={0} accent="bg-amber-500/15 dark:bg-amber-500/25 border border-amber-400/30 text-amber-600 dark:text-amber-400" />
+          <StatCard icon={FileText} label="Archived Candidates" value={totalRejected} accent="bg-purple-500/15 dark:bg-purple-500/25 border border-purple-400/30 text-purple-600 dark:text-purple-400" />
         </div>
       </section>
 

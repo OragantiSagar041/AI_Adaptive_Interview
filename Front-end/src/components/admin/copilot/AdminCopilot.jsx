@@ -341,8 +341,7 @@ const AdminCopilot = () => {
       <button
         onClick={() => setIsOpen(true)}
         style={{
-          background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
-          boxShadow: '0 8px 30px rgba(99, 102, 241, 0.55)'
+          background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)'
         }}
         className="fixed bottom-6 right-6 p-4 rounded-full !bg-indigo-600 hover:!bg-indigo-500 !text-white hover:-translate-y-1 transition-all duration-300 z-50 group flex items-center justify-center cursor-pointer border-none"
       >
@@ -355,7 +354,7 @@ const AdminCopilot = () => {
   }
 
   return (
-    <div className={`fixed bottom-6 right-6 flex flex-col bg-white dark:bg-[#131b2e] border border-slate-200/80 dark:border-[#26334d] rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] overflow-hidden z-50 transition-all duration-300 ease-in-out ${isExpanded ? 'w-[520px] h-[720px]' : 'w-[380px] h-[580px]'}`}>
+    <div className={`fixed bottom-6 right-6 flex flex-col bg-white dark:bg-[#131b2e] border border-slate-200/80 dark:border-[#26334d] rounded-2xl overflow-hidden z-50 transition-all duration-300 ease-in-out ${isExpanded ? 'w-[520px] h-[720px]' : 'w-[380px] h-[580px]'}`}>
       {/* Header */}
       <div className="bg-white dark:bg-[#131b2e] border-b border-slate-100 dark:border-[#26334d] p-3.5 flex items-center justify-between shrink-0 relative overflow-hidden">
         <div className="flex items-center gap-2.5 relative z-10">

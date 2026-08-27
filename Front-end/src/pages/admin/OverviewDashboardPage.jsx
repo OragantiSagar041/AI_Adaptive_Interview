@@ -83,12 +83,12 @@ const quickActions = [
 ];
 
 const tintClasses = {
-  primary: "bg-primary/10 text-primary",
-  info: "bg-info/10 text-info",
-  accent: "bg-accent text-accent-foreground",
-  success: "bg-success/10 text-success",
-  warning: "bg-warning/15 text-warning-foreground",
-  destructive: "bg-destructive/10 text-destructive",
+  primary: "bg-indigo-500/15 dark:bg-indigo-500/25 border border-indigo-400/30 text-indigo-600 dark:text-indigo-400 shadow-xs",
+  info: "bg-sky-500/15 dark:bg-sky-500/25 border border-sky-400/30 text-sky-600 dark:text-sky-400 shadow-xs",
+  accent: "bg-violet-500/15 dark:bg-violet-500/25 border border-violet-400/30 text-violet-600 dark:text-violet-400 shadow-xs",
+  success: "bg-emerald-500/15 dark:bg-emerald-500/25 border border-emerald-400/30 text-emerald-600 dark:text-emerald-400 shadow-xs",
+  warning: "bg-amber-500/15 dark:bg-amber-500/25 border border-amber-400/30 text-amber-600 dark:text-amber-400 shadow-xs",
+  destructive: "bg-rose-500/15 dark:bg-rose-500/25 border border-rose-400/30 text-rose-600 dark:text-rose-400 shadow-xs",
 };
 
 function initials(name) {
@@ -377,7 +377,7 @@ export default function OverviewDashboardPage() {
                     )}
                   </div>
                   <div
-                    className={`grid h-10 w-10 place-items-center rounded-lg ${tintClasses[k.tint]}`}
+                    className={`grid h-10 w-10 place-items-center rounded-[0.5rem] ${tintClasses[k.tint]}`}
                   >
                     <Icon className="h-5 w-5" />
                   </div>
@@ -403,18 +403,18 @@ export default function OverviewDashboardPage() {
             {pipeline.map((p, i) => (
               <div key={p.stage} className="relative">
                 <div
-                  className="rounded-lg p-3.5 text-white"
-                  style={{ background: p.color }}
+                  className="p-3.5 text-white text-center shadow-xs flex flex-col items-center justify-between min-h-[110px]"
+                  style={{ background: p.color, borderRadius: '0.75rem' }}
                 >
-                  <div className="text-[10px] font-medium uppercase tracking-wider opacity-80">
+                  <div className="text-[10px] font-extrabold uppercase tracking-wider opacity-90 bg-black/20 px-2 py-0.5 rounded-full inline-block">
                     Stage {i + 1}
                   </div>
-                  <div className="mt-1 text-xl font-semibold">{p.count.toLocaleString()}</div>
-                  <div className="mt-0.5 text-[11px] opacity-90">{p.stage}</div>
+                  <div className="my-1.5 text-2xl font-black">{p.count.toLocaleString()}</div>
+                  <div className="text-xs font-bold opacity-95 truncate max-w-full px-1">{p.stage}</div>
                 </div>
-                <div className="mt-2 h-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800/50">
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
                   <div
-                    className="h-full rounded-full"
+                    className="h-full rounded-full transition-all duration-500"
                     style={{ width: `${(p.count / maxPipeline) * 100}%`, background: p.color }}
                   />
                 </div>
@@ -692,7 +692,7 @@ export default function OverviewDashboardPage() {
                 return (
                   <div
                     key={s.label}
-                    className="rounded-lg border border-border/50 bg-gradient-to-br from-white to-slate-50 p-3.5"
+                    className="rounded-lg border border-border dark:border-slate-700 bg-card p-3.5"
                   >
                     <div className="flex items-center gap-2">
                       <span className="relative flex h-2 w-2">
@@ -701,9 +701,9 @@ export default function OverviewDashboardPage() {
                         )}
                         <span className={`relative inline-flex h-2 w-2 rounded-full ${s.dot}`} />
                       </span>
-                      <span className="text-[11px] font-medium text-muted-foreground">{s.label}</span>
+                      <span className="text-[11px] font-bold text-muted-foreground">{s.label}</span>
                     </div>
-                    <div className="mt-1.5 text-2xl font-semibold tabular-nums">{s.count}</div>
+                    <div className="mt-1.5 text-2xl font-black text-foreground tabular-nums">{s.count}</div>
                   </div>
                 );
               })}
@@ -748,11 +748,11 @@ export default function OverviewDashboardPage() {
             {analyticsKpis.map((a) => (
               <div
                 key={a.label}
-                className="rounded-lg border border-border/50 bg-gradient-to-br from-white to-slate-50 p-4"
+                className="rounded-lg border border-border dark:border-slate-700 bg-card p-4"
               >
-                <div className="text-[11px] font-medium text-muted-foreground">{a.label}</div>
+                <div className="text-[11px] font-bold text-muted-foreground">{a.label}</div>
                 <div className="mt-1.5 flex items-baseline gap-2">
-                  <span className="text-xl font-semibold tabular-nums">{a.value}</span>
+                  <span className="text-2xl font-black text-foreground tabular-nums">{a.value}</span>
                   {a.trend && <span className="text-[11px] font-medium text-success">{a.trend}</span>}
                 </div>
                 <div className="mt-3 flex h-6 items-end gap-0.5">

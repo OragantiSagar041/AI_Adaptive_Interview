@@ -655,113 +655,6 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
               </div>
             )}
           </div>
-
-          {/* ── Tabs ── */}
-          <div className="flex items-center gap-4 px-6 border-b border-border bg-card overflow-x-auto shrink-0">
-            {tabs.map(t => (
-              <button key={t} onClick={() => setActiveTab(t)} className={`capitalize whitespace-nowrap px-1 py-4 text-sm font-bold border-b-2 transition-colors ${activeTab === t ? "border-indigo-500 text-indigo-400" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
-                {t}
-              </button>
-            ))}
-          </div>
-
-          {/* ── Content ── */}
-          <div className="flex-1 overflow-y-auto p-6 bg-background">
-
-            {/* ─ Overview Tab ─ */}
-            {activeTab === 'overview' && (
-              <div className="space-y-6">
-                <section className="bg-card rounded-xl border border-border p-5 shadow-sm">
-                  <h3 className="text-sm font-black text-foreground mb-4">Candidate Information</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-5">
-                    <InfoRow icon={Mail} label="Email" value={email} />
-                    <InfoRow icon={Phone} label="Mobile" value={phone} />
-                    <InfoRow icon={Clock} label="Experience" value={c.experience} />
-                    <InfoRow icon={Building2} label="Current Company" value={(() => {
-                      const comp = c.current_company;
-                      if (!comp || comp === "N/A" || comp === "Not specified" || /^(technical|skills|apis,?\s*and\s*database)$/i.test(comp)) {
-                        return (c.experience && c.experience.toLowerCase().includes("fresher")) ? "Fresher" : (comp && !/^(technical|skills|apis,?\s*and\s*database)$/i.test(comp) ? comp : "Fresher");
-                      }
-                      return comp;
-                    })()} />
-                    <InfoRow icon={IndianRupee} label="Current CTC" value={c.current_ctc} />
-                    <InfoRow icon={IndianRupee} label="Expected CTC" value={c.expected_ctc} />
-                    <InfoRow icon={Clock} label="Notice Period" value={c.notice_period} />
-                    <InfoRow icon={MapPin} label="Location" value={c.location} />
-                  </div >
-                </section >
-
-                <section className="bg-card rounded-xl border border-border p-5 shadow-sm">
-                  <h3 className="text-sm font-black text-foreground mb-3 flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-indigo-500" /> AI Recommendation
-                  </h3>
-                  <div className="rounded-xl border border-border bg-secondary p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${isQualified ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'}`}>
-                        {c.overall_recommendation || (isQualified ? 'Hire' : 'Reject')}
-                      </span>
-                      <span className="text-sm font-medium text-foreground">
-                        {isQualified ? 'Ready for Technical Round / Hiring' : 'Does not meet required threshold'}
-                      </span>
-                    </div>
-                    {c.strengths_summary && (
-                      <div className="mb-3">
-                        <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Strengths</div>
-                        <p className="text-sm font-medium text-foreground bg-emerald-500/10 rounded-lg p-3 border border-emerald-500/20">{c.strengths_summary}</p>
-                      </div>
-                    )}
-                    {c.weaknesses_summary && (
-                      <div>
-                        <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Areas to Improve</div>
-                        <p className="text-sm font-medium text-foreground bg-rose-500/10 rounded-lg p-3 border border-rose-500/20">{c.weaknesses_summary}</p>
-                      </div>
-                    )}
-                    {!c.strengths_summary && !c.weaknesses_summary && (
-                      <p className="text-sm text-muted-foreground">No AI summary available for this candidate yet.</p>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h2 className="text-2xl font-black text-slate-800 truncate">{name}</h2>
-                    <p className="text-sm font-medium text-slate-500 mt-0.5">{jobTitle}</p>
-                    <div className="flex flex-wrap items-center gap-2 mt-3">
-                      <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${isQualified ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                        {isQualified ? 'Hire' : 'Rejected'}
-                      </span>
-                      <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
-                        {isQualified ? 'Qualified' : 'Rejected'}
-                      </span>
-                      <span className="text-xs font-medium text-slate-400">ID: {candidate.link_id || candidate.id}</span>
-                      {(c.decision_by_name || c.last_action_by_name) && (
-                        <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-white px-2.5 py-1 rounded-md border border-slate-200 shadow-xs" title={`Action taken by ${c.decision_by_name || c.last_action_by_name} (${c.decision_by_role || c.last_action_by_role || 'Admin'})`}>
-                          <UserCheck size={13} className="text-indigo-600" />
-                          Decision by: <strong className="text-indigo-700">{c.decision_by_name || c.last_action_by_name}</strong>
-                          {(c.decision_by_role || c.last_action_by_role) && (
-                            <span className="text-[10px] text-slate-400 font-bold uppercase">({c.decision_by_role || c.last_action_by_role})</span>
-                          )}
-                        </span>
-                      )}
-                      {c.started_at && (
-                        <span className="flex items-center gap-1 text-xs font-medium text-slate-500 bg-slate-100/50 px-2.5 py-1 rounded-md border border-slate-200/50">
-                          <Calendar size={13} className="text-slate-400" /> Attended: {new Date(c.started_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="hidden sm:flex flex-col items-center justify-center mr-16">
-                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">AI Score</div>
-                    <div className={`text-4xl font-black tabular-nums tracking-tighter mt-1 ${aiScore >= 75 ? 'text-emerald-600' : aiScore >= 50 ? 'text-amber-500' : 'text-rose-500'}`}>{aiScore.toFixed(0)}%</div>
-                  </div>
-                </section>
-              </div>
-            )}
-
-              {error && (
-                <div className="mt-3 flex items-center gap-2 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-                  <AlertCircle size={14} /> {error}
-                </div>
-              )}
-            </div>
-
             {/* ── Tabs ── */}
             <div className="flex items-center gap-4 px-6 border-b border-slate-100 bg-white overflow-x-auto shrink-0">
               {tabs.map(t => (
@@ -797,11 +690,11 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                     </div>
                   </section>
 
-                  <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
-                    <h3 className="text-sm font-black text-slate-800 mb-3 flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-indigo-600" /> AI Recommendation
+                  <section className="bg-card rounded-xl border border-border p-5 shadow-sm">
+                    <h3 className="text-sm font-black text-foreground mb-3 flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-indigo-500" /> AI Recommendation
                     </h3>
-                    <div className="rounded-xl border border-slate-100 bg-gradient-to-br from-indigo-50/40 to-white p-4">
+                    <div className="rounded-xl border border-border bg-secondary p-4">
                       <div className="flex items-center gap-2 mb-3">
                         <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${isQualified ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
                           {c.overall_recommendation || (isQualified ? 'Hire' : 'Reject')}
@@ -876,13 +769,13 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
 
                         {/* Sub-tabs — only show if both url and text exist */}
                         {resumeUrl && resumeText && (
-                          <div className="flex items-center gap-2 px-4 pt-3 bg-slate-50/50 border-b border-slate-100">
+                          <div className="flex items-center gap-2 px-4 pt-3 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800">
                             <button
                               type="button"
                               onClick={() => setResumeSubTab('document')}
                               className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 ${resumeSubTab === 'document'
-                                  ? 'border-indigo-600 text-indigo-700 bg-white shadow-sm'
-                                  : 'border-transparent text-slate-500 hover:text-slate-800'
+                                  ? 'border-indigo-600 text-indigo-700 bg-white dark:bg-slate-800/60 shadow-sm'
+                                  : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200'
                                 }`}
                             >
                               <FileText size={13} /> Resume Document
@@ -891,8 +784,8 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                               type="button"
                               onClick={() => setResumeSubTab('parsedText')}
                               className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 ${resumeSubTab === 'parsedText'
-                                  ? 'border-indigo-600 text-indigo-700 bg-white shadow-sm'
-                                  : 'border-transparent text-slate-500 hover:text-slate-800'
+                                  ? 'border-indigo-600 text-indigo-700 bg-white dark:bg-slate-800/60 shadow-sm'
+                                  : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-200'
                                 }`}
                             >
                               <Check size={13} /> Extracted Text
@@ -909,16 +802,16 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                                 <iframe
                                   src={resumeFullUrl}
                                   title="Candidate Resume"
-                                  className="w-full h-[600px] border-none bg-white"
+                                  className="w-full h-[600px] border-none bg-white dark:bg-slate-900"
                                 />
                               ) : (
-                                <div className="p-8 text-center bg-white space-y-4">
+                                <div className="p-8 text-center bg-white dark:bg-slate-800/60 space-y-4">
                                   <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto shadow-inner">
                                     <FileText size={32} />
                                   </div>
                                   <div>
-                                    <h4 className="font-extrabold text-slate-800 text-base">Resume File Attached</h4>
-                                    <p className="text-xs text-slate-500 mt-1 font-mono">{resumeFilename || resumeUrl}</p>
+                                    <h4 className="font-extrabold text-slate-800 dark:text-slate-200 text-base">Resume File Attached</h4>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-mono">{resumeFilename || resumeUrl}</p>
                                   </div>
                                   <a
                                     href={resumeFullUrl}
@@ -935,8 +828,8 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
 
                           {/* Show extracted text when: tab is 'parsedText' OR only resumeText exists (no url) */}
                           {(resumeSubTab === 'parsedText' || (!resumeUrl && resumeText)) && resumeText && (
-                            <div className="p-6">
-                              <pre className="text-sm text-slate-700 bg-slate-50 rounded-xl p-5 whitespace-pre-wrap font-sans border border-slate-200 leading-relaxed max-h-[500px] overflow-y-auto">
+                            <div className="p-6 bg-white dark:bg-slate-800/60">
+                              <pre className="text-sm text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-900/50 rounded-xl p-5 whitespace-pre-wrap font-sans border border-slate-200 dark:border-slate-700 leading-relaxed max-h-[500px] overflow-y-auto">
                                 {resumeText}
                               </pre>
                             </div>
@@ -1122,7 +1015,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                     }
 
                     return (
-                      <div className="bg-gradient-to-r from-indigo-50/60 via-white to-blue-50/40 rounded-xl border border-indigo-100/80 p-4 shadow-sm flex items-center justify-between gap-4">
+                      <div className="bg-secondary rounded-xl border border-border p-4 shadow-sm flex items-center justify-between gap-4">
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-lg bg-indigo-600/10 text-indigo-600 flex items-center justify-center font-bold">
                             <Mic size={18} />
@@ -1201,7 +1094,15 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                   <textarea
                     value={newNote}
                     onChange={e => setNewNote(e.target.value)}
-                    placeholder="Type a note..."
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        if (!notesSaving && newNote.trim()) {
+                          handleAddNote();
+                        }
+                      }
+                    }}
+                    placeholder="Type a note (Press Enter to save)..."
                     className="w-full text-sm rounded-xl border-slate-200 resize-none focus:ring-indigo-500 focus:border-indigo-500 mb-2 p-3 text-slate-800"
                     rows={3}
                   />
@@ -1254,21 +1155,21 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
         {/* ── Resume Sub-Modal ── */}
         {showResumeModal && (
           <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4" onClick={() => setShowResumeModal(false)}>
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
+            <div className="bg-white dark:bg-slate-800/60 rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-700/80 w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0 bg-white dark:bg-slate-800/80">
                 <div className="flex items-center gap-2">
-                  <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><FileText size={18} /></div>
+                  <div className="p-2 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-lg"><FileText size={18} /></div>
                   <div>
-                    <h3 className="text-sm font-black text-slate-800">Resume / Profile Text</h3>
-                    <p className="text-xs text-slate-400 font-medium">{name}</p>
+                    <h3 className="text-sm font-black text-slate-800 dark:text-slate-100">Resume / Profile Text</h3>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">{name}</p>
                   </div>
                 </div>
-                <button onClick={() => setShowResumeModal(false)} className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
+                <button onClick={() => setShowResumeModal(false)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700/50 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors">
                   <X size={18} />
                 </button>
               </div>
-              <div className="flex-1 overflow-y-auto p-6">
-                <pre className="text-sm text-slate-700 bg-slate-50 rounded-xl p-5 whitespace-pre-wrap font-sans border border-slate-200 leading-relaxed">{resumeText}</pre>
+              <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-900/50">
+                <pre className="text-sm text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800/60 rounded-xl p-5 whitespace-pre-wrap font-sans border border-slate-200 dark:border-slate-700 leading-relaxed">{resumeText}</pre>
               </div>
             </div>
           </div>

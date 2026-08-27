@@ -231,6 +231,23 @@ export default function SuperDashboardPage() {
   const avgScore = dbStats?.avg_score ?? 0;
   const starRating = avgScore / 20;
 
+  const stageColors = ["#3b82f6", "#06b6d4", "#0284c7", "#10b981", "#059669", "#16a34a", "#eab308", "#f59e0b"];
+
+  const pipelineStages = (rawFunnelData?.length ? rawFunnelData.map((d, i) => ({
+    stage: d.name || d.stage || `Stage ${i + 1}`,
+    count: Number(d.value ?? d.count ?? 0),
+    color: stageColors[i % stageColors.length]
+  })) : [
+    { stage: "Total Assigned", count: parseInt(dbStats?.total) || 0, color: "#3b82f6" },
+    { stage: "Started", count: parseInt(dbStats?.started || dbStats?.today) || 0, color: "#06b6d4" },
+    { stage: "Completed", count: parseInt(dbStats?.completed) || 0, color: "#10b981" },
+    { stage: "Pending Review", count: parseInt(dbStats?.pending) || 0, color: "#f59e0b" },
+    { stage: "Selected / Hired", count: parseInt(dbStats?.selected) || 0, color: "#16a34a" },
+    { stage: "Rejected", count: parseInt(dbStats?.rejected) || 0, color: "#ef4444" }
+  ]);
+  const maxPipelineCount = Math.max(...pipelineStages.map(p => p.count), 1);
+  const totalPipelineCount = pipelineStages[0]?.count || pipelineStages.reduce((acc, p) => acc + p.count, 0) || 1;
+
   return (
     <div className="space-y-6 bg-background rounded-3xl p-2 sm:p-4 -m-2 sm:-m-4 min-h-screen">
       <div>
@@ -257,8 +274,8 @@ export default function SuperDashboardPage() {
             <div className="p-4 flex flex-col h-full relative z-10">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded bg-violet-50 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
-                    <Mic className="w-4 h-4 text-violet-500" />
+                  <div className="w-8 h-8 rounded-lg bg-violet-500/15 dark:bg-violet-500/25 border border-violet-400/30 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
+                    <Mic className="w-4 h-4 text-violet-600 dark:text-violet-400" />
                   </div>
                   <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Total AI Interviews</span>
                 </div>
@@ -308,8 +325,8 @@ export default function SuperDashboardPage() {
             <div className="p-4 flex flex-col h-full relative z-10">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded bg-blue-50 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
-                    <Activity className="w-4 h-4 text-blue-500" />
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/15 dark:bg-blue-500/25 border border-blue-400/30 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
+                    <Activity className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                   </div>
                   <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Active Today</span>
                 </div>
@@ -426,8 +443,8 @@ export default function SuperDashboardPage() {
             <div className="p-4 flex flex-col h-full relative z-10">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded bg-emerald-50 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/15 dark:bg-emerald-500/25 border border-emerald-400/30 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                   </div>
                   <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Completed Interviews</span>
                 </div>
@@ -472,8 +489,8 @@ export default function SuperDashboardPage() {
             <div className="p-4 flex flex-col h-full relative z-10">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded bg-amber-50 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
-                    <Clock className="w-4 h-4 text-amber-500" />
+                  <div className="w-8 h-8 rounded-lg bg-amber-500/15 dark:bg-amber-500/25 border border-amber-400/30 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
+                    <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                   </div>
                   <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Pending Interviews</span>
                 </div>
@@ -516,8 +533,8 @@ export default function SuperDashboardPage() {
             <div className="p-4 flex flex-col h-full relative z-10">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded bg-fuchsia-50 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
-                    <Star className="w-4 h-4 text-fuchsia-500" />
+                  <div className="w-8 h-8 rounded-lg bg-fuchsia-500/15 dark:bg-fuchsia-500/25 border border-fuchsia-400/30 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
+                    <Star className="w-4 h-4 text-fuchsia-600 dark:text-fuchsia-400" />
                   </div>
                   <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Avg AI Score</span>
                 </div>
@@ -570,8 +587,8 @@ export default function SuperDashboardPage() {
             <div className="p-4 flex flex-col h-full relative z-10">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded bg-teal-50 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
-                    <Target className="w-4 h-4 text-teal-500" />
+                  <div className="w-8 h-8 rounded-lg bg-teal-500/15 dark:bg-teal-500/25 border border-teal-400/30 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
+                    <Target className="w-4 h-4 text-teal-600 dark:text-teal-400" />
                   </div>
                   <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Candidates Hired</span>
                 </div>
@@ -621,8 +638,8 @@ export default function SuperDashboardPage() {
             <div className="p-4 flex flex-col h-full relative z-10">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded bg-rose-50 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
-                    <XCircle className="w-4 h-4 text-rose-500" />
+                  <div className="w-8 h-8 rounded-lg bg-rose-500/15 dark:bg-rose-500/25 border border-rose-400/30 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
+                    <XCircle className="w-4 h-4 text-rose-600 dark:text-rose-400" />
                   </div>
                   <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Candidates Rejected</span>
                 </div>
@@ -672,8 +689,8 @@ export default function SuperDashboardPage() {
             <div className="p-4 flex flex-col h-full relative z-10">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded bg-rose-50 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
-                    <AlertTriangle className="w-4 h-4 text-rose-500" />
+                  <div className="w-8 h-8 rounded-lg bg-rose-500/15 dark:bg-rose-500/25 border border-rose-400/30 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
+                    <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400" />
                   </div>
                   <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Expired Links</span>
                 </div>
@@ -720,39 +737,60 @@ export default function SuperDashboardPage() {
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Funnel */}
-        <Card className="lg:col-span-2 bg-white dark:bg-slate-800/60 text-slate-900 dark:text-white border-slate-200 dark:border-slate-700 shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">AI Recruitment Funnel</CardTitle>
-            <CardDescription>Stage-by-stage conversion tracking.</CardDescription>
-          </CardHeader>
-          <div className="px-6 pb-6">
-            <div className="h-[320px]">
-              <ResponsiveContainer width="100%" height="100%">
-                {maxFunnelValue > 0 ? (
-                  <FunnelChart>
-                    <RTooltip
-                      formatter={(v) => formatNum(v)}
-                      contentStyle={{
-                        background: "#ffffff",
-                        border: "1px solid #e2e8f0",
-                        borderRadius: 8,
-                        fontSize: 12
-                      }}
-                    />
-                    <Funnel dataKey="value" data={funnelData} isAnimationActive>
-                      <LabelList position="right" fill="var(--foreground)" stroke="none" dataKey="name" fontSize={12} />
-                      <LabelList position="center" fill="#fff" stroke="none" dataKey="value" fontSize={12} formatter={(v) => formatNum(v)} />
-                    </Funnel>
-                  </FunnelChart>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full text-slate-400">
-                    <div className="text-3xl mb-2">📊</div>
-                    <div className="text-sm font-medium">No candidate data yet</div>
-                  </div>
-                )}
-              </ResponsiveContainer>
+        {/* Candidate Recruitment Pipeline */}
+        <Card className="lg:col-span-2 bg-card border border-border text-foreground dark:bg-slate-800/60 dark:border-slate-700 dark:text-white shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base font-bold text-slate-900 dark:text-white">Candidate Recruitment Pipeline</CardTitle>
+                <CardDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Stage-by-stage volume and conversion tracking across candidate pipeline.</CardDescription>
+              </div>
+              <Badge variant="outline" className="text-xs font-semibold border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300">Live Conversion</Badge>
             </div>
+          </CardHeader>
+
+          <div className="px-6 pb-6 space-y-6">
+
+            {/* Stage Cards (Play Cards) — 100% Solid Color Fill Matched 1:1 to Bars */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {pipelineStages.map((p, i) => (
+                <div
+                  key={p.stage || i}
+                  className="pipeline-stage-card rounded-xl p-3.5 text-white text-center shadow-md flex flex-col items-center justify-between min-h-[98px] w-full select-none pointer-events-none border border-white/30 dark:border-white/40 ring-1 ring-black/10 dark:ring-white/20 transition-all"
+                  style={{ backgroundColor: p.color, '--stage-bg': p.color, color: "#ffffff" }}
+                >
+                  <div className="text-[10px] font-extrabold uppercase tracking-wider text-white bg-black/30 px-2.5 py-0.5 rounded-md inline-block border border-white/20 shadow-xs">
+                    Stage {i + 1}
+                  </div>
+                  <div className="my-1 text-2xl font-black text-white drop-shadow-xs">
+                    {formatNum(p.count)}
+                  </div>
+                  <div className="text-[11px] font-bold text-white/95 truncate max-w-full px-1 drop-shadow-xs">
+                    {p.stage}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Square Horizontal Bar Graph — 1:1 Matched 8 Bars */}
+            <div className="space-y-3.5 pt-4 border-t border-slate-200 dark:border-slate-700/80">
+              {pipelineStages.map((p, i) => {
+                const pctOfMax = (p.count / maxPipelineCount) * 100;
+                return (
+                  <div key={p.stage || i} className="h-4.5 w-full flex items-center">
+                    <div
+                      className="h-full rounded-md transition-all duration-700 shadow-xs"
+                      style={{
+                        width: `${Math.max(pctOfMax, p.count > 0 ? 1.5 : 0.8)}%`,
+                        backgroundColor: p.color
+                      }}
+                      title={`${p.stage} (Stage ${i + 1}): ${formatNum(p.count)}`}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+
           </div>
         </Card>
 

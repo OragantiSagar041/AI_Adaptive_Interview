@@ -65,6 +65,24 @@ export const InterviewNonTechnical = () => {
 
   const session = useInterviewSession(sessionId, interviewType, startRoundTwo)
 
+  useEffect(() => {
+    const enforceLightMode = () => {
+      document.documentElement.classList.remove('dark')
+      document.documentElement.setAttribute('data-theme', 'light')
+    }
+    enforceLightMode()
+    const observer = new MutationObserver((mutations) => {
+      let shouldRevert = false;
+      mutations.forEach(m => {
+        if (m.attributeName === 'class' && document.documentElement.classList.contains('dark')) shouldRevert = true;
+        if (m.attributeName === 'data-theme' && document.documentElement.getAttribute('data-theme') === 'dark') shouldRevert = true;
+      });
+      if (shouldRevert) enforceLightMode();
+    })
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme'] })
+    return () => observer.disconnect()
+  }, [])
+
   const {
     loading,
     showAllSet,
