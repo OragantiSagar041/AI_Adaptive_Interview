@@ -5,7 +5,7 @@ const ThemeContext = createContext()
 export function ThemeProvider({ children }) {
   const [theme, setThemeState] = useState(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('uiTheme') || 'light'
+      return sessionStorage.getItem('uiTheme') || 'light'
     }
     return 'light'
   })
@@ -20,7 +20,7 @@ export function ThemeProvider({ children }) {
       root.setAttribute('data-theme', 'light')
     }
     try {
-      localStorage.setItem('uiTheme', theme)
+      sessionStorage.setItem('uiTheme', theme)
     } catch (e) {
       console.error(e)
     }

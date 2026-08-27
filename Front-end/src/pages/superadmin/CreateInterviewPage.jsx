@@ -1176,8 +1176,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     )}
                   </select>
                   <p className="text-[0.65rem] text-indigo-500 font-medium mt-1">
-                    {callLogs.length === 0 
-                      ? "Approve candidates in the AI Calling Agent Approval Queue to see them here." 
+                    {callLogs.length === 0
+                      ? "Approve candidates in the AI Calling Agent Approval Queue to see them here."
                       : "Selecting an approved candidate will automatically fill their name, email, phone, resume, and job description!"}
                   </p>
                 </div>
