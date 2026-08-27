@@ -1602,9 +1602,14 @@ def _normalize_text_field(value: Any) -> str:
 def normalize_agent_flow_read_item(item: Dict[str, Any]) -> Dict[str, Any]:
     context_title = item.get("context_title") if item.get("context_title") is not None else item.get("title", "")
     context_body = item.get("context_body") if item.get("context_body") is not None else item.get("body", item.get("instruction", ""))
+    norm_title = _normalize_text_field(context_title)
+    norm_body = _normalize_text_field(context_body)
     return {
-        "context_title": _normalize_text_field(context_title),
-        "context_body": _normalize_text_field(context_body),
+        "context_title": norm_title,
+        "context_body": norm_body,
+        "title": norm_title,
+        "body": norm_body,
+        "instruction": norm_body,
         "is_enabled": bool(item.get("is_enabled", item.get("enabled", True))),
     }
 
@@ -1612,9 +1617,14 @@ def normalize_agent_flow_read_item(item: Dict[str, Any]) -> Dict[str, Any]:
 def normalize_agent_flow_write_item(item: Dict[str, Any]) -> Dict[str, Any]:
     title = item.get("context_title") if item.get("context_title") is not None else item.get("title", "")
     body = item.get("context_body") if item.get("context_body") is not None else item.get("body", item.get("instruction", ""))
+    norm_title = _normalize_text_field(title)
+    norm_body = _normalize_text_field(body)
     return {
-        "title": _normalize_text_field(title),
-        "body": _normalize_text_field(body),
+        "title": norm_title,
+        "body": norm_body,
+        "context_title": norm_title,
+        "context_body": norm_body,
+        "instruction": norm_body,
         "is_enabled": bool(item.get("is_enabled", item.get("enabled", True))),
     }
 
