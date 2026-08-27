@@ -161,9 +161,9 @@ export default function ProfileViewPage() {
           </div>
           <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
             <div>
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white dark:bg-slate-800/60/10 rounded-full backdrop-blur-md border border-white/20 mb-4">
-                <Briefcase size={14} className="text-indigo-200" />
-                <span className="text-xs font-bold text-indigo-50 tracking-wide">{jobTitle}</span>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/20 dark:bg-black/20 rounded-full backdrop-blur-md border border-white/20 mb-4 shadow-sm">
+                <Briefcase size={14} className="text-white" />
+                <span className="text-xs font-bold text-white tracking-wide">{jobTitle}</span>
               </div>
               <h2 className="text-4xl font-black tracking-tight mb-2">{cName}</h2>
               <div className="flex flex-wrap items-center gap-4 text-indigo-100 font-medium text-sm">
@@ -172,11 +172,11 @@ export default function ProfileViewPage() {
               </div>
             </div>
             
-            <div className="shrink-0 flex items-center justify-center p-6 bg-white dark:bg-slate-800/60/10 rounded-3xl backdrop-blur-md border border-white/20">
+            <div className="shrink-0 flex items-center justify-center p-6 bg-white/10 dark:bg-black/20 rounded-3xl backdrop-blur-md border border-white/20 shadow-lg">
               <div className="text-center">
-                <div className="text-xs font-bold text-indigo-200 uppercase tracking-widest mb-1">AI Match Score</div>
-                <div className="text-6xl font-black tracking-tighter flex items-start justify-center text-white">
-                  {score.toFixed(0)}<span className="text-2xl mt-1 text-indigo-300">%</span>
+                <div className="text-xs font-bold text-indigo-100 uppercase tracking-widest mb-1">AI Match Score</div>
+                <div className="text-6xl font-black tracking-tighter flex items-start justify-center text-white drop-shadow-sm">
+                  {score.toFixed(0)}<span className="text-2xl mt-1 text-indigo-200">%</span>
                 </div>
               </div>
             </div>

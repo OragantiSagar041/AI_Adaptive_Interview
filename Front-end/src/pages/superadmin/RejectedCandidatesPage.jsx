@@ -24,7 +24,7 @@ function StatCard({ icon: Icon, label, value, accent }) {
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{label}</p>
           <p className="mt-2 text-2xl font-black text-foreground tracking-tight">{value}</p>
         </div>
-        <div className={`rounded-xl p-2.5 ${accent}`}>
+        <div className={`rounded-[0.75rem] p-2.5 ${accent}`}>
           <Icon className="h-5 w-5" strokeWidth={2.5} />
         </div>
       </div>

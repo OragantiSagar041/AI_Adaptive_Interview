@@ -56,44 +56,6 @@ def set_cached_omni_json(api_key: Optional[str], resource: str, value):
         pass
 
 
-
-def get_omni_client(api_key: str = None):
-    api_key = (api_key or get_omni_dimension_api_key()).strip()
-    if not api_key:
-        raise ValueError("OMNI_DIMENSION_API_KEY is not set.")
-    return Client(api_key)
-
-
-def get_omni_account(api_key: str = None):
-    """Return a client and agent belonging to the supplied Omni account."""
-    client = get_omni_client(api_key)
-    configured_agent_id = get_omni_agent_id()
-    configured_agent_id = int(configured_agent_id) if configured_agent_id else None
-    response = client.agent.list()
-    data = response.get("json", response) if isinstance(response, dict) else {}
-    agents = data.get("bots", []) if isinstance(data, dict) else []
-    if not isinstance(agents, list):
-        agents = []
-    agent = next((item for item in agents if item.get("id") == configured_agent_id), None)
-    if agent is None and agents:
-        agent = agents[0]
-    if not agent:
-        raise ValueError("No Omni Dimension agents were found for this API key.")
-
-    # Fetch fresh detailed agent parameters if client.agent.get is available
-    try:
-        if hasattr(client.agent, 'get'):
-            detail_res = client.agent.get(agent_id=agent.get("id"))
-            detail_data = detail_res.get("json", detail_res) if isinstance(detail_res, dict) else {}
-            if isinstance(detail_data, dict):
-                bot_obj = detail_data.get("bot") or detail_data.get("agent") or detail_data.get("data")
-                if isinstance(bot_obj, dict):
-                    agent = {**agent, **bot_obj}
-    except Exception as e:
-        print(f"[Omni Client Note] Agent detail fetch note: {e}")
-
-    return client, agent, agent.get("id")
-
 def get_omni_client(api_key: Optional[str] = None) -> Client:
     """
     Get an Omni Dimension SDK Client using the provided API key or fallback to env.
@@ -106,7 +68,8 @@ def get_omni_client(api_key: Optional[str] = None) -> Client:
 
 def get_omni_account(api_key: Optional[str] = None) -> Tuple[Client, dict, str]:
     """
-    Resolve the Omni Dimension SDK client, default agent object, and agent ID for the provided API key.
+    Resolve the Omni Dimension SDK client, target agent object, and agent ID for the provided API key.
+    Checks configured OMNI_DIMENSION_AGENT_ID or OMNI_DIMENSION_VOICE_ID before fallback.
     Returns: (client, agent_dict, agent_id_str)
     """
     client = get_omni_client(api_key)
@@ -115,39 +78,56 @@ def get_omni_account(api_key: Optional[str] = None) -> Tuple[Client, dict, str]:
     if cached and isinstance(cached, dict) and cached.get("agent"):
         return client, cached["agent"], str(cached.get("agent_id") or cached["agent"].get("id"))
     
-    agent_id = str(get_omni_agent_id() or "1")
+    configured_agent_id = str(get_omni_agent_id() or "").strip()
+    configured_voice_id = str(get_omni_voice_id() or "").strip()
+
+    agent_id = configured_agent_id or "1"
     agent_data = {}
-    
-    # Try fetching agent list for this API key
+    agents_list = []
+
+    # Fetch agent list for this API key
     try:
         if hasattr(client, 'agent') and hasattr(client.agent, 'list'):
             res = client.agent.list()
             data = res.get('json', res) if isinstance(res, dict) else (res.json if hasattr(res, 'json') else res)
-            agents = (
-                data.get("agents")
-                or data.get("data")
-                or data.get("results")
-                or (data if isinstance(data, list) else [])
-            )
-            if isinstance(agents, list) and len(agents) > 0:
-                first_agent = agents[0]
-                if isinstance(first_agent, dict):
-                    agent_data = first_agent
-                    agent_id = str(first_agent.get("id") or first_agent.get("agent_id") or agent_id)
+            if isinstance(data, dict):
+                agents_list = (
+                    data.get("bots")
+                    or data.get("agents")
+                    or data.get("data")
+                    or data.get("results")
+                    or []
+                )
+            elif isinstance(data, list):
+                agents_list = data
     except Exception as e:
         print(f"[get_omni_account note] Unable to list agents via SDK: {e}")
 
-    # Fallback to fetching specific agent details if agent_id is known
+    # Find agent matching configured_agent_id or configured_voice_id
+    selected_agent = None
+    if isinstance(agents_list, list) and len(agents_list) > 0:
+        if configured_agent_id:
+            selected_agent = next((a for a in agents_list if isinstance(a, dict) and str(a.get("id") or a.get("agent_id")) == configured_agent_id), None)
+        if selected_agent is None and configured_voice_id:
+            selected_agent = next((a for a in agents_list if isinstance(a, dict) and str(a.get("voice") or a.get("voice_external_id")) == configured_voice_id), None)
+        if selected_agent is None:
+            selected_agent = agents_list[0] if isinstance(agents_list[0], dict) else {}
+
+    if isinstance(selected_agent, dict) and selected_agent:
+        agent_data = selected_agent
+        agent_id = str(selected_agent.get("id") or selected_agent.get("agent_id") or agent_id)
+
+    # Fetch detailed agent parameters
     try:
         if hasattr(client, 'agent') and hasattr(client.agent, 'get'):
             res = client.agent.get(agent_id=agent_id)
             data = res.get('json', res) if isinstance(res, dict) else (res.json if hasattr(res, 'json') else res)
             if isinstance(data, dict):
-                agent_obj = data.get("agent") or data
+                agent_obj = data.get("bot") or data.get("agent") or data.get("data") or data
                 if isinstance(agent_obj, dict) and agent_obj:
                     agent_data = {**agent_data, **agent_obj}
     except Exception as e:
-        print(f"[get_omni_account note] Unable to get agent {agent_id} via SDK: {e}")
+        print(f"[get_omni_account note] Unable to get detailed agent {agent_id} via SDK: {e}")
 
     set_cached_omni_json(api_key, "account", {"agent": agent_data, "agent_id": agent_id})
     return client, agent_data, agent_id

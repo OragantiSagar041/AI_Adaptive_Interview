@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { useDispatch } from 'react-redux'
+import { useDispatch, useSelector } from 'react-redux'
 import { Search, X, Download, Trash2, Video, Eye, Calendar, PhoneCall, Phone } from 'lucide-react'
 import Button from '../Button'
 import Badge from '../Badge'
@@ -31,6 +31,8 @@ export function CandidateFilters({
 }) {
   const uniquePositions = [...new Set(allCandidates.map(c => c.interview_title).filter(Boolean))]
   const uniqueAdmins = [...new Set(allCandidates.map(c => c.created_by).filter(Boolean))]
+  const adminUser = useSelector(state => state.auth?.adminUser)
+  const isSuperAdminOrMaster = ['superadmin', 'super_admin', 'master'].includes(adminUser?.role?.toLowerCase())
 
   return (
     <div className="flex flex-nowrap items-end gap-3 w-full overflow-x-auto pb-3">
@@ -141,7 +143,7 @@ export function CandidateFilters({
         </div>
       )}
 
-      {adminFilter !== undefined && (
+      {isSuperAdminOrMaster && adminFilter !== undefined && adminFilter !== null && (
         <div className="flex flex-col gap-1 flex-shrink-0">
           <label className="text-[0.68rem] text-slate-500 font-bold uppercase">Admin</label>
           <select
@@ -175,8 +177,8 @@ export function CandidateFilters({
             if (setPipelineFilter) setPipelineFilter('all')
             if (setPositionFilter) setPositionFilter('all')
           }}
-          variant="secondary"
-          className="flex-1 sm:flex-initial px-2.5 py-1.5 h-[36px] bg-rose-50 border-rose-200 text-rose-500 hover:bg-rose-100/50 justify-center"
+          variant="ghost"
+          className="flex-1 sm:flex-initial px-2.5 py-1.5 h-[36px] bg-rose-50 border border-rose-200 text-rose-600 dark:bg-rose-500/15 dark:border-rose-500/30 dark:text-rose-400 hover:bg-rose-100/80 dark:hover:bg-rose-500/30 justify-center shadow-sm transition-colors"
           title="Clear Filters"
           icon={<X size={14} />}
         >
@@ -185,8 +187,8 @@ export function CandidateFilters({
 
         <Button
           onClick={handleExportExcel}
-          variant="secondary"
-          className="flex-1 sm:flex-initial px-2.5 py-1.5 h-[36px] bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-100/50 justify-center"
+          variant="ghost"
+          className="flex-1 sm:flex-initial px-2.5 py-1.5 h-[36px] bg-emerald-50 border border-emerald-200 text-emerald-700 dark:bg-emerald-500/15 dark:border-emerald-500/30 dark:text-emerald-400 hover:bg-emerald-100/80 dark:hover:bg-emerald-500/30 justify-center shadow-sm transition-colors"
           title="Export to Excel"
           icon={<Download size={14} />}
         >

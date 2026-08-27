@@ -51,8 +51,11 @@ export default function ConversationalFlowPage() {
     try {
       setLoading(true);
       setError(null);
+      const configuredOmniApiKey = sessionStorage.getItem('omniDimensionApiKey') || '';
       const res = await axios.get(`${API_BASE_URL}/admin/agent-flow`, {
-        headers: {},
+        headers: {
+          ...(configuredOmniApiKey ? { 'X-Omni-Dimension-API-Key': configuredOmniApiKey } : {})
+        },
       });
       if (res.data.success && Array.isArray(res.data.flow) && res.data.flow.length > 0) {
         const normalizedFlow = res.data.flow.map((item, index) => normalizeFlowItem(item, item?.id ?? `sec-${index + 1}`));
@@ -68,23 +71,28 @@ export default function ConversationalFlowPage() {
     }
   }
 
-  const handleSave = async () => {
+  const handleSave = async (customFlow = null) => {
     try {
       setSaving(true);
       setError(null);
       setSuccess(false);
       
+      const targetFlow = Array.isArray(customFlow) ? customFlow : (Array.isArray(flowData) ? flowData : []);
+      const configuredOmniApiKey = sessionStorage.getItem('omniDimensionApiKey') || '';
       const payload = {
-        flow: flowData.map((section) => ({
+        flow: targetFlow.map((section) => ({
           title: section.context_title,
           body: section.context_body,
           context_title: section.context_title,
           context_body: section.context_body,
+          instruction: section.context_body,
           is_enabled: section.is_enabled,
         })),
       };
       const res = await axios.put(`${API_BASE_URL}/admin/agent-flow`, payload, {
-        headers: {},
+        headers: {
+          ...(configuredOmniApiKey ? { 'X-Omni-Dimension-API-Key': configuredOmniApiKey } : {})
+        },
       });
       
       if (res.data.success) {
@@ -138,9 +146,11 @@ export default function ConversationalFlowPage() {
     setDraggingId(null);
   };
 
-  const removeSection = (index) => {
+  const removeSection = async (index) => {
     const newData = flowData.filter((_, i) => i !== index);
     setFlowData(newData);
+    // Immediately sync deleted section removal to Omni Dimension & local DB
+    await handleSave(newData);
   };
 
   const addSection = () => {
@@ -198,7 +208,7 @@ export default function ConversationalFlowPage() {
           
           <div className="flex items-center gap-3">
             <button
-              onClick={handleSave}
+              onClick={() => handleSave()}
               disabled={saving}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition-all shadow-md shadow-indigo-600/20 flex items-center gap-2 cursor-pointer"
             >

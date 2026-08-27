@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
-import { Users, Star, UserCheck, Phone, ClipboardCheck, Target, FileSignature, Search, Filter, Eye, Download, Sparkles } from 'lucide-react'
+import { Users, Star, Phone, UserCheck, ClipboardCheck, Target, FileSignature, Search, Filter, Eye, Download, Sparkles } from 'lucide-react'
 import axios from 'axios'
 import { formatShortDate, formatScore } from '../../utils/adminFormatters'
 import { loadAdminQualifiedCandidates, handleExportExcel } from '../../store/slices/candidatesSlice'
@@ -150,11 +150,12 @@ export default function QualifiedCandidatesPage() {
               <div className="text-2xl font-black text-slate-900 dark:text-white tabular-nums">{s.value}</div>
               <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-1">{s.label}</div>
             </div>
-          ))}
-        </section>
+          ))
+          }
+        </section >
 
         {/* Search & Filters */}
-        <section className="rounded-2xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-800/60 p-5 shadow-sm">
+        < section className="rounded-2xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-800/60 p-5 shadow-sm" >
           <div className="flex items-center gap-2 mb-4">
             <Filter className="h-4 w-4 text-slate-400" />
             <span className="text-sm font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Search & Filters</span>
@@ -204,7 +205,7 @@ export default function QualifiedCandidatesPage() {
               />
             </div>
           </div>
-        </section>
+        </section >
 
         {reqStatus === 'loading' && candidates.length === 0 && (
           <div className="flex items-center justify-center h-32">
@@ -212,11 +213,13 @@ export default function QualifiedCandidatesPage() {
           </div>
         )}
 
-        {reqStatus === 'failed' && (
-          <div className="bg-red-50 border border-red-200 text-red-600 font-medium text-sm rounded-xl p-4">
-            {reqError || 'Something went wrong fetching candidates. Please try again.'}
-          </div>
-        )}
+        {
+          reqStatus === 'failed' && (
+            <div className="bg-red-50 border border-red-200 text-red-600 font-medium text-sm rounded-xl p-4">
+              {reqError || 'Something went wrong fetching candidates. Please try again.'}
+            </div>
+          )
+        }
 
         {/* Table Section */}
         <section className="rounded-2xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-800/60 shadow-sm overflow-hidden">
@@ -303,13 +306,13 @@ export default function QualifiedCandidatesPage() {
             </table>
           </div>
         </section>
-      </main>
+      </main >
 
       <CandidateDialog
         candidate={selectedCandidate}
         open={!!selectedCandidate}
         onOpenChange={(v) => !v && setSelectedCandidate(null)}
       />
-    </div>
+    </div >
   )
 }

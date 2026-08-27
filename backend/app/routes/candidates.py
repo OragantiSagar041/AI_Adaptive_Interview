@@ -1525,8 +1525,8 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
             if omni_call_id.isdigit():
                 call_ids_to_try.append(int(omni_call_id))
 
-            log = omni_call_logs_collection.find_one({"call_id": {"$in": call_ids_to_try}})
-            session = interview_sessions_collection.find_one({"omni_call_id": {"$in": call_ids_to_try}})
+            log = omni_call_logs_collection.find_one({"$or": [{"call_id": {"$in": call_ids_to_try}}, {"id": {"$in": call_ids_to_try}}]})
+            session = interview_sessions_collection.find_one({"$or": [{"omni_call_id": {"$in": call_ids_to_try}}, {"call_id": {"$in": call_ids_to_try}}]})
 
             if app and not log and not session:
                 linked_app_id = str(app["_id"])
@@ -1565,13 +1565,17 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
                 "decision_by_role": admin_role,
                 "decision_at": now_iso
             }
+            if log and log.get("candidate_name"):
+                omni_update["candidate_name"] = log.get("candidate_name")
+            if log and log.get("user_name"):
+                omni_update["user_name"] = log.get("user_name")
             if company_id:
                 omni_update["company_id"] = company_id
             if admin_id:
                 omni_update["admin_id"] = admin_id
 
             omni_call_logs_collection.update_one(
-                {"call_id": {"$in": call_ids_to_try}},
+                {"$or": [{"call_id": {"$in": call_ids_to_try}}, {"id": {"$in": call_ids_to_try}}]},
                 {"$set": omni_update},
                 upsert=True
             )

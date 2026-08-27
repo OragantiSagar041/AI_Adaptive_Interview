@@ -849,7 +849,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                 }
 
                 return (
-                  <div className="bg-gradient-to-r from-indigo-50/60 via-white to-blue-50/40 rounded-xl border border-indigo-100/80 p-4 shadow-sm flex items-center justify-between gap-4">
+                  <div className="bg-secondary rounded-xl border border-border p-4 shadow-sm flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3">
                       <div className="w-9 h-9 rounded-lg bg-indigo-600/10 text-indigo-600 flex items-center justify-center font-bold">
                         <Mic size={18} />
