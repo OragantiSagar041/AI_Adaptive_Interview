@@ -87,7 +87,7 @@ export default function NewSuperDashboardPage() {
         {/* Available Credits */}
         <Card
           className="bg-card border border-border shadow-sm flex flex-col justify-center h-28 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md hover:border-emerald-500/50"
-          onClick={() => navigate('/superadmin/dashboard')}
+          onClick={() => navigate('/superadmin/credit')}
         >
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex flex-col">
@@ -166,7 +166,7 @@ export default function NewSuperDashboardPage() {
         {/* Recruiters */}
         <Card
           className="bg-card border border-border shadow-sm flex flex-col justify-center h-28 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md hover:border-purple-500/50"
-          onClick={() => navigate('/superadmin/team')}
+          onClick={() => navigate('/superadmin/recruiters')}
         >
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex flex-col">

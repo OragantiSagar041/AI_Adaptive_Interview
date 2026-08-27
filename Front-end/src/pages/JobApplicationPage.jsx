@@ -44,6 +44,26 @@ export default function JobApplicationPage() {
     cover_letter: ''
   });
 
+  // Force Light Theme on Public Job Application Page
+  useEffect(() => {
+    const originalTheme = document.documentElement.getAttribute('data-theme');
+    const hadDarkClass = document.documentElement.classList.contains('dark');
+
+    document.documentElement.setAttribute('data-theme', 'light');
+    document.documentElement.classList.remove('dark');
+
+    return () => {
+      if (originalTheme) {
+        document.documentElement.setAttribute('data-theme', originalTheme);
+      } else {
+        document.documentElement.removeAttribute('data-theme');
+      }
+      if (hadDarkClass) {
+        document.documentElement.classList.add('dark');
+      }
+    };
+  }, []);
+
   useEffect(() => {
     const fetchJob = async () => {
       try {

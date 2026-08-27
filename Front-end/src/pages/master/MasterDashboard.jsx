@@ -312,9 +312,10 @@ export default function MasterDashboard() {
                 <button
                   key={preset.key}
                   onClick={() => handlePresetSelect(preset.key)}
+                  style={isActive ? { backgroundColor: '#4f46e5', color: '#ffffff', borderColor: '#4338ca' } : {}}
                   className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all border ${isActive
-                    ? 'bg-indigo-600 dark:bg-indigo-500 text-white border-indigo-500 shadow-md shadow-indigo-500/30 ring-2 ring-indigo-400 dark:ring-indigo-400'
-                    : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700/60 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    ? 'shadow-md shadow-indigo-500/30 ring-2 ring-indigo-400'
+                    : 'bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700/60 hover:bg-slate-200 dark:hover:bg-slate-700'
                     }`}
                 >
                   {preset.label}
