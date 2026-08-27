@@ -1543,27 +1543,29 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
         }
     ]
     
-    closing = [
-        {
-            "question": "What do you consider your biggest strengths and weaknesses?",
-            "difficulty": "Easy",
-            "type": "Self-Assessment",
-            "category": "Strengths & Weaknesses"
-        },
-        {
-            "question": "Where do you see yourself in the next 5 years, and how does this role fit into that vision?",
-            "difficulty": "Easy",
-            "type": "Career Goals",
-            "category": "Future Plans"
-        }
-    ]
-    if num_questions >= 10:
-        closing.append({
-            "question": "Do you have any questions for us about the team, the role, or the company?",
-            "difficulty": "Easy",
-            "type": "Closing",
-            "category": "Candidate Questions"
-        })
+    closing = []
+    if str(interview_type).lower() != "technical":
+        closing = [
+            {
+                "question": "What do you consider your biggest strengths and weaknesses?",
+                "difficulty": "Easy",
+                "type": "Self-Assessment",
+                "category": "Strengths & Weaknesses"
+            },
+            {
+                "question": "Where do you see yourself in the next 5 years, and how does this role fit into that vision?",
+                "difficulty": "Easy",
+                "type": "Career Goals",
+                "category": "Future Plans"
+            }
+        ]
+        if num_questions >= 10:
+            closing.append({
+                "question": "Do you have any questions for us about the team, the role, or the company?",
+                "difficulty": "Easy",
+                "type": "Closing",
+                "category": "Candidate Questions"
+            })
     
     # Translate closing questions if language is not English
     if language != "English":
@@ -1943,9 +1945,12 @@ def _generate_hr_screening_questions(hr_screening: dict, jd_text: str, language:
 
     work_mode = hr_screening.get("work_mode", "")
     location = hr_screening.get("location", "")
+    
+    ask_work_mode = hr_screening.get("ask_work_mode", False)
+    ask_location = hr_screening.get("ask_location", False)
     ask_bond = hr_screening.get("ask_bond", False)
 
-    if not any([work_mode, location, ask_bond]):
+    if not any([ask_work_mode, ask_location, ask_bond]):
         return questions
 
     # Regional-language interviews must not rely on the English LLM/static
@@ -1991,11 +1996,11 @@ def _generate_hr_screening_questions(hr_screening: dict, jd_text: str, language:
         }.get(language)
         if not templates:
             raise ValueError(f"No direct HR screening templates configured for supported language: {language}")
-        if work_mode:
+        if ask_work_mode and work_mode:
             questions.append({"question": templates["work_mode"].format(work_mode=templates["work_modes"].get(work_mode, work_mode)), "difficulty": "Easy", "type": "HR Screening", "category": "Work Mode", "_generation_origin": "emergency fallback"})
-        if location == "Preferred":
+        if ask_location and location == "Preferred":
             questions.append({"question": templates["preferred"], "difficulty": "Easy", "type": "HR Screening", "category": "Preferred Location", "_generation_origin": "emergency fallback"})
-        elif location == "Current":
+        elif ask_location and location == "Current":
             questions.append({"question": templates["current"], "difficulty": "Easy", "type": "HR Screening", "category": "Current Location", "_generation_origin": "emergency fallback"})
         if ask_bond:
             questions.append({"question": templates["bond"], "difficulty": "Easy", "type": "HR Screening", "category": "Bond/Notice Period", "_generation_origin": "emergency fallback"})
@@ -2004,103 +2009,11 @@ def _generate_hr_screening_questions(hr_screening: dict, jd_text: str, language:
     # Try AI-powered contextual question generation
     try:
         topics = []
-        if work_mode:
+        if ask_work_mode and work_mode:
             topics.append(f"confirmation of {work_mode} work mode preference")
-        if location == "Preferred":
+        if ask_location and location == "Preferred":
             topics.append("preferred work location and willingness to relocate")
-        elif location == "Current":
-            topics.append("current location and commute feasibility")
-        if ask_bond:
-            topics.append("current bond/service agreement status, notice period, and availability to join")
-
-        topic_list = "\\n".join(f"- {t}" for t in topics)
-        prompt = (
-            f"You are an HR interviewer. Based on the following job description, "
-            f"generate exactly {len(topics)} screening question(s) for these topics:\\n"
-            f"{topic_list}\\n\\n"
-            f"Job Description:\\n{jd_text[:3000]}\\n\\n"
-            "Rules:\\n"
-            "- Extract any relevant details from the JD (like location, work mode) and reference them.\\n"
-            "- Each question should be conversational and professional.\\n"
-            '- Return ONLY a valid JSON array of objects with keys: "question", "difficulty", "type", "category".\\n'
-            '- difficulty should be "Easy" for all.\\n'
-            '- type should be "HR Screening".\\n'
-            '- category: "Work Mode", "Preferred Location", "Current Location", or "Bond/Notice Period".\\n'
-        )
-
-        raw = chat_completion(
-            messages=[{"role": "user", "content": prompt}],
-            model="openai/gpt-4o-mini"
-        )
-        ai_questions = extract_json(raw)
-        if ai_questions and isinstance(ai_questions, list) and len(ai_questions) > 0:
-            for q in ai_questions:
-                if isinstance(q, dict) and q.get("question"):
-                    questions.append({
-                        "question": q["question"],
-                        "difficulty": q.get("difficulty", "Easy"),
-                        "type": "HR Screening",
-                        "category": q.get("category", "HR Screening"),
-                        "_generation_origin": "LLM"
-                    })
-            print(f"AI generated {len(questions)} HR screening questions")
-            return questions
-    except Exception as e:
-        print(f"AI HR screening question generation failed: {e}")
-
-    # Fallback: Static contextual questions
-    if work_mode:
-        questions.append({
-            "question": f"This role requires a {work_mode} work arrangement. Are you comfortable with this setup?",
-            "difficulty": "Easy",
-            "type": "HR Screening",
-            "category": "Work Mode",
-            "_generation_origin": "emergency fallback"
-        })
-    if location == "Preferred":
-        questions.append({
-            "question": "What is your preferred work location? If the role is based in a different city, would you be open to relocating?",
-            "difficulty": "Easy",
-            "type": "HR Screening",
-            "category": "Preferred Location",
-            "_generation_origin": "emergency fallback"
-        })
-    elif location == "Current":
-        questions.append({
-            "question": "Where are you currently located? How would you manage the commute or transition to our office?",
-            "difficulty": "Easy",
-            "type": "HR Screening",
-            "category": "Current Location",
-            "_generation_origin": "emergency fallback"
-        })
-    if ask_bond:
-        questions.append({
-            "question": "Are you currently under any service agreement or bond with your current employer? What is your notice period, and how soon would you be available to join if selected?",
-            "difficulty": "Easy",
-            "type": "HR Screening",
-            "category": "Bond/Notice Period",
-            "_generation_origin": "emergency fallback"
-        })
-
-    print(f"Added {len(questions)} static HR screening questions")
-    return questions
-
-    ask_work_mode = hr_screening.get("ask_work_mode", False)
-    ask_preferred_location = hr_screening.get("ask_preferred_location", False)
-    ask_current_location = hr_screening.get("ask_current_location", False)
-    ask_bond = hr_screening.get("ask_bond", False)
-
-    if not any([ask_work_mode, ask_preferred_location, ask_current_location, ask_bond]):
-        return questions
-
-    # Try AI-powered contextual question generation
-    try:
-        topics = []
-        if ask_work_mode:
-            topics.append("work mode preference (on-site, remote, or hybrid)")
-        if ask_preferred_location:
-            topics.append("preferred work location and willingness to relocate")
-        if ask_current_location:
+        elif ask_location and location == "Current":
             topics.append("current location and commute feasibility")
         if ask_bond:
             topics.append("current bond/service agreement status, notice period, and availability to join")
@@ -2141,21 +2054,21 @@ def _generate_hr_screening_questions(hr_screening: dict, jd_text: str, language:
         print(f"AI HR screening question generation failed: {e}")
 
     # Fallback: Static contextual questions
-    if ask_work_mode:
+    if ask_work_mode and work_mode:
         questions.append({
-            "question": "This role may require a specific work arrangement. What is your preferred work mode - on-site, remote, or hybrid? Are you flexible if the company requires a particular arrangement?",
+            "question": f"This role requires a {work_mode} work arrangement. Are you comfortable with this setup?",
             "difficulty": "Easy",
             "type": "HR Screening",
             "category": "Work Mode"
         })
-    if ask_preferred_location:
+    if ask_location and location == "Preferred":
         questions.append({
             "question": "What is your preferred work location? If the role is based in a different city, would you be open to relocating? Do you have any location constraints we should be aware of?",
             "difficulty": "Easy",
             "type": "HR Screening",
             "category": "Preferred Location"
         })
-    if ask_current_location:
+    if ask_location and location == "Current":
         questions.append({
             "question": "Where are you currently located? If the office is in a different city, how would you manage the commute or transition? Are you already based near the job location?",
             "difficulty": "Easy",
