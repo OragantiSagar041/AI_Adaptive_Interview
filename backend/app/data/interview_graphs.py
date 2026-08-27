@@ -55,11 +55,16 @@ class AnswerScoringState(TypedDict, total=False):
     result: Dict[str, Any]
 
 def as_evaluate_answer(state: AnswerScoringState) -> AnswerScoringState:
-    sys_prompt = "You are an expert technical interviewer. Score the candidate's answer based on relevance, facts hit, and time spent. Return JSON matching the AnswerScore schema, but also include 'ideal_answer', 'key_facts_required' (list of facts), 'facts_mentioned_by_candidate' (list of facts), and 'is_relevant' (boolean)."
-    usr_prompt = f"Question: {state.get('question')}\nContext: {state.get('context')}\nAnswer: {state.get('answer')}\nTime Context: {state.get('time_context')}\nTime Hint: {state.get('time_score_hint')}\nLanguage: {state.get('language')}\n\nReturn JSON."
+    sys_prompt = "You are an expert technical interviewer. Score the candidate's answer using the Pure Accuracy Model: content_score (max 70 for technical depth/accuracy), relevance_score (max 30 for addressing the prompt without parroting), and time_score MUST be exactly 0. Return JSON matching the AnswerScore schema, but also include 'ideal_answer', 'key_facts_required' (list of facts), 'facts_mentioned_by_candidate' (list of facts), and 'is_relevant' (boolean)."
+    usr_prompt = f"Question: {state.get('question')}\nContext: {state.get('context')}\nAnswer: {state.get('answer')}\nLanguage: {state.get('language')}\n\nReturn JSON with overall_score = content_score + relevance_score."
     
     fallback = AnswerScore(feedback="Failed to score.", overall_score=0, content_score=0, relevance_score=0).to_dict()
     res = _llm_json(sys_prompt, usr_prompt, fallback=fallback)
+    
+    # If we received the exact hardcoded fallback, it means the LLM failed completely.
+    # Raise an exception so that `analyze_answer.py` can catch it and run `_dynamic_offline_evaluation`.
+    if res.get("feedback") == "Failed to score." and res.get("overall_score") == 0:
+        raise Exception("Graph LLM failed to score answer, triggering offline evaluation fallback.")
     
     result = AnswerScore(
         feedback=res.get("feedback", fallback.get("feedback")),
