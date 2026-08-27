@@ -80,15 +80,21 @@ import { ThemeProvider, useTheme } from './context/ThemeContext'
 function ThemeEnforcer() {
   const { pathname } = useLocation();
   const { setTheme } = useTheme();
+  const prevPathRef = React.useRef(pathname);
 
   React.useEffect(() => {
-    // Routes that should default to dark mode
     const darkRoutes = ['/', '/login', '/register', '/voice-recruiter'];
+    const isNowDashboard = pathname.startsWith('/admin') || pathname.startsWith('/superadmin') || pathname.startsWith('/recruiter');
+    const wasDashboard = prevPathRef.current.startsWith('/admin') || prevPathRef.current.startsWith('/superadmin') || prevPathRef.current.startsWith('/recruiter');
+
     if (darkRoutes.includes(pathname) || pathname.startsWith('/customer-story/')) {
       setTheme('dark');
-    } else {
+    } else if (isNowDashboard && !wasDashboard) {
+      // Only default to light if entering dashboard from outside
       setTheme('light');
     }
+
+    prevPathRef.current = pathname;
   }, [pathname, setTheme]);
 
   return null;

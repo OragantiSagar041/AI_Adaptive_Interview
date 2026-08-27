@@ -3,7 +3,12 @@ import React, { createContext, useContext, useState, useEffect } from 'react'
 const ThemeContext = createContext()
 
 export function ThemeProvider({ children }) {
-  const [theme, setThemeState] = useState('light')
+  const [theme, setThemeState] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('uiTheme') || 'light'
+    }
+    return 'light'
+  })
 
   useEffect(() => {
     const root = document.documentElement
