@@ -1252,15 +1252,37 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                 </div>
                 <div className="flex items-center gap-4">
                   {(() => {
-                    const verbalAnsForScore = (c.answers || []).filter(a => !a.question_text?.toLowerCase().includes('coding round') && !a.question_text?.toLowerCase().includes('case study'));
-                    const validVerbalAnsForScore = verbalAnsForScore.filter(a => a.ai_score !== null && a.ai_score !== undefined);
-                    if (validVerbalAnsForScore.length === 0) return null;
-                    const verbalAiScore = validVerbalAnsForScore.reduce((sum, a) => sum + Number(a.ai_score), 0) / validVerbalAnsForScore.length;
+                    let displayScore = aiScore;
+                    let displayLabel = "AI Score";
+
+                    if (transcriptTab === 'verbal') {
+                        displayLabel = "Verbal Score";
+                        if (c.round1_score !== undefined) {
+                            displayScore = c.round1_score;
+                        } else {
+                            // Legacy fallback for old sessions
+                            const verbalAnsForScore = (c.answers || []).filter(a => !a.question_text?.toLowerCase().includes('coding round') && !a.question_text?.toLowerCase().includes('case study'));
+                            const validVerbalAnsForScore = verbalAnsForScore.filter(a => a.ai_score !== null && a.ai_score !== undefined);
+                            displayScore = validVerbalAnsForScore.length > 0 ? (validVerbalAnsForScore.reduce((sum, a) => sum + Number(a.ai_score), 0) / validVerbalAnsForScore.length) * 0.8 : 0;
+                        }
+                    } else if (transcriptTab === 'coding') {
+                        displayLabel = "Coding Score";
+                        if (c.round2_score !== undefined) {
+                            displayScore = c.round2_score;
+                        } else {
+                            // Legacy fallback for old sessions
+                            displayScore = c.coding_round ? 20 : 0;
+                        }
+                    }
+
                     return (
                       <div className="flex flex-col items-end justify-center mr-2">
-                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">AI Score</div>
-                        <div className={`text-2xl font-black tabular-nums tracking-tighter mt-0.5 ${verbalAiScore >= 75 ? 'text-emerald-600' : verbalAiScore >= 50 ? 'text-amber-500' : 'text-rose-500'}`}>
-                          {verbalAiScore.toFixed(0)}%
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{displayLabel}</div>
+                        <div className={`text-2xl font-black tabular-nums tracking-tighter mt-0.5 ${displayScore >= (transcriptTab === 'coding' ? 15 : 60) ? 'text-emerald-600' : displayScore >= (transcriptTab === 'coding' ? 10 : 40) ? 'text-amber-500' : 'text-rose-500'}`}>
+                          {displayScore.toFixed(0)}
+                          <span className="text-sm font-bold text-slate-400 ml-1">
+                             / {transcriptTab === 'coding' ? '20' : '80'}
+                          </span>
                         </div>
                       </div>
                     );

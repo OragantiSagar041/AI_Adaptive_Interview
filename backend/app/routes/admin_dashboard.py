@@ -531,6 +531,8 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
 
     # 2. Calculate composite AI summary score
     avg_score = 0
+    round1_s = 0.0
+    round2_s = 0.0
     scores = [r["ai_score"] for r in results if r["ai_score"] is not None]
     verbal_avg = round(sum(scores) / len(scores), 1) if scores else 0
 
@@ -567,7 +569,6 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
             round1_s = calculate_round1_score(questions, results)
             
             # Round 2
-            round2_s = 0.0
             if coding_rd:
                 round2_s = calculate_coding_score(coding_rd)
             elif case_std:
@@ -576,6 +577,7 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
             
             avg_score = calculate_final_score(round1_s, round2_s)
         else:
+            round1_s = verbal_avg
             avg_score = verbal_avg
     except Exception as blend_err:
         print(f"🚨 complete-session blend error: {blend_err}")
@@ -810,6 +812,8 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
         "date": created_at,
         "source": session_data.get("source") or "Job Description / Resume",
         "avg_score": avg_score,
+        "round1_score": round1_s,
+        "round2_score": round2_s,
         "overall_recommendation": recommendation,
         "strengths_summary": strengths,
         "weaknesses_summary": weaknesses,

@@ -952,31 +952,7 @@ def get_all_sessions(
             if rec_path.startswith("http") or os.path.exists(rec_path):
                 has_video = True
                 
-        status = row.get("status", "pending")
-        if status == "pending" and row.get("expires_at"):
-            try:
-                exp_dt = datetime.fromisoformat(row["expires_at"].replace('Z', '+00:00'))
-                if exp_dt.tzinfo is None:
-                    exp_dt = exp_dt.replace(tzinfo=timezone.utc)
-                if now > exp_dt:
-                    status = "expired"
-                    interview_sessions_collection.update_one({"_id": row["_id"]}, {"$set": {"status": "expired"}})
-            except Exception:
-                pass
-        elif status == "started":
-            time_ref_str = row.get("started_at") or row.get("created_at")
-            if time_ref_str:
-                try:
-                    time_ref = datetime.fromisoformat(time_ref_str.replace('Z', '+00:00'))
-                    if time_ref.tzinfo is None:
-                        time_ref = time_ref.replace(tzinfo=timezone.utc)
-                    duration_mins = int(row.get("interview_duration") or 30)
-                    buffer_mins = max(120, duration_mins * 2)
-                    if (now - time_ref).total_seconds() > (buffer_mins * 60):
-                        status = "expired"
-                        interview_sessions_collection.update_one({"_id": row["_id"]}, {"$set": {"status": "expired"}})
-                except Exception:
-                    pass
+        status = sync_session_status(row, now)
 
         sessions.append({
             "link_id": row.get("link_id"),
