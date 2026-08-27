@@ -234,3 +234,78 @@ def blend_scores(
         blended = verbal_score
 
     return round(blended, 1)
+
+# ==============================================================================
+# DYNAMIC COMMON SCORING ENGINE (ONLINE & OFFLINE)
+# ==============================================================================
+
+def get_question_weight(question: dict) -> float:
+    """
+    Calculate the dynamic weight of a single question.
+    As requested, every question has equal marks, so weight is always 1.0.
+    """
+    return 1.0
+
+def calculate_round1_score(questions: list, answers: list) -> float:
+    """
+    Dynamically distributes 80 marks across the available technical questions.
+    HR Screening questions are excluded from the AI score.
+    Unanswered / skipped / missing answers receive 0.
+    """
+    if not questions:
+        return 0.0
+        
+    # Exclude HR Screening questions so they don't count towards the 80 marks
+    eval_questions = [q for q in questions if str(q.get("type", "")).lower() != "hr screening"]
+    
+    if not eval_questions:
+        return 0.0
+        
+    total_weight = 0.0
+    q_weights = {}
+    for q in eval_questions:
+        qid = str(q.get("id"))
+        w = get_question_weight(q)
+        q_weights[qid] = w
+        total_weight += w
+        
+    if total_weight == 0:
+        return 0.0
+        
+    # Create lookup for answers
+    ans_lookup = {str(a.get("question_id")): a for a in answers}
+    
+    round1_score = 0.0
+    
+    for q in eval_questions:
+        qid = str(q.get("id"))
+        w = q_weights[qid]
+        
+        # Max marks for this specific question
+        q_max_marks = (w / total_weight) * 80.0
+        
+        ans = ans_lookup.get(qid)
+        if ans and ans.get("ai_score") is not None:
+            ai_score_100 = float(ans.get("ai_score", 0))
+            q_marks_obtained = (ai_score_100 / 100.0) * q_max_marks
+            round1_score += q_marks_obtained
+            
+    return round(min(80.0, max(0.0, round1_score)), 1)
+
+def calculate_coding_score(coding_round: dict) -> float:
+    """
+    Returns a max of 20 marks based strictly on test cases passed ratio.
+    """
+    if not coding_round:
+        return 0.0
+        
+    test_case_ratio_pct = _compute_test_case_ratio(coding_round)
+    coding_score = (test_case_ratio_pct / 100.0) * 20.0
+    return round(min(20.0, max(0.0, coding_score)), 1)
+
+def calculate_final_score(round1_score: float, coding_score: float = 0.0) -> float:
+    """
+    Sums Round 1 (max 80) and Round 2 (max 20) for a max Final Score of 100.
+    """
+    final = round1_score + coding_score
+    return round(min(100.0, max(0.0, final)), 1)
