@@ -23,30 +23,30 @@ const CustomToggleSwitch = ({ checked, onChange }) => (
       onChange(!checked);
     }}
     style={{
-      width: '52px',
-      height: '28px',
-      backgroundColor: checked ? '#4f46e5' : '#1e293b',
-      border: checked ? '2px solid #818cf8' : '2px solid #475569',
-      boxShadow: checked ? '0 0 14px rgba(99, 102, 241, 0.75)' : 'none',
+      width: '42px',
+      height: '22px',
+      backgroundColor: checked ? '#4f46e5' : '#cbd5e1',
+      border: checked ? '1.5px solid #6366f1' : '1.5px solid #94a3b8',
+      boxShadow: checked ? '0 0 8px rgba(79, 70, 229, 0.4)' : 'none',
       display: 'inline-flex',
       alignItems: 'center',
-      padding: '3px',
+      padding: '2px',
       borderRadius: '9999px',
       cursor: 'pointer',
       position: 'relative',
-      transition: 'all 0.3s ease',
+      transition: 'all 0.25s ease',
       flexShrink: 0,
     }}
   >
     <div
       style={{
-        width: '18px',
-        height: '18px',
+        width: '14px',
+        height: '14px',
         backgroundColor: '#ffffff',
         borderRadius: '9999px',
-        transform: checked ? 'translateX(24px)' : 'translateX(0px)',
-        transition: 'transform 0.3s ease, background-color 0.3s ease',
-        boxShadow: '0 2px 5px rgba(0,0,0,0.4)',
+        transform: checked ? 'translateX(20px)' : 'translateX(0px)',
+        transition: 'transform 0.25s ease, background-color 0.25s ease',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -55,9 +55,9 @@ const CustomToggleSwitch = ({ checked, onChange }) => (
     >
       <div
         style={{
-          width: '6px',
-          height: '6px',
-          backgroundColor: checked ? '#4f46e5' : '#64748b',
+          width: '4px',
+          height: '4px',
+          backgroundColor: checked ? '#4f46e5' : '#94a3b8',
           borderRadius: '9999px',
         }}
       />
@@ -2756,10 +2756,10 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     value={bulkCandidateInput.email}
                     onChange={(e) => setBulkCandidateInput(prev => ({ ...prev, email: e.target.value }))}
                   />
-                  <Button
+                  <button
                     type="button"
-                    variant="primary"
-                    className="px-6 py-2.5 h-[42px] rounded-lg font-bold shadow-md bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-500/60 dark:border-indigo-400/60 transition-all active:scale-95 cursor-pointer shrink-0"
+                    style={{ backgroundColor: '#4f46e5', color: '#ffffff', borderColor: '#4338ca' }}
+                    className="px-6 py-2.5 h-[42px] rounded-lg font-bold shadow-md hover:bg-indigo-700 transition-all active:scale-95 cursor-pointer shrink-0 flex items-center justify-center gap-1.5 text-sm"
                     onClick={() => {
                       const { name, email } = bulkCandidateInput
                       if (!name || !email) {
@@ -2794,7 +2794,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     }}
                   >
                     Add
-                  </Button>
+                  </button>
                 </div>
               </div>
 

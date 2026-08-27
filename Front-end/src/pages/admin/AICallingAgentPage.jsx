@@ -2374,12 +2374,13 @@ export default function AICallingAgentPage() {
             <button
               key={id}
               onClick={() => setActiveTab(id)}
+              style={activeTab === id ? { backgroundColor: '#4f46e5', color: '#ffffff', borderColor: '#6366f1' } : {}}
               className={`relative flex items-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-bold rounded-xl transition-all whitespace-nowrap outline-none cursor-pointer border ${activeTab === id
-                ? 'bg-indigo-600 text-white border-indigo-500/80 dark:border-indigo-400/80 shadow-md ring-2 ring-indigo-500/30 dark:bg-indigo-600'
-                : 'bg-slate-100/80 dark:bg-slate-900/60 text-slate-700 dark:text-slate-300 border-slate-200/80 dark:border-slate-700/80 hover:border-indigo-400/50 hover:bg-slate-200/60 dark:hover:bg-slate-800'
+                ? 'bg-indigo-600 !text-white border-indigo-500 shadow-md ring-2 ring-indigo-500/30'
+                : 'bg-slate-100 dark:bg-slate-900/60 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700/80 hover:border-indigo-400/50 hover:bg-slate-200/60 dark:hover:bg-slate-800'
                 }`}
             >
-              <span className="relative z-10 flex items-center gap-2">{icon} {label}</span>
+              <span className="relative z-10 flex items-center gap-2" style={activeTab === id ? { color: '#ffffff' } : {}}>{icon} {label}</span>
             </button>
           ))}
         </div>

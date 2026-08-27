@@ -332,17 +332,17 @@ const Customize = () => {
           const isPremium = admin.plan?.toLowerCase() === "premium";
           const isOwner = admin.plan?.toLowerCase() === "owner";
 
-          let badgeStyle = "bg-slate-500/20 text-slate-300 border-slate-500/30";
+          let badgeStyle = "bg-indigo-500/10 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-500/30 font-bold";
           let avatarStyle = "bg-gradient-to-br from-indigo-500 to-indigo-600 text-white border-indigo-400/30 shadow-md shadow-indigo-500/25";
 
           if (isPremium) {
-            badgeStyle = "bg-amber-500/20 text-amber-300 border-amber-500/30";
+            badgeStyle = "bg-amber-500/10 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-500/30 font-bold";
             avatarStyle = "bg-gradient-to-br from-amber-500 to-amber-600 text-white border-amber-400/30 shadow-md shadow-amber-500/25";
           } else if (isOwner) {
-            badgeStyle = "bg-purple-500/20 text-purple-300 border-purple-500/30";
+            badgeStyle = "bg-purple-500/10 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-500/30 font-bold";
             avatarStyle = "bg-gradient-to-br from-purple-500 to-purple-600 text-white border-purple-400/30 shadow-md shadow-purple-500/25";
           } else {
-            badgeStyle = "bg-blue-500/20 text-blue-300 border-blue-500/30";
+            badgeStyle = "bg-indigo-500/10 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-500/30 font-bold";
             avatarStyle = "bg-gradient-to-br from-indigo-500 to-indigo-600 text-white border-indigo-400/30 shadow-md shadow-indigo-500/25";
           }
 

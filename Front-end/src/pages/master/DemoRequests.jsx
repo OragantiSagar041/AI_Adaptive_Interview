@@ -266,15 +266,16 @@ HireIQ Client Relations Team`
       <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-700 pb-3">
         <button
           onClick={() => setActiveTab('demos')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all cursor-pointer ${
+          style={activeTab === 'demos' ? { backgroundColor: '#4f46e5', color: '#ffffff', borderColor: '#4338ca' } : {}}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all cursor-pointer border ${
             activeTab === 'demos'
-              ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-200'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:bg-slate-800/50'
+              ? 'shadow-md shadow-indigo-500/20'
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
           }`}
         >
           <span>Book Demo Requests</span>
           <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
-            activeTab === 'demos' ? 'bg-white/20 text-white shadow-xs' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200'
+            activeTab === 'demos' ? 'bg-white/20 text-white shadow-xs' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200'
           }`}>
             {demoRequests.length}
           </span>
@@ -282,15 +283,16 @@ HireIQ Client Relations Team`
 
         <button
           onClick={() => setActiveTab('contacts')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all cursor-pointer ${
+          style={activeTab === 'contacts' ? { backgroundColor: '#0891b2', color: '#ffffff', borderColor: '#0e7490' } : {}}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all cursor-pointer border ${
             activeTab === 'contacts'
-              ? 'bg-cyan-600 text-white shadow-sm shadow-cyan-200'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:bg-slate-800/50'
+              ? 'shadow-md shadow-cyan-500/20'
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
           }`}
         >
           <span>Connect with Us Messages</span>
           <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
-            activeTab === 'contacts' ? 'bg-white/20 text-white shadow-xs' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200'
+            activeTab === 'contacts' ? 'bg-white/20 text-white shadow-xs' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200'
           }`}>
             {contactRequests.length}
           </span>
@@ -387,13 +389,10 @@ HireIQ Client Relations Team`
                           <button 
                             onClick={() => handleOpenEmailModal(req)}
                             title={`Send Email to ${email}`}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-semibold text-xs transition-all shadow-xs cursor-pointer group/btn ${
-                              activeTab === 'demos'
-                                ? 'bg-indigo-50 hover:bg-indigo-600 text-indigo-600 hover:text-white border-indigo-200 hover:border-indigo-600'
-                                : 'bg-cyan-50 hover:bg-cyan-600 text-cyan-600 hover:text-white border-cyan-200 hover:border-cyan-600'
-                            }`}
+                            style={{ backgroundColor: activeTab === 'demos' ? '#4f46e5' : '#0891b2', color: '#ffffff', borderColor: activeTab === 'demos' ? '#4338ca' : '#0e7490' }}
+                            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border font-bold text-xs transition-all shadow-sm hover:opacity-90 cursor-pointer"
                           >
-                            <Send size={13} className="transition-transform group-hover/btn:translate-x-0.5" />
+                            <Send size={13} />
                             <span>Email Client</span>
                           </button>
 
@@ -401,7 +400,7 @@ HireIQ Client Relations Team`
                           <button 
                             onClick={() => handleDelete(req.id)}
                             title="Delete Request"
-                            className="p-2 rounded-xl bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white border border-rose-100 hover:border-rose-500 transition-all cursor-pointer"
+                            className="p-2 rounded-xl bg-rose-500/10 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-600 hover:text-white dark:hover:bg-rose-600 dark:hover:text-white border border-rose-200 dark:border-rose-500/30 transition-all cursor-pointer"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>

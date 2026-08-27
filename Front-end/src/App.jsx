@@ -131,7 +131,7 @@ function App() {
             >
               <Route index element={<Navigate to="new-dashboard" replace />} />
               <Route path="new-dashboard" element={<NewSuperDashboardPage />} />
-              <Route path="team" element={<TeamManagementPage />} />
+              <Route path="team" element={<Navigate to="/superadmin/recruiters" replace />} />
               <Route path="dashboard" element={<SuperDashboardPage />} />
               <Route path="interviews" element={<SuperAdminInterviewsPage />} />
               <Route path="qualified-candidates" element={<SuperAdminQualifiedCandidatesPage />} />
