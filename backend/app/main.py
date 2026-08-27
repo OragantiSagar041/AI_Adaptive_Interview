@@ -51,7 +51,6 @@ from app.routes.debug_routes import router as debug_router
 from app.routes.plans_routes import router as plans_router
 
 from app.routes.conversation_flow import router as conversation_flow_router
-from app.routes.omni_sync import router as omni_sync_router
 import app.services.transcription as transcription                # Voice transcription sub-router
 from app.routes import voice_routes     # WebRTC voice routes
 from app.core import config
@@ -295,7 +294,6 @@ app.include_router(debug_router)
 app.include_router(plans_router)
 
 app.include_router(conversation_flow_router)
-app.include_router(omni_sync_router)
 app.include_router(transcription.router)
 app.include_router(voice_routes.router)
 

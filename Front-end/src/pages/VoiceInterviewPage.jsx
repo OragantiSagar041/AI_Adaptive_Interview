@@ -41,31 +41,19 @@ const RECORDING_OPTIONS = { videoBitsPerSecond: 450000, audioBitsPerSecond: 4800
 // ── Video Avatar Component ────────────────────────────────────────────────────
 function VideoAvatar({ status, size = 220 }) {
   const videoRef = useRef(null)
-  const candidateGlowRef = useRef(null)
   const isSpeaking = status === 'speaking'
-
-  useEffect(() => {
-    if (status !== 'listening') return
-    const handleRms = (e) => {
-      if (!candidateGlowRef.current) return
-      const rms = e.detail
-      // scale from 1.0 to 1.2 based on volume
-      const scale = 1 + Math.min(rms * 1.5, 0.2)
-      // opacity from 0.4 to 1.0
-      const opacity = 0.4 + Math.min(rms * 2, 0.6)
-      candidateGlowRef.current.style.transform = `scale(${scale})`
-      candidateGlowRef.current.style.opacity = opacity
-    }
-    window.addEventListener('candidate_audio_rms', handleRms)
-    return () => window.removeEventListener('candidate_audio_rms', handleRms)
-  }, [status])
 
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
-    // Always play the flowing animation
-    video.play().catch(() => { })
-  }, [])
+    if (isSpeaking) {
+      video.play().catch(() => { })
+    } else {
+      video.pause()
+      // Reset to frame 0 when not speaking so it's ready for next time
+      if (!isSpeaking) video.currentTime = 0
+    }
+  }, [isSpeaking])
 
   const ringColor = status === 'speaking'
     ? 'rgba(168,85,247,0.7)'
@@ -91,21 +79,6 @@ function VideoAvatar({ status, size = 220 }) {
           pointerEvents: 'none',
         }} />
       )}
-      {/* Dynamic Voice Visualizer Ring (Only when listening) */}
-      {status === 'listening' && (
-        <div ref={candidateGlowRef} style={{
-          position: 'absolute', inset: -12,
-          borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(16,185,129,0.15) 0%, rgba(16,185,129,0) 70%)',
-          border: '2px solid rgba(16,185,129,0.6)',
-          boxShadow: '0 0 40px rgba(16,185,129,0.5)',
-          pointerEvents: 'none',
-          transition: 'transform 0.05s ease-out, opacity 0.05s ease-out',
-          opacity: 0.4,
-          transform: 'scale(1)',
-          zIndex: 10
-        }} />
-      )}
       {/* Outer glow ring */}
       {(status === 'speaking' || status === 'listening') && (
         <div style={{
@@ -121,8 +94,7 @@ function VideoAvatar({ status, size = 220 }) {
         ref={videoRef}
         src={aiVideoUrl}
         loop
-        autoPlay
-        muted
+        muted={false}
         playsInline
         preload="auto"
         style={{
@@ -756,7 +728,7 @@ export default function VoiceInterviewPage() {
         setCandidateSessionAuth(candidateToken, linkId, sd.interview_id || '')
         setLoading(false)
         clearTimeout(loadingTimeout)
-      } catch (e) {
+      } catch (e) { 
         if (!hasTimedOut) setError(e.message)
         setLoading(false)
         clearTimeout(loadingTimeout)
@@ -808,27 +780,19 @@ export default function VoiceInterviewPage() {
       const audio = new Audio(url)
       activeAudioRef.current = audio
       audio.onended = () => {
-        setTimeout(() => {
-          isTTSPlayingRef.current = false
-          currentAudioRef.current = null
-          if (activeAudioRef.current === audio) {
-            setAiStatus('listening')
-            activeAudioRef.current = null
-          }
-          URL.revokeObjectURL(url)
-          onEnd?.()
-        }, 400) // 400ms echo-dissipation tail
+        isTTSPlayingRef.current = false
+        currentAudioRef.current = null
+        setAiStatus('listening')
+        URL.revokeObjectURL(url)
+        activeAudioRef.current = null
+        onEnd?.()
       }
       audio.onerror = () => {
-        setTimeout(() => {
-          isTTSPlayingRef.current = false
-          currentAudioRef.current = null
-          if (activeAudioRef.current === audio) {
-            setAiStatus('idle')
-            activeAudioRef.current = null
-          }
-          onEnd?.()
-        }, 100)
+        isTTSPlayingRef.current = false
+        currentAudioRef.current = null
+        setAiStatus('idle')
+        activeAudioRef.current = null
+        onEnd?.()
       }
       audio.play().catch(() => {
         isTTSPlayingRef.current = false
@@ -1161,7 +1125,7 @@ export default function VoiceInterviewPage() {
   // the /stt request entirely when the chunk is silent. Without this gate,
   // Whisper hallucinates phrases like "Thank you for watching" on silence.
   const chunkPeakRmsRef = useRef(0)
-  const CHUNK_SEND_RMS_THRESHOLD = 0.04
+  const CHUNK_SEND_RMS_THRESHOLD = 0.015
 
   // ── Merge consecutive Whisper chunks (12-second slices) ──
   // Whisper receives one ~12s audio slice every flush. The slices overlap at
@@ -1290,7 +1254,7 @@ export default function VoiceInterviewPage() {
 
         if (data && data.transcript && data.transcript.trim()) {
           const freshWhisper = data.transcript.trim()
-
+          
           const isHallucination = /^(transcribe verbatim\.?|thank you(?:\s+for\s+(?:watching|listening))?\.?|amara\.org\.?|subtitles by\s.*)$/i.test(freshWhisper)
           if (isHallucination) {
             console.debug(`[STT HALLUCINATION GATE] Ignored: "${freshWhisper}"`)
@@ -1396,7 +1360,7 @@ export default function VoiceInterviewPage() {
     }
 
     if (whisperRecorderRef.current && whisperRecorderRef.current.state !== 'inactive') {
-      try { whisperRecorderRef.current.stop() } catch (_) { }
+      try { whisperRecorderRef.current.stop() } catch (_) {}
     }
     whisperRecorderRef.current = null
 
@@ -1520,7 +1484,7 @@ export default function VoiceInterviewPage() {
       } catch (_) { }
     }
     if (!preserveTranscript && whisperRecorderRef.current && whisperRecorderRef.current.state !== 'inactive') {
-      try { whisperRecorderRef.current.stop() } catch (_) { }
+      try { whisperRecorderRef.current.stop() } catch (_) {}
       whisperRecorderRef.current = null
     }
 
@@ -1596,9 +1560,6 @@ export default function VoiceInterviewPage() {
             for (let i = 0; i < buf.length; i++) sumSq += buf[i] * buf[i]
             const rms = Math.sqrt(sumSq / buf.length)
             if (rms > chunkPeakRmsRef.current) chunkPeakRmsRef.current = rms
-
-            // Dispatch event for visualizer
-            window.dispatchEvent(new CustomEvent('candidate_audio_rms', { detail: rms }))
 
             const now = Date.now()
             if (rms > CHUNK_SEND_RMS_THRESHOLD && now - lastSilenceReset > 500) {
@@ -2011,7 +1972,7 @@ export default function VoiceInterviewPage() {
                     ...existing,
                     askedFollowUpsCount: nextFupCount
                   }))
-                } catch (_) { }
+                } catch (_) {}
               }
 
               // Create the follow-up question object
@@ -2035,7 +1996,7 @@ export default function VoiceInterviewPage() {
               const t = VOICE_TRANSLATIONS[languageRef.current] || VOICE_TRANSLATIONS['English']
               const acks = t.acks
               const ack = acks[Math.floor(Math.random() * acks.length)]
-
+              
               aiSay(`${ack} ${newQ.text}`, () => startListening(ans => handleAnswer(ans, qIdx + 1, 1)))
               return
             }
@@ -2191,7 +2152,7 @@ export default function VoiceInterviewPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ interview_id: iid, link_id: linkId }),
-      }).catch(() => { })
+      }).catch(() => {})
       await Swal.fire({
         title: 'Interview Saved',
         text: 'Your answers were submitted, but the recording upload was interrupted. The interview team has been notified.',
@@ -2743,10 +2704,10 @@ export default function VoiceInterviewPage() {
             boxShadow: '0 4px 24px rgba(0,0,0,0.25)',
             animation: 'alertSlideDown 0.25s cubic-bezier(0.34,1.56,0.64,1) forwards',
           }}>
-            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: '50%', background: 'rgba(239,68,68,0.2)', color: '#ef4444', flexShrink: 0 }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
+            <span style={{ display:'flex', alignItems:'center', justifyContent:'center', width:22, height:22, borderRadius:'50%', background:'rgba(239,68,68,0.2)', color:'#ef4444', flexShrink:0 }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
             </span>
-            <span style={{ fontWeight: 700, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.75, marginRight: 2 }}>Security</span>
+            <span style={{ fontWeight:700, fontSize:12, textTransform:'uppercase', letterSpacing:'0.05em', opacity:0.75, marginRight:2 }}>Security</span>
             {securityAlert}
           </div>,
           document.body
@@ -2821,10 +2782,10 @@ export default function VoiceInterviewPage() {
           boxShadow: '0 4px 24px rgba(0,0,0,0.25)',
           animation: 'alertSlideDown 0.25s cubic-bezier(0.34,1.56,0.64,1) forwards',
         }}>
-          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: '50%', background: 'rgba(239,68,68,0.2)', color: '#ef4444', flexShrink: 0 }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
+          <span style={{ display:'flex', alignItems:'center', justifyContent:'center', width:22, height:22, borderRadius:'50%', background:'rgba(239,68,68,0.2)', color:'#ef4444', flexShrink:0 }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
           </span>
-          <span style={{ fontWeight: 700, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.75, marginRight: 2 }}>Security</span>
+          <span style={{ fontWeight:700, fontSize:12, textTransform:'uppercase', letterSpacing:'0.05em', opacity:0.75, marginRight:2 }}>Security</span>
           {securityAlert}
         </div>,
         document.body
@@ -2894,7 +2855,7 @@ export default function VoiceInterviewPage() {
         </div>
 
         {/* Info note */}
-        <div className="flex items-center gap-2 text-xs text-slate-500 !bg-white/4 border border-white/8 rounded-xl px-5 py-3 max-w-sm text-center">
+        <div className="flex items-center gap-2 text-xs text-slate-500 bg-white/4 border border-white/8 rounded-xl px-5 py-3 max-w-sm text-center">
           <i className="fas fa-info-circle text-slate-400" />
           <span>The interview will submit automatically when the timer reaches zero.</span>
         </div>
@@ -2944,9 +2905,9 @@ export default function VoiceInterviewPage() {
           <button
             id="exit-interview-btn"
             onClick={() => {
-              window.close();
-              setTimeout(() => { window.location.href = 'https://www.google.com'; }, 300);
-            }}
+                window.close();
+                setTimeout(() => { window.location.href = 'https://www.google.com'; }, 300);
+              }}
             className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold text-lg shadow-[0_4px_30px_rgba(16,185,129,0.4)] hover:shadow-[0_4px_50px_rgba(16,185,129,0.6)] hover:scale-[1.02] transition-all flex items-center justify-center gap-3"
           >
             <i className="fas fa-sign-out-alt" />
@@ -2954,14 +2915,14 @@ export default function VoiceInterviewPage() {
           </button>
 
           {/* ── Optional feedback (secondary) ── */}
-          <div className="w-full !bg-[#0d1117] border border-white/10 rounded-2xl p-6 shadow-xl text-left">
+          <div className="w-full bg-[#0d1117] border border-white/10 rounded-2xl p-6 shadow-xl text-left">
             <h3 className="text-lg font-bold text-white mb-2">How was your experience? <span className="text-xs font-normal text-slate-500">(optional)</span></h3>
             <p className="text-sm text-slate-400 mb-4">Your feedback helps us improve the AI interview experience.</p>
             <textarea
               value={feedback}
               onChange={(e) => setFeedback(e.target.value)}
               placeholder="Tell us about your interview experience..."
-              className="w-full !bg-[#161b22] border border-white/10 rounded-xl p-4 text-white text-sm min-h-[120px] focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all resize-none mb-4"
+              className="w-full bg-[#161b22] border border-white/10 rounded-xl p-4 text-white text-sm min-h-[120px] focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all resize-none mb-4"
             />
             <button
               onClick={async () => {
@@ -3001,9 +2962,9 @@ export default function VoiceInterviewPage() {
           <button
             id="exit-interview-btn-post-feedback"
             onClick={() => {
-              window.close();
-              setTimeout(() => { window.location.href = 'https://www.google.com'; }, 300);
-            }}
+                window.close();
+                setTimeout(() => { window.location.href = 'https://www.google.com'; }, 300);
+              }}
             className="px-8 py-3 rounded-2xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 font-bold text-sm transition-all flex items-center gap-2"
           >
             <i className="fas fa-sign-out-alt" />
@@ -3027,7 +2988,7 @@ export default function VoiceInterviewPage() {
         </div>
 
         {/* Rules */}
-        <div className="grid gap-3 text-left !bg-[#0d1117] border border-white/10 rounded-2xl p-6 shadow-xl">
+        <div className="grid gap-3 text-left bg-[#0d1117] border border-white/10 rounded-2xl p-6 shadow-xl">
           <h3 className="text-lg font-bold text-white mb-2 border-b border-white/10 pb-2">Interview Rules</h3>
           {[
             { i: 'fa-volume-mute', c: 'text-rose-400', t: 'Ensure you are in a quiet environment without background noise.' },
@@ -3047,8 +3008,8 @@ export default function VoiceInterviewPage() {
         <div className="space-y-4">
           <button onClick={() => setShowDeviceCheck(true)}
             className={`w-full py-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-3 ${permissionsGranted
-              ? '!bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-default'
-              : '!bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/20'
+              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-default'
+              : 'bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/20'
               }`}>
             <i className={`fas ${permissionsGranted ? 'fa-check-circle' : 'fa-lock-open'}`} />
             {permissionsGranted ? 'Hardware Checked & Permissions Granted' : 'Test Hardware & Grant Permissions'}
@@ -3158,7 +3119,7 @@ export default function VoiceInterviewPage() {
           </div>
 
           {/* Sentence card */}
-          <div className="!bg-[#0d1117] border border-violet-500/30 rounded-2xl p-6 shadow-xl">
+          <div className="bg-[#0d1117] border border-violet-500/30 rounded-2xl p-6 shadow-xl">
             <p className="text-[0.7rem] font-bold uppercase tracking-widest text-violet-400 mb-3">Read this sentence clearly:</p>
             <p className="text-white text-lg font-semibold leading-relaxed italic">"{SAMPLE_SENTENCE}"</p>
           </div>
@@ -3186,7 +3147,7 @@ export default function VoiceInterviewPage() {
           )}
 
           {vcStep === 'done' && (
-            <div className="!bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-5 text-emerald-300">
+            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-5 text-emerald-300">
               <i className="fas fa-check-circle text-3xl mb-2 block" />
               <p className="font-bold">Voice Cloned Successfully!</p>
               <p className="text-sm text-emerald-400/80 mt-1">The AI interviewer will now speak in your voice.</p>
@@ -3194,7 +3155,7 @@ export default function VoiceInterviewPage() {
           )}
 
           {(vcStep === 'error') && (
-            <div className="!bg-rose-500/10 border border-rose-500/30 rounded-2xl p-5 text-rose-300">
+            <div className="bg-rose-500/10 border border-rose-500/30 rounded-2xl p-5 text-rose-300">
               <i className="fas fa-exclamation-triangle text-2xl mb-2 block" />
               <p className="text-sm">{vcError || 'An error occurred. Proceeding with default voice.'}</p>
             </div>
@@ -3213,7 +3174,7 @@ export default function VoiceInterviewPage() {
               </button>
             )}
             {vcStep === 'idle' && (
-              <button onClick={() => setRound('intro')} className="w-full py-3 rounded-xl !bg-white/5 border border-white/10 text-slate-400 hover:text-white text-sm font-medium transition-all">
+              <button onClick={() => setRound('intro')} className="w-full py-3 rounded-xl bg-white/5 border border-white/10 text-slate-400 hover:text-white text-sm font-medium transition-all">
                 Skip voice cloning — use default AI voice
               </button>
             )}
@@ -3331,10 +3292,10 @@ export default function VoiceInterviewPage() {
           boxShadow: '0 4px 24px rgba(0,0,0,0.25)',
           animation: 'alertSlideDown 0.25s cubic-bezier(0.34,1.56,0.64,1) forwards',
         }}>
-          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: '50%', background: 'rgba(239,68,68,0.2)', color: '#ef4444', flexShrink: 0 }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
+          <span style={{ display:'flex', alignItems:'center', justifyContent:'center', width:22, height:22, borderRadius:'50%', background:'rgba(239,68,68,0.2)', color:'#ef4444', flexShrink:0 }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
           </span>
-          <span style={{ fontWeight: 700, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.75, marginRight: 2 }}>Security</span>
+          <span style={{ fontWeight:700, fontSize:12, textTransform:'uppercase', letterSpacing:'0.05em', opacity:0.75, marginRight:2 }}>Security</span>
           {securityAlert}
         </div>,
         document.body
@@ -3410,8 +3371,8 @@ export default function VoiceInterviewPage() {
           {(aiStatus === 'listening' || transcript || interimText) && (
             <div className="max-w-xl w-full mx-auto mt-2">
               <div className={`rounded-2xl border px-5 py-3 text-center transition-all duration-300 ${aiStatus === 'listening'
-                ? 'border-emerald-500/30 !bg-emerald-500/8'
-                : 'border-white/10 !bg-white/4'
+                ? 'border-emerald-500/30 bg-emerald-500/8'
+                : 'border-white/10 bg-white/4'
                 }`}>
                 {(transcript || interimText)
                   ? <p className="text-emerald-300 text-sm leading-relaxed">
@@ -3460,22 +3421,22 @@ export default function VoiceInterviewPage() {
                 startListening(ans => handleAnswer(ans, currentQIdx, 0))
               }
             }} className={`flex-1 py-3.5 rounded-2xl text-sm font-bold transition-all flex items-center justify-center gap-2.5 ${aiStatus === 'listening'
-              ? '!bg-rose-500/15 border border-rose-500/30 text-rose-400 shadow-[0_0_30px_rgba(239,68,68,.15)]'
-              : '!bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20'
+              ? 'bg-rose-500/15 border border-rose-500/30 text-rose-400 shadow-[0_0_30px_rgba(239,68,68,.15)]'
+              : 'bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20'
               }`}>
               <i className={`fas ${aiStatus === 'listening' ? 'fa-stop-circle' : 'fa-microphone'} text-base`} />
               {aiStatus === 'listening' ? 'Done Speaking' : 'Speak Answer'}
             </button>
             <button
               onClick={() => transitionToNextRound(false)}
-              className="px-6 py-3.5 rounded-2xl text-xs font-bold transition-all uppercase tracking-widest !bg-white/5 text-slate-400 border border-white/8 hover:bg-white/10"
+              className="px-6 py-3.5 rounded-2xl text-xs font-bold transition-all uppercase tracking-widest bg-white/5 text-slate-400 border border-white/8 hover:bg-white/10"
               title="Proceed to the next round"
             >
               Next Round
             </button>
             <button
               onClick={handleFinishEarly}
-              className="px-6 py-3.5 rounded-2xl text-xs font-bold transition-all uppercase tracking-widest !bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20"
+              className="px-6 py-3.5 rounded-2xl text-xs font-bold transition-all uppercase tracking-widest bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20"
               title="End interview early"
             >
               Finish Early

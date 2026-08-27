@@ -184,48 +184,33 @@ def update_agent_flow(req: UpdateAgentFlowRequest, omni_api_key: Optional[str] =
         res = requests.put(omni_url, headers=headers, json=payload, timeout=10)
         logger.info("[agent-flow] OmniDimension response status: %s", res.status_code)
         logger.info("[agent-flow] OmniDimension response body: %s", res.text)
-        from app.db.mongo_db import db
-        flow_list = payload.get('context_breakdown', [])
         if res.status_code == 200:
-            set_cached_omni_json(api_key, "agent-flow", flow_list)
+            set_cached_omni_json(api_key, "agent-flow", payload.get('context_breakdown', []))
+            # persist locally as well
             try:
-                db.conversation_flows.update_one(
-                    {"omni_agent_id": agent_id},
-                    {"$set": {"omni_agent_id": agent_id, "flow": flow_list, "synced_at": datetime.utcnow().isoformat()}},
-                    upsert=True
-                )
                 local_path = Path(__file__).resolve().parents[1] / 'agent_flow.json'
-                local_path.write_text(json.dumps(flow_list, indent=2, ensure_ascii=False), encoding='utf-8')
+                local_path.write_text(json.dumps(payload.get('context_breakdown', []), indent=2, ensure_ascii=False), encoding='utf-8')
             except Exception as e:
                 print(f"[agent-flow] Warning: failed to persist local flow: {e}")
             return {"success": True, "message": "Agent flow updated successfully."}
         else:
             print(f"[Omnidimension] PUT agent flow failed [status={res.status_code}]")
+            # try to persist locally and return success if local save succeeds
             try:
-                db.conversation_flows.update_one(
-                    {"omni_agent_id": agent_id},
-                    {"$set": {"omni_agent_id": agent_id, "flow": flow_list, "synced_at": datetime.utcnow().isoformat()}},
-                    upsert=True
-                )
                 local_path = Path(__file__).resolve().parents[1] / 'agent_flow.json'
-                local_path.write_text(json.dumps(flow_list, indent=2, ensure_ascii=False), encoding='utf-8')
-                set_cached_omni_json(api_key, "agent-flow", flow_list)
+                local_path.write_text(json.dumps(payload.get('context_breakdown', []), indent=2, ensure_ascii=False), encoding='utf-8')
+                set_cached_omni_json(api_key, "agent-flow", payload.get('context_breakdown', []))
                 return {"success": True, "message": "Upstream failed but local flow updated."}
             except Exception:
                 raise HTTPException(status_code=res.status_code, detail="Failed to update agent flow on upstream API and failed to save locally.")
     except HTTPException:
         raise
     except Exception as e:
+        # attempt local save on unexpected error
         try:
-            flow_list = payload.get('context_breakdown', [])
-            db.conversation_flows.update_one(
-                {"omni_agent_id": agent_id if 'agent_id' in locals() else "default"},
-                {"$set": {"flow": flow_list, "synced_at": datetime.utcnow().isoformat()}},
-                upsert=True
-            )
             local_path = Path(__file__).resolve().parents[1] / 'agent_flow.json'
-            local_path.write_text(json.dumps(flow_list, indent=2, ensure_ascii=False), encoding='utf-8')
-            set_cached_omni_json(api_key, "agent-flow", flow_list)
+            local_path.write_text(json.dumps(payload.get('context_breakdown', []), indent=2, ensure_ascii=False), encoding='utf-8')
+            set_cached_omni_json(api_key, "agent-flow", payload.get('context_breakdown', []))
             return {"success": True, "message": "Local flow updated (upstream error)."}
         except Exception:
             raise HTTPException(status_code=500, detail=str(e))

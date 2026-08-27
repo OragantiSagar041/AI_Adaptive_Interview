@@ -7,7 +7,7 @@ import {
   BookOpen, Plug, Cog, MailCheck, Clock, Volume2, Globe, Zap, FileText,
   Mic, MessageSquare, RefreshCw, ChevronDown, ChevronUp, Timer,
   AlertCircle, User, Calendar, TrendingUp, Play, Plus, Trash2, Copy,
-  ArrowUpRight, ArrowDownLeft, Upload, Search, Filter, Users, Settings, Save,
+  ArrowUpRight, ArrowDownLeft, Upload, Search, Filter, Users, Settings,
   CheckCircle, Eye, Brain, X, ExternalLink, Info, Download, FileSpreadsheet
 } from 'lucide-react'
 import Card from '../../components/Card'
@@ -80,112 +80,29 @@ function EmptyState({ message }) {
 
 // ─── Tab Components ─────────────────────────────────────────────────────────────
 
-function AssistantDetailsTab({ agentSettings, loading, token, omniApiKey, onRefresh }) {
+function AssistantDetailsTab({ agentSettings, loading }) {
   const defaultGreeting = "Hello {{candidate_name}}, this is Sarah, the AI Recruitment Assistant from HireIQ, calling on behalf of {{HIRE IQ}} regarding your application for the {{job_role}} position. I'd like to conduct a brief screening interview that will take about {{duration}} minutes. Would you like me to continue?"
 
-  const [isDynamic, setIsDynamic] = useState(
-    agentSettings?.is_welcome_message_dynamic !== undefined ? Boolean(agentSettings.is_welcome_message_dynamic) : true
-  )
-  const [isInterruptible, setIsInterruptible] = useState(
-    agentSettings?.is_welcome_message_interruption !== undefined ? Boolean(agentSettings.is_welcome_message_interruption) : false
-  )
-  const [greetingText, setGreetingText] = useState(
-    agentSettings?.welcome_message || agentSettings?.greeting_message || agentSettings?.first_ideal_message || defaultGreeting
-  )
-  const [saving, setSaving] = useState(false)
-  const [saveSuccess, setSaveSuccess] = useState('')
+  const [isDynamic, setIsDynamic] = useState(true)
+  const [isInterruptible, setIsInterruptible] = useState(false)
+  const [greetingText, setGreetingText] = useState(agentSettings?.greeting_message || defaultGreeting)
 
   useEffect(() => {
-    if (agentSettings?.welcome_message || agentSettings?.greeting_message) {
-      setGreetingText(agentSettings.welcome_message || agentSettings.greeting_message)
-    }
-    if (agentSettings?.is_welcome_message_dynamic !== undefined) {
-      setIsDynamic(Boolean(agentSettings.is_welcome_message_dynamic))
-    }
-    if (agentSettings?.is_welcome_message_interruption !== undefined) {
-      setIsInterruptible(Boolean(agentSettings.is_welcome_message_interruption))
+    if (agentSettings?.greeting_message) {
+      setGreetingText(agentSettings.greeting_message)
     }
   }, [agentSettings])
-
-  const handleSaveAssistantDetails = async () => {
-    setSaving(true)
-    setSaveSuccess('')
-    try {
-      const configuredOmniApiKey = omniApiKey || sessionStorage.getItem('omniDimensionApiKey') || ''
-      const res = await fetch(`${API_BASE_URL}/api/calls/agent-settings`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          ...(configuredOmniApiKey ? { 'X-Omni-Dimension-API-Key': configuredOmniApiKey } : {})
-        },
-        body: JSON.stringify({
-          welcome_message: greetingText,
-          greeting_message: greetingText,
-          is_dynamic: isDynamic,
-          is_interruptible: isInterruptible
-        })
-      })
-
-      const data = await res.json()
-      if (!res.ok) {
-        throw new Error(data.detail || data.message || 'Failed to save assistant settings')
-      }
-
-      setSaveSuccess('Welcome Message & Assistant Settings saved successfully!')
-      setTimeout(() => setSaveSuccess(''), 3500)
-      if (typeof Swal !== 'undefined') {
-        Swal.fire({
-          title: 'Settings Saved!',
-          text: 'Welcome Message & Assistant Settings saved to Omni Dimension!',
-          icon: 'success',
-          timer: 2500,
-          showConfirmButton: false
-        })
-      }
-      if (onRefresh) onRefresh()
-    } catch (err) {
-      console.error(err)
-      const msg = err.message || 'Failed to save assistant settings'
-      if (typeof Swal !== 'undefined') {
-        Swal.fire('Error', msg, 'error')
-      } else {
-        alert(msg)
-      }
-    } finally {
-      setSaving(false)
-    }
-  }
 
   if (loading) return <SectionLoader />
   if (!agentSettings) return <EmptyState message="No agent settings found. Check your Omni Dimension API key." />
 
   return (
     <div className="space-y-6">
-      {saveSuccess && (
-        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center text-emerald-600 text-xs font-semibold">
-          <CheckCircle2 className="w-4 h-4 mr-2 flex-shrink-0" />
-          <p>{saveSuccess}</p>
-        </div>
-      )}
-
       {/* Assistant Settings Section */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <h3 className="text-sm font-extrabold text-slate-800 tracking-tight">Assistant Settings</h3>
-            <Info size={14} className="text-slate-400 cursor-pointer hover:text-slate-600 transition-colors" />
-          </div>
-
-          <button
-            type="button"
-            onClick={handleSaveAssistantDetails}
-            disabled={saving}
-            className="rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 px-4 py-2 text-xs font-bold text-white transition-all shadow-md shadow-indigo-600/20 flex items-center gap-2 cursor-pointer"
-          >
-            {saving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
-            {saving ? 'Saving...' : 'Save Settings'}
-          </button>
+      <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm space-y-4">
+        <div className="flex items-center gap-1.5">
+          <h3 className="text-sm font-extrabold text-slate-800 dark:text-slate-100 tracking-tight">Assistant Settings</h3>
+          <Info size={14} className="text-slate-400 cursor-pointer hover:text-slate-600 dark:text-slate-400 transition-colors" />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
@@ -283,18 +200,6 @@ function AssistantDetailsTab({ agentSettings, loading, token, omniApiKey, onRefr
             {greetingText.length}/600
           </div>
         </div>
-
-        <div className="flex justify-end pt-2">
-          <button
-            type="button"
-            onClick={handleSaveAssistantDetails}
-            disabled={saving}
-            className="rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 px-4 py-2 text-xs font-bold text-white transition-all shadow-md shadow-indigo-600/20 flex items-center gap-2 cursor-pointer"
-          >
-            {saving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
-            {saving ? 'Saving...' : 'Save Welcome Message'}
-          </button>
-        </div>
       </div>
 
       {/* System Prompt Section */}
@@ -335,8 +240,9 @@ function CyanToggleSwitch({ checked, onChange, label = "" }) {
   return (
     <div className="flex items-center gap-2.5 select-none cursor-pointer" onClick={() => onChange(!checked)}>
       {label && <span className={`text-xs font-bold ${checked ? "text-slate-800 dark:text-slate-100" : "text-slate-400"}`}>{label}</span>}
-      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${checked ? "bg-emerald-500/20 text-emerald-500 border-emerald-500/40" : "bg-slate-700/50 text-slate-400 border-slate-600"
-        }`}>
+      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+        checked ? "bg-emerald-500/20 text-emerald-500 border-emerald-500/40" : "bg-slate-700/50 text-slate-400 border-slate-600"
+      }`}>
         {checked ? "ON" : "OFF"}
       </span>
       <div className={`w-9 h-4.5 rounded-full p-0.5 transition-colors flex items-center border ${checked ? "bg-indigo-600 border-indigo-500 justify-end" : "bg-slate-600 border-slate-500 justify-start"
@@ -1793,7 +1699,6 @@ function ApprovalCallsTab({ calls, loading, onViewDetails, onDecision, actionLoa
 
 export default function AICallingAgentPage() {
   const token = useSelector(state => state.auth.token)
-  const omniApiKey = sessionStorage.getItem('omniDimensionApiKey') || ''
 
   const [activeTab, setActiveTab] = useState('assistant')
   const [accountVersion, setAccountVersion] = useState(0)
@@ -1903,6 +1808,7 @@ export default function AICallingAgentPage() {
   }
 
   const fetchPostCall = async () => {
+    if (postCallConfigs.length) return
     setLoading('postcall', true)
     try {
       const r = await fetch(`${API_BASE_URL}/api/calls/post-call-config`, { headers })
@@ -1927,40 +1833,12 @@ export default function AICallingAgentPage() {
     } finally { setLoading('recentcalls', false) }
   }
 
-  const fetchAllOmniValues = async (isManualSync = false) => {
+  const fetchAllOmniValues = async () => {
     setLoadingMap({
       assistant: true, callconfig: true, knowledgebase: true,
       integrations: true, postcall: true, recentcalls: true
     })
     try {
-      if (isManualSync && token) {
-        try {
-          const configuredOmniApiKey = omniApiKey || sessionStorage.getItem('omniDimensionApiKey') || ''
-          const syncRes = await fetch(`${API_BASE_URL}/api/calls/sync-all`, {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
-              ...(configuredOmniApiKey ? { 'X-Omni-Dimension-API-Key': configuredOmniApiKey } : {})
-            }
-          })
-          const syncData = await syncRes.json()
-          if (syncRes.ok && syncData.success) {
-            if (typeof Swal !== 'undefined') {
-              Swal.fire({
-                title: 'Omni Dimension Synced!',
-                text: 'Synced all data linked with your account & API key: Assistant Details, Conversation Flow, Call Config, Knowledge Base, Integrations, Post-Call, Recent Calls, Candidate Approvals & Bulk Dialer.',
-                icon: 'success',
-                timer: 3200,
-                showConfirmButton: false
-              })
-            }
-          }
-        } catch (syncErr) {
-          console.warn('[Sync Note] Backend sync-all error:', syncErr)
-        }
-      }
-
       await Promise.allSettled([
         fetchAssistant(),
         fetchCallConfig(),
@@ -2475,7 +2353,7 @@ export default function AICallingAgentPage() {
         <div className="w-full sm:w-auto flex sm:items-end justify-end">
           <button
             type="button"
-            onClick={() => fetchAllOmniValues(true)}
+            onClick={fetchAllOmniValues}
             className="rounded-xl bg-card border border-border px-4 py-2.5 text-xs font-bold text-foreground hover:bg-muted/40 transition-colors shadow-sm flex items-center gap-2 cursor-pointer"
           >
             <RefreshCw size={14} className="text-indigo-500 animate-spin-hover" /> Sync Agent Settings
@@ -2517,13 +2395,7 @@ export default function AICallingAgentPage() {
               transition={{ duration: 0.3, ease: "easeOut" }}
             >
               {activeTab === 'assistant' && (
-                <AssistantDetailsTab
-                  agentSettings={agentSettings}
-                  loading={loadingMap.assistant}
-                  token={token}
-                  omniApiKey={omniApiKey}
-                  onRefresh={fetchAssistant}
-                />
+                <AssistantDetailsTab agentSettings={agentSettings} loading={loadingMap.assistant} />
               )}
               {activeTab === 'conversationflow' && <ConversationalFlowPage />}
               {activeTab === 'callconfig' && (

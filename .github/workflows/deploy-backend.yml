@@ -26,8 +26,39 @@ env:
   CONTAINER_NAME: Main
 
 jobs:
+  test-backend:
+    name: Test FastAPI backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout backend source
+        uses: actions/checkout@v4
+
+      - name: Build backend test image
+        run: docker build --file backend/Dockerfile --tag fastapi-backend-ci:${{ github.sha }} backend
+
+      - name: Start backend test container
+        run: docker run --detach --name fastapi-backend-ci --publish 8000:8000 fastapi-backend-ci:${{ github.sha }}
+
+      - name: Wait for FastAPI health endpoint
+        shell: bash
+        run: |
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error http://127.0.0.1:8000/health; then
+              echo "Backend health check passed."
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs fastapi-backend-ci
+          exit 1
+
+      - name: Remove test container
+        if: always()
+        run: docker rm --force fastapi-backend-ci
+
   deploy-backend:
     name: Build, push, and deploy backend
+    needs: test-backend
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production

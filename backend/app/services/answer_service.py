@@ -9,7 +9,7 @@ import logging
 from typing import Any, Dict
 from uuid import uuid4
 
-from app.db.mongo_db import answers_collection, interviews_collection, interview_sessions_collection
+from app.db.mongo_db import answers_collection, interviews_collection
 
 
 MAX_QUESTION_TEXT_LENGTH = 20_000
@@ -135,39 +135,6 @@ def persist_answer_and_enqueue_scoring(
         },
         upsert=True,
     )
-
-    # Check if this is an HR Screening question
-    session_doc = interview_sessions_collection.find_one(
-        {"$or": [{"link_id": normalized_interview_id}, {"interview_id": normalized_interview_id}]}
-    )
-    is_hr_screening = False
-    if session_doc:
-        for q in session_doc.get("questions", []):
-            if str(q.get("id")) == str(normalized_question_id) or q.get("question") == normalized_question_text:
-                if q.get("type") == "HR Screening":
-                    is_hr_screening = True
-                break
-
-    if is_hr_screening:
-        answers_collection.update_one(
-            {
-                "interview_id": normalized_interview_id,
-                "question_id": normalized_question_id,
-                "answer_version": answer_version,
-            },
-            {
-                "$set": {
-                    "scoring_status": "completed",
-                    "ai_score": None,
-                    "ai_feedback": "HR Screening questions do not require AI scoring.",
-                }
-            },
-        )
-        return {
-            "status": "saved",
-            "scoring_status": "completed",
-            "answer_version": answer_version,
-        }
 
     from app import tasks
 

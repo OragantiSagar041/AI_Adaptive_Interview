@@ -1,5 +1,5 @@
 import React from 'react'
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 // Protected Route Guard
 import ProtectedRoute from './components/ProtectedRoute'
 
@@ -75,30 +75,12 @@ const AuditLogsPage = React.lazy(() => import('./pages/superadmin/AuditLogsPage'
 const SecurityPage = React.lazy(() => import('./pages/superadmin/SecurityPage'))
 
 import ErrorBoundary from './components/ErrorBoundary'
-import { ThemeProvider, useTheme } from './context/ThemeContext'
-
-function ThemeEnforcer() {
-  const { pathname } = useLocation();
-  const { setTheme } = useTheme();
-
-  React.useEffect(() => {
-    // Routes that should default to dark mode
-    const darkRoutes = ['/', '/login', '/register', '/voice-recruiter'];
-    if (darkRoutes.includes(pathname) || pathname.startsWith('/customer-story/')) {
-      setTheme('dark');
-    } else {
-      setTheme('light');
-    }
-  }, [pathname, setTheme]);
-
-  return null;
-}
+import { ThemeProvider } from './context/ThemeContext'
 
 function App() {
   return (
     <ThemeProvider>
       <BrowserRouter>
-        <ThemeEnforcer />
         <React.Suspense fallback={<div className="flex h-screen items-center justify-center bg-slate-50 text-slate-900 font-semibold text-lg tracking-wide">Loading Interface...</div>}>
           <ErrorBoundary>
             <Routes>

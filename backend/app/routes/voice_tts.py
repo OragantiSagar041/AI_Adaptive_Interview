@@ -398,24 +398,47 @@ async def stt_endpoint(
                 raise HTTPException(status_code=422, detail="Unsupported transcription language")
             
             candidate_name = str(candidate_session.get("candidate_name") or "").strip()
+            name_hint = f"The candidate's name is {candidate_name}. When introducing themselves ('myself {candidate_name}', 'I am {candidate_name}', 'my name is {candidate_name}'), accurately transcribe their name verbatim. " if candidate_name else ""
 
             known_terms_hint = ""
             if known_terms:
                 clean_terms = [t.strip() for t in (known_terms.split(",") if isinstance(known_terms, str) else known_terms) if t.strip()]
                 if clean_terms:
-                    known_terms_hint = ", ".join(clean_terms)
+                    known_terms_hint = f"The candidate may mention these specific proper nouns, companies, technologies, or terms: {', '.join(clean_terms)}. "
 
-            # Whisper prompt should ONLY contain a comma-separated list of terms
-            # to avoid the model treating conversational instructions as preceding text
-            # and hallucinating them into the output.
-            # NOTE: We deliberately DO NOT pass the candidate_name in the prompt because 
-            # Whisper will aggressively hallucinate it if it hears background noise. 
-            # We rely on the frontend's `formatCandidateName` to fix misspellings instead.
-            sys_prompt = known_terms_hint if iso_lang == "en" else ""
+            # NOTE: the prompt only steers terminology and the candidate name.
+            # Avoid mentioning interview roles or common phrases inside the
+            # prompt because Whisper uses them as "seeds" for hallucinations
+            # on silence.
+            sys_prompt = (
+                f"{name_hint}{known_terms_hint}"
+                if iso_lang == "en" else ""
+            )
 
-            # Audio probing for WebM is omitted here because standard wave module cannot parse WebM.
-            # We rely on the frontend's STT RMS silence gate (CHUNK_SEND_RMS_THRESHOLD) 
-            # to filter out silence before it reaches the backend.
+            # ── Quick audio-energy gate: reject flat-line audio before sending to Whisper ──
+            try:
+                import wave, struct, contextlib
+                with contextlib.closing(wave.open(temp_filename, 'rb')) as wf:
+                    n_frames = wf.getnframes()
+                    n_channels = wf.getnchannels()
+                    samp_width = wf.getsampwidth()
+                    raw = wf.readframes(n_frames)
+                if samp_width == 2 and raw:
+                    n_samples = len(raw) // 2
+                    samples = struct.unpack(f"<{n_samples}h", raw[:n_samples * 2])
+                    peak = max(abs(s) for s in samples) if samples else 0
+                    mean_sq = sum(s * s for s in samples) / len(samples) if samples else 0
+                    rms = (mean_sq ** 0.5) / 32768.0
+                    peak_norm = peak / 32768.0
+                    # If the audio is essentially silent, skip Whisper entirely.
+                    # 0.01 RMS = roughly -40 dBFS, below typical speech floor.
+                    if rms < 0.01 or peak_norm < 0.05:
+                        dur = round(time.time() - t0, 3)
+                        print(f"🔇 [STT SILENCE GATE] Rejected silent audio | rms={rms:.4f} peak={peak_norm:.4f} | Latency: {dur}s")
+                        return {"transcript": ""}
+            except Exception as e:
+                # If audio probing fails, continue to STT engines (don't break the request)
+                pass
 
             HALLUCINATIONS = {
                 "thank you", "thanks", "okay", "you", "bye",

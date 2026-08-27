@@ -353,8 +353,9 @@ export default function OverviewDashboardPage() {
                     handleOpenRecordsModal(k.filterType, k.label);
                   }
                 }}
-                className={`group relative overflow-hidden p-5 border border-slate-200 dark:border-slate-700 transition-all hover:-translate-y-0.5 hover:shadow-md bg-white dark:bg-slate-800 ${isClickable ? "cursor-pointer hover:border-primary/40" : ""
-                  }`}
+                className={`group relative overflow-hidden p-5 border border-slate-200 dark:border-slate-700 transition-all hover:-translate-y-0.5 hover:shadow-md bg-white dark:bg-slate-800 ${
+                  isClickable ? "cursor-pointer hover:border-primary/40" : ""
+                }`}
               >
                 <div className="flex items-start justify-between">
                   <div>
@@ -376,7 +377,7 @@ export default function OverviewDashboardPage() {
                     )}
                   </div>
                   <div
-                    className={`grid h-10 w-10 place-items-center rounded-[0.5rem] ${tintClasses[k.tint]}`}
+                    className={`grid h-10 w-10 place-items-center rounded-lg ${tintClasses[k.tint]}`}
                   >
                     <Icon className="h-5 w-5" />
                   </div>
@@ -476,9 +477,9 @@ export default function OverviewDashboardPage() {
                       <Progress value={(session.audio_level || 0) * 10} className="h-1.5 w-16 ml-2" />
                     </TableCell>
                     <TableCell className="px-6 py-3 text-right">
-                      <Button
-                        size="sm"
-                        variant="outline"
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
                         onClick={() => handleOpenLiveStreamAction && handleOpenLiveStreamAction(session)}
                         className="h-8 text-xs font-semibold hover:bg-indigo-50 hover:text-indigo-600 border-indigo-100 transition-colors bg-white dark:bg-slate-800/60 shadow-sm"
                       >
@@ -832,9 +833,9 @@ export default function OverviewDashboardPage() {
               <p className="mt-1.5 text-sm opacity-90">
                 You have {topCandidates.length} high-scoring candidates waiting. Review them to speed up your conversion rates.
               </p>
-              <Button
-                size="sm"
-                variant="secondary"
+              <Button 
+                size="sm" 
+                variant="secondary" 
                 className="mt-4 bg-white dark:bg-slate-800/60 text-primary hover:bg-white dark:bg-slate-800/60/90"
                 onClick={() => handleOpenRecordsModal('high_scores', 'High-Scoring Candidates')}
               >

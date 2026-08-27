@@ -239,7 +239,6 @@ function RegisterPage() {
             </span>
           </Link>
           <div className="flex items-center gap-3">
-            <ThemeToggle />
             <Link
               to="/"
               className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all shadow-xs"

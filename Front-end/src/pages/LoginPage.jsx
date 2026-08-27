@@ -220,18 +220,12 @@ const CSS = `
   /* ── Trust badge ── */
   .lp-trust {
     margin-top: 24px; display: inline-flex; align-items: center; gap: 10px;
-    background: rgba(15, 23, 42, 0.04); border: 1px solid rgba(15, 23, 42, 0.08);
+    background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.06);
     border-radius: 100px; padding: 7px 16px 7px 12px;
   }
-  .dark .lp-trust {
-    background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.06);
-  }
   .lp-stars { display: flex; gap: 2px; }
-  .lp-trust-text { font-size: 0.78rem; color: rgba(15, 23, 42, 0.6); font-weight: 500; }
-  .lp-trust-text strong { color: rgba(15, 23, 42, 0.9); font-weight: 700; }
-  
-  .dark .lp-trust-text { color: rgba(203,213,225,0.55); }
-  .dark .lp-trust-text strong { color: rgba(203,213,225,0.85); }
+  .lp-trust-text { font-size: 0.78rem; color: rgba(203,213,225,0.55); font-weight: 500; }
+  .lp-trust-text strong { color: rgba(203,213,225,0.85); font-weight: 700; }
 
   /* ── Right panel ── */
   .lp-right {
@@ -577,9 +571,6 @@ export default function LoginPage() {
       <style>{CSS}</style>
 
       <div className="lp-root relative">
-        <div style={{ position: 'absolute', top: 24, right: 24, zIndex: 50 }}>
-          <ThemeToggle />
-        </div>
 
         {/* Waves — elevated ambient background layer */}
         <div className="lp-waves-bg">
