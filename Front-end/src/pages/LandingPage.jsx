@@ -229,7 +229,7 @@ function Hero() {
             #1 AI Recruitment & Interview Intelligence Platform India
           </div>
           <h1 className="mt-6 text-5xl sm:text-6xl lg:text-7xl font-extrabold tracking-tighter leading-[1.02]">
-            India’s #1 <span className="text-gradient">AI Interview Platform</span> & Recruitment Software.
+            HireIQ: India’s #1 <span className="text-gradient">AI Interview Platform</span> & Recruitment Software.
           </h1>
           <p className="mt-6 text-lg text-muted-foreground max-w-2xl leading-relaxed">
             HireIQ is the leading <strong>AI mock interview platform</strong>, <strong>automated HR screening tool</strong>, and <strong>AI calling agent for recruitment</strong>. Automate candidate outreach, resume screening, live technical assessments, and <strong>bulk hiring in India</strong> 10× faster with predictive AI scoring.

@@ -1048,13 +1048,13 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
         </div>
 
         {/* Tab Switcher Capsule */}
-        <div className="flex bg-slate-100 dark:bg-slate-800/50/80 p-1.5 rounded-2xl gap-1.5 max-w-md mx-auto w-full border border-slate-200 dark:border-slate-700/50 shadow-sm relative overflow-hidden">
+        <div className="flex bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl gap-1.5 max-w-md mx-auto w-full border border-slate-200 dark:border-slate-700/50 shadow-sm relative overflow-hidden">
           <button
             type="button"
             onClick={() => setCreateTab('single')}
             className={`flex-1 py-2.5 px-4 rounded-xl font-extrabold text-xs cursor-pointer transition-all duration-300 outline-none flex items-center justify-center gap-2 z-10 ${createTab === 'single'
-              ? 'bg-primary text-white shadow-[0_4px_12px_rgba(99,102,241,0.25)]'
-              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-100 hover:bg-slate-200/50'
+              ? 'bg-indigo-600 dark:bg-indigo-500 text-white shadow-[0_4px_12px_rgba(99,102,241,0.25)]'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-100 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
               }`}
           >
             <i className="fas fa-user text-xs"></i> Single Candidate
@@ -1063,8 +1063,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
             type="button"
             onClick={() => setCreateTab('bulk')}
             className={`flex-1 py-2.5 px-4 rounded-xl font-extrabold text-xs cursor-pointer transition-all duration-300 outline-none flex items-center justify-center gap-2 z-10 ${createTab === 'bulk'
-              ? 'bg-primary text-white shadow-[0_4px_12px_rgba(99,102,241,0.25)]'
-              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-100 hover:bg-slate-200/50'
+              ? 'bg-indigo-600 dark:bg-indigo-500 text-white shadow-[0_4px_12px_rgba(99,102,241,0.25)]'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-100 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
               }`}
           >
             <i className="fas fa-users text-xs"></i> Bulk Send

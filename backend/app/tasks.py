@@ -204,7 +204,10 @@ def score_answer_task(
 
             # Composite score: blend with coding / case study if present
             try:
-                from app.ai.score_rounds import compute_coding_score, compute_case_study_score, blend_scores
+                from app.ai.score_rounds import (
+                    compute_coding_score, compute_case_study_score, 
+                    calculate_round1_score, calculate_coding_score, calculate_final_score
+                )
                 session_rec = interview_sessions_collection.find_one({"interview_id": interview_id})
                 if not session_rec:
                     session_rec = interview_sessions_collection.find_one({"link_id": interview_id})
@@ -217,14 +220,41 @@ def score_answer_task(
                     interview_format = session_rec["interview_format"]
                 elif interview_row and interview_row.get("interview_format"):
                     interview_format = interview_row["interview_format"]
+                    
                 coding_round_data = (interview_row or {}).get("coding_round") if interview_row else None
                 case_study_data   = (interview_row or {}).get("case_study_round") if interview_row else None
 
-                coding_s     = compute_coding_score(coding_round_data, interview_format, language) if coding_round_data else None
-                case_study_s = compute_case_study_score(case_study_data, context, language) if case_study_data else None
-                avg_score    = blend_scores(verbal_avg, coding_s, case_study_s)
+                # Extract questions for dynamic Round 1 scoring
+                questions = []
+                if interview_row and interview_row.get("questions"):
+                    questions = interview_row["questions"]
+                    if isinstance(questions, str):
+                        import json
+                        try:
+                            questions = json.loads(questions)
+                        except:
+                            questions = []
+                elif session_rec and session_rec.get("pre_generated_questions"):
+                    import json
+                    try:
+                        questions = json.loads(session_rec["pre_generated_questions"])
+                    except:
+                        pass
+                
+                # Use Common Scoring Engine
+                round1_s = calculate_round1_score(questions, answers)
+                
+                round2_s = 0.0
+                if coding_round_data:
+                    round2_s = calculate_coding_score(coding_round_data)
+                elif case_study_data:
+                    cs_score_100 = compute_case_study_score(case_study_data, context, language) or 0.0
+                    round2_s = round(min(20.0, max(0.0, (cs_score_100 / 100.0) * 20.0)), 1)
+                
+                avg_score = calculate_final_score(round1_s, round2_s)
+                
             except Exception as blend_err:
-                logger.warning(f"Composite blend error (falling back to verbal): {blend_err}")
+                logger.warning(f"Composite blend error (falling back to verbal_avg): {blend_err}")
                 avg_score = verbal_avg
 
             session = interview_sessions_collection.find_one(

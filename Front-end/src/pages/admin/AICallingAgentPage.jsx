@@ -2366,10 +2366,10 @@ export default function AICallingAgentPage() {
         initial={{ opacity: 0, y: 40 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.5, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-        className="mt-6 bg-white dark:bg-slate-800/60/80 backdrop-blur-xl rounded-[30px] border border-white/60 overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative z-10"
+        className="mt-6 bg-white dark:bg-slate-900 backdrop-blur-xl rounded-[30px] border border-slate-200 dark:border-slate-800 overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative z-10"
       >
         {/* Tab Bar */}
-        <div className="flex items-center flex-wrap gap-2 px-4 pt-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60/50 relative z-10">
+        <div className="flex items-center flex-wrap gap-2 px-4 pt-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/90 relative z-10">
           {TABS.map(({ id, label, icon }) => (
             <button
               key={id}

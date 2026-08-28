@@ -42,7 +42,8 @@ def _dynamic_offline_evaluation(
         "how", "why", "when", "where", "can", "could", "should", "would", "may", "might",
         "must", "shall", "to", "of", "in", "for", "on", "with", "at", "by", "from", "up",
         "about", "into", "over", "after", "your", "my", "our", "you", "me", "we", "us",
-        "explain", "describe", "tell", "candidate", "question", "answer", "role", "using"
+        "explain", "describe", "tell", "candidate", "question", "answer", "role", "using",
+        "hello", "hi", "hey", "name"
     }
 
     def tokenize(text: str):
@@ -58,21 +59,59 @@ def _dynamic_offline_evaluation(
 
     if word_count == 0:
         return {
-            "content_score": 0,
-            "relevance_score": 0,
-            "time_score": 0,
-            "clarity_score": 0,
-            "confidence_score": 0,
-            "technical_depth_score": 0,
-            "feedback": "No answer recorded.",
-            "keywords": []
+            "content_score": 0, "relevance_score": 0, "time_score": 0,
+            "clarity_score": 0, "confidence_score": 0, "technical_depth_score": 0,
+            "feedback": "No answer recorded.", "keywords": []
         }
 
-    # 1. RELEVANCE SCORE (0–30 pts): Measures how directly the answer addresses question terms
+    # HR / LOGISTICS BYPASS
+    # Simple questions (like relocation, on-site, notice period) do not require technical essays.
+    lower_q = question.lower()
+    hr_keywords = ["comfortable", "willing to", "relocate", "on-site", "onsite", "remote", "hybrid", "notice period", "salary", "shift", "located"]
+    is_hr_question = any(kw in lower_q for kw in hr_keywords)
+
+    if is_hr_question and word_count >= 4:
+        lower_ans = answer.lower()
+        positive_words = {"yes", "yeah", "okay", "sure", "ready", "fine", "agree", "can", "will", "am", "do"}
+        if any(pw in lower_ans for pw in positive_words):
+            return {
+                "content_score": 45,  # 45/50
+                "relevance_score": 30, # 30/30
+                "time_score": 15,     # 15/20
+                "clarity_score": 85,
+                "technical_depth_score": 0,
+                "confidence_score": 90,
+                "feedback": "Offline Analysis: Provided a clear, direct answer to the screening question.",
+                "keywords": ["Screening"]
+            }
+
+    # EXPANDED TECHNICAL VOCABULARY
+    domain_vocab = {
+        "code", "data", "system", "algorithm", "database", "api", "function", "method",
+        "class", "object", "interface", "server", "client", "network", "security",
+        "performance", "optimiz", "framework", "architecture", "component", "state",
+        "testing", "deploy", "pipeline", "async", "sync", "thread", "process", "logic",
+        "model", "schema", "query", "index", "cache", "frontend", "backend", "fullstack",
+        "design", "management", "lead", "team", "project", "strategy", "deliver", "scale",
+        # Modern Tech / ML / AI
+        "python", "java", "javascript", "react", "node", "aws", "cloud", "azure", "sql",
+        "nosql", "machine", "learning", "deep", "ai", "ml", "llm", "llms", "rag", "nlp",
+        "pandas", "numpy", "docker", "kubernetes", "git", "ci/cd", "agile", "scrum", "vision"
+    }
+    
+    matched_domain_terms = set()
+    for word in a_token_set:
+        for term in domain_vocab:
+            if term in word:
+                matched_domain_terms.add(word)
+
+    # 1. RELEVANCE SCORE (0-30 pts)
     q_matches = q_tokens.intersection(a_token_set)
     q_overlap_ratio = len(q_matches) / len(q_tokens) if q_tokens else 0.5
-    c_matches = c_tokens.intersection(a_token_set)
-    c_overlap_ratio = len(c_matches) / len(c_tokens) if c_tokens else 0.0
+    
+    # PARROT CHECK: Is the answer just repeating the question?
+    parrot_ratio = len(q_matches) / len(a_token_set) if a_token_set else 0.0
+    is_parroting = parrot_ratio > 0.65 and len(matched_domain_terms) < 3
 
     if q_tokens:
         if q_overlap_ratio >= 0.60:
@@ -85,9 +124,17 @@ def _dynamic_offline_evaluation(
             relevance_s = int(q_overlap_ratio * 80)
     else:
         relevance_s = 15
+        
+    # Boost relevance if they used strong domain terminology (e.g. introductory questions)
+    if len(matched_domain_terms) >= 3 and relevance_s < 20:
+        relevance_s = min(30, relevance_s + int(len(matched_domain_terms) * 3))
+
+    if is_parroting:
+        relevance_s = 0 # Heavily penalize repeating the question
+
     relevance_s = max(0, min(30, relevance_s))
 
-    # 2. CONTENT SCORE (0–50 pts): Concept coverage, structural reasoning, and response depth
+    # 2. CONTENT SCORE (0-70 pts) -> The "Pure Accuracy" Model
     explanation_indicators = {
         "because", "therefore", "thus", "for example", "for instance", "such as",
         "however", "although", "consequently", "result", "firstly", "secondly",
@@ -97,41 +144,25 @@ def _dynamic_offline_evaluation(
     lower_ans = answer.lower()
     exp_count = sum(1 for exp in explanation_indicators if exp in lower_ans)
 
-    coverage_score = min(25, int(len(q_matches) * 5))
-    structure_score = min(15, exp_count * 4)
-    length_depth_score = min(10, int(word_count / 15))
+    # Technical Score (Max 40 points): Heavy reward for hitting technical vocabulary
+    tech_score = min(40, int(len(matched_domain_terms) * 8))
+    
+    # Coverage & Structure (Max 30 points): Reward for answering the prompt and explaining well
+    coverage_score = min(20, int(len(q_matches) * 5))
+    structure_score = min(10, exp_count * 3)
 
-    content_s = coverage_score + structure_score + length_depth_score
-    content_s = max(0, min(50, content_s))
+    if is_parroting:
+        tech_score = 0
+        coverage_score = 0
+        structure_score = 0
 
-    # 3. TIME SCORE (0–20 pts)
-    time_s = 12
-    if time_spent_seconds > 0 and time_limit_seconds > 0:
-        pct = time_spent_seconds / time_limit_seconds
-        if 0.35 <= pct <= 0.85:
-            time_s = 18
-        elif 0.20 <= pct < 0.35:
-            time_s = 14
-        elif pct < 0.20:
-            time_s = 5
-        elif pct > 1.10:
-            time_s = 8
+    content_s = tech_score + coverage_score + structure_score
+    content_s = max(0, min(70, content_s))
 
-    # 4. TECHNICAL DEPTH SCORE (0–100 pts)
-    domain_vocab = {
-        "code", "data", "system", "algorithm", "database", "api", "function", "method",
-        "class", "object", "interface", "server", "client", "network", "security",
-        "performance", "optimiz", "framework", "architecture", "component", "state",
-        "testing", "deploy", "pipeline", "async", "sync", "thread", "process", "logic",
-        "model", "schema", "query", "index", "cache", "frontend", "backend", "fullstack",
-        "design", "management", "lead", "team", "project", "strategy", "deliver", "scale"
-    }
-    matched_domain_terms = set()
-    for word in a_token_set:
-        for term in domain_vocab:
-            if term in word:
-                matched_domain_terms.add(word)
+    # 3. TIME SCORE (0 pts - Disabled in Pure Accuracy Model)
+    time_s = 0
 
+    # 4. TECHNICAL DEPTH SCORE (0-100 pts)
     tech_ratio = len(matched_domain_terms) / len(a_token_set) if a_token_set else 0
     if tech_ratio > 0.15 or len(matched_domain_terms) >= 4:
         technical_depth_score = 85
@@ -141,8 +172,11 @@ def _dynamic_offline_evaluation(
         technical_depth_score = 50
     else:
         technical_depth_score = 35
+        
+    if is_parroting:
+        technical_depth_score = 0
 
-    # 5. CLARITY SCORE (0–100 pts)
+    # 5. CLARITY SCORE (0-100 pts)
     clarity_score = 50
     if time_spent_seconds > 0 and word_count > 0:
         wpm = (word_count / time_spent_seconds) * 60
@@ -155,17 +189,21 @@ def _dynamic_offline_evaluation(
     elif word_count >= 15:
         clarity_score = 70
 
-    # 6. CONFIDENCE SCORE (0–100 pts)
+    # 6. CONFIDENCE SCORE (0-100 pts)
     hedging_words = [" um ", " uh ", " like ", " i mean ", " sort of ", " kind of ", " maybe ", " probably ", " i guess ", " not sure "]
     padded_ans = " " + lower_ans + " "
     hedge_count = sum(padded_ans.count(h) for h in hedging_words)
     confidence_score = max(20, 90 - (hedge_count * 5))
 
-    extracted_keywords = list(q_matches)[:5] if q_matches else list(a_token_set)[:5]
-    feedback = (
-        f"Offline Analysis: Evaluated dynamically against question concepts. "
-        f"Matched {len(q_matches)} key concept(s) from the question."
-    )
+    extracted_keywords = list(q_matches)[:3] + list(matched_domain_terms)[:2] if (q_matches or matched_domain_terms) else ["Offline"]
+    
+    if is_parroting:
+        feedback = "Offline Analysis: Candidate repeated the question rather than providing a meaningful answer."
+    else:
+        feedback = (
+            f"Offline Analysis: Evaluated dynamically. "
+            f"Matched {len(q_matches)} question concept(s) and {len(matched_domain_terms)} technical term(s)."
+        )
 
     return {
         "content_score": content_s,
@@ -175,7 +213,7 @@ def _dynamic_offline_evaluation(
         "technical_depth_score": technical_depth_score,
         "confidence_score": confidence_score,
         "feedback": feedback,
-        "keywords": extracted_keywords if extracted_keywords else ["Offline"],
+        "keywords": extracted_keywords,
     }
 
 
@@ -190,12 +228,12 @@ def analyze_answer(
     """
     Analyze a candidate's interview answer and return a structured score.
 
-    Scoring Rubric (industry-standard, calibrated against HireVue / Karat norms):
-      - Content Quality   : 50 pts  (depth, accuracy, examples, structure)
-      - Relevance         : 30 pts  (how directly the answer addresses the question)
-      - Time Efficiency   : 20 pts  (optimal use of allotted time — not too short, not padding)
+    Scoring Rubric (Pure Accuracy Model):
+      - Content Quality   : 70 pts  (technical depth, accuracy, examples, structure)
+      - Relevance         : 30 pts  (how directly the answer addresses the question, 0 if parroting)
+      - Time Efficiency   : 0 pts   (disabled)
 
-    Final overall_score = weighted sum (0–100).
+    Final overall_score = content_score + relevance_score (max 100).
     """
     # Short-circuit for empty/placeholder answers
     if not answer or not answer.strip() or answer.strip() in [
@@ -212,58 +250,26 @@ def analyze_answer(
             "feedback": "No answer was recorded for this question.",
         }
 
-    # ── Time efficiency context ──────────────────────────────────────────────
-    time_context = ""
-    time_score_hint = ""
-    if time_spent_seconds > 0 and time_limit_seconds > 0:
-        pct = time_spent_seconds / time_limit_seconds
-        if pct < 0.20:
-            time_context = (
-                f"The candidate answered in {time_spent_seconds}s out of {time_limit_seconds}s allowed "
-                f"({int(pct*100)}% of time used). This is very short — likely insufficient depth."
-            )
-            time_score_hint = "time_score should be 0–10 (far too brief)."
-        elif pct < 0.40:
-            time_context = (
-                f"The candidate answered in {time_spent_seconds}s out of {time_limit_seconds}s allowed "
-                f"({int(pct*100)}% of time used). Answer may lack sufficient detail."
-            )
-            time_score_hint = "time_score should be 10–14 (too short)."
-        elif pct <= 0.85:
-            time_context = (
-                f"The candidate answered in {time_spent_seconds}s out of {time_limit_seconds}s allowed "
-                f"({int(pct*100)}% of time used). Good time management."
-            )
-            time_score_hint = "time_score should be 16–20 (optimal range)."
-        elif pct <= 1.05:
-            time_context = (
-                f"The candidate answered in {time_spent_seconds}s out of {time_limit_seconds}s allowed "
-                f"({int(pct*100)}% of time used). Used nearly all time — good."
-            )
-            time_score_hint = "time_score should be 14–18 (slightly long but acceptable)."
-        else:
-            time_context = (
-                f"The candidate went over time: {time_spent_seconds}s used vs {time_limit_seconds}s allowed "
-                f"({int(pct*100)}% of limit). Answer was padded or rambling."
-            )
-            time_score_hint = "time_score should be 8–12 (over time, penalised)."
-    else:
-        time_context = "Time data not available."
-        time_score_hint = "time_score should be 12 (neutral default when time data is missing)."
-
-    # TOKEN SAVE: Cap answer at 600 words — adequate for full scoring
+    # TOKEN SAVE: Cap answer at 600 words - adequate for full scoring
     answer_words = answer.split()
     if len(answer_words) > 600:
         answer = " ".join(answer_words[:600]) + " ...[truncated]"
 
-    # USER message — concise, variable data only (system prompt is cached above)
+    # USER message - concise, variable data only (system prompt is cached above)
     prompt = f"""Score this interview answer. Language for feedback: {language}.
 
 Context: {context[:500] if context else 'N/A'}
 Question: "{question[:300]}"
 Answer: "{answer}"
-Time: {time_context}
-{time_score_hint}
+
+RULES:
+- Score the CANDIDATE'S ANSWER only, not the suggested answer.
+- overall_score = content_score + relevance_score (max 100).
+- content_score is max 70.
+- relevance_score is max 30.
+- time_score MUST be strictly 0.
+- Also score clarity_score, technical_depth_score, confidence_score (each 0-100).
+- Return VALID JSON ONLY.
 
 Return VALID JSON ONLY:
 {{
@@ -342,16 +348,16 @@ Return VALID JSON ONLY:
             )
             
     # Clamp rubric components before computing overall_score
-    content_s = max(0, min(50, content_s))
+    content_s = max(0, min(70, content_s))
     relevance_s = max(0, min(30, relevance_s))
-    time_s = max(0, min(20, time_s))
+    time_s = 0 # Time score is disabled in Pure Accuracy model
     
     result_dict["content_score"] = content_s
     result_dict["relevance_score"] = relevance_s
     result_dict["time_score"] = time_s
     
     # STRICT OVERRIDE: overall_score MUST be the mathematical sum
-    result_dict["overall_score"] = content_s + relevance_s + time_s
+    result_dict["overall_score"] = content_s + relevance_s
 
     # Final constraints for secondary components
     for k in ["clarity_score", "technical_depth_score", "confidence_score"]:

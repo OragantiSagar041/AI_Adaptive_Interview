@@ -518,28 +518,57 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
 
     # 2. Calculate composite AI summary score
     avg_score = 0
-    if results:
-        scores = [r["ai_score"] for r in results if r["ai_score"] is not None]
-        verbal_avg = round(sum(scores) / len(scores), 1) if scores else 0
+    round1_s = 0.0
+    round2_s = 0.0
+    scores = [r["ai_score"] for r in results if r["ai_score"] is not None]
+    verbal_avg = round(sum(scores) / len(scores), 1) if scores else 0
 
-        # Blend with coding / case study rounds if present
-        try:
-            from app.ai.score_rounds import compute_coding_score, compute_case_study_score, blend_scores
-            interview_record_for_score = interviews_collection.find_one({"id": actual_interview_id}) if actual_interview_id else None
-            if interview_record_for_score:
-                interview_format_cs = session_data.get("interview_format", "Standard") if session_data else "Standard"
-                lang_cs = interview_record_for_score.get("language", "English")
-                ctx_cs  = f"Candidate's {interview_record_for_score.get('source','Resume')}: {interview_record_for_score.get('profile_text','')}"
-                coding_rd  = interview_record_for_score.get("coding_round")
-                case_std   = interview_record_for_score.get("case_study_round")
-                coding_s   = compute_coding_score(coding_rd, interview_format_cs, lang_cs) if coding_rd else None
-                case_s     = compute_case_study_score(case_std, ctx_cs, lang_cs) if case_std else None
-                avg_score  = blend_scores(verbal_avg, coding_s, case_s)
-            else:
-                avg_score = verbal_avg
-        except Exception as blend_err:
-            print(f"⚠️ complete-session blend error: {blend_err}")
+    # Blend with coding / case study rounds if present
+    try:
+        from app.ai.score_rounds import (
+            compute_coding_score, compute_case_study_score, 
+            calculate_round1_score, calculate_coding_score, calculate_final_score
+        )
+        interview_record_for_score = interviews_collection.find_one({"id": actual_interview_id}) if actual_interview_id else None
+        
+        if interview_record_for_score:
+            interview_format_cs = session_data.get("interview_format", "Standard") if session_data else "Standard"
+            lang_cs = interview_record_for_score.get("language", "English")
+            ctx_cs  = f"Candidate's {interview_record_for_score.get('source','Resume')}: {interview_record_for_score.get('profile_text','')}"
+            
+            coding_rd  = interview_record_for_score.get("coding_round")
+            case_std   = interview_record_for_score.get("case_study_round")
+            questions  = interview_record_for_score.get("questions", [])
+            if isinstance(questions, str):
+                import json
+                try:
+                    questions = json.loads(questions)
+                except:
+                    questions = []
+            if not questions and session_data and session_data.get("pre_generated_questions"):
+                import json
+                try:
+                    questions = json.loads(session_data["pre_generated_questions"])
+                except:
+                    pass
+            
+            # Round 1
+            round1_s = calculate_round1_score(questions, results)
+            
+            # Round 2
+            if coding_rd:
+                round2_s = calculate_coding_score(coding_rd)
+            elif case_std:
+                cs_score_100 = compute_case_study_score(case_std, ctx_cs, lang_cs) or 0.0
+                round2_s = round(min(20.0, max(0.0, (cs_score_100 / 100.0) * 20.0)), 1)
+            
+            avg_score = calculate_final_score(round1_s, round2_s)
+        else:
+            round1_s = verbal_avg
             avg_score = verbal_avg
+    except Exception as blend_err:
+        print(f"🚨 complete-session blend error: {blend_err}")
+        avg_score = verbal_avg
 
     # Use cached values if available, else generate
     if saved_rec and saved_comm is not None and saved_skills is not None:
@@ -770,6 +799,8 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
         "date": created_at,
         "source": session_data.get("source") or "Job Description / Resume",
         "avg_score": avg_score,
+        "round1_score": round1_s,
+        "round2_score": round2_s,
         "overall_recommendation": recommendation,
         "strengths_summary": strengths,
         "weaknesses_summary": weaknesses,

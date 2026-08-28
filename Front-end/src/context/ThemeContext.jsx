@@ -4,11 +4,8 @@ const ThemeContext = createContext()
 
 export function ThemeProvider({ children }) {
   const [theme, setThemeState] = useState(() => {
-    try {
-      const saved = localStorage.getItem('uiTheme')
-      if (saved === 'dark' || saved === 'light') return saved
-    } catch (e) {
-      console.error(e)
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem('uiTheme') || 'light'
     }
     return 'light'
   })
@@ -23,7 +20,7 @@ export function ThemeProvider({ children }) {
       root.setAttribute('data-theme', 'light')
     }
     try {
-      localStorage.setItem('uiTheme', theme)
+      sessionStorage.setItem('uiTheme', theme)
     } catch (e) {
       console.error(e)
     }
