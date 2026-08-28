@@ -1059,7 +1059,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       mr.ondataavailable = e => {
         if (e.data && e.data.size > 0) segmentChunksRef.current.push(e.data)
       }
-      mr.start(250) // small timeslice so cuts are near-instant
+      mr.start(1000) // 1s timeslice for clean audio frames
       segmentRecorderRef.current = mr
     } catch (err) {
       console.warn('[STT] Failed to start segment recorder:', err)
@@ -1075,7 +1075,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const cutCurrentSegment = (stream) => {
     if (segmentCuttingRef.current) return
     if (!segmentHasSpeechRef.current) return // nothing to send
-    if (Date.now() - segmentStartTimeRef.current < MIN_SEGMENT_MS) return
+    if (Date.now() - segmentStartTimeRef.current < 1500) return
     if (!segmentRecorderRef.current || segmentRecorderRef.current.state === 'inactive') return
 
     segmentCuttingRef.current = true
@@ -1091,7 +1091,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     recorder.onstop = () => {
       const blob = new Blob(chunksSnapshot, { type: 'audio/webm' })
       const hadRealSpeech = segmentPeakRmsRef.current >= SEGMENT_MIN_PEAK_RMS
-      if (blob.size < 2500 || !hadRealSpeech) { finish(); return } // silence/noise — never send to Whisper
+      if (blob.size < 12000 || !hadRealSpeech) { finish(); return } // silence/noise/tiny chunk — never send to Whisper
       // Serialize transcription calls so results commit in spoken order
       segmentTranscribeChainRef.current = segmentTranscribeChainRef.current
         .then(() => transcribeSegment(blob))

@@ -54,11 +54,10 @@ def preprocess_audio(input_path: str, output_path: str) -> bool:
 # Hallucination / garbage filters
 # ---------------------------------------------------------------------------
 HALLUCINATION_PATTERNS = re.compile(
-    r"^\s*(thank\s*you|thanks|bye|okay|ok|you|tsh|tch|shh|hmm|uh|um|mm|"
-    r"i\s*am\s*not\s*spoken|am\s*i\s*not\s*spoken|i\s*am\s*not|"
-    r"go\s*to\s*(the\s*)?next\s*slide|thank\s*you\s*for\s*watching|"
-    r"subscribe|like\s*and\s*subscribe|comment\s*below|"
-    r"\.\.\.|…)\s*[.,!?]*\s*$",
+    r"(thank\s*you\s*for\s*watching|subscribe|like\s*and\s*subscribe|comment\s*below|"
+    r"media\s*office|french\s*island|wait\s*for\s*the\s*video|subtitles\s*by|amara\.org|"
+    r"go\s*to\s*(the\s*)?next\s*slide|i\s*am\s*not\s*spoken|am\s*i\s*not\s*spoken|"
+    r"all\s*rights\s*reserved|copyright|transcribed\s*by)",
     re.IGNORECASE,
 )
 
@@ -72,8 +71,8 @@ def is_likely_hallucination(text: str, segments: list) -> bool:
 
     t = text.strip()
 
-    # 1. Hardcoded phrase list
-    if HALLUCINATION_PATTERNS.match(t):
+    # 1. Check for known Whisper hallucination phrases anywhere in text
+    if HALLUCINATION_PATTERNS.search(t):
         return True
 
     # 2. Excessive repetition (Whisper loops)
@@ -184,7 +183,8 @@ def _fix_candidate_name(text: str, candidate_name: str) -> str:
     i = 0
     while i <= n_words - k:
         window = " ".join(words[i:i+k])
-        if _similarity(window, clean_name) >= 0.75:
+        # Strictly require 90%+ match and similar length to avoid replacing ordinary words
+        if len(window) >= len(clean_name) - 2 and _similarity(window, clean_name) >= 0.90:
             words[i:i+k] = [clean_name]
             n_words = len(words)
             i += 1
@@ -194,7 +194,7 @@ def _fix_candidate_name(text: str, candidate_name: str) -> str:
     for p in name_parts:
         for idx, w in enumerate(words):
             stripped = "".join(c for c in w if c.isalnum())
-            if len(stripped) >= 3 and _similarity(stripped, p) >= 0.80:
+            if abs(len(stripped) - len(p)) <= 2 and len(stripped) >= 3 and _similarity(stripped, p) >= 0.90:
                 prefix = w[:len(w) - len(w.lstrip(".,!?;:\"'"))]
                 suffix = w[len(w.rstrip(".,!?;:\"'")):]
                 words[idx] = f"{prefix}{p}{suffix}"

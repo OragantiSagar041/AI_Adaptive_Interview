@@ -169,7 +169,12 @@ def compute_case_study_score(
     for idx, (q, a) in enumerate(pairs, 1):
         qa_block += f"\nScenario {idx}:\nQ: {q[:400]}\nA: {a[:500]}\n"
 
-    prompt = f"""You are an expert business analyst and technical interviewer evaluating case study answers.
+    prompt = f"""You are a senior executive interviewer evaluating a candidate's written case study strategy.
+
+CRITICAL ANTI-HALLUCINATION GUARDRAILS:
+1. Evaluate STRICTLY based on the exact statements in the candidate's written text.
+2. Do NOT assume, infer, or fabricate any candidate tools, experience, or action steps that are not explicitly written.
+3. If a candidate answer is vague, incomplete, or off-topic, score it strictly lower without inventing unstated context.
 
 Context (Job description / candidate profile):
 {context[:500]}
@@ -177,13 +182,10 @@ Context (Job description / candidate profile):
 Case Study Questions and Candidate Answers:
 {qa_block}
 
-CRITICAL LANGUAGE REQUIREMENT:
-Evaluate based on content quality regardless of the language used. Respond ONLY in valid JSON.
-
-For each scenario, score the answer from 0–100 based on:
-1. Relevance – does the answer address the specific scenario?
-2. Practicality – is the proposed solution realistic and actionable?
-3. Depth of reasoning – does the candidate show analytical thinking?
+SCORING RUBRIC (0-100 per scenario):
+1. Relevant Action Plan (0-40 pts): Did the candidate directly address the specific scenario requirements in their text?
+2. Operational Feasibility (0-30 pts): Are the steps mentioned actionable and realistic?
+3. Problem Identification & Structure (0-30 pts): Does the response present a clear, structured strategy?
 
 Respond ONLY with a valid JSON object in exactly this format:
 {{
@@ -195,6 +197,7 @@ Respond ONLY with a valid JSON object in exactly this format:
         resp = chat_completion(
             messages=[{"role": "user", "content": prompt}],
             max_tokens=200,
+            temperature=0.1
         )
         data = extract_json(resp or "")
         scores = data.get("scores")

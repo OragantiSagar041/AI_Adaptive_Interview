@@ -1602,7 +1602,7 @@ export default function VoiceInterviewPage() {
             whisperChunksRef.current = []
             const peak = chunkPeakRmsRef.current
             const isSilent = peak < CHUNK_SEND_RMS_THRESHOLD
-            if (validAudioBlob.size > 1000 && !isSilent) {
+            if (validAudioBlob.size > 8000 && !isSilent) {
               lastSttHadAudioRef.current = true
               sttSeqRef.current += 1
               const langCode = (langMap[languageRef.current] || 'en-US').split('-')[0]
@@ -1627,14 +1627,14 @@ export default function VoiceInterviewPage() {
             }
           }
         }
-        mr.start(3000)
+        mr.start(4500)
         whisperFlushTimerRef.current = setInterval(() => {
           if (whisperRecorderRef.current && whisperRecorderRef.current.state === 'recording') {
             try {
               whisperRecorderRef.current.stop()
             } catch (_) { }
           }
-        }, 3000)
+        }, 4500)
       } catch (err) {
         console.warn('Failed to start Whisper chunk recorder:', err)
         resolveWhisperStopRef.current?.()

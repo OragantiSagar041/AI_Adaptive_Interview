@@ -46,11 +46,11 @@ export const InterviewNonTechnical = () => {
       })
 
       setQuestions(prev => [...prev, ...formattedQs])
-      
-      const targetIndex = (savedIndex !== null && savedIndex >= verbalQuestionsLength && savedIndex < verbalQuestionsLength + formattedQs.length) 
-        ? savedIndex 
+
+      const targetIndex = (savedIndex !== null && savedIndex >= verbalQuestionsLength && savedIndex < verbalQuestionsLength + formattedQs.length)
+        ? savedIndex
         : verbalQuestionsLength
-      
+
       setCurrentQuestionIndex(targetIndex)
     } catch (err) {
       console.error('Case study round start failed:', err)
@@ -193,14 +193,14 @@ export const InterviewNonTechnical = () => {
       // Stop mic if running
       if (recognitionRef?.current) {
         if (isSpeechRecordingRef) isSpeechRecordingRef.current = false
-        try { recognitionRef.current.stop() } catch (e) {}
+        try { recognitionRef.current.stop() } catch (e) { }
       }
     } else {
       setIsPrepMode(false)
       // Ensure mic is running for non-prep modes
       if (recognitionRef?.current) {
         if (isSpeechRecordingRef) isSpeechRecordingRef.current = true
-        try { recognitionRef.current.start() } catch (e) {}
+        try { recognitionRef.current.start() } catch (e) { }
       }
     }
   }, [currentQuestionIndex, currentQuestion?.type, recognitionRef, isSpeechRecordingRef])
@@ -216,7 +216,7 @@ export const InterviewNonTechnical = () => {
       // Restart mic when prep time finishes
       if (recognitionRef?.current) {
         if (isSpeechRecordingRef) isSpeechRecordingRef.current = true
-        try { recognitionRef.current.start() } catch (e) {}
+        try { recognitionRef.current.start() } catch (e) { }
       }
     }
     return () => clearInterval(timer)
@@ -300,12 +300,12 @@ export const InterviewNonTechnical = () => {
 
         {/* Device Check Modal */}
         {session.showDeviceCheck && (
-          <DeviceCheckModal 
+          <DeviceCheckModal
             onSuccess={() => {
               session.setShowDeviceCheck(false);
               session.promptScreenShare();
-            }} 
-            onCancel={() => session.setShowDeviceCheck(false)} 
+            }}
+            onCancel={() => session.setShowDeviceCheck(false)}
           />
         )}
       </div>
@@ -334,7 +334,7 @@ export const InterviewNonTechnical = () => {
         {vcStep === 'recording' && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', height: '40px' }}>
-              {Array.from({length: 9}).map((_,i) => <div key={i} className="vc-bar" style={{animationDelay:`${i*0.1}s`}} />)}
+              {Array.from({ length: 9 }).map((_, i) => <div key={i} className="vc-bar" style={{ animationDelay: `${i * 0.1}s` }} />)}
             </div>
             <p style={{ color: '#c4b5fd', fontSize: '14px', fontWeight: '600' }}>🔴 Recording... speak now</p>
             <button onClick={stopVcRecording} style={{ padding: '10px 24px', background: '#dc2626', color: 'white', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '14px' }}>
@@ -446,8 +446,8 @@ export const InterviewNonTechnical = () => {
 
   const currentQuestionText = currentQuestion?.text || currentQuestion?.question || currentQuestion?.prompt || ''
 
-  const displayQuestionNum = currentQuestion?.caseStudyIndex !== undefined 
-    ? currentQuestion.caseStudyIndex + 1 
+  const displayQuestionNum = currentQuestion?.caseStudyIndex !== undefined
+    ? currentQuestion.caseStudyIndex + 1
     : currentQuestionIndex + 1
 
   const totalDisplayQuestions = currentQuestion?.type === 'case_study'
@@ -553,7 +553,7 @@ export const InterviewNonTechnical = () => {
                 </button>
               )}
 
-              <button 
+              <button
                 className="w-full py-3 px-4 rounded-xl font-bold text-xs transition-all border-none shadow-md flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white cursor-pointer hover:-translate-y-0.5"
                 onClick={(e) => handleFinishEarly(e)}
                 title="Finish Interview"
@@ -565,7 +565,7 @@ export const InterviewNonTechnical = () => {
             {/* AI insights Card */}
             <div className="bg-white/60 backdrop-blur-2xl border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-[24px] p-6 transition-all duration-300 hover:shadow-lg">
               <h4 className="m-0 mb-4 text-[13px] font-bold text-slate-800 tracking-wide uppercase">AI Live Evaluation</h4>
-              
+
               <div className="mb-4">
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-[11px] font-extrabold text-slate-500 tracking-wider">CLARITY & COMMUNICATION</span>
@@ -634,7 +634,7 @@ export const InterviewNonTechnical = () => {
 
                 <div className="flex flex-col gap-2">
                   <h3 className="text-sm font-bold text-indigo-600 uppercase tracking-widest flex items-center gap-2 m-0">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg> 
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                     Scenario
                   </h3>
                   <div className="text-slate-700 leading-relaxed text-[15px] font-medium bg-slate-50 border-l-4 border-indigo-600 px-5 py-4 rounded-r-xl">
@@ -674,7 +674,7 @@ export const InterviewNonTechnical = () => {
                       setIsPrepMode(false)
                       if (recognitionRef?.current) {
                         if (isSpeechRecordingRef) isSpeechRecordingRef.current = true
-                        try { recognitionRef.current.start() } catch (e) {}
+                        try { recognitionRef.current.start() } catch (e) { }
                       }
                     }}
                     className="px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-indigo-600 hover:bg-indigo-700 border-none cursor-pointer transition-all shadow-md flex items-center gap-2"
@@ -694,13 +694,12 @@ export const InterviewNonTechnical = () => {
                     <span className="px-3 py-1 rounded-full text-[10px] font-bold tracking-wide uppercase bg-indigo-50 text-indigo-600 border border-indigo-100">
                       {currentQuestion?.category || currentQuestion?.type || 'Case Analysis'}
                     </span>
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wide uppercase border ${
-                      String(currentQuestion?.difficulty || 'Easy').toLowerCase() === 'easy'
-                        ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                        : String(currentQuestion?.difficulty || 'Easy').toLowerCase() === 'medium'
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wide uppercase border ${String(currentQuestion?.difficulty || 'Easy').toLowerCase() === 'easy'
+                      ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                      : String(currentQuestion?.difficulty || 'Easy').toLowerCase() === 'medium'
                         ? 'bg-amber-50 text-amber-600 border-amber-100'
                         : 'bg-red-50 text-red-600 border-red-100'
-                    }`}>
+                      }`}>
                       {currentQuestion?.difficulty || 'Easy'}
                     </span>
                   </div>
@@ -728,8 +727,8 @@ export const InterviewNonTechnical = () => {
                     ) : (
                       <p className="flex-1 text-slate-800 text-base md:text-lg font-semibold leading-relaxed m-0">{currentQuestionText || 'Question is loading...'}</p>
                     )}
-                    <button 
-                      className="bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-indigo-600 border border-slate-200 hover:border-indigo-100 cursor-pointer p-2.5 rounded-full transition-all duration-200 shrink-0" 
+                    <button
+                      className="bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-indigo-600 border border-slate-200 hover:border-indigo-100 cursor-pointer p-2.5 rounded-full transition-all duration-200 shrink-0"
                       onClick={() => speakAIQuestion(currentQuestionText)}
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -772,7 +771,7 @@ export const InterviewNonTechnical = () => {
                         </span>
                       </div>
                     ) : (
-                      <button 
+                      <button
                         className="px-8 py-3.5 rounded-xl font-bold text-sm text-white transition-all duration-200 border-none bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/20 hover:shadow-red-500/30 cursor-pointer"
                         onClick={(e) => handleFinishEarly(e)}
                         title="Finish Interview"
@@ -781,7 +780,7 @@ export const InterviewNonTechnical = () => {
                       </button>
                     )
                   ) : (
-                    <button 
+                    <button
                       className="px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30 transition-all duration-200 cursor-pointer border-none"
                       onClick={handleNextQuestion}
                     >
@@ -797,8 +796,8 @@ export const InterviewNonTechnical = () => {
 
       {/* Floating Camera Preview Widget */}
       {isDisclaimerAccepted && !showAllSet && !loading && (
-        <motion.div 
-          drag 
+        <motion.div
+          drag
           dragMomentum={false}
           className="fixed bottom-6 right-6 w-56 h-36 rounded-xl overflow-hidden shadow-2xl border-2 border-indigo-600 z-[9999] bg-black transition-colors duration-300 hover:shadow-[0_15px_30px_rgba(99,102,241,0.25)] hover:border-violet-500 cursor-move"
         >

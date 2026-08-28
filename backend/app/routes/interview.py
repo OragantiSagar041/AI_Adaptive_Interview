@@ -948,7 +948,7 @@ Return ONLY a JSON array. Example format:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            temperature=0.7
+            temperature=0.2
         )
         # Extract JSON array from response
         import json, re
@@ -1019,37 +1019,39 @@ def _generate_case_study_questions_offline(job_description: str, num_questions: 
         except ImportError:
             pass
 
-    industry_cases = INDUSTRY_CASE_STUDIES.get(industry)
+    from app.data.industry_fallback_data import get_industry_case_study
+    industry_cases = get_industry_case_study(industry)
+    ind_display = industry if industry and industry.lower() != "general" else "enterprise"
     if industry_cases:
         skill_scenarios = industry_cases
     else:
         skill_scenarios = {
             "team management": {
-                "scenario": f"You are leading a cross-functional team in the {industry} sector. Two senior team members have conflicting ideas on how to approach a major project phase, leading to delays and low morale.",
+                "scenario": f"You are leading a cross-functional team in the {ind_display} sector. Two senior team members have conflicting ideas on how to approach a major project phase, leading to delays and low morale.",
                 "question": "How would you mediate this conflict and get the team back on track?",
                 "skill_tested": "Conflict Resolution & Leadership",
                 "evaluation_criteria": ["Neutral mediation", "Focus on project goals", "Active listening", "Clear decision-making"]
             },
             "project planning": {
-                "scenario": f"Your {industry} project has just lost 20% of its budget due to company-wide cuts, but the delivery deadline remains the same. The client still expects all core features.",
+                "scenario": f"Your {ind_display} project has just lost 20% of its budget due to company-wide cuts, but the delivery deadline remains the same. The client still expects all core features.",
                 "question": "How do you re-plan the project delivery and communicate this to the stakeholders?",
                 "skill_tested": "Project Management & Communication",
                 "evaluation_criteria": ["Prioritization/MVP focus", "Resource reallocation", "Transparent communication", "Risk management"]
             },
             "stakeholder management": {
-                "scenario": f"A key stakeholder in your {industry} project keeps changing their requirements late in the development cycle, causing scope creep and team frustration.",
+                "scenario": f"A key stakeholder in your {ind_display} project keeps changing their requirements late in the development cycle, causing scope creep and team frustration.",
                 "question": "What is your strategy to manage these changes without damaging the client relationship?",
                 "skill_tested": "Stakeholder Management & Scope Control",
                 "evaluation_criteria": ["Change management process", "Setting boundaries", "Impact analysis communication", "Relationship building"]
             },
             "agile delivery": {
-                "scenario": f"You are transitioning a traditional waterfall team to Agile methodologies for a critical {industry} product release. The team is highly resistant to daily standups and sprint planning.",
+                "scenario": f"You are transitioning a traditional waterfall team to Agile methodologies for a critical {ind_display} product release. The team is highly resistant to daily standups and sprint planning.",
                 "question": "How do you drive Agile adoption while ensuring the product release is not delayed?",
                 "skill_tested": "Change Management & Agile Methodologies",
                 "evaluation_criteria": ["Iterative adoption", "Focus on value", "Addressing concerns", "Team coaching"]
             },
             "risk management": {
-                "scenario": f"Two weeks before a major {industry} product launch, you discover a critical compliance issue that might delay the release by a month. Leadership is pushing to launch anyway.",
+                "scenario": f"Two weeks before a major {ind_display} product launch, you discover a critical compliance issue that might delay the release by a month. Leadership is pushing to launch anyway.",
                 "question": "How do you handle the situation with leadership and your team?",
                 "skill_tested": "Risk Management & Integrity",
                 "evaluation_criteria": ["Impact analysis", "Risk mitigation strategies", "Courageous communication", "Alternative solutions"]

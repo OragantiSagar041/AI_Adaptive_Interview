@@ -142,7 +142,7 @@ def qg_generate_all(state: QuestionGenerationState) -> QuestionGenerationState:
         "Return JSON: {'questions': [{'question':'...', 'difficulty':'Medium', 'type':'Technical', 'category':'Core'}]}"
     )
 
-    res = _llm_json(sys, usr, fallback={"questions": []}, temperature=0.7)
+    res = _llm_json(sys, usr, fallback={"questions": []}, temperature=0.2)
 
     state["drafts"] = res.get("questions", [])
     return state
