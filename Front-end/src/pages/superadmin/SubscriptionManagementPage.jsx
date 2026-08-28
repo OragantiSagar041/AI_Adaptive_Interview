@@ -296,29 +296,29 @@ function RechargeModal({ company, onClose, onSuccess }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 mt-8 md:mt-12">
-      <div className="bg-[#0f0f1a] rounded-2xl shadow-2xl w-full max-w-3xl max-h-[80vh] overflow-y-auto relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm p-4 mt-8 md:mt-12">
+      <div className="bg-white dark:bg-[#0f0f1a] text-slate-900 dark:text-white border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[80vh] overflow-y-auto relative">
 
         {/* Close */}
-        <button onClick={onClose} className="absolute top-4 right-4 z-10 text-slate-400 hover:text-white transition-colors">
+        <button onClick={onClose} className="absolute top-4 right-4 z-10 text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors">
           <X className="w-5 h-5" />
         </button>
 
         {/* Header */}
-        <div className="px-6 pt-6 pb-4 text-center border-b border-white/10">
-          <p className="text-slate-400 text-xs mb-1">Recharging for</p>
-          <h2 className="text-white text-2xl font-bold">{company.company_name || company.owner_name}</h2>
-          <p className="text-slate-400 text-sm mt-1">Currently on <span className="text-indigo-400 font-semibold">{company.plan_label}</span></p>
+        <div className="px-6 pt-6 pb-4 text-center border-b border-slate-200 dark:border-white/10">
+          <p className="text-slate-500 dark:text-slate-400 text-xs mb-1">Recharging for</p>
+          <h2 className="text-slate-900 dark:text-white text-2xl font-bold">{company.company_name || company.owner_name}</h2>
+          <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Currently on <span className="text-indigo-600 dark:text-indigo-400 font-semibold">{company.plan_label}</span></p>
 
           {/* Step tabs */}
           <div className="flex items-center justify-center gap-3 mt-5">
             <button
               onClick={() => setStep("pick")}
-              className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${step === "pick" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-white"}`}
+              className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${step === "pick" ? "bg-indigo-600 text-white" : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"}`}
             >
               1. Choose Plan
             </button>
-            <div className="w-8 h-px bg-slate-700" />
+            <div className="w-8 h-px bg-slate-300 dark:bg-slate-700" />
             <button
               onClick={() => step !== "pick" && setStep("form")}
               className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${step === "form" ? "bg-indigo-600 text-white" : "text-slate-500 dark:text-slate-400"}`}
@@ -341,8 +341,8 @@ function RechargeModal({ company, onClose, onSuccess }) {
                     onClick={() => setSelectedPlan(plan)}
                     className={`relative text-left rounded-2xl p-5 border-2 transition-all duration-200 cursor-pointer group
                       ${isSelected
-                        ? "border-indigo-500 bg-gradient-to-b " + plan.gradient + " scale-[1.02] shadow-xl shadow-indigo-900/30"
-                        : "border-white/10 bg-white dark:bg-slate-800/60/5 hover:border-white/20 hover:bg-white dark:bg-slate-800/60/8"
+                        ? "border-indigo-500 bg-gradient-to-b " + plan.gradient + " scale-[1.02] shadow-xl shadow-indigo-900/30 text-white"
+                        : "border-slate-200 bg-slate-50 hover:border-indigo-400 hover:bg-slate-100 dark:border-slate-700/80 dark:bg-[#161b26] dark:hover:border-slate-600 dark:hover:bg-[#1c2333]"
                       }`}
                   >
                     {/* Popular badge */}
@@ -353,29 +353,29 @@ function RechargeModal({ company, onClose, onSuccess }) {
                     )}
                     {/* Current badge */}
                     {isCurrent && !isSelected && (
-                      <span className="absolute top-3 right-3 bg-emerald-500/20 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                      <span className="absolute top-3 right-3 bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full">
                         Current
                       </span>
                     )}
                     {isSelected && (
-                      <span className="absolute top-3 right-3 bg-white dark:bg-slate-800/60/20 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                      <span className="absolute top-3 right-3 bg-white/20 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
                         ✓ Selected
                       </span>
                     )}
 
                     {/* Plan name */}
-                    <h3 className="text-white font-bold text-lg mt-2">{plan.label}</h3>
-                    <p className="text-slate-300 text-xs leading-relaxed mt-1 mb-4">{plan.summary}</p>
+                    <h3 className={`font-bold text-lg mt-2 ${isSelected ? "text-white" : "text-slate-900 dark:text-white"}`}>{plan.label}</h3>
+                    <p className={`text-xs leading-relaxed mt-1 mb-4 ${isSelected ? "text-slate-200" : "text-slate-600 dark:text-slate-300"}`}>{plan.summary}</p>
 
                     {/* Price */}
                     <div className="mb-1">
                       {plan.price > 0 ? (
                         <>
-                          <span className="text-white text-2xl font-bold">₹{plan.price.toLocaleString()}</span>
-                          <span className="text-slate-400 text-xs ml-1">/mo</span>
+                          <span className={`text-2xl font-bold ${isSelected ? "text-white" : "text-slate-900 dark:text-white"}`}>₹{plan.price.toLocaleString()}</span>
+                          <span className={`text-xs ml-1 ${isSelected ? "text-slate-300" : "text-slate-500 dark:text-slate-400"}`}>/mo</span>
                         </>
                       ) : (
-                        <span className="text-white text-2xl font-bold">Free</span>
+                        <span className={`text-2xl font-bold ${isSelected ? "text-white" : "text-slate-900 dark:text-white"}`}>Free</span>
                       )}
                     </div>
 
@@ -387,7 +387,7 @@ function RechargeModal({ company, onClose, onSuccess }) {
                     {/* Features */}
                     <ul className="space-y-1.5">
                       {plan.features.map((f, i) => (
-                        <li key={i} className="flex items-center gap-2 text-xs text-slate-300">
+                        <li key={i} className={`flex items-center gap-2 text-xs ${isSelected ? "text-slate-100" : "text-slate-700 dark:text-slate-300"}`}>
                           <Check className="w-3 h-3 shrink-0" style={{ color: plan.accent }} />
                           {f}
                         </li>
@@ -397,8 +397,8 @@ function RechargeModal({ company, onClose, onSuccess }) {
                     {/* Select button */}
                     <div className={`mt-5 w-full py-2 rounded-xl text-center text-sm font-semibold transition-all
                       ${isSelected
-                        ? "bg-white dark:bg-slate-800/60 text-slate-900 dark:text-white"
-                        : "bg-white dark:bg-slate-800/60/10 text-white group-hover:bg-white dark:bg-slate-800/60/20"
+                        ? "bg-white text-slate-900 shadow-md"
+                        : "bg-indigo-600/10 dark:bg-white/10 text-indigo-600 dark:text-white hover:bg-indigo-600/20 dark:hover:bg-white/20"
                       }`}
                     >
                       {isSelected ? "Selected" : "Select Plan"}
@@ -446,32 +446,32 @@ function RechargeModal({ company, onClose, onSuccess }) {
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="grid grid-cols-2 gap-5">
                 <div>
-                  <label className="block text-sm font-semibold text-slate-300 mb-2">
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                     Extra Credits (on top of plan)
                   </label>
                   <input
                     type="number" min={0} value={addCredits}
                     onChange={e => setAddCredits(e.target.value)}
-                    className="w-full bg-white dark:bg-slate-800/60/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder-slate-500"
+                    className="w-full bg-slate-50 dark:bg-slate-900/60 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder-slate-400 dark:placeholder-slate-500"
                     placeholder="0"
                   />
                   <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">Leave 0 to use plan's default ({selectedPlan.credits >= 1000000 ? "∞" : selectedPlan.credits})</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-slate-300 mb-2">
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                     Extend Subscription (days)
                   </label>
                   <input
                     type="number" min={0} value={extendDays}
                     onChange={e => setExtendDays(e.target.value)}
-                    className="w-full bg-white dark:bg-slate-800/60/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full bg-slate-50 dark:bg-slate-900/60 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     placeholder="30"
                   />
                   <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">Default: 30 days (1 month)</p>
                 </div>
               </div>
 
-              <label className="flex items-center gap-3 text-sm text-slate-400 cursor-pointer select-none">
+              <label className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400 cursor-pointer select-none">
                 <input
                   type="checkbox" checked={resetExpiry}
                   onChange={e => setResetExpiry(e.target.checked)}
@@ -481,25 +481,25 @@ function RechargeModal({ company, onClose, onSuccess }) {
               </label>
 
               {/* Summary box */}
-              <div className="bg-white dark:bg-slate-800/60/5 rounded-xl p-4 border border-white/10 text-sm space-y-2">
-                <p className="text-slate-400 font-semibold text-xs uppercase tracking-wider mb-3">Summary</p>
-                <div className="flex justify-between text-slate-300">
-                  <span>Plan</span><span className="font-semibold text-white">{selectedPlan.label}</span>
+              <div className="bg-slate-50 dark:bg-slate-900/60 rounded-xl p-4 border border-slate-200 dark:border-slate-700 text-sm space-y-2">
+                <p className="text-slate-500 dark:text-slate-400 font-semibold text-xs uppercase tracking-wider mb-3">Summary</p>
+                <div className="flex justify-between text-slate-700 dark:text-slate-300">
+                  <span>Plan</span><span className="font-semibold text-slate-900 dark:text-white">{selectedPlan.label}</span>
                 </div>
-                <div className="flex justify-between text-slate-300">
+                <div className="flex justify-between text-slate-700 dark:text-slate-300">
                   <span>Credits granted</span>
-                  <span className="font-semibold text-white">
+                  <span className="font-semibold text-slate-900 dark:text-white">
                     {selectedPlan.credits >= 1000000 ? "∞" : selectedPlan.credits.toLocaleString()}
-                    {Number(addCredits) > 0 && <span className="text-emerald-400"> + {Number(addCredits).toLocaleString()} extra</span>}
+                    {Number(addCredits) > 0 && <span className="text-emerald-600 dark:text-emerald-400"> + {Number(addCredits).toLocaleString()} extra</span>}
                   </span>
                 </div>
-                <div className="flex justify-between text-slate-300">
-                  <span>Validity</span><span className="font-semibold text-white">{extendDays || "—"} days</span>
+                <div className="flex justify-between text-slate-700 dark:text-slate-300">
+                  <span>Validity</span><span className="font-semibold text-slate-900 dark:text-white">{extendDays || "—"} days</span>
                 </div>
               </div>
 
               <div className="flex gap-3 pt-2">
-                <Button type="button" variant="outline" className="flex-1 rounded-xl border-white/20 text-slate-300 hover:bg-white dark:bg-slate-800/60/10" onClick={() => setStep("pick")} disabled={saving}>
+                <Button type="button" variant="outline" className="flex-1 rounded-xl border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white" onClick={() => setStep("pick")} disabled={saving}>
                   ← Back
                 </Button>
                 <Button type="submit" className="flex-1 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white border-0 font-semibold" disabled={saving}>

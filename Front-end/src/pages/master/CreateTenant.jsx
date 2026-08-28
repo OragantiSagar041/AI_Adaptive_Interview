@@ -355,7 +355,8 @@ export default function CreateTenant() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full sm:w-auto px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl transition-colors shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            style={{ backgroundColor: '#4f46e5', color: '#ffffff', borderColor: '#4338ca' }}
+            className="w-full sm:w-auto px-8 py-3 text-white font-bold text-sm rounded-xl transition-all shadow-md shadow-indigo-500/30 flex items-center justify-center gap-2 cursor-pointer border hover:opacity-90 disabled:opacity-50"
           >
             {loading ? <RefreshCw size={16} className="animate-spin" /> : <Bolt size={16} />} 
             {loading ? 'Creating Tenant...' : 'Create Account Now'}

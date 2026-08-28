@@ -3,7 +3,12 @@ import React, { createContext, useContext, useState, useEffect } from 'react'
 const ThemeContext = createContext()
 
 export function ThemeProvider({ children }) {
-  const [theme, setThemeState] = useState('light')
+  const [theme, setThemeState] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem('uiTheme') || 'light'
+    }
+    return 'light'
+  })
 
   useEffect(() => {
     const root = document.documentElement
@@ -15,7 +20,7 @@ export function ThemeProvider({ children }) {
       root.setAttribute('data-theme', 'light')
     }
     try {
-      localStorage.setItem('uiTheme', theme)
+      sessionStorage.setItem('uiTheme', theme)
     } catch (e) {
       console.error(e)
     }
