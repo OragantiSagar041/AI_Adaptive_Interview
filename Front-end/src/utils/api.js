@@ -586,6 +586,30 @@ export const getAllSessions = async (params) => {
   }
 };
 
+export const getPlatformSettings = async () => {
+  try {
+    const response = await api.get("/api/platform/settings");
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching platform settings:", error);
+    throw error.response?.data?.detail || error.response?.data?.message || "Failed to fetch platform settings";
+  }
+};
+
+export const uploadPlatformLogo = async (formData) => {
+  try {
+    const response = await api.post("/api/platform/upload-logo", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error uploading platform logo:", error);
+    throw error.response?.data?.detail || error.response?.data?.message || "Failed to upload platform logo";
+  }
+};
+
 export const deleteSession = async (linkId) => {
   try {
     const response = await api.delete(`/admin/sessions/${linkId}`);
