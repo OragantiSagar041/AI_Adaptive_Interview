@@ -252,14 +252,18 @@ def score_answer_task(
             except Exception as blend_err:
                 logger.warning(f"Composite blend error (falling back to verbal_avg): {blend_err}")
                 avg_score = verbal_avg
-
             session = interview_sessions_collection.find_one(
                 {"$or": [{"interview_id": interview_id}, {"link_id": interview_id}]}
             )
             if session:
                 interview_sessions_collection.update_one(
                     {"_id": session["_id"]},
-                    {"$set": {"avg_score": round(avg_score, 1)}}
+                    {"$set": {
+                        "score": round(avg_score, 1),
+                        "avg_score": round(avg_score, 1),
+                        "round1_score": round(round1_s, 1),
+                        "round2_score": round(round2_s, 1)
+                    }}
                 )
                 from app.routes.interview import sync_session_to_application
                 sync_session_to_application(session.get("link_id"))

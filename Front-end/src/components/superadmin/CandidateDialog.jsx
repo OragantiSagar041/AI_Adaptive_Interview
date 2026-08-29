@@ -644,7 +644,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                 </div>
                 <div className="hidden sm:flex flex-col items-center justify-center mr-16">
                   <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">AI Score</div>
-                  <div className={`text-4xl font-black tabular-nums tracking-tighter mt-1 ${aiScore >= 75 ? 'text-emerald-600' : aiScore >= 50 ? 'text-amber-500' : 'text-rose-500'}`}>{aiScore.toFixed(0)}%</div>
+                  <div className={`text-4xl font-black tabular-nums tracking-tighter mt-1 ${aiScore >= 75 ? 'text-emerald-600' : aiScore >= 50 ? 'text-amber-500' : 'text-rose-500'}`}>{aiScore.toFixed(1)}%</div>
                 </div>
               </div>
             )}
@@ -1288,7 +1288,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                       <div className="flex flex-col items-end justify-center mr-2">
                         <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{displayLabel}</div>
                         <div className={`text-2xl font-black tabular-nums tracking-tighter mt-0.5 ${displayScore >= (transcriptTab === 'coding' ? 15 : 60) ? 'text-emerald-600' : displayScore >= (transcriptTab === 'coding' ? 10 : 40) ? 'text-amber-500' : 'text-rose-500'}`}>
-                          {displayScore.toFixed(0)}
+                          {displayScore.toFixed(1)}
                           <span className="text-sm font-bold text-slate-400 ml-1">
                              / {transcriptTab === 'coding' ? '20' : '80'}
                           </span>
