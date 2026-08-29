@@ -687,7 +687,10 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
                         "job_success_score": job_success_score,
                         "job_success_reasoning": job_success_reasoning,
                         "detected_accent": detected_accent,
-                        "avg_score": avg_score
+                        "score": avg_score,
+                        "avg_score": avg_score,
+                        "round1_score": round1_s,
+                        "round2_score": round2_s
                     }}
                 )
             except Exception as e:

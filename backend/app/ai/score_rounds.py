@@ -4,13 +4,13 @@ score_rounds.py
 Composite scoring helpers for coding round and case study round.
 
 Verbal Question-Answer Score:
-  60 marks max based on Q&A accuracy → (verbal_avg * 0.60)
+  80 marks max based on dynamically weighted technical questions.
 
-Coding Score:
-  40 marks max based strictly on test cases passed ratio → (test_score * 0.40)
+Coding Score / Case Study Score:
+  20 marks max based strictly on test cases passed ratio (or case study AI evaluation).
 
 Final Composite Score:
-  Out of 100 marks total → (verbal_avg * 0.60) + (coding_score * 0.40)
+  Out of 100 marks total (Round 1 Score + Round 2 Score)
 """
 
 from typing import Optional, Dict, Any
