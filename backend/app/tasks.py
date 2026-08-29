@@ -201,24 +201,38 @@ def score_answer_task(
             # Composite score: blend with coding / case study if present
             try:
                 from app.ai.score_rounds import (
-                    compute_coding_score, compute_case_study_score, 
-                    calculate_round1_score, calculate_coding_score, calculate_final_score
+                    compute_case_study_score,
+                    calculate_round1_score, calculate_coding_score,
+                    calculate_case_study_round2_score, calculate_final_score,
+                    get_marks_split
                 )
                 session_rec = interview_sessions_collection.find_one({"interview_id": interview_id})
                 if not session_rec:
                     session_rec = interview_sessions_collection.find_one({"link_id": interview_id})
-                
+
                 actual_interview_id = session_rec.get("interview_id") if session_rec else interview_id
                 interview_row = interviews_collection.find_one({"id": actual_interview_id})
-                
+
                 interview_format = "Standard"
                 if session_rec and session_rec.get("interview_format"):
                     interview_format = session_rec["interview_format"]
                 elif interview_row and interview_row.get("interview_format"):
                     interview_format = interview_row["interview_format"]
-                    
+
+                # Determine interview type for scoring model selection
+                interview_type = "Technical"
+                if interview_row and interview_row.get("interview_type"):
+                    interview_type = interview_row["interview_type"]
+                elif session_rec and session_rec.get("interview_type"):
+                    interview_type = session_rec["interview_type"]
+
                 coding_round_data = (interview_row or {}).get("coding_round") if interview_row else None
                 case_study_data   = (interview_row or {}).get("case_study_round") if interview_row else None
+
+                # Count case study questions for Non-Tech dynamic split
+                n_cs_questions = 0
+                if case_study_data:
+                    n_cs_questions = len(case_study_data.get("questions", []) or [])
 
                 # Extract questions for dynamic Round 1 scoring
                 questions = []
@@ -236,19 +250,23 @@ def score_answer_task(
                         questions = json.loads(session_rec["pre_generated_questions"])
                     except:
                         pass
-                
-                # Use Common Scoring Engine
-                round1_s = calculate_round1_score(questions, answers)
-                
+
+                # Round 1: dynamic verbal score based on interview type
+                round1_s = calculate_round1_score(questions, answers, interview_type=interview_type, n_case_study_questions=n_cs_questions)
+
+                # Round 2: depends on interview type
                 round2_s = 0.0
-                if coding_round_data:
+                itype_lower = str(interview_type).strip().lower()
+                if itype_lower == "technical" and coding_round_data:
                     round2_s = calculate_coding_score(coding_round_data)
-                elif case_study_data:
-                    cs_score_100 = compute_case_study_score(case_study_data, context, language) or 0.0
-                    round2_s = round(min(20.0, max(0.0, (cs_score_100 / 100.0) * 20.0)), 1)
-                
+                elif itype_lower in ("non-technical", "non_technical", "non tech", "nontech") and case_study_data:
+                    language = (interview_row or {}).get("language", "English")
+                    context  = f"Profile: {(interview_row or {}).get('profile_text', '')}"
+                    round2_s = calculate_case_study_round2_score(case_study_data, n_cs_questions, context, language)
+                # Normal / other types: round2_s stays 0.0
+
                 avg_score = calculate_final_score(round1_s, round2_s)
-                
+
             except Exception as blend_err:
                 logger.warning(f"Composite blend error (falling back to verbal_avg): {blend_err}")
                 avg_score = verbal_avg

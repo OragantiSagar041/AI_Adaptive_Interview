@@ -1264,6 +1264,17 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                     let displayScore = aiScore;
                     let displayLabel = "AI Score";
 
+                    // Determine interview type and max marks dynamically
+                    const itype = (c.interview_type || 'Technical').trim().toLowerCase();
+                    const isNonTech = ['non-technical', 'non_technical', 'non tech', 'nontech'].includes(itype);
+                    const isNormal = !isNonTech && itype !== 'technical';
+
+                    // For Non-Tech: derive n_case_study_questions from round2_score / 10 or fallback
+                    const round2Max = isNonTech
+                      ? Math.min(Math.round((c.round2_score || 0) > 0 ? Math.ceil(c.round2_score / 10) * 10 : (c.case_study_round?.questions?.length || 0) * 10), 30)
+                      : isNormal ? 0 : 20;
+                    const round1Max = isNormal ? 100 : (100 - round2Max);
+
                     if (transcriptTab === 'verbal') {
                         displayLabel = "Verbal Score";
                         if (c.round1_score !== undefined) {
@@ -1272,25 +1283,29 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                             // Legacy fallback for old sessions
                             const verbalAnsForScore = (c.answers || []).filter(a => !a.question_text?.toLowerCase().includes('coding round') && !a.question_text?.toLowerCase().includes('case study'));
                             const validVerbalAnsForScore = verbalAnsForScore.filter(a => a.ai_score !== null && a.ai_score !== undefined);
-                            displayScore = validVerbalAnsForScore.length > 0 ? (validVerbalAnsForScore.reduce((sum, a) => sum + Number(a.ai_score), 0) / validVerbalAnsForScore.length) * 0.8 : 0;
+                            displayScore = validVerbalAnsForScore.length > 0 ? (validVerbalAnsForScore.reduce((sum, a) => sum + Number(a.ai_score), 0) / validVerbalAnsForScore.length) * (round1Max / 100) : 0;
                         }
                     } else if (transcriptTab === 'coding') {
-                        displayLabel = "Coding Score";
+                        displayLabel = isNonTech ? "Case Study Score" : "Coding Score";
                         if (c.round2_score !== undefined) {
                             displayScore = c.round2_score;
                         } else {
                             // Legacy fallback for old sessions
-                            displayScore = c.coding_round ? 20 : 0;
+                            displayScore = c.coding_round ? round2Max : 0;
                         }
                     }
+
+                    const maxForTab = transcriptTab === 'coding' ? round2Max : round1Max;
+                    const goodThreshold = maxForTab * 0.75;
+                    const okThreshold = maxForTab * 0.5;
 
                     return (
                       <div className="flex flex-col items-end justify-center mr-2">
                         <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{displayLabel}</div>
-                        <div className={`text-2xl font-black tabular-nums tracking-tighter mt-0.5 ${displayScore >= (transcriptTab === 'coding' ? 15 : 60) ? 'text-emerald-600' : displayScore >= (transcriptTab === 'coding' ? 10 : 40) ? 'text-amber-500' : 'text-rose-500'}`}>
+                        <div className={`text-2xl font-black tabular-nums tracking-tighter mt-0.5 ${displayScore >= goodThreshold ? 'text-emerald-600' : displayScore >= okThreshold ? 'text-amber-500' : 'text-rose-500'}`}>
                           {displayScore.toFixed(1)}
                           <span className="text-sm font-bold text-slate-400 ml-1">
-                             / {transcriptTab === 'coding' ? '20' : '80'}
+                             / {maxForTab}
                           </span>
                         </div>
                       </div>
