@@ -1854,10 +1854,9 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                         value={singleCandidate.caseStudyCount}
                         onChange={(e) => handleSingleChange('caseStudyCount', parseInt(e.target.value))}
                         options={[
+                          { value: '1', label: '1 Question' },
                           { value: '2', label: '2 Questions' },
-                          { value: '3', label: '3 Questions' },
-                          { value: '4', label: '4 Questions' },
-                          { value: '5', label: '5 Questions' }
+                          { value: '3', label: '3 Questions' }
                         ]}
                       />
                     </div>
@@ -2501,10 +2500,9 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                         value={bulkConfig.caseStudyCount}
                         onChange={(e) => handleBulkConfigChange('caseStudyCount', parseInt(e.target.value))}
                         options={[
+                          { value: '1', label: '1 Question' },
                           { value: '2', label: '2 Questions' },
-                          { value: '3', label: '3 Questions' },
-                          { value: '4', label: '4 Questions' },
-                          { value: '5', label: '5 Questions' }
+                          { value: '3', label: '3 Questions' }
                         ]}
                       />
                     </div>

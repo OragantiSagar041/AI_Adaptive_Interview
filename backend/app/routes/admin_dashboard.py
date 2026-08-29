@@ -539,18 +539,25 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
     # Blend with coding / case study rounds if present
     try:
         from app.ai.score_rounds import (
-            compute_coding_score, compute_case_study_score, 
-            calculate_round1_score, calculate_coding_score, calculate_final_score
-        )
+                compute_case_study_score,
+                calculate_round1_score, calculate_coding_score,
+                calculate_case_study_round2_score, calculate_final_score
+            )
         interview_record_for_score = interviews_collection.find_one({"id": actual_interview_id}) if actual_interview_id else None
-        
+
         if interview_record_for_score:
             interview_format_cs = session_data.get("interview_format", "Standard") if session_data else "Standard"
             lang_cs = interview_record_for_score.get("language", "English")
             ctx_cs  = f"Candidate's {interview_record_for_score.get('source','Resume')}: {interview_record_for_score.get('profile_text','')}"
-            
+
+            # Determine interview type for scoring model
+            interview_type = interview_record_for_score.get("interview_type") or \
+                             (session_data.get("interview_type") if session_data else None) or "Technical"
+
             coding_rd  = interview_record_for_score.get("coding_round")
             case_std   = interview_record_for_score.get("case_study_round")
+            n_cs_questions = len((case_std or {}).get("questions", []) or []) if case_std else 0
+
             questions  = interview_record_for_score.get("questions", [])
             if isinstance(questions, str):
                 import json
@@ -564,17 +571,18 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
                     questions = json.loads(session_data["pre_generated_questions"])
                 except:
                     pass
-            
-            # Round 1
-            round1_s = calculate_round1_score(questions, results)
-            
-            # Round 2
-            if coding_rd:
+
+            # Round 1: dynamic based on interview type
+            round1_s = calculate_round1_score(questions, results, interview_type=interview_type, n_case_study_questions=n_cs_questions)
+
+            # Round 2: route by interview type
+            itype_lower = str(interview_type).strip().lower()
+            if itype_lower == "technical" and coding_rd:
                 round2_s = calculate_coding_score(coding_rd)
-            elif case_std:
-                cs_score_100 = compute_case_study_score(case_std, ctx_cs, lang_cs) or 0.0
-                round2_s = round(min(20.0, max(0.0, (cs_score_100 / 100.0) * 20.0)), 1)
-            
+            elif itype_lower in ("non-technical", "non_technical", "non tech", "nontech") and case_std:
+                round2_s = calculate_case_study_round2_score(case_std, n_cs_questions, ctx_cs, lang_cs)
+            # Normal / other types: round2_s stays 0.0
+
             avg_score = calculate_final_score(round1_s, round2_s)
         else:
             round1_s = verbal_avg
@@ -817,6 +825,7 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
         "avg_score": avg_score,
         "round1_score": round1_s,
         "round2_score": round2_s,
+        "interview_type": interview_type,
         "overall_recommendation": recommendation,
         "strengths_summary": strengths,
         "weaknesses_summary": weaknesses,
