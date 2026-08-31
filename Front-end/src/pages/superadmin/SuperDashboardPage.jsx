@@ -248,7 +248,7 @@ export default function SuperDashboardPage() {
 
   const stageColors = ["#3b82f6", "#06b6d4", "#0284c7", "#10b981", "#059669", "#16a34a", "#eab308", "#f59e0b"];
 
-  const pipelineStages = (rawFunnelData?.length ? rawFunnelData.map((d, i) => ({
+  let pipelineStages = (rawFunnelData?.length ? rawFunnelData.map((d, i) => ({
     stage: d.name || d.stage || `Stage ${i + 1}`,
     count: Number(d.value ?? d.count ?? 0),
     color: stageColors[i % stageColors.length]
@@ -260,6 +260,23 @@ export default function SuperDashboardPage() {
     { stage: "Selected / Hired", count: parseInt(dbStats?.selected) || 0, color: "#16a34a" },
     { stage: "Rejected", count: parseInt(dbStats?.rejected) || 0, color: "#ef4444" }
   ]);
+
+  if (pipelineStages.length >= 2) {
+    const offersIdx = pipelineStages.findIndex(s => s.stage === "Offers Released");
+    const hiredIdx = pipelineStages.findIndex(s => s.stage === "Candidates Hired");
+    
+    if (offersIdx !== -1 && hiredIdx !== -1) {
+      const tempStage = pipelineStages[offersIdx].stage;
+      const tempCount = pipelineStages[offersIdx].count;
+      
+      pipelineStages[offersIdx].stage = pipelineStages[hiredIdx].stage;
+      pipelineStages[offersIdx].count = pipelineStages[hiredIdx].count;
+      
+      pipelineStages[hiredIdx].stage = tempStage;
+      pipelineStages[hiredIdx].count = tempCount;
+    }
+  }
+
   const maxPipelineCount = Math.max(...pipelineStages.map(p => p.count), 1);
   const totalPipelineCount = pipelineStages[0]?.count || pipelineStages.reduce((acc, p) => acc + p.count, 0) || 1;
 

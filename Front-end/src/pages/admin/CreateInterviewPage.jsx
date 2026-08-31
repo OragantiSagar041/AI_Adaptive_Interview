@@ -1074,8 +1074,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
         {/* Single candidate panel */}
         {createTab === 'single' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            {/* Left Column: Candidate & Material Details (Col Span 7) */}
-            <div className="lg:col-span-7 flex flex-col gap-6">
+            {/* Left Column: Candidate & Material Details (Col Span 6) */}
+            <div className="lg:col-span-6 flex flex-col gap-6">
               {/* Card 1: Candidate Basic Info */}
               <Card className="bg-card border border-border text-foreground flex flex-col gap-5">
                 <div className="flex gap-3.5 items-center border-b border-border pb-4">
@@ -1673,10 +1673,11 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                   </div>
                 </div>
               </div>
+
             </div>
 
-            {/* Right Column: Settings, Customization & Actions (Col Span 5) */}
-            <div className="lg:col-span-5 flex flex-col gap-6">
+            {/* Right Column: Settings, Customization & Actions (Col Span 6) */}
+            <div className="lg:col-span-6 flex flex-col gap-6">
               {/* Card 1: Configuration Parameters */}
               <Card className="bg-card border border-border text-foreground flex flex-col gap-5">
                 <div className="flex gap-3.5 items-center border-b border-border pb-4">
@@ -2028,6 +2029,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                   Preview Email
                 </Button>
               </div>
+
+              
             </div>
           </div>
         )}
@@ -2035,8 +2038,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
         {/* Bulk send panel */}
         {createTab === 'bulk' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            {/* Left Column: Requirements & Material Details (Col Span 7) */}
-            <div className="lg:col-span-7 flex flex-col gap-6">
+            {/* Left Column: Requirements & Material Details (Col Span 6) */}
+            <div className="lg:col-span-6 flex flex-col gap-6">
               {/* Card 1: Requirement Documents */}
               <Card className="bg-card border border-border text-foreground flex flex-col gap-5">
                 <div className="flex gap-3.5 items-center border-b border-border pb-4">
@@ -2343,10 +2346,128 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                   </div>
                 </div>
               </div>
+{/* Card 5: Excel/CSV Upload Dropzone */}
+              <div className="bg-white dark:bg-slate-800/60/82 backdrop-blur-md border border-[#e5edf7] rounded-2xl p-5 text-slate-800 dark:text-slate-100 flex flex-col gap-4 shadow-[0_18px_40px_rgba(17,24,39,0.06)] hover:border-slate-300 transition-all duration-200">
+                <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <i className="fas fa-file-excel text-emerald-650 text-sm"></i>
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200 m-0">Import Candidates</label>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={downloadExcelTemplate}
+                    className="flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-500/15 px-3 py-1 rounded-lg text-xs font-extrabold cursor-pointer transition-all"
+                  >
+                    <i className="fas fa-download"></i> Get Template
+                  </button>
+                </div>
+
+                <div
+                  className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-6 text-center cursor-pointer bg-slate-50 dark:bg-slate-900/50/50 hover:bg-white dark:bg-slate-800/60 hover:border-emerald-500/80 hover:shadow-md hover:shadow-emerald-500/5 hover:-translate-y-0.5 transition-all duration-300 flex flex-col items-center justify-center gap-2 group"
+                  onClick={() => document.getElementById('bulkExcelInput').click()}
+                >
+                  <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-all">
+                    <i className="fas fa-file-arrow-up text-lg"></i>
+                  </div>
+                  <p className="font-bold text-slate-650 text-xs mt-1">
+                    {bulkCsvLabel}
+                  </p>
+                </div>
+                <input
+                  type="file"
+                  id="bulkExcelInput"
+                  accept=".xlsx,.xls,.csv"
+                  className="hidden"
+                  onChange={handleBulkFileUpload}
+                />
+              </div>
+
+              {/* Card 6: Manual Candidates Addition Form */}
+              <div className="bg-white dark:bg-slate-800/60/82 backdrop-blur-md border border-[#e5edf7] rounded-2xl p-5 text-slate-800 dark:text-slate-100 flex flex-col gap-4 shadow-[0_18px_40px_rgba(17,24,39,0.06)] hover:border-slate-350 transition-all duration-200">
+                <div className="flex gap-2 items-center border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                  <i className="fas fa-user-plus text-primary text-xs"></i>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200 m-0">Add Candidate Manually</h4>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-4 items-end">
+                  <Input
+                    label="Candidate Name"
+                    placeholder="John Doe"
+                    value={bulkCandidateInput.name}
+                    onChange={(e) => setBulkCandidateInput(prev => ({ ...prev, name: e.target.value.replace(/[0-9]/g, '') }))}
+                  />
+                  <Input
+                    label="Candidate Email"
+                    placeholder="john@example.com"
+                    value={bulkCandidateInput.email}
+                    onChange={(e) => setBulkCandidateInput(prev => ({ ...prev, email: e.target.value }))}
+                  />
+                  <button
+                    type="button"
+                    style={{ backgroundColor: '#4f46e5', color: '#ffffff', borderColor: '#4338ca' }}
+                    className="px-6 py-2.5 h-[42px] rounded-lg font-bold shadow-md hover:bg-indigo-700 transition-all active:scale-95 cursor-pointer shrink-0 flex items-center justify-center gap-1.5 text-sm"
+                    onClick={() => {
+                      const { name, email } = bulkCandidateInput
+                      if (!name || !email) {
+                        Swal.fire({
+                          title: 'Fields Required',
+                          text: 'Name and email are required to add a candidate manually.',
+                          icon: 'warning',
+                          confirmButtonColor: '#6366f1'
+                        })
+                        return
+                      }
+                      if (!email.includes('@')) {
+                        Swal.fire({
+                          title: 'Invalid Email',
+                          text: 'Invalid candidate email format.',
+                          icon: 'warning',
+                          confirmButtonColor: '#6366f1'
+                        })
+                        return
+                      }
+                      if (bulkCandidates.find(c => c.email === email)) {
+                        Swal.fire({
+                          title: 'Candidate Duplicate',
+                          text: 'Candidate already exists in the list.',
+                          icon: 'warning',
+                          confirmButtonColor: '#6366f1'
+                        })
+                        return
+                      }
+                      setBulkCandidates(prev => [...prev, { name, email, record_video: true }])
+                      setBulkCandidateInput({ name: '', email: '' })
+                    }}
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+
+              {/* Form Action Controls (Bulk) */}
+              <div className="flex gap-3.5 flex-col sm:flex-row mt-2">
+                <Button
+                  variant="primary"
+                  className="flex-1 shadow-lg bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 rounded-xl"
+                  onClick={handleSendBulkInterviews}
+                  disabled={inviting}
+                  icon={bulkUploadProgress ? <i className="fas fa-spinner fa-spin" /> : <i className="fas fa-paper-plane" />}
+                >
+                  {bulkUploadProgress || (inviting ? 'Sending...' : 'Send to All')}
+                </Button>
+                <Button
+                  variant="warning"
+                  className="flex-1 rounded-xl"
+                  onClick={() => handlePreviewEmail('bulk')}
+                  icon={<i className="fas fa-eye" />}
+                >
+                  Preview Email
+                </Button>
+              </div>
+
             </div>
 
-            {/* Right Column: Settings, Candidates & Submission (Col Span 5) */}
-            <div className="lg:col-span-5 flex flex-col gap-6">
+            {/* Right Column: Settings, Candidates & Submission (Col Span 6) */}
+            <div className="lg:col-span-6 flex flex-col gap-6">
               {/* Card 1: Configuration */}
               <Card className="bg-card border border-border text-foreground flex flex-col gap-5">
                 <div className="flex gap-3.5 items-center border-b border-border pb-4">
@@ -2654,123 +2775,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                 </div>
               </Card>
 
-              {/* Card 5: Excel/CSV Upload Dropzone */}
-              <div className="bg-white dark:bg-slate-800/60/82 backdrop-blur-md border border-[#e5edf7] rounded-2xl p-5 text-slate-800 dark:text-slate-100 flex flex-col gap-4 shadow-[0_18px_40px_rgba(17,24,39,0.06)] hover:border-slate-300 transition-all duration-200">
-                <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2.5">
-                  <div className="flex items-center gap-2">
-                    <i className="fas fa-file-excel text-emerald-650 text-sm"></i>
-                    <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200 m-0">Import Candidates</label>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={downloadExcelTemplate}
-                    className="flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-500/15 px-3 py-1 rounded-lg text-xs font-extrabold cursor-pointer transition-all"
-                  >
-                    <i className="fas fa-download"></i> Get Template
-                  </button>
-                </div>
-
-                <div
-                  className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-6 text-center cursor-pointer bg-slate-50 dark:bg-slate-900/50/50 hover:bg-white dark:bg-slate-800/60 hover:border-emerald-500/80 hover:shadow-md hover:shadow-emerald-500/5 hover:-translate-y-0.5 transition-all duration-300 flex flex-col items-center justify-center gap-2 group"
-                  onClick={() => document.getElementById('bulkExcelInput').click()}
-                >
-                  <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-all">
-                    <i className="fas fa-file-arrow-up text-lg"></i>
-                  </div>
-                  <p className="font-bold text-slate-650 text-xs mt-1">
-                    {bulkCsvLabel}
-                  </p>
-                </div>
-                <input
-                  type="file"
-                  id="bulkExcelInput"
-                  accept=".xlsx,.xls,.csv"
-                  className="hidden"
-                  onChange={handleBulkFileUpload}
-                />
-              </div>
-
-              {/* Card 6: Manual Candidates Addition Form */}
-              <div className="bg-white dark:bg-slate-800/60/82 backdrop-blur-md border border-[#e5edf7] rounded-2xl p-5 text-slate-800 dark:text-slate-100 flex flex-col gap-4 shadow-[0_18px_40px_rgba(17,24,39,0.06)] hover:border-slate-350 transition-all duration-200">
-                <div className="flex gap-2 items-center border-b border-slate-100 dark:border-slate-800 pb-2.5">
-                  <i className="fas fa-user-plus text-primary text-xs"></i>
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200 m-0">Add Candidate Manually</h4>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-4 items-end">
-                  <Input
-                    label="Candidate Name"
-                    placeholder="John Doe"
-                    value={bulkCandidateInput.name}
-                    onChange={(e) => setBulkCandidateInput(prev => ({ ...prev, name: e.target.value.replace(/[0-9]/g, '') }))}
-                  />
-                  <Input
-                    label="Candidate Email"
-                    placeholder="john@example.com"
-                    value={bulkCandidateInput.email}
-                    onChange={(e) => setBulkCandidateInput(prev => ({ ...prev, email: e.target.value }))}
-                  />
-                  <button
-                    type="button"
-                    style={{ backgroundColor: '#4f46e5', color: '#ffffff', borderColor: '#4338ca' }}
-                    className="px-6 py-2.5 h-[42px] rounded-lg font-bold shadow-md hover:bg-indigo-700 transition-all active:scale-95 cursor-pointer shrink-0 flex items-center justify-center gap-1.5 text-sm"
-                    onClick={() => {
-                      const { name, email } = bulkCandidateInput
-                      if (!name || !email) {
-                        Swal.fire({
-                          title: 'Fields Required',
-                          text: 'Name and email are required to add a candidate manually.',
-                          icon: 'warning',
-                          confirmButtonColor: '#6366f1'
-                        })
-                        return
-                      }
-                      if (!email.includes('@')) {
-                        Swal.fire({
-                          title: 'Invalid Email',
-                          text: 'Invalid candidate email format.',
-                          icon: 'warning',
-                          confirmButtonColor: '#6366f1'
-                        })
-                        return
-                      }
-                      if (bulkCandidates.find(c => c.email === email)) {
-                        Swal.fire({
-                          title: 'Candidate Duplicate',
-                          text: 'Candidate already exists in the list.',
-                          icon: 'warning',
-                          confirmButtonColor: '#6366f1'
-                        })
-                        return
-                      }
-                      setBulkCandidates(prev => [...prev, { name, email, record_video: true }])
-                      setBulkCandidateInput({ name: '', email: '' })
-                    }}
-                  >
-                    Add
-                  </button>
-                </div>
-              </div>
-
-              {/* Form Action Controls (Bulk) */}
-              <div className="flex gap-3.5 flex-col sm:flex-row mt-2">
-                <Button
-                  variant="primary"
-                  className="flex-1 shadow-lg bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 rounded-xl"
-                  onClick={handleSendBulkInterviews}
-                  disabled={inviting}
-                  icon={bulkUploadProgress ? <i className="fas fa-spinner fa-spin" /> : <i className="fas fa-paper-plane" />}
-                >
-                  {bulkUploadProgress || (inviting ? 'Sending...' : 'Send to All')}
-                </Button>
-                <Button
-                  variant="warning"
-                  className="flex-1 rounded-xl"
-                  onClick={() => handlePreviewEmail('bulk')}
-                  icon={<i className="fas fa-eye" />}
-                >
-                  Preview Email
-                </Button>
-              </div>
+              
             </div>
           </div>
         )}
