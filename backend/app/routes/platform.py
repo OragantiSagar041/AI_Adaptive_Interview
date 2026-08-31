@@ -3,6 +3,8 @@ from app.db.database import platform_settings_collection
 from app.routes.auth import get_current_admin_details
 import cloudinary
 import cloudinary.uploader
+import json
+import os
 
 router = APIRouter()
 
@@ -45,3 +47,14 @@ def upload_platform_logo(
         "status": "success",
         "hireiq_logo_url": secure_url
     }
+
+@router.get("/features")
+def get_active_features():
+    registry_path = os.path.join(os.path.dirname(__file__), '..', '..', 'features_registry.json')
+    try:
+        with open(registry_path, 'r') as f:
+            features = json.load(f)
+        return {"features": features}
+    except Exception as e:
+        # Fallback empty list if registry file is missing
+        return {"features": []}

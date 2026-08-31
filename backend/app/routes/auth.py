@@ -466,9 +466,24 @@ def get_all_plans_master(master_id: str = Depends(get_current_admin)):
     if not master:
         raise HTTPException(status_code=401, detail="Unauthorized")
     plans = list(plans_collection.find({}))
+    
+    # Load active features registry
+    import json
+    import os
+    registry_path = os.path.join(os.path.dirname(__file__), '..', '..', 'features_registry.json')
+    active_features = set()
+    try:
+        with open(registry_path, 'r') as f:
+            active_features = set(json.load(f))
+    except Exception:
+        pass
+        
     result = []
     for p in plans:
-        result.append(serialize_plan(p))
+        serialized = serialize_plan(p)
+        if active_features:
+            serialized["features"] = [f for f in serialized.get("features", []) if f in active_features]
+        result.append(serialized)
     return {"status": "success", "data": result}
 
 @router.post("/master/plans")
