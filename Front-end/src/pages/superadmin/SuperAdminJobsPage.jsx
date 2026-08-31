@@ -31,6 +31,11 @@ const GRADIENT_ACCENTS = [
   'from-sky-500 via-blue-500 to-sky-600',
 ];
 
+const formatPhoneNumber = (phone) => {
+  if (!phone) return '';
+  return phone.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
+};
+
 export default function SuperAdminJobsPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -789,9 +794,9 @@ export default function SuperAdminJobsPage() {
 
       {/* ── Create / Edit Job Modal ─────────────────────── */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-50 flex items-center justify-center p-4 sm:p-6 pt-16 sm:pt-20">
           <div
-            className="bg-white dark:bg-slate-800/60/95 backdrop-blur-xl rounded-[2rem] shadow-[0_20px_60px_rgba(0,0,0,0.15)] border border-white/60 w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col relative"
+            className="bg-white dark:bg-slate-800/60/95 backdrop-blur-xl rounded-[2rem] shadow-[0_20px_60px_rgba(0,0,0,0.15)] border border-white/60 w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col relative my-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="absolute top-0 left-0 w-full h-28 bg-gradient-to-b from-indigo-50/80 to-transparent pointer-events-none rounded-t-[2rem]" />
@@ -940,9 +945,9 @@ export default function SuperAdminJobsPage() {
 
       {/* ── Job Applications Modal ───────────────────────── */}
       {applicationData.open && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 sm:p-6" onClick={closeApplications}>
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 sm:p-6 pt-16 sm:pt-20" onClick={closeApplications}>
           <div
-            className="bg-card border border-border rounded-[2rem] shadow-2xl w-full max-w-5xl max-h-[85vh] overflow-hidden flex flex-col z-10"
+            className="bg-card border border-border rounded-[2rem] shadow-2xl w-full max-w-5xl max-h-[80vh] overflow-hidden flex flex-col z-10 my-auto"
             onClick={e => e.stopPropagation()}
           >
             {/* Header */}
@@ -965,11 +970,11 @@ export default function SuperAdminJobsPage() {
                       <Building2 size={13} className="text-teal-400" /> {applicationData.job?.location || 'Remote'}
                     </span>
                     <span>•</span>
-                    <span className="flex items-center gap-1.5 bg-secondary text-foreground font-bold px-2.5 py-1 rounded-lg border border-border shadow-xs">
+                    <span className="flex items-center gap-1 text-muted-foreground">
                       <User size={12} className="text-indigo-400" />
-                      Created by: <span className="text-indigo-400 font-extrabold">{applicationData.job?.created_by_name || applicationData.job?.created_by || 'Admin'}</span>
+                      Created by: <strong className="text-indigo-600 dark:text-indigo-400 font-extrabold">{applicationData.job?.created_by_name || applicationData.job?.created_by || 'Admin'}</strong>
                       {applicationData.job?.created_by_role && (
-                        <span className="text-[0.62rem] text-muted-foreground uppercase font-bold">({applicationData.job?.created_by_role})</span>
+                        <span className="text-[0.65rem] text-muted-foreground uppercase font-bold">({applicationData.job?.created_by_role})</span>
                       )}
                     </span>
                     {applicationData.job?.created_at && (
@@ -1062,7 +1067,7 @@ export default function SuperAdminJobsPage() {
                           <tr key={app._id} className="hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700/60 transition-colors group">
                             <td className="py-3 px-3 sm:px-4">
                               <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 rounded-xl bg-indigo-600 dark:bg-indigo-500 flex items-center justify-center text-white font-black text-sm shrink-0 shadow-sm">
+                                <div className="w-9 h-9 rounded-xl text-white font-black text-sm flex items-center justify-center shrink-0 shadow-md shadow-indigo-500/30" style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)' }}>
                                   {(app.name || '?')[0].toUpperCase()}
                                 </div>
                                 <div>
@@ -1209,20 +1214,18 @@ export default function SuperAdminJobsPage() {
 
       {/* ── Job Details / Apply Modal ───────────────────── */}
       {selectedJobDetails && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 sm:p-6" onClick={() => setSelectedJobDetails(null)}>
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 sm:p-6 pt-16 sm:pt-20" onClick={() => setSelectedJobDetails(null)}>
           <div
-            className="bg-card border border-border rounded-[2rem] shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col relative z-10"
+            className="bg-card border border-border rounded-[2rem] shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col relative z-10 my-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="absolute top-0 left-0 w-full h-28 bg-gradient-to-b from-indigo-50/80 to-transparent pointer-events-none rounded-t-[2rem]" />
-
-            <div className="p-7 border-b border-indigo-100/50 flex items-start justify-between relative z-10">
+            <div className="p-7 border-b border-slate-200 dark:border-slate-800 flex items-start justify-between relative z-10 bg-slate-50/50 dark:bg-slate-900/60">
               <div className="flex items-center gap-4 overflow-hidden pr-4">
-                <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg shrink-0">
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 text-white shadow-lg shrink-0">
                   <Briefcase size={24} />
                 </div>
                 <div className="overflow-hidden">
-                  <h2 className="text-xl font-black text-slate-800 dark:text-slate-100 tracking-tight truncate">{selectedJobDetails.title}</h2>
+                  <h2 className="text-xl font-black text-slate-900 dark:text-slate-100 tracking-tight truncate">{selectedJobDetails.title}</h2>
                   <div className="flex items-center gap-3 mt-0.5 flex-wrap">
                     <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1"><MapPin size={11} /> {selectedJobDetails.location}</span>
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.65rem] font-bold border ${WORK_MODE_STYLES[selectedJobDetails.workMode] || 'bg-slate-50 dark:bg-slate-900/50 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}>
@@ -1246,18 +1249,24 @@ export default function SuperAdminJobsPage() {
 
             <div className="p-7 overflow-y-auto space-y-6 relative z-10">
               <div className="grid grid-cols-3 gap-4">
-                {[
-                  { label: 'Experience', value: selectedJobDetails.experience, icon: Target, color: 'amber' },
-                  { label: 'Salary', value: selectedJobDetails.salary || 'Not specified', icon: Wallet, color: 'emerald' },
-                  { label: 'Bond', value: selectedJobDetails.bond || 'No Bond', icon: BookOpen, color: 'indigo' },
-                ].map(({ label, value, icon: Icon, color }) => (
-                  <div key={label} className={`bg-${color}-50 rounded-2xl p-4 border border-${color}-100/60`}>
-                    <div className={`flex items-center gap-1.5 text-[0.65rem] font-bold text-${color}-500 uppercase tracking-wider mb-1.5`}>
-                      <Icon size={11} /> {label}
-                    </div>
-                    <p className={`font-black text-${color}-800 text-sm`}>{value}</p>
+                <div className="bg-amber-500/10 dark:bg-amber-500/15 rounded-2xl p-4 border border-amber-500/30">
+                  <div className="flex items-center gap-1.5 text-[0.65rem] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-1.5">
+                    <Target size={11} /> Experience
                   </div>
-                ))}
+                  <p className="font-black text-amber-700 dark:text-amber-300 text-sm">{selectedJobDetails.experience}</p>
+                </div>
+                <div className="bg-emerald-500/10 dark:bg-emerald-500/15 rounded-2xl p-4 border border-emerald-500/30">
+                  <div className="flex items-center gap-1.5 text-[0.65rem] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-1.5">
+                    <Wallet size={11} /> Salary
+                  </div>
+                  <p className="font-black text-emerald-700 dark:text-emerald-300 text-sm">{selectedJobDetails.salary || 'Not specified'}</p>
+                </div>
+                <div className="bg-indigo-500/10 dark:bg-indigo-500/15 rounded-2xl p-4 border border-indigo-500/30">
+                  <div className="flex items-center gap-1.5 text-[0.65rem] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1.5">
+                    <BookOpen size={11} /> Bond
+                  </div>
+                  <p className="font-black text-indigo-700 dark:text-indigo-300 text-sm">{selectedJobDetails.bond || 'No Bond'}</p>
+                </div>
               </div>
 
               <div>
@@ -1294,10 +1303,10 @@ export default function SuperAdminJobsPage() {
               </button>
               <button
                 onClick={() => handleCopyJobLink(selectedJobDetails)}
-                className="flex items-center gap-2 px-4 py-3 rounded-xl bg-slate-100 dark:bg-slate-800/50 hover:bg-indigo-50 text-slate-700 dark:text-slate-200 hover:text-indigo-600 font-bold text-sm border-none cursor-pointer transition-colors"
+                className="flex items-center gap-2 px-4 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 font-bold text-sm border border-slate-200 dark:border-slate-700 cursor-pointer transition-colors"
                 title="Copy Public Apply Link"
               >
-                <Copy size={15} /> Copy Link
+                <Copy size={15} className="text-indigo-600 dark:text-indigo-400" /> Copy Link
               </button>
               <button
                 onClick={() => {
@@ -1305,7 +1314,7 @@ export default function SuperAdminJobsPage() {
                   setSelectedJobDetails(null);
                   handleEditJob(job);
                 }}
-                className="flex items-center gap-2 px-4 py-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-sm border-none cursor-pointer transition-colors"
+                className="flex items-center gap-2 px-4 py-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/80 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 font-bold text-sm border border-indigo-200 dark:border-indigo-800 cursor-pointer transition-colors"
               >
                 <Pencil size={15} /> Edit
               </button>
@@ -1314,7 +1323,7 @@ export default function SuperAdminJobsPage() {
                   const job = selectedJobDetails;
                   confirmDeleteJob(job, e);
                 }}
-                className="p-3 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-sm border-none cursor-pointer transition-colors"
+                className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/80 hover:bg-rose-100 dark:hover:bg-rose-900 text-rose-600 dark:text-rose-400 font-bold text-sm border border-rose-200 dark:border-rose-800 cursor-pointer transition-colors"
                 title="Delete Job"
               >
                 <Trash2 size={16} />
@@ -1421,29 +1430,29 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
     <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-fadeIn">
       <div className="bg-white dark:bg-slate-800/60 rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-scaleUp">
         {/* Header */}
-        <div className="px-7 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white dark:from-slate-800/90 dark:to-slate-900/90">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white font-extrabold text-lg shadow-md shadow-indigo-500/20">
+        <div className="px-7 py-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900 shrink-0">
+          <div className="flex items-center gap-4 min-w-0 pr-4">
+            <div className="w-12 h-12 rounded-2xl text-white font-extrabold text-lg flex items-center justify-center shrink-0 shadow-md shadow-indigo-500/30" style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)' }}>
               {(application.name || '?')[0].toUpperCase()}
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2.5 flex-wrap">
-                <h3 className="text-xl font-extrabold text-slate-800 dark:text-slate-100 tracking-tight">{application.name || 'Candidate'}</h3>
-                <span className={`px-2.5 py-0.5 rounded-full text-[0.7rem] font-bold border ${statusStyles[application.status] || 'bg-indigo-50 text-indigo-700 border-indigo-100'}`}>
+                <h3 className="text-xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight truncate">{application.name || 'Candidate'}</h3>
+                <span className={`px-2.5 py-0.5 rounded-full text-[0.7rem] font-bold border ${statusStyles[application.status] || 'bg-indigo-50 text-indigo-700 border-indigo-100 dark:bg-indigo-950/80 dark:text-indigo-300 dark:border-indigo-800'}`}>
                   {application.status || 'Pending Review'}
                 </span>
                 {application.last_action_by_name && (
-                  <span className="inline-flex items-center gap-1 text-[0.68rem] bg-indigo-50/80 text-indigo-800 font-semibold px-2 py-0.5 rounded-md border border-indigo-100">
-                    <UserCheck size={11} className="text-indigo-600" />
+                  <span className="inline-flex items-center gap-1 text-[0.68rem] bg-indigo-50 text-indigo-800 dark:bg-indigo-950/80 dark:text-indigo-200 font-semibold px-2 py-0.5 rounded-md border border-indigo-200 dark:border-indigo-800">
+                    <UserCheck size={11} className="text-indigo-600 dark:text-indigo-400" />
                     Last Action by <strong className="font-bold">{application.last_action_by_name}</strong>
-                    {application.last_action_by_role && <span className="text-[0.6rem] uppercase text-indigo-500">({application.last_action_by_role})</span>}
+                    {application.last_action_by_role && <span className="text-[0.6rem] uppercase text-indigo-500 dark:text-indigo-400">({application.last_action_by_role})</span>}
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-4 mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium flex-wrap">
-                <span className="flex items-center gap-1"><Mail size={12} className="text-indigo-400" /> {application.candidate_email || application.email || '—'}</span>
-                {application.phone && <span className="flex items-center gap-1"><Phone size={12} className="text-teal-400" /> {application.phone}</span>}
-                {job?.title && <span className="flex items-center gap-1 text-slate-400 font-semibold">• Applied for <span className="text-indigo-600">{job.title}</span></span>}
+              <div className="flex items-center gap-4 mt-1 text-xs text-slate-600 dark:text-slate-300 font-medium flex-wrap">
+                <span className="flex items-center gap-1"><Mail size={12} className="text-indigo-500" /> {application.candidate_email || application.email || '—'}</span>
+                {application.phone && <span className="flex items-center gap-1"><Phone size={12} className="text-teal-600 dark:text-teal-400" /> {formatPhoneNumber(application.phone)}</span>}
+                {job?.title && <span className="flex items-center gap-1 text-slate-500 dark:text-slate-400 font-semibold">• Applied for <span className="text-indigo-600 dark:text-indigo-400">{job.title}</span></span>}
               </div>
             </div>
           </div>

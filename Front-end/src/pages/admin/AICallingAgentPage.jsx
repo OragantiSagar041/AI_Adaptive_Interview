@@ -2501,21 +2501,21 @@ export default function AICallingAgentPage() {
         initial={{ opacity: 0, y: 40 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.5, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-        className="mt-6 bg-white dark:bg-slate-800/60/80 backdrop-blur-xl rounded-[30px] border border-white/60 overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative z-10"
+        className="mt-6 bg-white dark:bg-slate-900 backdrop-blur-xl rounded-[30px] border border-slate-200 dark:border-slate-800 overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative z-10"
       >
         {/* Tab Bar */}
-        <div className="flex items-center flex-wrap gap-2 px-4 pt-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60/50 relative z-10">
+        <div className="flex items-center flex-wrap gap-2 px-4 pt-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/90 relative z-10">
           {TABS.map(({ id, label, icon }) => (
             <button
               key={id}
               onClick={() => setActiveTab(id)}
-              className={`relative flex items-center gap-2 px-5 py-3 text-sm font-bold rounded-t-xl transition-colors whitespace-nowrap outline-none ${
-                activeTab === id
-                  ? 'text-indigo-700'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-100 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700'
-              }`}
+              style={activeTab === id ? { backgroundColor: '#4f46e5', color: '#ffffff', borderColor: '#6366f1' } : {}}
+              className={`relative flex items-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-bold rounded-xl transition-all whitespace-nowrap outline-none cursor-pointer border ${activeTab === id
+                ? 'bg-indigo-600 !text-white border-indigo-500 shadow-md ring-2 ring-indigo-500/30'
+                : 'bg-slate-100 dark:bg-slate-900/60 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700/80 hover:border-indigo-400/50 hover:bg-slate-200/60 dark:hover:bg-slate-800'
+                }`}
             >
-              <span className="relative z-10 flex items-center gap-2">{icon} {label}</span>
+              <span className="relative z-10 flex items-center gap-2" style={activeTab === id ? { color: '#ffffff' } : {}}>{icon} {label}</span>
             </button>
           ))}
         </div>

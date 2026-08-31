@@ -4,13 +4,13 @@ score_rounds.py
 Composite scoring helpers for coding round and case study round.
 
 Verbal Question-Answer Score:
-  60 marks max based on Q&A accuracy → (verbal_avg * 0.60)
+  80 marks max based on dynamically weighted technical questions.
 
-Coding Score:
-  40 marks max based strictly on test cases passed ratio → (test_score * 0.40)
+Coding Score / Case Study Score:
+  20 marks max based strictly on test cases passed ratio (or case study AI evaluation).
 
 Final Composite Score:
-  Out of 100 marks total → (verbal_avg * 0.60) + (coding_score * 0.40)
+  Out of 100 marks total (Round 1 Score + Round 2 Score)
 """
 
 from typing import Optional, Dict, Any
@@ -239,28 +239,61 @@ def blend_scores(
 # DYNAMIC COMMON SCORING ENGINE (ONLINE & OFFLINE)
 # ==============================================================================
 
+# Max case study questions allowed (each = 10 marks of Round 2)
+MAX_CASE_STUDY_QUESTIONS = 3
+
 def get_question_weight(question: dict) -> float:
     """
     Calculate the dynamic weight of a single question.
-    As requested, every question has equal marks, so weight is always 1.0.
+    Every question has equal marks, so weight is always 1.0.
     """
     return 1.0
 
-def calculate_round1_score(questions: list, answers: list) -> float:
+
+def get_marks_split(interview_type: str, n_case_study_questions: int = 0) -> tuple:
     """
-    Dynamically distributes 80 marks across the available technical questions.
+    Returns (round1_max, round2_max) based on interview type.
+
+    - Technical (+ Coding)     → (80, 20)  fixed
+    - Normal (Standard AI)     → (100, 0)  verbal only
+    - Non-Technical (Case Studies) → dynamic: each case study Q = 10 marks (max 3 Qs)
+        e.g. 1Q → (90, 10), 2Q → (80, 20), 3Q → (70, 30)
+    """
+    itype = str(interview_type).strip().lower()
+    if itype == "technical":
+        return (80.0, 20.0)
+    elif itype in ("non-technical", "non_technical", "non tech", "nontech"):
+        n = min(max(int(n_case_study_questions), 0), MAX_CASE_STUDY_QUESTIONS)
+        round2_max = n * 10.0
+        round1_max = 100.0 - round2_max
+        return (round1_max, round2_max)
+    else:
+        # Normal (Standard AI) and any other type → 100/0
+        return (100.0, 0.0)
+
+
+def calculate_round1_score(questions: list, answers: list, interview_type: str = "Technical", n_case_study_questions: int = 0) -> float:
+    """
+    Dynamically distributes Round 1 marks across verbal/technical questions.
     HR Screening questions are excluded from the AI score.
     Unanswered / skipped / missing answers receive 0.
+
+    Max marks depend on interview_type:
+      - Technical            → 80 marks
+      - Normal               → 100 marks
+      - Non-Technical        → (100 - n_case_study_questions × 10) marks
     """
     if not questions:
         return 0.0
-        
-    # Exclude HR Screening questions so they don't count towards the 80 marks
+
+    round1_max, _ = get_marks_split(interview_type, n_case_study_questions)
+
+    # Exclude HR Screening questions so they don't count towards marks
     eval_questions = [q for q in questions if str(q.get("type", "")).lower() != "hr screening"]
-    
+
     if not eval_questions:
         return 0.0
-        
+
     total_weight = 0.0
     q_weights = {}
     for q in eval_questions:
@@ -268,44 +301,72 @@ def calculate_round1_score(questions: list, answers: list) -> float:
         w = get_question_weight(q)
         q_weights[qid] = w
         total_weight += w
-        
+
     if total_weight == 0:
         return 0.0
-        
+
     # Create lookup for answers
     ans_lookup = {str(a.get("question_id")): a for a in answers}
-    
+
     round1_score = 0.0
-    
+
     for q in eval_questions:
         qid = str(q.get("id"))
         w = q_weights[qid]
-        
-        # Max marks for this specific question
-        q_max_marks = (w / total_weight) * 80.0
-        
+
+        # Max marks for this specific question (proportional share of round1_max)
+        q_max_marks = (w / total_weight) * round1_max
+
         ans = ans_lookup.get(qid)
         if ans and ans.get("ai_score") is not None:
             ai_score_100 = float(ans.get("ai_score", 0))
             q_marks_obtained = (ai_score_100 / 100.0) * q_max_marks
             round1_score += q_marks_obtained
-            
-    return round(min(80.0, max(0.0, round1_score)), 1)
+
+    return round(min(round1_max, max(0.0, round1_score)), 1)
+
 
 def calculate_coding_score(coding_round: dict) -> float:
     """
     Returns a max of 20 marks based strictly on test cases passed ratio.
+    Used only for Technical (+ Coding) interviews.
     """
     if not coding_round:
         return 0.0
-        
+
     test_case_ratio_pct = _compute_test_case_ratio(coding_round)
     coding_score = (test_case_ratio_pct / 100.0) * 20.0
     return round(min(20.0, max(0.0, coding_score)), 1)
 
-def calculate_final_score(round1_score: float, coding_score: float = 0.0) -> float:
+
+def calculate_case_study_round2_score(case_study_round: dict, n_questions: int, context: str = "", language: str = "English") -> float:
     """
-    Sums Round 1 (max 80) and Round 2 (max 20) for a max Final Score of 100.
+    Returns the Round 2 score for Non-Technical (Case Studies) interviews.
+    Each question is worth 10 marks (max 3 questions = max 30 marks).
+    The AI evaluates answers 0-100, then we scale to the per-question mark allocation.
     """
-    final = round1_score + coding_score
+    if not case_study_round:
+        return 0.0
+
+    n = min(max(int(n_questions), 0), MAX_CASE_STUDY_QUESTIONS)
+    if n == 0:
+        return 0.0
+
+    round2_max = n * 10.0
+
+    # Get AI score out of 100 for the case study
+    cs_score_100 = compute_case_study_score(case_study_round, context, language) or 0.0
+
+    # Scale to round2_max
+    round2_score = (cs_score_100 / 100.0) * round2_max
+    return round(min(round2_max, max(0.0, round2_score)), 1)
+
+
+def calculate_final_score(round1_score: float, round2_score: float = 0.0) -> float:
+    """
+    Sums Round 1 and Round 2 for a max Final Score of 100.
+    Works for all interview types since the per-type caps are enforced upstream.
+    """
+    final = round1_score + round2_score
     return round(min(100.0, max(0.0, final)), 1)
+

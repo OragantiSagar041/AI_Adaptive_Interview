@@ -200,8 +200,27 @@ function Nav() {
 }
 
 function Logo() {
+  const [logoUrl, setLogoUrl] = useState(logoImg);
+
+  useEffect(() => {
+    const cachedLogo = sessionStorage.getItem('platform_logo');
+    if (cachedLogo) {
+      setLogoUrl(cachedLogo);
+    }
+    // Always fetch in background to stay fresh
+    fetch(`${API_BASE_URL}/api/platform/settings`, { cache: 'no-store' })
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.hireiq_logo_url && data.hireiq_logo_url !== cachedLogo) {
+          setLogoUrl(data.hireiq_logo_url);
+          sessionStorage.setItem('platform_logo', data.hireiq_logo_url);
+        }
+      })
+      .catch(err => console.error("Error fetching logo:", err));
+  }, []);
+
   return (
-    <img src={logoImg} alt="Logo" className="h-30 w-auto object-contain brand-logo-img" />
+    <img src={logoUrl} alt="Logo" className="h-30 w-auto object-contain brand-logo-img" />
   );
 }
 
@@ -229,7 +248,7 @@ function Hero() {
             #1 AI Recruitment & Interview Intelligence Platform India
           </div>
           <h1 className="mt-6 text-5xl sm:text-6xl lg:text-7xl font-extrabold tracking-tighter leading-[1.02]">
-            India’s #1 <span className="text-gradient">AI Interview Platform</span> & Recruitment Software.
+            HireIQ: India’s #1 <span className="text-gradient">AI Interview Platform</span> & Recruitment Software.
           </h1>
           <p className="mt-6 text-lg text-muted-foreground max-w-2xl leading-relaxed">
             HireIQ is the leading <strong>AI mock interview platform</strong>, <strong>automated HR screening tool</strong>, and <strong>AI calling agent for recruitment</strong>. Automate candidate outreach, resume screening, live technical assessments, and <strong>bulk hiring in India</strong> 10× faster with predictive AI scoring.

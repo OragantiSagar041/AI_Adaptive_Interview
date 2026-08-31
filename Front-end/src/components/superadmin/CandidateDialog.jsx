@@ -590,8 +590,8 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
 
   return (
     <>
-      <div className="fixed top-16 left-0 md:left-64 right-0 bottom-0 z-30 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 md:p-6" onClick={(e) => { if (e.target === e.currentTarget) onOpenChange(false) }}>
-        <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 sm:p-6 pt-16 sm:pt-20" onClick={(e) => { if (e.target === e.currentTarget) onOpenChange(false) }}>
+        <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-5xl max-h-[80vh] flex flex-col overflow-hidden my-auto">
 
           {/* ── Header ── */}
           <div className="relative p-6 pb-4 border-b border-border bg-card shrink-0">
@@ -627,11 +627,11 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                     </span>
                     <span className="text-xs font-medium text-muted-foreground">ID: {candidate.link_id || candidate.id}</span>
                     {(c.decision_by_name || c.last_action_by_name) && (
-                      <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-white px-2.5 py-1 rounded-md border border-slate-200 shadow-xs" title={`Action taken by ${c.decision_by_name || c.last_action_by_name} (${c.decision_by_role || c.last_action_by_role || 'Admin'})`}>
-                        <UserCheck size={13} className="text-indigo-600" />
-                        Decision by: <strong className="text-indigo-700">{c.decision_by_name || c.last_action_by_name}</strong>
+                      <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-md border border-slate-300 dark:border-slate-700 shadow-xs" title={`Action taken by ${c.decision_by_name || c.last_action_by_name} (${c.decision_by_role || c.last_action_by_role || 'Admin'})`}>
+                        <UserCheck size={13} className="text-indigo-600 dark:text-indigo-400" />
+                        Decision by: <strong className="text-indigo-700 dark:text-indigo-300">{c.decision_by_name || c.last_action_by_name}</strong>
                         {(c.decision_by_role || c.last_action_by_role) && (
-                          <span className="text-[10px] text-slate-400 font-bold uppercase">({c.decision_by_role || c.last_action_by_role})</span>
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase">({c.decision_by_role || c.last_action_by_role})</span>
                         )}
                       </span>
                     )}
@@ -644,7 +644,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                 </div>
                 <div className="hidden sm:flex flex-col items-center justify-center mr-16">
                   <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">AI Score</div>
-                  <div className={`text-4xl font-black tabular-nums tracking-tighter mt-1 ${aiScore >= 75 ? 'text-emerald-600' : aiScore >= 50 ? 'text-amber-500' : 'text-rose-500'}`}>{aiScore.toFixed(0)}%</div>
+                  <div className={`text-4xl font-black tabular-nums tracking-tighter mt-1 ${aiScore >= 75 ? 'text-emerald-600' : aiScore >= 50 ? 'text-amber-500' : 'text-rose-500'}`}>{aiScore.toFixed(1)}%</div>
                 </div>
               </div>
             )}
@@ -1015,25 +1015,25 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                     }
 
                     return (
-                      <div className="bg-secondary rounded-xl border border-border p-4 shadow-sm flex items-center justify-between gap-4">
+                      <div className="bg-slate-50 dark:bg-slate-900/80 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm flex items-center justify-between gap-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-lg bg-indigo-600/10 text-indigo-600 flex items-center justify-center font-bold">
+                          <div className="w-9 h-9 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
                             <Mic size={18} />
                           </div>
                           <div>
-                            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Detected Language & Accent</div>
-                            <div className="text-sm font-black text-slate-850 flex items-center gap-2 mt-0.5">
-                              <span className="text-slate-800 font-bold">{lang}</span>
-                              <span className="text-slate-300">•</span>
-                              <span className="text-indigo-600 font-bold">{accent}</span>
+                            <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Detected Language & Accent</div>
+                            <div className="text-sm font-black flex items-center gap-2 mt-0.5">
+                              <span className="text-slate-800 dark:text-slate-100 font-bold">{lang}</span>
+                              <span className="text-slate-400 dark:text-slate-600">•</span>
+                              <span className="text-indigo-600 dark:text-indigo-400 font-bold">{accent}</span>
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 font-semibold text-xs rounded-lg border border-indigo-200/50">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 text-xs font-bold border border-indigo-200/60 dark:border-indigo-800">
                             {lang}
                           </span>
-                          <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 font-semibold text-xs rounded-lg border border-emerald-200/50">
+                          <span className="px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 text-xs font-bold border border-indigo-200/60 dark:border-indigo-800">
                             {accent}
                           </span>
                         </div>
@@ -1117,32 +1117,31 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
               </div>
             )}
 
-            {/* ── Footer Actions ── */}
-            <div className="border-t border-slate-200/80 p-4 bg-white flex flex-wrap items-center justify-end gap-3 shrink-0">
-              <button onClick={() => setShowNotes(!showNotes)} className={`flex items-center gap-2 px-4 py-2 text-sm font-bold border rounded-xl transition-colors shadow-sm ${showNotes ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'text-slate-600 bg-white border-slate-200 hover:bg-slate-50'}`}>
-                <MessageSquare size={16} /> Notes {(c.notes?.length > 0) && <span className="bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded text-[10px] leading-none ml-1">{c.notes.length}</span>}
+          {/* ── Footer Actions ── */}
+          <div className="border-t border-slate-200 dark:border-slate-800 p-4 bg-slate-50 dark:bg-slate-900/90 flex flex-wrap items-center justify-end gap-3 shrink-0">
+            <button onClick={() => setShowNotes(!showNotes)} className={`flex items-center gap-2 px-4 py-2 text-sm font-bold border rounded-xl transition-all shadow-xs ${showNotes ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'}`}>
+              <MessageSquare size={16} /> Notes {(c.notes?.length > 0) && <span className="bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 px-1.5 py-0.5 rounded text-[10px] leading-none ml-1">{c.notes.length}</span>}
+            </button>
+            <button onClick={handleViewProfile} className="flex items-center gap-2 px-4 py-2 text-sm font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all shadow-xs">
+              <Eye size={16} /> View Profile
+            </button>
+            <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1" />
+            {c.decision !== 'rejected' && (
+              <button onClick={() => handleDecision('rejected')} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 dark:bg-rose-500/20 border border-rose-200 dark:border-rose-500/40 rounded-xl hover:bg-rose-500/20 dark:hover:bg-rose-500/30 transition-all shadow-xs">
+                <X size={16} strokeWidth={3} /> Reject
               </button>
-              <button onClick={handleViewProfile} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
-                <Eye size={16} /> View Profile
+            )}
+            {c.decision !== 'selected' && c.decision !== 'hired' && (
+              <button onClick={() => handleDecision('selected')} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/20 border border-emerald-200 dark:border-emerald-500/40 rounded-xl hover:bg-emerald-500/20 dark:hover:bg-emerald-500/30 transition-all shadow-xs">
+                <Check size={16} strokeWidth={3} /> Select
               </button>
-              <div className="w-px h-6 bg-slate-200 mx-1" />
-              {c.decision !== 'rejected' && (
-                <button onClick={() => handleDecision('rejected')} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-rose-600 bg-rose-50 border border-rose-100 rounded-xl hover:bg-rose-100 transition-colors shadow-sm">
-                  <X size={16} strokeWidth={3} /> Reject
-                </button>
-              )}
-              {c.decision !== 'selected' && c.decision !== 'hired' && (
-                <button onClick={() => handleDecision('selected')} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl hover:bg-emerald-100 transition-colors shadow-sm">
-                  <Check size={16} strokeWidth={3} /> Select
-                </button>
-              )}
-              <button onClick={handleSchedule} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-xl hover:bg-indigo-100 transition-colors shadow-sm">
-                <Calendar size={16} /> Schedule
-              </button>
-              <button onClick={handleOffer} className="flex items-center gap-2 px-5 py-2 text-sm font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 transition-colors shadow-sm">
-                <Send size={16} /> Send Offer
-              </button>
-            </div>
+            )}
+            <button onClick={handleSchedule} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 dark:bg-indigo-500/20 border border-indigo-200 dark:border-indigo-500/40 rounded-xl hover:bg-indigo-500/20 dark:hover:bg-indigo-500/30 transition-all shadow-xs">
+              <Calendar size={16} /> Schedule
+            </button>
+            <button onClick={handleOffer} style={{ backgroundColor: '#4f46e5', color: '#ffffff', borderColor: '#4338ca' }} className="flex items-center gap-2 px-5 py-2 text-sm font-extrabold rounded-xl border transition-all shadow-md shadow-indigo-500/30 hover:opacity-90 cursor-pointer">
+              <Send size={16} /> Send Offer
+            </button>
           </div>
 
           <ScheduleModal
@@ -1152,11 +1151,19 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
           />
         </div>
 
-        {/* ── Resume Sub-Modal ── */}
-        {showResumeModal && (
-          <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4" onClick={() => setShowResumeModal(false)}>
-            <div className="bg-white dark:bg-slate-800/60 rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-700/80 w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0 bg-white dark:bg-slate-800/80">
+        <ScheduleModal
+          isOpen={showScheduleModal}
+          onClose={() => setShowScheduleModal(false)}
+          candidate={c}
+        />
+      </div>
+
+      {/* ── Resume Sub-Modal ── */}
+      {
+        showResumeModal && (
+          <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/80 backdrop-blur-md p-4 sm:p-6 pt-16 sm:pt-20" onClick={() => setShowResumeModal(false)}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden my-auto" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
                 <div className="flex items-center gap-2">
                   <div className="p-2 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-lg"><FileText size={18} /></div>
                   <div>
@@ -1175,10 +1182,11 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
           </div>
         )}
 
-        {/* ── Recording Sub-Modal ── */}
-        {showRecordingModal && (
-          <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4" onClick={() => setShowRecordingModal(false)}>
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+      {/* ── Recording Sub-Modal ── */}
+      {
+        showRecordingModal && (
+          <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/80 backdrop-blur-md p-4 sm:p-6 pt-16 sm:pt-20" onClick={() => setShowRecordingModal(false)}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col overflow-hidden my-auto" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
                 <div className="flex items-center gap-2">
                   <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg"><Video size={18} /></div>
@@ -1238,10 +1246,11 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
         )}
 
 
-        {/* ── Transcript Sub-Modal ── */}
-        {showTranscriptModal && (
-          <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4" onClick={() => setShowTranscriptModal(false)}>
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+      {/* ── Transcript Sub-Modal ── */}
+      {
+        showTranscriptModal && (
+          <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/80 backdrop-blur-md p-4 sm:p-6 pt-16 sm:pt-20" onClick={() => setShowTranscriptModal(false)}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col overflow-hidden my-auto" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between px-6 py-4 shrink-0">
                 <div className="flex items-center gap-2">
                   <div className="p-2 bg-violet-50 text-violet-600 rounded-lg"><MessageSquare size={18} /></div>
@@ -1252,15 +1261,52 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                 </div>
                 <div className="flex items-center gap-4">
                   {(() => {
-                    const verbalAnsForScore = (c.answers || []).filter(a => !a.question_text?.toLowerCase().includes('coding round') && !a.question_text?.toLowerCase().includes('case study'));
-                    const validVerbalAnsForScore = verbalAnsForScore.filter(a => a.ai_score !== null && a.ai_score !== undefined);
-                    if (validVerbalAnsForScore.length === 0) return null;
-                    const verbalAiScore = validVerbalAnsForScore.reduce((sum, a) => sum + Number(a.ai_score), 0) / validVerbalAnsForScore.length;
+                    let displayScore = aiScore;
+                    let displayLabel = "AI Score";
+
+                    // Determine interview type and max marks dynamically
+                    const itype = (c.interview_type || 'Technical').trim().toLowerCase();
+                    const isNonTech = ['non-technical', 'non_technical', 'non tech', 'nontech'].includes(itype);
+                    const isNormal = !isNonTech && itype !== 'technical';
+
+                    // For Non-Tech: derive n_case_study_questions from round2_score / 10 or fallback
+                    const round2Max = isNonTech
+                      ? Math.min(Math.round((c.round2_score || 0) > 0 ? Math.ceil(c.round2_score / 10) * 10 : (c.case_study_round?.questions?.length || 0) * 10), 30)
+                      : isNormal ? 0 : 20;
+                    const round1Max = isNormal ? 100 : (100 - round2Max);
+
+                    if (transcriptTab === 'verbal') {
+                        displayLabel = "Verbal Score";
+                        if (c.round1_score !== undefined) {
+                            displayScore = c.round1_score;
+                        } else {
+                            // Legacy fallback for old sessions
+                            const verbalAnsForScore = (c.answers || []).filter(a => !a.question_text?.toLowerCase().includes('coding round') && !a.question_text?.toLowerCase().includes('case study'));
+                            const validVerbalAnsForScore = verbalAnsForScore.filter(a => a.ai_score !== null && a.ai_score !== undefined);
+                            displayScore = validVerbalAnsForScore.length > 0 ? (validVerbalAnsForScore.reduce((sum, a) => sum + Number(a.ai_score), 0) / validVerbalAnsForScore.length) * (round1Max / 100) : 0;
+                        }
+                    } else if (transcriptTab === 'coding') {
+                        displayLabel = isNonTech ? "Case Study Score" : "Coding Score";
+                        if (c.round2_score !== undefined) {
+                            displayScore = c.round2_score;
+                        } else {
+                            // Legacy fallback for old sessions
+                            displayScore = c.coding_round ? round2Max : 0;
+                        }
+                    }
+
+                    const maxForTab = transcriptTab === 'coding' ? round2Max : round1Max;
+                    const goodThreshold = maxForTab * 0.75;
+                    const okThreshold = maxForTab * 0.5;
+
                     return (
                       <div className="flex flex-col items-end justify-center mr-2">
-                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">AI Score</div>
-                        <div className={`text-2xl font-black tabular-nums tracking-tighter mt-0.5 ${verbalAiScore >= 75 ? 'text-emerald-600' : verbalAiScore >= 50 ? 'text-amber-500' : 'text-rose-500'}`}>
-                          {verbalAiScore.toFixed(0)}%
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{displayLabel}</div>
+                        <div className={`text-2xl font-black tabular-nums tracking-tighter mt-0.5 ${displayScore >= goodThreshold ? 'text-emerald-600' : displayScore >= okThreshold ? 'text-amber-500' : 'text-rose-500'}`}>
+                          {displayScore.toFixed(1)}
+                          <span className="text-sm font-bold text-slate-400 ml-1">
+                             / {maxForTab}
+                          </span>
                         </div>
                       </div>
                     );

@@ -6,21 +6,21 @@ import { Video, MicOff, MonitorOff, Code, MessageSquare, Briefcase, RefreshCw, E
 
 // Maps violation_type values to a human-readable label
 const VIOLATION_META = {
-  tab_switch:          { label: 'Tab Switch',          color: 'text-rose-600',   bg: 'bg-rose-50' },
-  screenshot_shortcut: { label: 'Screenshot Attempt',  color: 'text-orange-600', bg: 'bg-orange-50' },
-  clipboard_attempt:   { label: 'Copy / Paste',        color: 'text-amber-600',  bg: 'bg-amber-50' },
-  print_attempt:       { label: 'Print Attempt',       color: 'text-amber-600',  bg: 'bg-amber-50' },
-  save_attempt:        { label: 'Save Page',           color: 'text-amber-600',  bg: 'bg-amber-50' },
-  devtools_open:       { label: 'DevTools Opened',     color: 'text-rose-600',   bg: 'bg-rose-50' },
-  devtools_attempt:    { label: 'DevTools Attempt',    color: 'text-rose-600',   bg: 'bg-rose-50' },
-  window_blur:         { label: 'App Switch',          color: 'text-orange-600', bg: 'bg-orange-50' },
-  multi_monitor:       { label: 'Multi-Monitor',       color: 'text-amber-600',  bg: 'bg-amber-50' },
-  no_face:             { label: 'No Face Detected',    color: 'text-rose-600',   bg: 'bg-rose-50' },
-  multi_person:        { label: 'Multiple Faces',      color: 'text-rose-600',   bg: 'bg-rose-50' },
-  phone:               { label: 'Phone Detected',      color: 'text-rose-600',   bg: 'bg-rose-50' },
-  eye_contact:         { label: 'Eye Contact Lost',    color: 'text-orange-600', bg: 'bg-orange-50' },
-  lip_sync:            { label: 'Lip-Sync Mismatch',   color: 'text-amber-600',  bg: 'bg-amber-50' },
-  noise_alert:         { label: 'Background Noise',    color: 'text-amber-600',  bg: 'bg-amber-50' },
+  tab_switch: { label: 'Tab Switch', color: 'text-rose-600', bg: 'bg-rose-50' },
+  screenshot_shortcut: { label: 'Screenshot Attempt', color: 'text-orange-600', bg: 'bg-orange-50' },
+  clipboard_attempt: { label: 'Copy / Paste', color: 'text-amber-600', bg: 'bg-amber-50' },
+  print_attempt: { label: 'Print Attempt', color: 'text-amber-600', bg: 'bg-amber-50' },
+  save_attempt: { label: 'Save Page', color: 'text-amber-600', bg: 'bg-amber-50' },
+  devtools_open: { label: 'DevTools Opened', color: 'text-rose-600', bg: 'bg-rose-50' },
+  devtools_attempt: { label: 'DevTools Attempt', color: 'text-rose-600', bg: 'bg-rose-50' },
+  window_blur: { label: 'App Switch', color: 'text-orange-600', bg: 'bg-orange-50' },
+  multi_monitor: { label: 'Multi-Monitor', color: 'text-amber-600', bg: 'bg-amber-50' },
+  no_face: { label: 'No Face Detected', color: 'text-rose-600', bg: 'bg-rose-50' },
+  multi_person: { label: 'Multiple Faces', color: 'text-rose-600', bg: 'bg-rose-50' },
+  phone: { label: 'Phone Detected', color: 'text-rose-600', bg: 'bg-rose-50' },
+  eye_contact: { label: 'Eye Contact Lost', color: 'text-orange-600', bg: 'bg-orange-50' },
+  lip_sync: { label: 'Lip-Sync Mismatch', color: 'text-amber-600', bg: 'bg-amber-50' },
+  noise_alert: { label: 'Background Noise', color: 'text-amber-600', bg: 'bg-amber-50' },
 }
 
 function formatTs(ts) {
@@ -40,7 +40,7 @@ export default function SpectatorPage() {
     const queryParams = new URLSearchParams(window.location.search)
     const t = hashParams.get('token') || queryParams.get('token') || (linkId ? sessionStorage.getItem(`spectator_token_${linkId}`) : null)
     if (t && linkId) {
-      try { sessionStorage.setItem(`spectator_token_${linkId}`, t) } catch (_) {}
+      try { sessionStorage.setItem(`spectator_token_${linkId}`, t) } catch (_) { }
     }
     return t
   })
@@ -153,8 +153,8 @@ export default function SpectatorPage() {
 
       pc.onicecandidate = (e) => {
         if (e.candidate && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ 
-            type: 'webrtc_ice_candidate', 
+          ws.send(JSON.stringify({
+            type: 'webrtc_ice_candidate',
             candidate: e.candidate,
             spectator_id: spectatorIdRef.current,
             admin_id: spectatorIdRef.current,
@@ -205,8 +205,8 @@ export default function SpectatorPage() {
 
       const offer = await pc.createOffer()
       await pc.setLocalDescription(offer)
-      ws.send(JSON.stringify({ 
-        type: 'webrtc_offer', 
+      ws.send(JSON.stringify({
+        type: 'webrtc_offer',
         sdp: offer,
         spectator_id: spectatorIdRef.current,
         admin_id: spectatorIdRef.current,
@@ -311,7 +311,7 @@ export default function SpectatorPage() {
             await pcRef.current.setRemoteDescription(new RTCSessionDescription(msg.sdp))
             const queue = iceCandidateQueueRef.current || []
             for (const candidate of queue) {
-              try { await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate)) } catch (_) {}
+              try { await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate)) } catch (_) { }
             }
             iceCandidateQueueRef.current = []
           }
@@ -377,7 +377,7 @@ export default function SpectatorPage() {
 
   return (
     <div className="min-h-screen bg-[#0f0f1a] text-slate-200 flex flex-col font-sans">
-      
+
       {/* ── Header / Watermark ──────────────────────────────────────────────── */}
       <header className="bg-slate-900/80 backdrop-blur-md border-b border-white/10 px-6 py-3.5 flex items-center justify-between shadow-sm sticky top-0 z-30">
         <div className="flex items-center gap-3">
@@ -392,21 +392,20 @@ export default function SpectatorPage() {
             <p className="text-xs text-slate-400 font-medium">Session ID: {linkId}</p>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 bg-slate-800/90 px-3.5 py-1.5 rounded-full border border-slate-700">
-            <span className={`w-2.5 h-2.5 rounded-full ${
-              status === 'streaming' ? 'bg-emerald-500 animate-pulse' :
-              status === 'connecting' || status === 'negotiating' ? 'bg-amber-400 animate-pulse' : 'bg-rose-500'
-            }`} />
+            <span className={`w-2.5 h-2.5 rounded-full ${status === 'streaming' ? 'bg-emerald-500 animate-pulse' :
+                status === 'connecting' || status === 'negotiating' ? 'bg-amber-400 animate-pulse' : 'bg-rose-500'
+              }`} />
             <span className="text-xs font-semibold text-slate-300 uppercase tracking-widest">
-              {status === 'streaming'   ? 'LIVE' :
-               status === 'connecting'  ? 'Connecting...' :
-               status === 'negotiating' ? 'Establishing...' : status}
+              {status === 'streaming' ? 'LIVE' :
+                status === 'connecting' ? 'Connecting...' :
+                  status === 'negotiating' ? 'Establishing...' : status}
             </span>
           </div>
-          
-          <button 
+
+          <button
             onClick={handleManualRetry}
             className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-full border border-slate-700 transition-colors shadow-sm"
           >
@@ -418,18 +417,18 @@ export default function SpectatorPage() {
 
       {/* ── Main Content Grid ─────────────────────────────────────────────── */}
       <main className="flex-1 p-4 md:p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-7xl mx-auto w-full">
-        
+
         {/* Left Column (Video Stream) */}
         <div className="lg:col-span-2 flex flex-col gap-4">
           <div className="bg-slate-900 rounded-2xl border border-white/10 shadow-2xl overflow-hidden aspect-video relative flex items-center justify-center group">
-            
+
             {status !== 'streaming' && (
               <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-slate-900/90 backdrop-blur-sm p-6 text-center">
                 <Video className="w-12 h-12 text-slate-600 mb-4 animate-pulse" />
                 <p className="text-slate-300 font-semibold mb-1">
-                  {status === 'disconnected' ? 'Candidate disconnected.' : 
-                   status === 'error' ? 'Connection error.' : 
-                   'Connecting to candidate stream...'}
+                  {status === 'disconnected' ? 'Candidate disconnected.' :
+                    status === 'error' ? 'Connection error.' :
+                      'Connecting to candidate stream...'}
                 </p>
                 <p className="text-xs text-slate-500 max-w-xs">
                   {status === 'connecting' || status === 'negotiating' ? 'Performing peer handshake and media negotiation...' : 'Click refresh to attempt reconnecting.'}
@@ -443,7 +442,7 @@ export default function SpectatorPage() {
               playsInline
               className="w-full h-full object-contain bg-black"
             />
-            
+
             {/* Top Overlay badges */}
             <div className="absolute top-3 left-3 flex flex-wrap gap-2 z-20">
               <div className="px-2.5 py-1 bg-black/60 backdrop-blur-md rounded-full text-xs font-semibold border border-white/10 flex items-center gap-1.5 text-slate-300">
@@ -460,11 +459,10 @@ export default function SpectatorPage() {
                 <button
                   type="button"
                   onClick={() => setActiveView('camera')}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
-                    activeView === 'camera'
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${activeView === 'camera'
                       ? 'bg-indigo-600 text-white'
                       : 'text-slate-400 hover:text-slate-200'
-                  }`}
+                    }`}
                 >
                   <Camera size={12} />
                   Camera
@@ -472,11 +470,10 @@ export default function SpectatorPage() {
                 <button
                   type="button"
                   onClick={() => setActiveView('screen')}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
-                    activeView === 'screen'
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${activeView === 'screen'
                       ? 'bg-indigo-600 text-white'
                       : 'text-slate-400 hover:text-slate-200'
-                  }`}
+                    }`}
                 >
                   <Monitor size={12} />
                   Screen
@@ -501,7 +498,7 @@ export default function SpectatorPage() {
 
         {/* Right Column (Telemetry & Logs) */}
         <div className="bg-slate-900 rounded-2xl border border-white/10 shadow-2xl flex flex-col overflow-hidden max-h-[80vh]">
-          
+
           <div className="p-5 border-b border-white/10 bg-slate-800/40">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Current Focus</h3>
             {telemetry ? (
@@ -523,7 +520,7 @@ export default function SpectatorPage() {
               <p className="text-xs text-slate-500 italic">Waiting for interview telemetry...</p>
             )}
           </div>
-          
+
           <div className="flex-1 p-5 overflow-y-auto">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center justify-between">
               Proctoring Events
@@ -533,7 +530,7 @@ export default function SpectatorPage() {
                 </span>
               )}
             </h3>
-            
+
             {violations.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-40 text-slate-500 text-center">
                 <p className="text-xs">No integrity violations recorded in this session.</p>
@@ -561,4 +558,3 @@ export default function SpectatorPage() {
     </div>
   )
 }
-

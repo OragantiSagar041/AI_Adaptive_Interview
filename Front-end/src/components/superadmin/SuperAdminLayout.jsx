@@ -514,7 +514,7 @@ export default function SuperAdminLayout() {
         {/* NEW SHADCN SIDEBAR */}
         {layoutConfig?.layout_type !== "navbar" && (
           <Sidebar
-            className="border-r border-border z-20 overflow-hidden bg-sidebar"
+            className="border-r border-border overflow-hidden bg-sidebar"
             collapsible="icon"
           >
             <SidebarHeader className="h-16 px-6 py-0 flex items-center justify-center shrink-0 border-b border-border transition-colors">
@@ -798,9 +798,7 @@ export default function SuperAdminLayout() {
 
           {/* Main Content */}
           <main className="flex-1 overflow-y-auto bg-transparent relative">
-
-            <div className="relative z-10">
-
+            <div className="relative">
               <div className="p-4 lg:p-8">
                 <Outlet context={{ handleOpenLiveStreamAction }} />
               </div>

@@ -220,36 +220,72 @@ def complete_session(
                     all_scored = all(a.get("scoring_status") in ("complete", "failed") for a in answers)
                     
                     if all_scored and not session.get("notification_sent"):
-                        # Reuse the existing score in the database session document if available
-                        avg_score = session.get("avg_score")
-                        if avg_score is None:
-                            # 1. Determine total expected questions
+                        # ALWAYS recalculate the final score to include the coding/case-study round
+                        avg_score = session.get("avg_score") or 0.0
+                        try:
+                            from app.ai.score_rounds import (
+                                calculate_round1_score, calculate_coding_score,
+                                calculate_case_study_round2_score, calculate_final_score
+                            )
                             interview_doc = interviews_collection.find_one({"id": interview_id})
-                            total_expected = 0
-                            if interview_doc and interview_doc.get("questions"):
+                            questions = []
+                            round1_s = 0.0
+                            round2_s = 0.0
+
+                            # Determine interview type for scoring model
+                            interview_type = "Technical"
+                            if interview_doc and interview_doc.get("interview_type"):
+                                interview_type = interview_doc["interview_type"]
+                            elif session.get("interview_type"):
+                                interview_type = session["interview_type"]
+
+                            if interview_doc:
                                 q_data = interview_doc.get("questions")
                                 if isinstance(q_data, str):
                                     import json
                                     try:
-                                        total_expected = len(json.loads(q_data))
+                                        questions = json.loads(q_data)
                                     except:
                                         pass
                                 elif isinstance(q_data, list):
-                                    total_expected = len(q_data)
-                                    
-                            # 2. Get scores for answered questions
-                            scores = [a.get("ai_score", 0) for a in answers if a.get("ai_score") is not None]
-                            
-                            # 3. Fallback: if dynamic questions exceeded expected, or expected is 0
-                            total_expected = max(total_expected, len(scores))
-                            
-                            # 4. Calculate average based on TOTAL expected questions (penalizing skips)
-                            avg_score = sum(scores) / total_expected if total_expected > 0 else 0
+                                    questions = q_data
+
+                                if not questions and session.get("pre_generated_questions"):
+                                    import json
+                                    try:
+                                        questions = json.loads(session.get("pre_generated_questions"))
+                                    except:
+                                        pass
+
+                                coding_rd = interview_doc.get("coding_round")
+                                case_std = interview_doc.get("case_study_round")
+                                n_cs_questions = len((case_std or {}).get("questions", []) or []) if case_std else 0
+
+                                # Round 1: dynamic based on interview type
+                                round1_s = calculate_round1_score(questions, answers, interview_type=interview_type, n_case_study_questions=n_cs_questions)
+
+                                # Round 2: route by interview type
+                                itype_lower = str(interview_type).strip().lower()
+                                if itype_lower == "technical" and coding_rd:
+                                    round2_s = calculate_coding_score(coding_rd)
+                                elif itype_lower in ("non-technical", "non_technical", "non tech", "nontech") and case_std:
+                                    lang_cs = interview_doc.get("language", "English")
+                                    ctx_cs = f"Profile: {interview_doc.get('profile_text', '')}"
+                                    round2_s = calculate_case_study_round2_score(case_std, n_cs_questions, ctx_cs, lang_cs)
+                                # Normal / other types: round2_s stays 0.0
+
+                            avg_score = calculate_final_score(round1_s, round2_s)
+                        except Exception as e:
+                            print(f"Error calculating final score on completion: {e}")
+
                         
                         interview_sessions_collection.update_one(
                             {"link_id": link_id},
                             {"$set": {
+                                "score": round(avg_score, 1),
                                 "avg_score": round(avg_score, 1),
+                                "round1_score": round(round1_s, 1),
+                                "round2_score": round(round2_s, 1),
                                 "notification_sent": True
                             }}
                         )

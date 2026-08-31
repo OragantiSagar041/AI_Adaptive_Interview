@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useOutletContext, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { loadSuperAdminDashboard, loadRecruitmentFunnel, loadPlatformAnalytics, loadLiveSessions } from "@/store/slices/dashboardSlice";
@@ -148,6 +148,21 @@ export default function SuperDashboardPage() {
   const [adminsList, setAdminsList] = useState([]);
   const [showLivePicker, setShowLivePicker] = useState(false);
   const [livePickerLoading, setLivePickerLoading] = useState(false);
+  const livePickerRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (livePickerRef.current && !livePickerRef.current.contains(event.target)) {
+        setShowLivePicker(false);
+      }
+    }
+    if (showLivePicker) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showLivePicker]);
 
   useEffect(() => {
     const fetchAdmins = async () => {
@@ -343,7 +358,7 @@ export default function SuperDashboardPage() {
                 </div>
               </div>
               {/* Live Sessions Picker */}
-              <div className="mt-3 relative">
+              <div className="mt-3 relative" ref={livePickerRef}>
                 <div className="flex items-center justify-end text-[11px]">
                   <span
                     className="text-blue-500 font-medium cursor-pointer flex items-center hover:underline"
@@ -365,7 +380,12 @@ export default function SuperDashboardPage() {
                   </span>
                 </div>
                 {showLivePicker && (
-                  <div className="absolute bottom-6 right-0 z-50 w-72 bg-white dark:bg-slate-800/60/95 backdrop-blur-xl border border-white/60 rounded-xl shadow-2xl overflow-hidden">
+                  <>
+                    <div
+                      className="fixed inset-0 z-40 bg-transparent"
+                      onClick={() => setShowLivePicker(false)}
+                    />
+                    <div className="absolute bottom-6 right-0 z-50 w-72 bg-white dark:bg-slate-800/95 backdrop-blur-xl border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-fadeIn">
                     <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50/50">
                       <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Live Sessions</span>
                       <button
@@ -422,6 +442,7 @@ export default function SuperDashboardPage() {
                       </div>
                     )}
                   </div>
+                </>
                 )}
               </div>
             </div>
