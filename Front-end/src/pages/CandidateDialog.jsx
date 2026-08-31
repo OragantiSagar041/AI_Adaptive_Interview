@@ -11,6 +11,7 @@ import {
   MessageSquare, Video, Scale, Loader2, AlertCircle, Monitor,
   Mic, ShieldAlert, Eye, UserCheck, User, ArrowLeft
 } from "lucide-react"
+import { jsPDF } from 'jspdf'
 
 // ── Score Ring ──────────────────────────────────────────────────────────────
 function ScoreRing({ value, size = 140, strokeWidth = 12, label, tone }) {
@@ -355,6 +356,103 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
     const linkId = c.link_id || candidate.link_id || c.id || candidate.id || c._id || candidate._id
     const basePath = window.location.pathname.startsWith('/superadmin') ? '/superadmin' : '/admin'
     navigate(`${basePath}/candidate/profile/${linkId}`, { state: { candidate: c } })
+  }
+
+  const formatAnswerDuration = (seconds) => {
+    const duration = Number(seconds || 0)
+    if (duration <= 0) return ''
+    const minutes = Math.floor(duration / 60)
+    const remainingSeconds = Math.floor(duration) % 60
+    return minutes > 0 ? `${minutes}m ${remainingSeconds}s` : `${Math.floor(duration)}s`
+  }
+
+  const handleDownloadTranscript = () => {
+    if (!c.answers || c.answers.length === 0) return
+
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+    const margin = 15
+    const pageHeight = doc.internal.pageSize.height
+    const pageWidth = doc.internal.pageSize.width
+    let y = 20
+
+    const checkPageBreak = (neededHeight) => {
+      if (y + neededHeight > pageHeight - margin) {
+        doc.addPage()
+        y = margin + 5
+      }
+    }
+
+    doc.setFontSize(16)
+    doc.setFont('helvetica', 'bold')
+    doc.text(`Interview Q&A: ${c.candidate_name || 'Unknown Candidate'}`, margin, y)
+    y += 10
+    doc.setFontSize(11)
+    doc.setFont('helvetica', 'normal')
+    doc.text(`Status: ${c.status || 'Completed'}`, margin, y)
+    y += 6
+    doc.text(`Total Score: ${c.score || c.avg_score || 0}/100`, margin, y)
+    y += 10
+    doc.setDrawColor(200)
+    doc.line(margin, y, pageWidth - margin, y)
+    y += 10
+
+    c.answers.forEach((a, index) => {
+      const questionLines = doc.splitTextToSize(`Q${index + 1}: ${a.question_text || 'No question recorded'}`, pageWidth - 2 * margin)
+      checkPageBreak(questionLines.length * 5 + 30)
+      doc.setFont('helvetica', 'bold')
+      doc.text(questionLines, margin, y)
+      y += questionLines.length * 5 + 3
+
+      const answerDuration = formatAnswerDuration(a.time_spent_seconds)
+      if (answerDuration) {
+        doc.setFont('helvetica', 'normal')
+        doc.text(`Time Taken: ${answerDuration}`, margin, y)
+        y += 5
+      }
+
+      const wpm = Number(a.wpm || 0)
+      const faceAlerts = Number(a.face_alerts || 0)
+      const aiScore = a.ai_score !== null && a.ai_score !== undefined
+        ? `${Number(a.ai_score).toFixed(0)}%`
+        : 'N/A'
+      doc.setFontSize(10)
+      doc.text(`WPM: ${wpm > 0 ? wpm.toFixed(0) : 'N/A'}  |  AI Score: ${aiScore}  |  Face Alerts: ${faceAlerts}`, margin, y)
+      y += 5
+      doc.setFontSize(11)
+      y += 4
+      doc.setFont('helvetica', 'normal')
+      doc.text("Candidate's Answer:", margin, y)
+      y += 5
+      checkPageBreak(5)
+      const answerLines = doc.splitTextToSize(a.answer_text || 'No answer provided', pageWidth - 2 * margin)
+      answerLines.forEach((line) => {
+        checkPageBreak(5)
+        doc.text(line, margin, y)
+        y += 5
+      })
+
+      if (a.ai_feedback) {
+        checkPageBreak(10)
+        doc.setFont('helvetica', 'italic')
+        doc.text('AI Feedback:', margin, y)
+        y += 5
+        doc.setFont('helvetica', 'normal')
+        const feedbackLines = doc.splitTextToSize(a.ai_feedback, pageWidth - 2 * margin)
+        feedbackLines.forEach((line) => {
+          checkPageBreak(5)
+          doc.text(line, margin, y)
+          y += 5
+        })
+      }
+
+      y += 5
+      checkPageBreak(5)
+      doc.setDrawColor(200)
+      doc.line(margin, y, pageWidth - margin, y)
+      y += 10
+    })
+
+    doc.save(`${c.candidate_name?.replace(/\s+/g, '_') || 'Candidate'}_interview_qa.pdf`)
   }
 
 
@@ -736,7 +834,16 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
               {/* Q&A Answers */}
               {c.answers && c.answers.length > 0 && (
                 <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
-                  <h3 className="text-sm font-black text-slate-800 mb-4">Interview Q&A ({c.answers.length} questions)</h3>
+                  <div className="flex items-center justify-between gap-3 mb-4">
+                    <h3 className="text-sm font-black text-slate-800">Interview Q&A ({c.answers.length} questions)</h3>
+                    <button
+                      onClick={handleDownloadTranscript}
+                      className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors shadow-sm"
+                      title="Download Interview Q&A"
+                    >
+                      <Download size={14} /> Download
+                    </button>
+                  </div>
                   <div className="space-y-4 max-h-80 overflow-y-auto pr-2">
                     {c.answers.map((a, idx) => (
                       <div key={idx} className="rounded-lg border border-slate-100 p-4 bg-slate-50">
