@@ -387,13 +387,15 @@ async def generate_more_questions_endpoint(
                         loaded_questions = json.loads(row.get("questions", "[]"))
                         session = {
                             "id": interview_id,
+                            "link_id": session_row.get("link_id"),
                             "source": row.get("source"),
                             "profile_text": row.get("profile_text", ""),
                             "questions": loaded_questions,
                             "answers": {},
                             "industry": row.get("industry") or row.get("industry_type") or session_row.get("industry") or session_row.get("industry_type") or "General",
                             "interview_type": row.get("interview_type") or session_row.get("interview_type") or "Technical",
-                            "language": row.get("language") or session_row.get("language") or "English"
+                            "language": row.get("language") or session_row.get("language") or "English",
+                            "case_study_count": session_row.get("case_study_count", 3)
                         }
                         set_session(interview_id, session)
                     except Exception:
@@ -1138,7 +1140,13 @@ async def start_case_study_round(
     # Get the number of questions and industry from the session
     link_id = interview.get("link_id", "")
     session = interview_sessions_collection.find_one({"link_id": link_id}) if link_id else None
-    num_questions = (session or {}).get("case_study_count", 3) or 3
+    
+    # Try getting case_study_count from RAM first, then DB, default to 3
+    num_questions = interview.get("case_study_count")
+    if num_questions is None:
+        num_questions = (session or {}).get("case_study_count", 3)
+    
+    num_questions = int(num_questions) if num_questions is not None else 3
     num_questions = max(1, min(8, num_questions))
     industry = (session or {}).get("industry", "General")
     language = interview.get("language", "English")
