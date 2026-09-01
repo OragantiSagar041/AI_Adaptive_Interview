@@ -107,6 +107,47 @@ export default function SuperDashboardPage() {
   const navigate = useNavigate();
   const { handleOpenLiveStreamAction } = useOutletContext() || {};
   const dispatch = useDispatch();
+
+  // Per-stage navigation: each stage routes to the right filtered page
+  const handlePipelineStageClick = (stageName) => {
+    if (!stageName) return;
+    const lower = stageName.toLowerCase();
+
+    if (lower.includes('applications received')) {
+      // All sessions (no filter)
+      dispatch(setStatusFilter('all'));
+      navigate('/superadmin/interviews');
+    } else if (lower.includes('ai resume screening')) {
+      // All interview sessions assigned
+      dispatch(setStatusFilter('all'));
+      navigate('/superadmin/interviews');
+    } else if (lower.includes('ai voice screening')) {
+      // AI calling candidates → AI Calling page
+      navigate('/superadmin/ai-calling');
+    } else if (lower.includes('ai interviews')) {
+      // Completed interviews
+      dispatch(setStatusFilter('completed'));
+      navigate('/superadmin/interviews');
+    } else if (lower.includes('qualified candidates')) {
+      // Qualified / selected candidates page
+      navigate('/superadmin/qualified-candidates');
+    } else if (lower.includes('recruiter review')) {
+      // Qualified candidates awaiting recruiter review
+      navigate('/superadmin/qualified-candidates');
+    } else if (lower.includes('candidates hired')) {
+      // Hired candidates (decision = selected)
+      navigate('/superadmin/qualified-candidates');
+    } else if (lower.includes('offers released')) {
+      // Offers sent → qualified candidates page (they received offer emails)
+      navigate('/superadmin/qualified-candidates');
+    } else if (lower.includes('rejected')) {
+      navigate('/superadmin/rejected-candidates');
+    } else {
+      dispatch(setStatusFilter('all'));
+      navigate('/superadmin/interviews');
+    }
+  };
+
   const {
     dbStats,
     ongoingMonitoredCount,
@@ -246,20 +287,26 @@ export default function SuperDashboardPage() {
   const avgScore = dbStats?.avg_score ?? 0;
   const starRating = avgScore / 20;
 
-  const stageColors = ["#3b82f6", "#06b6d4", "#0284c7", "#10b981", "#059669", "#16a34a", "#eab308", "#f59e0b"];
+  // Use the fill colors provided by the backend; fall back to a curated palette if missing
+  const stageColors = ["#3b82f6", "#0ea5e9", "#0284c7", "#0d9488", "#10b981", "#22c55e", "#eab308", "#f59e0b"];
 
-  const pipelineStages = (rawFunnelData?.length ? rawFunnelData.map((d, i) => ({
+  let pipelineStages = (rawFunnelData?.length ? rawFunnelData.map((d, i) => ({
     stage: d.name || d.stage || `Stage ${i + 1}`,
     count: Number(d.value ?? d.count ?? 0),
-    color: stageColors[i % stageColors.length]
+    // Prefer the color sent by the backend (d.fill), fallback to local palette
+    color: d.fill || stageColors[i % stageColors.length]
   })) : [
-    { stage: "Total Assigned", count: parseInt(dbStats?.total) || 0, color: "#3b82f6" },
-    { stage: "Started", count: parseInt(dbStats?.started || dbStats?.today) || 0, color: "#06b6d4" },
-    { stage: "Completed", count: parseInt(dbStats?.completed) || 0, color: "#10b981" },
-    { stage: "Pending Review", count: parseInt(dbStats?.pending) || 0, color: "#f59e0b" },
-    { stage: "Selected / Hired", count: parseInt(dbStats?.selected) || 0, color: "#16a34a" },
-    { stage: "Rejected", count: parseInt(dbStats?.rejected) || 0, color: "#ef4444" }
+    { stage: "Applications Received", count: (parseInt(dbStats?.total) || 0), color: "#3b82f6" },
+    { stage: "AI Resume Screening",   count: parseInt(dbStats?.total) || 0, color: "#0ea5e9" },
+    { stage: "AI Voice Screening",    count: 0, color: "#0284c7" },
+    { stage: "AI Interviews",         count: parseInt(dbStats?.completed) || 0, color: "#0d9488" },
+    { stage: "Qualified Candidates",  count: parseInt(dbStats?.selected) || 0, color: "#10b981" },
+    { stage: "Recruiter Review",      count: parseInt(dbStats?.selected) || 0, color: "#22c55e" },
+    { stage: "Candidates Hired",      count: parseInt(dbStats?.selected) || 0, color: "#eab308" },
+    { stage: "Offers Released",       count: parseInt(dbStats?.selected) || 0, color: "#f59e0b" },
   ]);
+
+
   const maxPipelineCount = Math.max(...pipelineStages.map(p => p.count), 1);
   const totalPipelineCount = pipelineStages[0]?.count || pipelineStages.reduce((acc, p) => acc + p.count, 0) || 1;
 
@@ -520,21 +567,15 @@ export default function SuperDashboardPage() {
                 <div className="text-3xl font-bold text-slate-900 dark:text-white">
                   <AnimatedNumber value={dbStats?.pending || 0} />
                 </div>
-                <div className="text-right">
-                  {(!dbStats?.pending || dbStats?.pending === 0) ? (
-                    <>
-                      <div className="flex items-center justify-end text-emerald-500 text-[10px] font-bold">
-                        <CheckCircle2 className="w-3 h-3 mr-1" /> No Pending
-                      </div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">Great job!</div>
-                    </>
-                  ) : (
-                    null
-                  )}
-                </div>
               </div>
-
-              <div className="mt-3 flex items-center justify-end text-[11px] min-h-[16px]">
+              <div className="flex-1" />
+              <div className="mt-3 flex items-center justify-end text-[11px]">
+                <span className="text-amber-500 font-medium cursor-pointer flex items-center hover:underline" onClick={() => {
+                  dispatch(setStatusFilter('pending'));
+                  navigate('/superadmin/interviews');
+                }}>
+                  View details <ArrowRight className="w-3 h-3 ml-0.5" />
+                </span>
               </div>
             </div>
           </div>
@@ -772,24 +813,32 @@ export default function SuperDashboardPage() {
 
           <div className="px-6 pb-6 space-y-6">
 
-            {/* Stage Cards (Play Cards) — 100% Solid Color Fill Matched 1:1 to Bars */}
+            {/* Stage Cards — Animated, Clickable, Dynamic */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {pipelineStages.map((p, i) => (
-                <div
+                <motion.div
                   key={p.stage || i}
-                  className="pipeline-stage-card rounded-xl p-3.5 text-white text-center shadow-md flex flex-col items-center justify-between min-h-[98px] w-full select-none pointer-events-none border border-white/30 dark:border-white/40 ring-1 ring-black/10 dark:ring-white/20 transition-all"
-                  style={{ backgroundColor: p.color, '--stage-bg': p.color, color: "#ffffff" }}
+                  onClick={() => handlePipelineStageClick(p.stage)}
+                  whileHover={{ scale: 1.04, y: -3 }}
+                  whileTap={{ scale: 0.97 }}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25, delay: i * 0.04, ease: 'easeOut' }}
+                  className="pipeline-stage-card rounded-xl p-3.5 text-white text-center shadow-md flex flex-col items-center justify-between min-h-[108px] w-full cursor-pointer border border-white/30 dark:border-white/40 ring-1 ring-black/10 dark:ring-white/20 relative overflow-hidden"
+                  style={{ backgroundColor: p.color }}
                 >
-                  <div className="text-[10px] font-extrabold uppercase tracking-wider text-white bg-black/30 px-2.5 py-0.5 rounded-md inline-block border border-white/20 shadow-xs">
+                  {/* subtle shimmer overlay */}
+                  <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent pointer-events-none" />
+                  <div className="text-[10px] font-extrabold uppercase tracking-wider text-white bg-black/30 px-2.5 py-0.5 rounded-md inline-block border border-white/20 z-10">
                     Stage {i + 1}
                   </div>
-                  <div className="my-1 text-2xl font-black text-white drop-shadow-xs">
-                    {formatNum(p.count)}
+                  <div className="my-1 text-2xl font-black text-white drop-shadow z-10">
+                    <AnimatedNumber value={p.count} />
                   </div>
-                  <div className="text-[11px] font-bold text-white/95 truncate max-w-full px-1 drop-shadow-xs">
+                  <div className="text-[11px] font-bold text-white/95 truncate max-w-full px-1 z-10">
                     {p.stage}
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
 

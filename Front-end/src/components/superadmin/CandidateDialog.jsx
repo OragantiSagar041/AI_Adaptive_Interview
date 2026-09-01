@@ -362,10 +362,18 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
     }
   };
 
+  const formatAnswerDuration = (seconds) => {
+    const duration = Number(seconds || 0);
+    if (duration <= 0) return '';
+    const minutes = Math.floor(duration / 60);
+    const remainingSeconds = Math.floor(duration) % 60;
+    return minutes > 0 ? `${minutes}m ${remainingSeconds}s` : `${Math.floor(duration)}s`;
+  };
+
   const handleDownloadTranscript = () => {
     if (!c.answers || c.answers.length === 0) return;
 
-    const doc = new jsPDF();
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
     const margin = 15;
     const pageHeight = doc.internal.pageSize.height;
@@ -404,9 +412,28 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
       doc.setFont("helvetica", "bold");
       const qText = `Q${index + 1}: ${a.question_text || 'No question recorded'}`;
       const qLines = doc.splitTextToSize(qText, pageWidth - 2 * margin);
-      checkPageBreak(qLines.length * 5 + 5);
+      checkPageBreak(qLines.length * 5 + 30);
       doc.text(qLines, margin, y);
       y += qLines.length * 5 + 3;
+
+      const answerDuration = formatAnswerDuration(a.time_spent_seconds);
+      if (answerDuration) {
+        checkPageBreak(5);
+        doc.setFont("helvetica", "normal");
+        doc.text(`Time Taken: ${answerDuration}`, margin, y);
+        y += 5;
+      }
+
+      const wpm = Number(a.wpm || 0);
+      const faceAlerts = Number(a.face_alerts || 0);
+      const aiScore = a.ai_score !== null && a.ai_score !== undefined
+        ? `${Number(a.ai_score).toFixed(0)}%`
+        : "N/A";
+      doc.setFontSize(10);
+      doc.text(`WPM: ${wpm > 0 ? wpm.toFixed(0) : "N/A"}  |  AI Score: ${aiScore}  |  Face Alerts: ${faceAlerts}`, margin, y);
+      y += 5;
+      doc.setFontSize(11);
+      y += 4;
 
       doc.setFont("helvetica", "normal");
       const ansLabel = "Candidate's Answer/Code:";
@@ -414,7 +441,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
       doc.text(ansLabel, margin, y);
       y += 5;
 
-      doc.setFont("courier", "normal");
+      doc.setFont("helvetica", "normal");
       const aText = a.answer_text || c.coding_round?.latest_code || 'No answer provided';
       const aLines = doc.splitTextToSize(aText, pageWidth - 2 * margin);
 
@@ -424,13 +451,6 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
         y += 5;
       }
       y += 3;
-
-      if (a.ai_score !== null && a.ai_score !== undefined) {
-        checkPageBreak(5);
-        doc.setFont("helvetica", "bold");
-        doc.text(`AI Score: ${Number(a.ai_score).toFixed(0)}%`, margin, y);
-        y += 5;
-      }
 
       if (a.ai_feedback) {
         checkPageBreak(5);

@@ -9,7 +9,8 @@ from app.db.mongo_db import (
     interviews_collection, 
     interview_sessions_collection,
     admins_collection,
-    candidates_collection
+    candidates_collection,
+    platform_settings_collection,
 )
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
@@ -555,9 +556,17 @@ def send_recruiter_credentials_email_task(
         FRONTEND_URL = os.getenv("FRONTEND_URL", "https://www.hireiq.co.in")
         login_url = f"{FRONTEND_URL}/login"
         
+        settings = platform_settings_collection.find_one({"_id": "global_settings"})
+        logo_url = "https://raw.githubusercontent.com/OragantiSagar041/AI_Adaptive_Interview/pavan/Front-end/public/hireiq_new_logo.png"
+        if settings and settings.get("hireiq_logo_url"):
+            logo_url = settings.get("hireiq_logo_url")
+            
         html_content = f"""
         <html>
             <body style="font-family: Arial, sans-serif; color: #333;">
+                <div style="margin-bottom: 20px;">
+                    <img src="{logo_url}" alt="HireIQ" style="height: 60px; max-width: 100%; object-fit: contain;" />
+                </div>
                 <h2 style="color: #4F46E5;">Welcome to HireIQ, {recruiter_name}!</h2>
                 <p>An administrator has provisioned a new recruiter account for you.</p>
                 <div style="background-color: #F8FAFC; padding: 20px; border-radius: 8px; margin: 20px 0;">

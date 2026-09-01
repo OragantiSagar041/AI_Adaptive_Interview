@@ -19,6 +19,7 @@ export default function Plans() {
   // Edit Modal state
   const [isEditPlanModalOpen, setIsEditPlanModalOpen] = useState(false)
   const [editPlanName, setEditPlanName] = useState('')
+  const [activeFeatures, setActiveFeatures] = useState([])
   const [editPlanCredits, setEditPlanCredits] = useState(250)
   const [editPlanPrice, setEditPlanPrice] = useState(0)
   const [editPlanFeatures, setEditPlanFeatures] = useState([])
@@ -98,43 +99,26 @@ export default function Plans() {
   useEffect(() => {
     if (token) {
       fetchPlans()
+      fetchFeatures()
     }
    
   }, [token])
 
+  const fetchFeatures = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/api/platform/features`)
+      if (res.data && res.data.features) {
+        setActiveFeatures(res.data.features)
+      }
+    } catch (error) {
+      console.error("Error fetching features:", error)
+    }
+  }
+
   // Exact authentic features present across this project
-  const PROJECT_FEATURES = [
-    'Super Admin Dashboard',
-    'Team Management',
-    'Dashboard',
-    'Interviews',
-    'Qualified Candidates',
-    'Rejected Candidates',
-    'Create Interview',
-    'AI Calling Agent',
-    'Jobs',
-    'Organizations',
-    'Recruiters',
-    'Credit Management',
-    'Subscription Management',
-    'Integrations',
-    'Security',
-    'Settings',
-    'Live Results',
-    'Analytics & Reports',
-    'Bulk Email Invites',
-    'Resume Parsing',
-    'Custom Branding',
-    'Priority Support',
-    'API Access',
-    'Export Data',
-    'Role-Based Access',
-    'Industry Type',
-    'ATS Score'
-  ]
 
   const featureOptions = Array.from(new Set([
-    ...PROJECT_FEATURES,
+    ...activeFeatures,
     ...(editPlanFeatures || [])
   ]))
 

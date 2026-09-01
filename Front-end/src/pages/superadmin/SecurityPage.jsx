@@ -218,7 +218,7 @@ export default function SecurityPage() {
             </select>
           </div>
           
-          <div className="space-y-4">
+          <div className="space-y-4 max-h-64 overflow-y-auto custom-scrollbar pr-2">
             {alerts.length > 0 ? (
               alerts.map((alert, idx) => {
                 const isFailed = alert.type?.toLowerCase().includes("failed");
