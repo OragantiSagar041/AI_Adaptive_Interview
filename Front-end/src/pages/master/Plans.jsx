@@ -19,6 +19,7 @@ export default function Plans() {
   // Edit Modal state
   const [isEditPlanModalOpen, setIsEditPlanModalOpen] = useState(false)
   const [editPlanName, setEditPlanName] = useState('')
+  const [activeFeatures, setActiveFeatures] = useState([])
   const [editPlanCredits, setEditPlanCredits] = useState(250)
   const [editPlanPrice, setEditPlanPrice] = useState(0)
   const [editPlanFeatures, setEditPlanFeatures] = useState([])
@@ -98,43 +99,26 @@ export default function Plans() {
   useEffect(() => {
     if (token) {
       fetchPlans()
+      fetchFeatures()
     }
    
   }, [token])
 
+  const fetchFeatures = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/api/platform/features`)
+      if (res.data && res.data.features) {
+        setActiveFeatures(res.data.features)
+      }
+    } catch (error) {
+      console.error("Error fetching features:", error)
+    }
+  }
+
   // Exact authentic features present across this project
-  const PROJECT_FEATURES = [
-    'Super Admin Dashboard',
-    'Team Management',
-    'Dashboard',
-    'Interviews',
-    'Qualified Candidates',
-    'Rejected Candidates',
-    'Create Interview',
-    'AI Calling Agent',
-    'Jobs',
-    'Organizations',
-    'Recruiters',
-    'Credit Management',
-    'Subscription Management',
-    'Integrations',
-    'Security',
-    'Settings',
-    'Live Results',
-    'Analytics & Reports',
-    'Bulk Email Invites',
-    'Resume Parsing',
-    'Custom Branding',
-    'Priority Support',
-    'API Access',
-    'Export Data',
-    'Role-Based Access',
-    'Industry Type',
-    'ATS Score'
-  ]
 
   const featureOptions = Array.from(new Set([
-    ...PROJECT_FEATURES,
+    ...activeFeatures,
     ...(editPlanFeatures || [])
   ]))
 
@@ -210,7 +194,7 @@ export default function Plans() {
       {/* MODAL: EDIT PLAN DETAILS */}
       {isEditPlanModalOpen && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <form onSubmit={handleEditPlanSubmit} className="w-full max-w-lg bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-2xl space-y-4 text-slate-800 dark:text-slate-100">
+          <form onSubmit={handleEditPlanSubmit} className="w-full max-w-3xl bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-2xl space-y-4 text-slate-800 dark:text-slate-100">
             <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-3">
               <h3 className="font-bold text-slate-800 dark:text-slate-100">Edit {editPlanName} Plan</h3>
               <button
@@ -265,7 +249,7 @@ export default function Plans() {
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[180px] overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl p-3.5 bg-slate-50 dark:bg-slate-900/50">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 max-h-[60vh] overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl p-3.5 bg-slate-50 dark:bg-slate-900/50">
                   {featureOptions.map(f => {
                     const isChecked = editPlanFeatures.includes(f)
                     return (

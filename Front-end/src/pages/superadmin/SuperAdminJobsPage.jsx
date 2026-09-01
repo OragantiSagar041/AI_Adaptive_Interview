@@ -31,6 +31,11 @@ const GRADIENT_ACCENTS = [
   'from-sky-500 via-blue-500 to-sky-600',
 ];
 
+const formatPhoneNumber = (phone) => {
+  if (!phone) return '';
+  return phone.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
+};
+
 export default function SuperAdminJobsPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -59,6 +64,7 @@ export default function SuperAdminJobsPage() {
   const [selectedResumeApp, setSelectedResumeApp] = useState(null);
   const [viewMode, setViewMode] = useState('grid');
   const [jobsLoading, setJobsLoading] = useState(true);
+  const [showSchedulePanel, setShowSchedulePanel] = useState(false);
 
   // ── Application viewer state ──────────────────────────────────────────────
   const [applicationData, setApplicationData] = useState({
@@ -981,6 +987,28 @@ export default function SuperAdminJobsPage() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                {/* Interview Schedule button — shows candidates with Interview Scheduled status */}
+                {!applicationData.loading && applicationData.list.some(a => a.status === 'Interview Scheduled') && (
+                  <button
+                    onClick={() => setShowSchedulePanel(v => !v)}
+                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border font-bold text-sm cursor-pointer transition-all ${
+                      showSchedulePanel
+                        ? 'bg-violet-600 text-white border-violet-600 shadow-lg shadow-violet-500/30'
+                        : 'bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-700 hover:bg-violet-100 dark:hover:bg-violet-900/40 hover:text-violet-800 dark:hover:text-violet-200'
+                    }`}
+                    title="View Interview Schedule"
+                  >
+                    <Calendar size={15} />
+                    Interview Schedule
+                    <span className={`ml-0.5 text-[10px] font-black px-1.5 py-0.5 rounded-full ${
+                      showSchedulePanel
+                        ? 'bg-white/20 text-white'
+                        : 'bg-violet-200/60 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300'
+                    }`}>
+                      {applicationData.list.filter(a => a.status === 'Interview Scheduled').length}
+                    </span>
+                  </button>
+                )}
                 <button
                   onClick={() => openApplications(applicationData.job)}
                   className="p-2.5 rounded-xl bg-secondary hover:bg-muted text-muted-foreground hover:text-foreground border border-border cursor-pointer transition-colors"
@@ -996,6 +1024,65 @@ export default function SuperAdminJobsPage() {
                 </button>
               </div>
             </div>
+
+            {/* ── Interview Schedule Panel (slides in below header) ────────── */}
+            {showSchedulePanel && (() => {
+              const scheduled = applicationData.list.filter(a => a.status === 'Interview Scheduled');
+              return (
+                <div className="shrink-0 border-b border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/30 px-6 py-4 animate-fadeIn">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Calendar size={16} className="text-violet-600" />
+                      <span className="text-sm font-black text-violet-700 dark:text-violet-300">
+                        Upcoming Scheduled Interviews
+                      </span>
+                      <span className="px-2 py-0.5 bg-violet-600 text-white text-[10px] font-black rounded-full">
+                        {scheduled.length}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setShowSchedulePanel(false)}
+                      className="text-violet-400 hover:text-violet-700 cursor-pointer bg-transparent border-none p-1 rounded"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    {scheduled.map((app, idx) => (
+                      <div
+                        key={app._id || idx}
+                        className="flex items-center justify-between bg-white dark:bg-slate-800/60 rounded-xl px-4 py-3 border border-violet-100 dark:border-violet-800 shadow-sm hover:shadow-md transition-shadow"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 text-white font-black text-sm flex items-center justify-center shrink-0 shadow">
+                            {(app.name || '?')[0].toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-bold text-slate-800 dark:text-slate-100 text-sm truncate">{app.name || '—'}</p>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{app.candidate_email || app.email || '—'}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0 ml-3">
+                          {app.last_action_at && (
+                            <span className="text-[10px] text-violet-600 dark:text-violet-300 font-semibold bg-violet-100 dark:bg-violet-900/40 px-2 py-1 rounded-lg">
+                              {new Date(app.last_action_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                              {' '}
+                              {new Date(app.last_action_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          )}
+                          <button
+                            onClick={() => handleScheduleInterview(app)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-lg cursor-pointer transition-colors shadow"
+                          >
+                            <Calendar size={12} /> Reschedule
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Body */}
             <div className="flex-1 overflow-y-auto p-6 bg-background">

@@ -200,8 +200,27 @@ function Nav() {
 }
 
 function Logo() {
+  const [logoUrl, setLogoUrl] = useState(logoImg);
+
+  useEffect(() => {
+    const cachedLogo = sessionStorage.getItem('platform_logo');
+    if (cachedLogo) {
+      setLogoUrl(cachedLogo);
+    }
+    // Always fetch in background to stay fresh
+    fetch(`${API_BASE_URL}/api/platform/settings`, { cache: 'no-store' })
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.hireiq_logo_url && data.hireiq_logo_url !== cachedLogo) {
+          setLogoUrl(data.hireiq_logo_url);
+          sessionStorage.setItem('platform_logo', data.hireiq_logo_url);
+        }
+      })
+      .catch(err => console.error("Error fetching logo:", err));
+  }, []);
+
   return (
-    <img src={logoImg} alt="Logo" className="h-30 w-auto object-contain brand-logo-img" />
+    <img src={logoUrl} alt="Logo" className="h-30 w-auto object-contain brand-logo-img" />
   );
 }
 

@@ -536,12 +536,23 @@ def superadmin_recruitment_funnel(adminId: Optional[str] = None, current_admin: 
         if adminId:
             base_q["created_by"] = adminId
 
+        # Stage 1 & 2: total interview sessions assigned
         total       = interview_sessions_collection.count_documents(base_q)
+        # Stage 4: sessions where interview was actually completed
         completed   = interview_sessions_collection.count_documents({**base_q, "status": "completed"})
+        # Stage 5 & 6: candidates marked as selected (qualified) by recruiter
         qualified   = interview_sessions_collection.count_documents({**base_q, "decision": "selected"})
-        rejected    = interview_sessions_collection.count_documents({**base_q, "decision": "rejected"})
+        # Stage 7: candidates to whom an offer email was sent (invite_email_status=sent and decision=selected)
+        offers_sent = interview_sessions_collection.count_documents({
+            **base_q,
+            "decision": "selected",
+            "invite_email_status": "sent"
+        })
+        # If no offers_sent data yet, fall back to qualified count
+        if offers_sent == 0 and qualified > 0:
+            offers_sent = qualified
 
-        # Count AI calling candidates
+        # Count AI calling candidates (from job_applications)
         ai_call_apps = 0
         try:
             jobs_q = {}
@@ -562,8 +573,8 @@ def superadmin_recruitment_funnel(adminId: Optional[str] = None, current_admin: 
             {"name": "AI Interviews",           "value": completed,           "fill": colors[3]},
             {"name": "Qualified Candidates",    "value": qualified,           "fill": colors[4]},
             {"name": "Recruiter Review",        "value": qualified,           "fill": colors[5]},
-            {"name": "Offers Released",         "value": max(0, qualified - rejected), "fill": colors[6]},
-            {"name": "Candidates Hired",        "value": qualified,           "fill": colors[7]},
+            {"name": "Candidates Hired",        "value": qualified,           "fill": colors[6]},
+            {"name": "Offers Released",         "value": offers_sent,         "fill": colors[7]},
         ]
         return {"funnel": funnel}
     except Exception as e:

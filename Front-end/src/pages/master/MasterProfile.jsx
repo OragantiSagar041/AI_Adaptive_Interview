@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { User, Mail, Calendar, Lock, Shield, Coins, RefreshCw, KeyRound, Eye, EyeOff, CheckCircle, Camera, Loader2, AlertCircle, X, Check } from 'lucide-react'
-import { getMasterProfile, updateAdminProfile, uploadProfileImage } from '../../utils/api'
+import { getMasterProfile, updateAdminProfile, uploadProfileImage, getPlatformSettings, uploadPlatformLogo } from '../../utils/api'
 import { setCredentials } from '../../store/slices/authSlice'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -22,6 +22,9 @@ export default function MasterProfile() {
   const [modalTitle, setModalTitle] = useState('')
   const [modalMessage, setModalMessage] = useState('')
   const [modalFileName, setModalFileName] = useState('')
+
+  // Platform Branding State
+  const [platformLogo, setPlatformLogo] = useState('')
 
   const triggerModal = (state, title, message, filename = '') => {
     setModalState(state)
@@ -99,7 +102,40 @@ export default function MasterProfile() {
         }
       } catch (err) {
         console.error(err)
-        triggerModal('error', 'Upload Failed', err || 'Failed to upload profile image.')
+        const errMsg = typeof err === 'string' ? err : err?.message || 'Failed to upload profile image.'
+        triggerModal('error', 'Upload Failed', errMsg)
+      }
+    }
+  }
+
+  const handleLogoChange = async (e) => {
+    const file = e.target.files[0]
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        triggerModal('warning', 'Invalid File', 'Please select a valid image file.')
+        return
+      }
+      if (file.size > 2 * 1024 * 1024) {
+        triggerModal('warning', 'File Too Large', 'Image size should be less than 2MB.')
+        return
+      }
+
+      triggerModal('loading', 'Uploading Logo', 'Uploading new global platform logo...', file.name)
+
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+
+        const result = await uploadPlatformLogo(formData)
+
+        if (result.status === 'success') {
+          setPlatformLogo(result.hireiq_logo_url)
+          triggerModal('success', 'Success', 'Platform logo uploaded successfully!')
+        }
+      } catch (err) {
+        console.error(err)
+        const errMsg = typeof err === 'string' ? err : err?.message || 'Failed to upload platform logo.'
+        triggerModal('error', 'Upload Failed', errMsg)
       }
     }
   }
@@ -114,7 +150,8 @@ export default function MasterProfile() {
       setCompanyName(data.company_name || '')
     } catch (err) {
       console.error(err)
-      triggerModal('error', 'Error', err || 'Failed to fetch master admin profile data.')
+      const errMsg = typeof err === 'string' ? err : err?.message || 'Failed to fetch master admin profile data.'
+      triggerModal('error', 'Error', errMsg)
     } finally {
       setLoading(false)
     }
@@ -123,6 +160,13 @@ export default function MasterProfile() {
   useEffect(() => {
     if (token) {
       fetchProfile()
+      getPlatformSettings()
+        .then((data) => {
+          setPlatformLogo(data.hireiq_logo_url || '')
+        })
+        .catch((err) => {
+          console.error("Failed to fetch platform logo:", err)
+        })
     }
   }, [token])
 
@@ -183,7 +227,8 @@ export default function MasterProfile() {
       }
     } catch (err) {
       console.error(err)
-      triggerModal('error', 'Update Failed', err || 'Failed to update profile settings.')
+      const errMsg = typeof err === 'string' ? err : err?.message || 'Failed to update profile settings.'
+      triggerModal('error', 'Update Failed', errMsg)
     } finally {
       setUpdatingProfile(false)
     }
@@ -219,7 +264,8 @@ export default function MasterProfile() {
       }
     } catch (err) {
       console.error(err)
-      triggerModal('error', 'Update Failed', err || 'Failed to change administrator password.')
+      const errMsg = typeof err === 'string' ? err : err?.message || 'Failed to change administrator password.'
+      triggerModal('error', 'Update Failed', errMsg)
     } finally {
       setUpdatingPassword(false)
     }
@@ -500,6 +546,49 @@ export default function MasterProfile() {
                 </div>
               </form>
             </div>
+
+            {/* Card 3: Platform Branding */}
+            <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 p-8 rounded-3xl shadow-[0_4px_25px_rgba(0,0,0,0.02)]">
+              <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2.5 border-b border-slate-100 dark:border-slate-800 pb-4">
+                <Shield size={18} className="text-primary" /> Platform Branding
+              </h3>
+
+              <div className="mt-6 flex flex-col md:flex-row items-center gap-6">
+                <div className="relative group w-32 h-32 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 overflow-hidden flex items-center justify-center shadow-inner shrink-0">
+                  {platformLogo ? (
+                    <img src={platformLogo} alt="Platform Logo" className="w-full h-full object-contain p-2" />
+                  ) : (
+                    <span className="text-3xl font-black text-slate-300 dark:text-slate-700 select-none">LOGO</span>
+                  )}
+                  <label className="absolute inset-0 bg-slate-900/60 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-all cursor-pointer backdrop-blur-sm">
+                    <Camera size={24} className="text-white mb-2" />
+                    <span className="text-white text-[10px] font-bold uppercase tracking-wider">Change Logo</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleLogoChange}
+                    />
+                  </label>
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-1">Global HireIQ Logo</h4>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 max-w-sm">
+                    This logo will be displayed on the Landing Page and sent in all automated emails (e.g., Interview Invitations, Credentials). Max size: 2MB.
+                  </p>
+                  <label className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold transition-colors cursor-pointer border border-slate-200 dark:border-slate-700 shadow-sm active:scale-[0.98]">
+                    <Camera size={14} /> Upload New Logo
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleLogoChange}
+                    />
+                  </label>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
       )}

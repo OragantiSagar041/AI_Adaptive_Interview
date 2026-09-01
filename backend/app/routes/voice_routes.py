@@ -1,3 +1,5 @@
+from bson import datetime_ms
+from datetime import datetime, timezone
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from typing import Dict, Any
 import asyncio
@@ -51,7 +53,6 @@ async def interview_websocket(websocket: WebSocket, link_id: str):
 
         if session.get("status") not in ("started", "in_progress"):
             try:
-                from datetime import timezone
                 interview_sessions_collection.update_one(
                     {"link_id": link_id},
                     {"$set": {"status": "started", "started_at": datetime.now(timezone.utc).isoformat()}}

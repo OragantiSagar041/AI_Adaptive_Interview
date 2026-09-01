@@ -170,10 +170,12 @@ function Bubble({ role, text, typing }) {
           <i className="fas fa-user text-sm text-emerald-400"/>
         </div>
       )}
-      <div className={`max-w-[72%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
-        role === 'ai' ? 'bg-indigo-500/10 border border-indigo-500/15 text-slate-200 rounded-tl-none' :
-                        'bg-emerald-500/10 border border-emerald-500/15 text-slate-200 rounded-tr-none'
-      }`}>
+      <div 
+        className={`max-w-[72%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm text-slate-200 ${
+          role === 'ai' ? 'border border-indigo-500/15 rounded-tl-none' : 'border border-emerald-500/15 rounded-tr-none'
+        }`}
+        style={{ backgroundColor: role === 'ai' ? 'rgba(99,102,241,0.1)' : 'rgba(16,185,129,0.1)' }}
+      >
         {typing ? (
           <span className="flex gap-1.5 items-center py-1">
             {[0,1,2].map(i => <span key={i} className="w-2 h-2 rounded-full bg-indigo-400" style={{animation:'bounce-dot 0.9s ease infinite',animationDelay:`${i*0.15}s`}}/>)}
@@ -548,6 +550,21 @@ export default function VoiceCaseStudy({
     }
   }, [questionCount, scenarios, interviewId, sessionDetail, addMsg, aiSay, startListening, usedFollowups, sessionLang])
 
+  const handleComplete = useCallback(async () => {
+    if (submittingRef.current) return
+    submittingRef.current = true
+    
+    stopListening()
+    window.speechSynthesis?.cancel()
+    if (playingAudioRef.current) {
+      playingAudioRef.current.pause()
+      playingAudioRef.current = null
+    }
+    
+    try { await candidateFetch(`${API_BASE_URL}/complete-session/${linkId}`, { method: 'POST' }) } catch(_) {}
+    onComplete?.()
+  }, [stopListening, onComplete, linkId])
+
   // ── Present scenario ───────────────────────────────────────────────────────
   const presentScenario = useCallback((idx, prefix = '') => {
     const sc = scenarios[idx]
@@ -565,7 +582,7 @@ export default function VoiceCaseStudy({
         startListening(ans => handleAnswer(ans, idx))
       })
     }, 400)
-  }, [scenarios, aiSay, startListening, handleAnswer, sessionLang])
+  }, [scenarios, aiSay, startListening, handleAnswer, sessionLang, handleComplete])
 
   // ── Start ─────────────────────────────────────────────────────────────────
   const hasStartedRef = useRef(false)
@@ -585,20 +602,6 @@ export default function VoiceCaseStudy({
     return () => clearInterval(t)
   }, [handleComplete])
 
-  const handleComplete = useCallback(async () => {
-    if (submittingRef.current) return
-    submittingRef.current = true
-    
-    stopListening()
-    window.speechSynthesis?.cancel()
-    if (playingAudioRef.current) {
-      playingAudioRef.current.pause()
-      playingAudioRef.current = null
-    }
-    
-    try { await candidateFetch(`${API_BASE_URL}/complete-session/${linkId}`, { method: 'POST' }) } catch(_) {}
-    onComplete?.()
-  }, [stopListening, onComplete])
 
   useEffect(() => {
     return () => {
@@ -682,7 +685,7 @@ export default function VoiceCaseStudy({
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Scenario card */}
           {currentScenario && (
-            <div className="m-5 mb-3 bg-gradient-to-br from-violet-500/10 to-indigo-500/10 border border-violet-500/20 rounded-2xl p-5 shadow-xl shrink-0">
+            <div className="m-5 mb-3 border border-violet-500/20 rounded-2xl p-5 shadow-xl shrink-0" style={{ background: 'linear-gradient(to bottom right, rgba(139,92,246,0.1), rgba(99,102,241,0.1))' }}>
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-xl bg-violet-500/20 flex items-center justify-center shrink-0">
                   <i className="fas fa-briefcase text-violet-400"/>
@@ -707,7 +710,10 @@ export default function VoiceCaseStudy({
                 <div className="w-9 h-9 rounded-full bg-emerald-500/20 border-2 border-emerald-500/40 flex items-center justify-center shrink-0">
                   <i className="fas fa-user text-sm text-emerald-400"/>
                 </div>
-                <div className="max-w-[72%] rounded-2xl rounded-tr-none px-4 py-3 text-sm leading-relaxed bg-emerald-500/10 border border-emerald-500/15 text-slate-300">
+                <div 
+                  className="max-w-[72%] rounded-2xl rounded-tr-none px-4 py-3 text-sm leading-relaxed border border-emerald-500/15 text-slate-300"
+                  style={{ backgroundColor: 'rgba(16,185,129,0.1)' }}
+                >
                   {transcript || <span className="text-slate-600 italic">Listening to your response...</span>}
                   {interimText && <span className="text-slate-500 italic"> {interimText}</span>}
                 </div>
@@ -719,10 +725,14 @@ export default function VoiceCaseStudy({
           {/* Controls */}
           <div className="p-5 border-t border-white/6 space-y-3 shrink-0">
             <div className="flex gap-2">
-              <button onClick={() => setInputMode('voice')} className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-all ${inputMode==='voice' ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30' : 'bg-white/5 text-slate-500 border border-transparent'}`}>
+              <button onClick={() => setInputMode('voice')} 
+                style={{ backgroundColor: inputMode === 'voice' ? 'rgba(139,92,246,0.2)' : 'rgba(255,255,255,0.05)' }}
+                className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-all ${inputMode==='voice' ? 'text-violet-300 border border-violet-500/30' : 'text-slate-500 border border-transparent'}`}>
                 <i className="fas fa-microphone mr-1.5"/>Voice
               </button>
-              <button onClick={() => setInputMode('text')} className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-all ${inputMode==='text' ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30' : 'bg-white/5 text-slate-500 border border-transparent'}`}>
+              <button onClick={() => setInputMode('text')} 
+                style={{ backgroundColor: inputMode === 'text' ? 'rgba(139,92,246,0.2)' : 'rgba(255,255,255,0.05)' }}
+                className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-all ${inputMode==='text' ? 'text-violet-300 border border-violet-500/30' : 'text-slate-500 border border-transparent'}`}>
                 <i className="fas fa-keyboard mr-1.5"/>Type
               </button>
             </div>
@@ -732,9 +742,11 @@ export default function VoiceCaseStudy({
                 <input value={typedInput} onChange={e => setTypedInput(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter' && typedInput.trim()) { handleAnswer(typedInput, currentScenarioIdx); setTypedInput('') } }}
                   placeholder="Type your response and press Enter..."
-                  className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none focus:border-violet-500/50"/>
+                  style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}
+                  className="flex-1 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none focus:border-violet-500/50"/>
                 <button onClick={() => { if (typedInput.trim()) { handleAnswer(typedInput, currentScenarioIdx); setTypedInput('') } }}
-                  className="w-10 h-10 rounded-xl bg-violet-500/20 text-violet-400 flex items-center justify-center hover:bg-violet-500/30 transition-all">
+                  style={{ backgroundColor: 'rgba(139,92,246,0.2)' }}
+                  className="w-10 h-10 rounded-xl text-violet-400 flex items-center justify-center hover:opacity-80 transition-all">
                   <i className="fas fa-paper-plane text-sm"/>
                 </button>
               </div>
@@ -743,12 +755,13 @@ export default function VoiceCaseStudy({
                 <button onClick={() => {
                   if (aiStatus === 'listening') {
                     stopListening()
-                    // do not call handleAnswer here, startListening's onstop handles it
                   } else {
                     startListening(ans => handleAnswer(ans, currentScenarioIdx))
                   }
-                }} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${
-                  aiStatus === 'listening' ? 'bg-rose-500/20 border border-rose-500/30 text-rose-400' : 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
+                }} 
+                style={{ backgroundColor: aiStatus === 'listening' ? 'rgba(244,63,94,0.2)' : 'rgba(16,185,129,0.1)' }}
+                className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+                  aiStatus === 'listening' ? 'border border-rose-500/30 text-rose-400' : 'border border-emerald-500/30 text-emerald-400 hover:opacity-80'
                 }`}>
                   <i className={`fas ${aiStatus === 'listening' ? 'fa-stop-circle' : 'fa-microphone'}`}/>
                   {aiStatus === 'listening' ? 'Done Speaking' : 'Speak Your Answer'}
@@ -760,7 +773,9 @@ export default function VoiceCaseStudy({
                   } else {
                     handleComplete()
                   }
-                }} disabled={isTransitioningRef.current} className="px-4 py-3 rounded-xl bg-white/5 text-slate-300 border border-white/10 text-xs font-semibold hover:bg-white/10 transition-all uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed">
+                }} disabled={isTransitioningRef.current} 
+                style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}
+                className="px-4 py-3 rounded-xl text-slate-300 border border-white/10 text-xs font-semibold hover:opacity-80 transition-all uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed">
                   {currentScenarioIdx < scenarios.length - 1 ? 'Next Scenario' : 'Submit Interview'}
                 </button>
               </div>

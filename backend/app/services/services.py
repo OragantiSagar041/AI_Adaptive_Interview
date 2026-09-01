@@ -2635,7 +2635,11 @@ def build_default_interview_email_html(candidate_name: str, duration: int, job_d
     import html
     
     # Use the public image URL so Gmail can load it properly
-    logo_url = "https://raw.githubusercontent.com/OragantiSagar041/AI_Adaptive_Interview/pavan/Front-end/public/hireiq_new_logo.png"
+    settings = platform_settings_collection.find_one({"_id": "global_settings"})
+    if settings and settings.get("hireiq_logo_url"):
+        logo_url = settings.get("hireiq_logo_url")
+    else:
+        logo_url = "https://raw.githubusercontent.com/OragantiSagar041/AI_Adaptive_Interview/pavan/Front-end/public/hireiq_new_logo.png"
 
     safe_company = company_name.strip().title() if company_name else "HireIQ"
     # The platform is ALWAYS HireIQ, so the header banner must always show the HireIQ logo

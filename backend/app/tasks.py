@@ -9,7 +9,8 @@ from app.db.mongo_db import (
     interviews_collection, 
     interview_sessions_collection,
     admins_collection,
-    candidates_collection
+    candidates_collection,
+    platform_settings_collection,
 )
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
@@ -205,24 +206,38 @@ def score_answer_task(
             # Composite score: blend with coding / case study if present
             try:
                 from app.ai.score_rounds import (
-                    compute_coding_score, compute_case_study_score, 
-                    calculate_round1_score, calculate_coding_score, calculate_final_score
+                    compute_case_study_score,
+                    calculate_round1_score, calculate_coding_score,
+                    calculate_case_study_round2_score, calculate_final_score,
+                    get_marks_split
                 )
                 session_rec = interview_sessions_collection.find_one({"interview_id": interview_id})
                 if not session_rec:
                     session_rec = interview_sessions_collection.find_one({"link_id": interview_id})
-                
+
                 actual_interview_id = session_rec.get("interview_id") if session_rec else interview_id
                 interview_row = interviews_collection.find_one({"id": actual_interview_id})
-                
+
                 interview_format = "Standard"
                 if session_rec and session_rec.get("interview_format"):
                     interview_format = session_rec["interview_format"]
                 elif interview_row and interview_row.get("interview_format"):
                     interview_format = interview_row["interview_format"]
-                    
+
+                # Determine interview type for scoring model selection
+                interview_type = "Technical"
+                if interview_row and interview_row.get("interview_type"):
+                    interview_type = interview_row["interview_type"]
+                elif session_rec and session_rec.get("interview_type"):
+                    interview_type = session_rec["interview_type"]
+
                 coding_round_data = (interview_row or {}).get("coding_round") if interview_row else None
                 case_study_data   = (interview_row or {}).get("case_study_round") if interview_row else None
+
+                # Count case study questions for Non-Tech dynamic split
+                n_cs_questions = 0
+                if case_study_data:
+                    n_cs_questions = len(case_study_data.get("questions", []) or [])
 
                 # Extract questions for dynamic Round 1 scoring
                 questions = []
@@ -240,30 +255,38 @@ def score_answer_task(
                         questions = json.loads(session_rec["pre_generated_questions"])
                     except:
                         pass
-                
-                # Use Common Scoring Engine
-                round1_s = calculate_round1_score(questions, answers)
-                
+
+                # Round 1: dynamic verbal score based on interview type
+                round1_s = calculate_round1_score(questions, answers, interview_type=interview_type, n_case_study_questions=n_cs_questions)
+
+                # Round 2: depends on interview type
                 round2_s = 0.0
-                if coding_round_data:
+                itype_lower = str(interview_type).strip().lower()
+                if itype_lower == "technical" and coding_round_data:
                     round2_s = calculate_coding_score(coding_round_data)
-                elif case_study_data:
-                    cs_score_100 = compute_case_study_score(case_study_data, context, language) or 0.0
-                    round2_s = round(min(20.0, max(0.0, (cs_score_100 / 100.0) * 20.0)), 1)
-                
+                elif itype_lower in ("non-technical", "non_technical", "non tech", "nontech") and case_study_data:
+                    language = (interview_row or {}).get("language", "English")
+                    context  = f"Profile: {(interview_row or {}).get('profile_text', '')}"
+                    round2_s = calculate_case_study_round2_score(case_study_data, n_cs_questions, context, language)
+                # Normal / other types: round2_s stays 0.0
+
                 avg_score = calculate_final_score(round1_s, round2_s)
-                
+
             except Exception as blend_err:
                 logger.warning(f"Composite blend error (falling back to verbal_avg): {blend_err}")
                 avg_score = verbal_avg
-
             session = interview_sessions_collection.find_one(
                 {"$or": [{"interview_id": interview_id}, {"link_id": interview_id}]}
             )
             if session:
                 interview_sessions_collection.update_one(
                     {"_id": session["_id"]},
-                    {"$set": {"avg_score": round(avg_score, 1)}}
+                    {"$set": {
+                        "score": round(avg_score, 1),
+                        "avg_score": round(avg_score, 1),
+                        "round1_score": round(round1_s, 1),
+                        "round2_score": round(round2_s, 1)
+                    }}
                 )
                 from app.routes import sync_session_to_application
                 sync_session_to_application(session.get("link_id"))
@@ -532,9 +555,17 @@ def send_recruiter_credentials_email_task(
         FRONTEND_URL = os.getenv("FRONTEND_URL", "https://www.hireiq.co.in")
         login_url = f"{FRONTEND_URL}/login"
         
+        settings = platform_settings_collection.find_one({"_id": "global_settings"})
+        logo_url = "https://raw.githubusercontent.com/OragantiSagar041/AI_Adaptive_Interview/pavan/Front-end/public/hireiq_new_logo.png"
+        if settings and settings.get("hireiq_logo_url"):
+            logo_url = settings.get("hireiq_logo_url")
+            
         html_content = f"""
         <html>
             <body style="font-family: Arial, sans-serif; color: #333;">
+                <div style="margin-bottom: 20px;">
+                    <img src="{logo_url}" alt="HireIQ" style="height: 60px; max-width: 100%; object-fit: contain;" />
+                </div>
                 <h2 style="color: #4F46E5;">Welcome to HireIQ, {recruiter_name}!</h2>
                 <p>An administrator has provisioned a new recruiter account for you.</p>
                 <div style="background-color: #F8FAFC; padding: 20px; border-radius: 8px; margin: 20px 0;">

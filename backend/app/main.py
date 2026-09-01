@@ -49,6 +49,7 @@ from app.routes.voice_tts import router as voice_tts_router
 from app.routes.ws_dashboard import router as ws_dashboard_router
 from app.routes.debug_routes import router as debug_router
 from app.routes.plans_routes import router as plans_router
+from app.routes.platform import router as platform_router
 
 from app.routes.conversation_flow import router as conversation_flow_router
 import app.services.transcription as transcription                # Voice transcription sub-router
@@ -292,6 +293,7 @@ app.include_router(voice_tts_router)
 app.include_router(ws_dashboard_router)
 app.include_router(debug_router)
 app.include_router(plans_router)
+app.include_router(platform_router, prefix="/api/platform", tags=["Platform Settings"])
 
 app.include_router(conversation_flow_router)
 app.include_router(transcription.router)

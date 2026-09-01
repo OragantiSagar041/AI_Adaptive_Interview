@@ -26,6 +26,7 @@ from app.db.mongo_db import (
     contact_requests_collection,
     crash_logs_collection,
     agents_collection,
+    platform_settings_collection,
     get_next_sequence_value,
 )
 
@@ -57,5 +58,6 @@ __all__ = [
     "contact_requests_collection",
     "crash_logs_collection",
     "agents_collection",
+    "platform_settings_collection",
     "get_next_sequence_value",
 ]
