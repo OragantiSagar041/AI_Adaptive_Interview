@@ -187,53 +187,98 @@ For each scenario, score the answer from 0–100 based on:
 
 Respond ONLY with a valid JSON object in exactly this format:
 {{
-  "scores": [<score_for_scenario_1>, <score_for_scenario_2>, ...],
+  "evaluations": [
+    {{
+      "score": <score_for_scenario_1_between_0_and_100>,
+      "feedback": "<concise actionable feedback on why this score was given>"
+    }},
+    ...
+  ],
   "avg_score": <average of all scores>
 }}"""
 
     try:
         resp = chat_completion(
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=200,
+            max_tokens=600,
         )
         data = extract_json(resp or "")
-        scores = data.get("scores")
-        if scores and isinstance(scores, list):
+        data = data if isinstance(data, dict) else {}
+        
+        # New format with evaluations
+        evals = data.get("evaluations", [])
+        scores = data.get("scores", []) # Fallback
+        
+        valid_scores = []
+        raw_answers = case_study_round.get("answers", [])
+        
+        if evals and isinstance(evals, list):
+            for i, ev in enumerate(evals):
+                if isinstance(ev, dict):
+                    s = ev.get("score", 0)
+                    fb = ev.get("feedback", "No feedback provided.")
+                    try:
+                        s_float = float(s)
+                    except:
+                        s_float = 0.0
+                    valid_scores.append(s_float)
+                    
+                    if i < len(raw_answers) and isinstance(raw_answers[i], dict):
+                        raw_answers[i]["ai_score"] = s_float
+                        raw_answers[i]["ai_feedback"] = fb
+                        
+            avg = sum(valid_scores) / len(valid_scores) if valid_scores else 0.0
+            
+        elif scores and isinstance(scores, list):
             valid_scores = [float(s) for s in scores if isinstance(s, (int, float, str)) and str(s).replace('.', '', 1).isdigit()]
+            for i, s_val in enumerate(valid_scores):
+                if i < len(raw_answers) and isinstance(raw_answers[i], dict):
+                    raw_answers[i]["ai_score"] = s_val
+                    raw_answers[i]["ai_feedback"] = "Evaluated via legacy pipeline without feedback."
             avg = sum(valid_scores) / len(valid_scores) if valid_scores else 0.0
         else:
             avg = float(data.get("avg_score", 0))
+            
         return round(max(0.0, min(100.0, avg)), 1)
     except Exception as e:
-        print(f"[score_rounds] Case study eval error: {e}")
-        return None
+        print(f"[score_rounds] Case study eval error (fallback to offline scoring): {e}")
+        raw_answers = case_study_round.get("answers", [])
+        valid_scores = []
+        for i, ans in enumerate(raw_answers):
+            if isinstance(ans, dict):
+                a_text = str(ans.get("answer_text") or "")
+                word_count = len(a_text.split())
+                
+                # Basic offline heuristic: 
+                # < 10 words = 0
+                # 10 - 50 words = 40 (partial)
+                # > 50 words = 75 (fair effort)
+                if word_count < 10:
+                    fallback_score = 0.0
+                    fb = "Offline Analysis: Answer too short to evaluate meaningfully."
+                elif word_count < 50:
+                    fallback_score = 40.0
+                    fb = "Offline Analysis: Partial answer provided. More detail was needed."
+                else:
+                    fallback_score = 75.0
+                    fb = "Offline Analysis: Detailed response provided. (Detailed AI evaluation unavailable due to API limit)."
+                    
+                ans["ai_score"] = fallback_score
+                ans["ai_feedback"] = fb
+                valid_scores.append(fallback_score)
+                
+        if valid_scores:
+            avg = sum(valid_scores) / len(valid_scores)
+            return round(max(0.0, min(100.0, avg)), 1)
+            
+        return 0.0
 
 
 # ──────────────────────────────────────────────────────────
 # BLENDING
 # ──────────────────────────────────────────────────────────
 
-def blend_scores(
-    verbal_score: float,
-    coding_score: Optional[float] = None,
-    case_study_score: Optional[float] = None,
-) -> float:
-    """
-    Weighted blend (100 marks total):
-    - Q&A Accuracy (22 interview questions): 60 marks max (verbal_score * 0.60)
-    - Coding Accuracy (test cases passed):     40 marks max (coding_score * 0.40)
-    """
-    has_coding     = coding_score is not None
-    has_case_study = case_study_score is not None
 
-    if has_coding:
-        blended = (verbal_score * 0.60) + (coding_score * 0.40)
-    elif has_case_study:
-        blended = (verbal_score * 0.60) + (case_study_score * 0.40)
-    else:
-        blended = verbal_score
-
-    return round(blended, 1)
 
 # ==============================================================================
 # DYNAMIC COMMON SCORING ENGINE (ONLINE & OFFLINE)

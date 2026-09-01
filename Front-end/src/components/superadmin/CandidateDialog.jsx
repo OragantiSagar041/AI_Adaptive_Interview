@@ -1537,257 +1537,310 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                       a.question_text?.toLowerCase().includes('case study')
                     ).length === 0 && (
                       <>
-                        {c.coding_round?.task || c.coding_round?.latest_code ? (
-                          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                            {/* Header */}
-                            <div className="flex items-start justify-between gap-3 p-4 bg-slate-50 border-b border-slate-100">
-                              <div className="flex items-start gap-2 flex-1 min-w-0">
-                                <span className="mt-0.5 shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-indigo-600 text-white text-[10px] font-black">
-                                  <Code size={12} />
-                                </span>
-                                <div className="min-w-0">
-                                  <p className="text-sm font-bold text-slate-800 leading-snug">
-                                    {c.coding_round?.task?.title || 'Coding Round'}
-                                  </p>
-                                  {c.coding_round?.task?.description && (
-                                    <p className="text-xs text-slate-500 mt-1 leading-relaxed whitespace-pre-wrap">
-                                      {c.coding_round.task.description}
-                                    </p>
-                                  )}
-                                  {c.coding_round?.task?.input_format && (
-                                    <div className="mt-3">
-                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Input Format</span>
-                                      <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">{c.coding_round.task.input_format}</p>
-                                    </div>
-                                  )}
-                                  {c.coding_round?.task?.output_format && (
-                                    <div className="mt-2">
-                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Output Format</span>
-                                      <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">{c.coding_round.task.output_format}</p>
-                                    </div>
-                                  )}
-                                  {c.coding_round?.task?.constraints && Array.isArray(c.coding_round.task.constraints) && c.coding_round.task.constraints.length > 0 && (
-                                    <div className="mt-2">
-                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Constraints</span>
-                                      <ul className="list-disc list-inside text-xs text-slate-600 space-y-0.5 ml-1">
-                                        {c.coding_round.task.constraints.map((c_str, idx) => (
-                                          <li key={idx}>{c_str}</li>
-                                        ))}
-                                      </ul>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="flex flex-col items-end gap-1 shrink-0">
-                                {c.coding_round?.language && (
-                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 uppercase tracking-wide">
-                                    {c.coding_round.language}
-                                  </span>
-                                )}
-                                {c.coding_round?.latest_run && (() => {
-                                  const passed = ((c.coding_round.latest_run.visible_results || []).filter(r => r.passed).length) + (c.coding_round.latest_run.hidden_summary?.passed || 0)
-                                  const total = ((c.coding_round.latest_run.visible_results || []).length) + (c.coding_round.latest_run.hidden_summary?.total || 0)
-                                  const allOk = total > 0 && passed === total
+                        {(() => {
+                          const itype = (c.interview_type || 'Technical').trim().toLowerCase();
+                          const isNonTech = ['non-technical', 'non_technical', 'non tech', 'nontech'].includes(itype);
+
+                          if (isNonTech) {
+                            return c.case_study_round?.questions?.length > 0 ? (
+                              <div className="space-y-6">
+                                {c.case_study_round.questions.map((q, idx) => {
+                                  const qText = typeof q === 'object' ? (q.scenario || q.question || q.text || q.title || JSON.stringify(q)) : q;
+                                  const ansObj = c.case_study_round.answers?.[idx];
+                                  const aText = typeof ansObj === 'object' ? ansObj?.answer_text : ansObj;
+                                  
                                   return (
-                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${allOk ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                                      {passed}/{total} Tests Passed
-                                    </span>
-                                  )
-                                })()}
-                              </div>
-                            </div>
-
-                            <div className="p-4 space-y-4">
-                              {/* Submitted Code */}
-                              <div className="bg-slate-900 rounded-xl overflow-hidden shadow-inner border border-slate-700">
-                                <div className="bg-slate-800 px-4 py-2 border-b border-slate-700 flex items-center gap-2">
-                                  <Code size={13} className="text-slate-400" />
-                                  <span className="text-xs font-black text-slate-300 tracking-wider">SUBMITTED CODE</span>
-                                </div>
-                                <div className="p-4 overflow-x-auto">
-                                  <pre className="text-sm font-mono text-emerald-400 leading-relaxed whitespace-pre-wrap">
-                                    {c.coding_round?.latest_code || <span className="text-slate-500 italic">No code submitted.</span>}
-                                  </pre>
-                                </div>
-                              </div>
-
-                              {/* Run Results */}
-                              {c.coding_round?.latest_run ? (
-                                <div className="bg-slate-900 rounded-xl p-4 border border-slate-700 space-y-2">
-                                  <div className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Test Results</div>
-                                  {c.coding_round.latest_run.runtime_error ? (
-                                    <div className="text-rose-400 text-xs font-mono whitespace-pre-wrap bg-slate-950 p-3 rounded-lg border border-rose-900/50">
-                                      <strong className="text-rose-500 block mb-1">Runtime Error:</strong>
-                                      {c.coding_round.latest_run.runtime_error}
+                                    <div key={idx} className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                                      <div className="flex items-center justify-between gap-2 p-4 bg-slate-50 border-b border-slate-100">
+                                        <div className="flex items-center gap-2">
+                                          <FileText size={14} className="text-violet-600" />
+                                          <span className="text-sm font-bold text-slate-800">
+                                            Case Study Question {idx + 1}
+                                          </span>
+                                        </div>
+                                        {ansObj?.ai_score !== undefined && ansObj.ai_score !== null && (() => {
+                                          const score = Number(ansObj.ai_score);
+                                          const scoreBg = score >= 75 ? 'bg-emerald-100 text-emerald-700' : score >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700';
+                                          return (
+                                            <span className={`shrink-0 text-xs font-black px-2.5 py-1 rounded-full ${scoreBg}`}>
+                                              AI Score: {score.toFixed(0)}%
+                                            </span>
+                                          );
+                                        })()}
+                                      </div>
+                                      <div className="p-4 space-y-4">
+                                        <div>
+                                          <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Scenario / Question</div>
+                                          <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{qText}</div>
+                                        </div>
+                                        {aText && (
+                                          <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                                              <Mic size={10} /> Candidate Response
+                                            </div>
+                                            <div className="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
+                                              {aText}
+                                            </div>
+                                          </div>
+                                        )}
+                                        {ansObj?.ai_feedback && (
+                                          <div>
+                                            <div className="text-[10px] font-black text-indigo-500 uppercase tracking-wider mb-1.5 flex items-center gap-1 mt-4">
+                                              <Sparkles size={10} /> AI Feedback
+                                            </div>
+                                            <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-sm text-indigo-800 italic leading-relaxed whitespace-pre-wrap">
+                                              {ansObj.ai_feedback}
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
                                     </div>
-                                  ) : (
-                                    <div className="space-y-2">
-                                      {(() => {
-                                        const visibleResults = c.coding_round.latest_run.visible_results || [];
-                                        const hiddenResults = c.coding_round.latest_run.hidden_results || [];
-                                        const displayedResults = showAllTests ? visibleResults : visibleResults.slice(0, 2);
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <div className="text-center py-12 text-slate-400 text-sm font-medium">
+                                No case study data available for this candidate.
+                              </div>
+                            );
+                          }
 
-                                        const hiddenCount = c.coding_round.latest_run.hidden_summary?.total || hiddenResults.length;
-                                        const visibleRemaining = visibleResults.length - displayedResults.length;
-                                        const moreCount = showAllTests ? 0 : visibleRemaining + hiddenCount;
+                          // For Technical interviews
+                          return c.coding_round?.task || c.coding_round?.latest_code ? (
+                            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                              {/* Header */}
+                              <div className="flex items-start justify-between gap-3 p-4 bg-slate-50 border-b border-slate-100">
+                                <div className="flex items-start gap-2 flex-1 min-w-0">
+                                  <span className="mt-0.5 shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-indigo-600 text-white text-[10px] font-black">
+                                    <Code size={12} />
+                                  </span>
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-bold text-slate-800 leading-snug">
+                                      {c.coding_round?.task?.title || 'Coding Round'}
+                                    </p>
+                                    {c.coding_round?.task?.description && (
+                                      <p className="text-xs text-slate-500 mt-1 leading-relaxed whitespace-pre-wrap">
+                                        {c.coding_round.task.description}
+                                      </p>
+                                    )}
+                                    {c.coding_round?.task?.input_format && (
+                                      <div className="mt-3">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Input Format</span>
+                                        <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">{c.coding_round.task.input_format}</p>
+                                      </div>
+                                    )}
+                                    {c.coding_round?.task?.output_format && (
+                                      <div className="mt-2">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Output Format</span>
+                                        <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">{c.coding_round.task.output_format}</p>
+                                      </div>
+                                    )}
+                                    {c.coding_round?.task?.constraints && Array.isArray(c.coding_round.task.constraints) && c.coding_round.task.constraints.length > 0 && (
+                                      <div className="mt-2">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Constraints</span>
+                                        <ul className="list-disc list-inside text-xs text-slate-600 space-y-0.5 ml-1">
+                                          {c.coding_round.task.constraints.map((c_str, idx) => (
+                                            <li key={idx}>{c_str}</li>
+                                          ))}
+                                        </ul>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex flex-col items-end gap-1 shrink-0">
+                                  {c.coding_round?.language && (
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 uppercase tracking-wide">
+                                      {c.coding_round.language}
+                                    </span>
+                                  )}
+                                  {c.coding_round?.latest_run && (() => {
+                                    const passed = ((c.coding_round.latest_run.visible_results || []).filter(r => r.passed).length) + (c.coding_round.latest_run.hidden_summary?.passed || 0)
+                                    const total = ((c.coding_round.latest_run.visible_results || []).length) + (c.coding_round.latest_run.hidden_summary?.total || 0)
+                                    const allOk = total > 0 && passed === total
+                                    return (
+                                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${allOk ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                                        {passed}/{total} Tests Passed
+                                      </span>
+                                    )
+                                  })()}
+                                </div>
+                              </div>
 
-                                        return (
-                                          <>
-                                            {displayedResults.map((r, i) => (
-                                              <div key={`vis-${i}`} className={`text-xs font-mono p-3 rounded-lg border ${r.passed ? 'text-emerald-400 bg-slate-950 border-emerald-900/30' : 'text-slate-300 bg-slate-950 border-slate-800'}`}>
-                                                <div className="flex items-center gap-1.5 font-bold mb-2">
-                                                  {r.passed ? <Check size={12} className="text-emerald-400" /> : <X size={12} className="text-rose-400" />}
-                                                  Test {r.id || i + 1} — {r.passed ? 'PASSED' : 'FAILED'}
-                                                </div>
-                                                <div className="grid grid-cols-[80px,1fr] gap-1 mb-1">
-                                                  <span className="text-slate-500">Input:</span>
-                                                  <span>{typeof r.input === 'object' ? JSON.stringify(r.input) : String(r.input ?? '')}</span>
-                                                </div>
-                                                <div className="grid grid-cols-[80px,1fr] gap-1 mb-1">
-                                                  <span className="text-slate-500">Expected:</span>
-                                                  <span className="text-emerald-400">{typeof r.expected === 'object' ? JSON.stringify(r.expected) : String(r.expected ?? '')}</span>
-                                                </div>
-                                                {!r.passed && (
-                                                  <div className="grid grid-cols-[80px,1fr] gap-1">
-                                                    <span className="text-slate-500">Got:</span>
-                                                    <span className="text-amber-400">{typeof r.output === 'object' ? JSON.stringify(r.output) : String(r.output ?? '')}</span>
+                              <div className="p-4 space-y-4">
+                                {/* Submitted Code */}
+                                <div className="bg-slate-900 rounded-xl overflow-hidden shadow-inner border border-slate-700">
+                                  <div className="bg-slate-800 px-4 py-2 border-b border-slate-700 flex items-center gap-2">
+                                    <Code size={13} className="text-slate-400" />
+                                    <span className="text-xs font-black text-slate-300 tracking-wider">SUBMITTED CODE</span>
+                                  </div>
+                                  <div className="p-4 overflow-x-auto">
+                                    <pre className="text-sm font-mono text-emerald-400 leading-relaxed whitespace-pre-wrap">
+                                      {c.coding_round?.latest_code || <span className="text-slate-500 italic">No code submitted.</span>}
+                                    </pre>
+                                  </div>
+                                </div>
+
+                                {/* Run Results */}
+                                {c.coding_round?.latest_run ? (
+                                  <div className="bg-slate-900 rounded-xl p-4 border border-slate-700 space-y-2">
+                                    <div className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Test Results</div>
+                                    {c.coding_round.latest_run.runtime_error ? (
+                                      <div className="text-rose-400 text-xs font-mono whitespace-pre-wrap bg-slate-950 p-3 rounded-lg border border-rose-900/50">
+                                        <strong className="text-rose-500 block mb-1">Runtime Error:</strong>
+                                        {c.coding_round.latest_run.runtime_error}
+                                      </div>
+                                    ) : (
+                                      <div className="space-y-2">
+                                        {(() => {
+                                          const visibleResults = c.coding_round.latest_run.visible_results || [];
+                                          const hiddenResults = c.coding_round.latest_run.hidden_results || [];
+                                          const displayedResults = showAllTests ? visibleResults : visibleResults.slice(0, 2);
+
+                                          const hiddenCount = c.coding_round.latest_run.hidden_summary?.total || hiddenResults.length;
+                                          const visibleRemaining = visibleResults.length - displayedResults.length;
+                                          const moreCount = showAllTests ? 0 : visibleRemaining + hiddenCount;
+
+                                          return (
+                                            <>
+                                              {displayedResults.map((r, i) => (
+                                                <div key={`vis-${i}`} className={`text-xs font-mono p-3 rounded-lg border ${r.passed ? 'text-emerald-400 bg-slate-950 border-emerald-900/30' : 'text-slate-300 bg-slate-950 border-slate-800'}`}>
+                                                  <div className="flex items-center gap-1.5 font-bold mb-2">
+                                                    {r.passed ? <Check size={12} className="text-emerald-400" /> : <X size={12} className="text-rose-400" />}
+                                                    Test {r.id || i + 1} — {r.passed ? 'PASSED' : 'FAILED'}
                                                   </div>
-                                                )}
-                                              </div>
-                                            ))}
-
-                                            {/* Render hidden tests when expanded */}
-                                            {showAllTests && hiddenResults.length > 0 ? (
-                                              <div className="mt-4 pt-4 border-t border-slate-700/50 space-y-2">
-                                                <div className="flex items-center gap-2 mb-3">
-                                                  <ShieldAlert size={14} className="text-amber-500" />
-                                                  <span className="text-xs font-black text-amber-500/80 uppercase tracking-wider">Hidden Test Cases ({c.coding_round.latest_run.hidden_summary?.passed || 0}/{c.coding_round.latest_run.hidden_summary?.total || 0} Passed)</span>
-                                                </div>
-                                                {hiddenResults.map((r, i) => (
-                                                  <div key={`hid-${i}`} className={`text-xs font-mono p-3 rounded-lg border ${r.passed ? 'text-emerald-400 bg-slate-950 border-emerald-900/30' : 'text-slate-300 bg-slate-950 border-slate-800'}`}>
-                                                    <div className="flex items-center gap-1.5 font-bold mb-2">
-                                                      {r.passed ? <Check size={12} className="text-emerald-400" /> : <X size={12} className="text-rose-400" />}
-                                                      Hidden Test {r.id || i + 1} — {r.passed ? 'PASSED' : 'FAILED'}
-                                                    </div>
-                                                    <div className="grid grid-cols-[80px,1fr] gap-1 mb-1">
-                                                      <span className="text-slate-500">Input:</span>
-                                                      <span>{typeof r.input === 'object' ? JSON.stringify(r.input) : String(r.input ?? '')}</span>
-                                                    </div>
-                                                    <div className="grid grid-cols-[80px,1fr] gap-1 mb-1">
-                                                      <span className="text-slate-500">Expected:</span>
-                                                      <span className="text-emerald-400">{typeof r.expected === 'object' ? JSON.stringify(r.expected) : String(r.expected ?? '')}</span>
-                                                    </div>
-                                                    {!r.passed && (
-                                                      <div className="grid grid-cols-[80px,1fr] gap-1">
-                                                        <span className="text-slate-500">Got:</span>
-                                                        <span className="text-amber-400">{typeof r.output === 'object' ? JSON.stringify(r.output) : String(r.output ?? '')}</span>
-                                                      </div>
-                                                    )}
+                                                  <div className="grid grid-cols-[80px,1fr] gap-1 mb-1">
+                                                    <span className="text-slate-500">Input:</span>
+                                                    <span>{typeof r.input === 'object' ? JSON.stringify(r.input) : String(r.input ?? '')}</span>
                                                   </div>
-                                                ))}
-                                              </div>
-                                            ) : (
-                                              showAllTests && c.coding_round.latest_run.hidden_summary?.total > 0 && (
+                                                  <div className="grid grid-cols-[80px,1fr] gap-1 mb-1">
+                                                    <span className="text-slate-500">Expected:</span>
+                                                    <span className="text-emerald-400">{typeof r.expected === 'object' ? JSON.stringify(r.expected) : String(r.expected ?? '')}</span>
+                                                  </div>
+                                                  {!r.passed && (
+                                                    <div className="grid grid-cols-[80px,1fr] gap-1">
+                                                      <span className="text-slate-500">Got:</span>
+                                                      <span className="text-amber-400">{typeof r.output === 'object' ? JSON.stringify(r.output) : String(r.output ?? '')}</span>
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              ))}
+
+                                              {/* Render hidden tests when expanded */}
+                                              {showAllTests && hiddenResults.length > 0 ? (
                                                 <div className="mt-4 pt-4 border-t border-slate-700/50 space-y-2">
                                                   <div className="flex items-center gap-2 mb-3">
                                                     <ShieldAlert size={14} className="text-amber-500" />
                                                     <span className="text-xs font-black text-amber-500/80 uppercase tracking-wider">Hidden Test Cases ({c.coding_round.latest_run.hidden_summary?.passed || 0}/{c.coding_round.latest_run.hidden_summary?.total || 0} Passed)</span>
                                                   </div>
-                                                  {Array.from({ length: c.coding_round.latest_run.hidden_summary.total }).map((_, i) => {
-                                                    // We don't know exactly which passed/failed if it's just a summary, 
-                                                    // so we'll just style them neutrally as 'evaluated'
-                                                    return (
-                                                      <div key={`hid-ph-${i}`} className="text-xs font-mono p-3 rounded-lg border text-slate-400 bg-slate-950 border-slate-800 opacity-80">
-                                                        <div className="flex items-center gap-1.5 font-bold mb-2 text-slate-500">
-                                                          <ShieldAlert size={12} />
-                                                          Hidden Test {i + 1}
-                                                        </div>
-                                                        <div className="italic text-[10px] text-slate-600">
-                                                          Input & Output details are not available for this older interview record.
-                                                        </div>
+                                                  {hiddenResults.map((r, i) => (
+                                                    <div key={`hid-${i}`} className={`text-xs font-mono p-3 rounded-lg border ${r.passed ? 'text-emerald-400 bg-slate-950 border-emerald-900/30' : 'text-slate-300 bg-slate-950 border-slate-800'}`}>
+                                                      <div className="flex items-center gap-1.5 font-bold mb-2">
+                                                        {r.passed ? <Check size={12} className="text-emerald-400" /> : <X size={12} className="text-rose-400" />}
+                                                        Hidden Test {r.id || i + 1} — {r.passed ? 'PASSED' : 'FAILED'}
                                                       </div>
-                                                    );
-                                                  })}
+                                                      <div className="grid grid-cols-[80px,1fr] gap-1 mb-1">
+                                                        <span className="text-slate-500">Input:</span>
+                                                        <span>{typeof r.input === 'object' ? JSON.stringify(r.input) : String(r.input ?? '')}</span>
+                                                      </div>
+                                                      <div className="grid grid-cols-[80px,1fr] gap-1 mb-1">
+                                                        <span className="text-slate-500">Expected:</span>
+                                                        <span className="text-emerald-400">{typeof r.expected === 'object' ? JSON.stringify(r.expected) : String(r.expected ?? '')}</span>
+                                                      </div>
+                                                      {!r.passed && (
+                                                        <div className="grid grid-cols-[80px,1fr] gap-1">
+                                                          <span className="text-slate-500">Got:</span>
+                                                          <span className="text-amber-400">{typeof r.output === 'object' ? JSON.stringify(r.output) : String(r.output ?? '')}</span>
+                                                        </div>
+                                                      )}
+                                                    </div>
+                                                  ))}
                                                 </div>
-                                              )
-                                            )}
+                                              ) : (
+                                                showAllTests && c.coding_round.latest_run.hidden_summary?.total > 0 && (
+                                                  <div className="mt-4 pt-4 border-t border-slate-700/50 space-y-2">
+                                                    <div className="flex items-center gap-2 mb-3">
+                                                      <ShieldAlert size={14} className="text-amber-500" />
+                                                      <span className="text-xs font-black text-amber-500/80 uppercase tracking-wider">Hidden Test Cases ({c.coding_round.latest_run.hidden_summary?.passed || 0}/{c.coding_round.latest_run.hidden_summary?.total || 0} Passed)</span>
+                                                    </div>
+                                                    {Array.from({ length: c.coding_round.latest_run.hidden_summary.total }).map((_, i) => {
+                                                      // We don't know exactly which passed/failed if it's just a summary, 
+                                                      // so we'll just style them neutrally as 'evaluated'
+                                                      return (
+                                                        <div key={`hid-ph-${i}`} className="text-xs font-mono p-3 rounded-lg border text-slate-400 bg-slate-950 border-slate-800 opacity-80">
+                                                          <div className="flex items-center gap-1.5 font-bold mb-2 text-slate-500">
+                                                            <ShieldAlert size={12} />
+                                                            Hidden Test {i + 1}
+                                                          </div>
+                                                          <div className="italic text-[10px] text-slate-600">
+                                                            Input & Output details are not available for this older interview record.
+                                                          </div>
+                                                        </div>
+                                                      );
+                                                    })}
+                                                  </div>
+                                                )
+                                              )}
 
-                                            {moreCount > 0 || showAllTests ? (
-                                              <button
-                                                onClick={() => setShowAllTests(!showAllTests)}
-                                                className="w-full py-2 mt-3 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg border border-slate-700 transition-colors flex justify-center items-center gap-1 cursor-pointer"
-                                              >
-                                                {showAllTests ? 'Show Less' : `View ${moreCount} More Test Cases`}
-                                              </button>
-                                            ) : null}
-                                          </>
-                                        );
-                                      })()}
-                                      {c.coding_round.latest_run.all_passed && (
-                                        <div className="text-xs font-mono text-emerald-400 bg-slate-950 p-3 rounded-lg border border-emerald-900/30 flex items-center gap-2 mt-2">
-                                          <Check size={14} /> All test cases passed successfully!
+                                              {moreCount > 0 || showAllTests ? (
+                                                <button
+                                                  onClick={() => setShowAllTests(!showAllTests)}
+                                                  className="w-full py-2 mt-3 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg border border-slate-700 transition-colors flex justify-center items-center gap-1 cursor-pointer"
+                                                >
+                                                  {showAllTests ? 'Show Less' : `View ${moreCount} More Test Cases`}
+                                                </button>
+                                              ) : null}
+                                            </>
+                                          );
+                                        })()}
+                                        {c.coding_round.latest_run.all_passed && (
+                                          <div className="text-xs font-mono text-emerald-400 bg-slate-950 p-3 rounded-lg border border-emerald-900/30 flex items-center gap-2 mt-2">
+                                            <Check size={14} /> All test cases passed successfully!
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : c.coding_round?.task?.test_cases?.length > 0 ? (
+                                  <div className="bg-slate-900 rounded-xl p-4 border border-slate-700">
+                                    <div className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Visible Test Cases (not executed)</div>
+                                    {c.coding_round.task.test_cases.filter(t => t.visible !== false).map((t, i) => (
+                                      <div key={i} className="text-xs font-mono text-slate-300 bg-slate-950 p-3 rounded-lg border border-slate-800 mb-2">
+                                        <div className="grid grid-cols-[80px,1fr] gap-1 mb-1">
+                                          <span className="text-slate-500">Input:</span>
+                                          <span>{typeof t.input === 'string' ? t.input : JSON.stringify(t.input)}</span>
                                         </div>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              ) : c.coding_round?.task?.test_cases?.length > 0 ? (
-                                <div className="bg-slate-900 rounded-xl p-4 border border-slate-700">
-                                  <div className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Visible Test Cases (not executed)</div>
-                                  {c.coding_round.task.test_cases.filter(t => t.visible !== false).map((t, i) => (
-                                    <div key={i} className="text-xs font-mono text-slate-300 bg-slate-950 p-3 rounded-lg border border-slate-800 mb-2">
-                                      <div className="grid grid-cols-[80px,1fr] gap-1 mb-1">
-                                        <span className="text-slate-500">Input:</span>
-                                        <span>{typeof t.input === 'string' ? t.input : JSON.stringify(t.input)}</span>
+                                        <div className="grid grid-cols-[80px,1fr] gap-1">
+                                          <span className="text-slate-500">Expected:</span>
+                                          <span className="text-emerald-400">{typeof t.expected === 'string' ? t.expected : JSON.stringify(t.expected)}</span>
+                                        </div>
                                       </div>
-                                      <div className="grid grid-cols-[80px,1fr] gap-1">
-                                        <span className="text-slate-500">Expected:</span>
-                                        <span className="text-emerald-400">{typeof t.expected === 'string' ? t.expected : JSON.stringify(t.expected)}</span>
-                                      </div>
+                                    ))}
+                                  </div>
+                                ) : null}
+
+                                {/* AI Evaluation */}
+                                {c.coding_round?.final_evaluation && (
+                                  <div>
+                                    <div className="text-[10px] font-black text-indigo-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                                      <Sparkles size={10} /> AI Evaluation
                                     </div>
-                                  ))}
-                                </div>
-                              ) : null}
-
-                              {/* AI Evaluation */}
-                              {c.coding_round?.final_evaluation && (
-                                <div>
-                                  <div className="text-[10px] font-black text-indigo-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                                    <Sparkles size={10} /> AI Evaluation
+                                    <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-sm text-indigo-800 italic leading-relaxed whitespace-pre-wrap">
+                                      {typeof c.coding_round.final_evaluation === 'object'
+                                        ? c.coding_round.final_evaluation.coach_message ||
+                                        c.coding_round.final_evaluation.feedback ||
+                                        JSON.stringify(c.coding_round.final_evaluation, null, 2)
+                                        : c.coding_round.final_evaluation}
+                                    </div>
                                   </div>
-                                  <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-sm text-indigo-800 italic leading-relaxed whitespace-pre-wrap">
-                                    {typeof c.coding_round.final_evaluation === 'object'
-                                      ? c.coding_round.final_evaluation.coach_message ||
-                                      c.coding_round.final_evaluation.feedback ||
-                                      JSON.stringify(c.coding_round.final_evaluation, null, 2)
-                                      : c.coding_round.final_evaluation}
-                                  </div>
-                                </div>
-                              )}
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        ) : (
-                          <div className="text-center py-12 text-slate-400 text-sm font-medium">
-                            No coding round data available for this candidate.
-                          </div>
-                        )}
-
-                        {/* Case Study */}
-                        {c.case_study_round?.latest_response && (
-                          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden mt-4">
-                            <div className="flex items-center gap-2 p-4 bg-slate-50 border-b border-slate-100">
-                              <FileText size={14} className="text-violet-600" />
-                              <span className="text-sm font-bold text-slate-800">
-                                {c.case_study_round?.task?.title || 'Case Study Round'}
-                              </span>
+                          ) : (
+                            <div className="text-center py-12 text-slate-400 text-sm font-medium">
+                              No coding round data available for this candidate.
                             </div>
-                            <div className="p-4">
-                              <pre className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
-                                {c.case_study_round.latest_response}
-                              </pre>
-                            </div>
-                          </div>
-                        )}
+                          );
+                        })()}
                       </>
                     )}
 

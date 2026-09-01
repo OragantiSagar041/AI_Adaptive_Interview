@@ -572,18 +572,28 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
                 except:
                     pass
 
-            # Round 1: dynamic based on interview type
-            round1_s = calculate_round1_score(questions, results, interview_type=interview_type, n_case_study_questions=n_cs_questions)
+            saved_r1 = session_data.get("round1_score")
+            saved_r2 = session_data.get("round2_score")
+            saved_total = session_data.get("score")
 
-            # Round 2: route by interview type
-            itype_lower = str(interview_type).strip().lower()
-            if itype_lower == "technical" and coding_rd:
-                round2_s = calculate_coding_score(coding_rd)
-            elif itype_lower in ("non-technical", "non_technical", "non tech", "nontech") and case_std:
-                round2_s = calculate_case_study_round2_score(case_std, n_cs_questions, ctx_cs, lang_cs)
-            # Normal / other types: round2_s stays 0.0
+            if saved_r1 is not None:
+                round1_s = float(saved_r1)
+            else:
+                round1_s = calculate_round1_score(questions, results, interview_type=interview_type, n_case_study_questions=n_cs_questions)
 
-            avg_score = calculate_final_score(round1_s, round2_s)
+            if saved_r2 is not None:
+                round2_s = float(saved_r2)
+            else:
+                itype_lower = str(interview_type).strip().lower()
+                if itype_lower == "technical" and coding_rd:
+                    round2_s = calculate_coding_score(coding_rd)
+                elif itype_lower in ("non-technical", "non_technical", "non tech", "nontech") and case_std:
+                    round2_s = calculate_case_study_round2_score(case_std, n_cs_questions, ctx_cs, lang_cs)
+
+            if saved_total is not None:
+                avg_score = float(saved_total)
+            else:
+                avg_score = calculate_final_score(round1_s, round2_s)
         else:
             round1_s = verbal_avg
             avg_score = verbal_avg

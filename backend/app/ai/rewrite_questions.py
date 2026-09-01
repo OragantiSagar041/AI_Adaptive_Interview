@@ -84,16 +84,16 @@ def rewrite():
                 continue
             middle_questions.append(q)
             
-        print(f"✅ AI generated {len(middle_questions)} technical questions")
+        print(f"[OK] AI generated {len(middle_questions)} technical questions")
     except Exception as e:
-        print(f"⚠️ AI question generation failed: {e}")
-        print("📋 Falling back to smart offline question generator...")
+        print(f"[Fallback] AI question generation failed: {e}")
+        print("[Fallback] Falling back to smart offline question generator...")
     
     # ── OFFLINE FALLBACK: Extract skills/projects and build timeline-based questions ──
     if len(middle_questions) < middle_count:
         offline_questions = _generate_offline_questions(resume_text or "", jd_text or text, num_questions)
         middle_questions.extend(offline_questions)
-        print(f"📋 Offline generator added {len(offline_questions)} questions")
+        print(f"[Fallback] Offline generator added {len(offline_questions)} questions")
     
     middle_questions = middle_questions[:middle_count]
     

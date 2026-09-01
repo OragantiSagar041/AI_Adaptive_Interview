@@ -73,8 +73,7 @@ Respond ONLY with a valid JSON object in exactly this format. Do not include mar
             temperature=0.3
         )
         
-        data_str = extract_json(raw)
-        result = json.loads(data_str)
+        result = extract_json(raw) or {}
         return result
     except Exception as e:
         print(f"Error in multi-dimensional analysis: {e}")

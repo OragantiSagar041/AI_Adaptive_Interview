@@ -793,23 +793,61 @@ export default function SuperDashboardPage() {
               ))}
             </div>
 
-            {/* Square Horizontal Bar Graph — 1:1 Matched 8 Bars */}
-            <div className="space-y-3.5 pt-4 border-t border-slate-200 dark:border-slate-700/80">
-              {pipelineStages.map((p, i) => {
-                const pctOfMax = (p.count / maxPipelineCount) * 100;
-                return (
-                  <div key={p.stage || i} className="h-4.5 w-full flex items-center">
-                    <div
-                      className="h-full rounded-md transition-all duration-700 shadow-xs"
-                      style={{
-                        width: `${Math.max(pctOfMax, p.count > 0 ? 1.5 : 0.8)}%`,
-                        backgroundColor: p.color
-                      }}
-                      title={`${p.stage} (Stage ${i + 1}): ${formatNum(p.count)}`}
-                    />
-                  </div>
-                );
-              })}
+            {/* Minimalist Donut Chart */}
+            <div className="pt-6 border-t border-slate-200 dark:border-slate-700/80 w-full flex justify-center items-center h-[350px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={pipelineStages.filter(p => p.count > 0)}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={90}
+                    outerRadius={140}
+                    labelLine={false}
+                    label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, name }) => {
+                      if (percent < 0.02) return null; // Hide labels for very small slices
+                      const RADIAN = Math.PI / 180;
+                      
+                      // Calculate position for the percentage (centered inside the donut ring)
+                      const ringRadius = innerRadius + (outerRadius - innerRadius) * 0.5;
+                      const xInside = cx + ringRadius * Math.cos(-midAngle * RADIAN);
+                      const yInside = cy + ringRadius * Math.sin(-midAngle * RADIAN);
+                      
+                      // Calculate position for the Stage Name (floating just outside the donut ring)
+                      const textRadius = outerRadius + 20;
+                      const xOutside = cx + textRadius * Math.cos(-midAngle * RADIAN);
+                      const yOutside = cy + textRadius * Math.sin(-midAngle * RADIAN);
+                      
+                      // Align text left or right depending on which side of the circle it falls on
+                      const textAnchor = xOutside > cx ? 'start' : 'end';
+                      
+                      return (
+                        <g>
+                          {/* Inner Percentage */}
+                          <text x={xInside} y={yInside} fill="white" textAnchor="middle" dominantBaseline="central" fontSize="14" fontWeight="bold">
+                            {`${(percent * 100).toFixed(0)}%`}
+                          </text>
+                          {/* Outer Stage Name */}
+                          <text x={xOutside} y={yOutside} fill="#64748b" textAnchor={textAnchor} dominantBaseline="central" fontSize="12" fontWeight="600" className="dark:fill-slate-400">
+                            {name}
+                          </text>
+                        </g>
+                      );
+                    }}
+                    dataKey="count"
+                    nameKey="stage"
+                    stroke="none"
+                  >
+                    {pipelineStages.filter(p => p.count > 0).map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <RTooltip 
+                    formatter={(value, name) => [`${formatNum(value)} candidates`, name]}
+                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)' }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
             </div>
 
           </div>
