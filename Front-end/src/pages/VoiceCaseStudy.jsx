@@ -499,25 +499,25 @@ export default function VoiceCaseStudy({
     // Save to backend
     const scenario = scenarios[currentIdx]
     if (interviewId && scenario) {
-      if (wsRef?.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({
-          action: "save_answer",
-          interview_id: interviewId,
-          question_id: scenario.id || currentIdx,
-          question_text: scenario.text,
-          answer_text: answer,
-          candidate_name: sessionDetail?.candidate_name || 'Candidate',
-          timestamp: new Date().toISOString()
-        }))
-      } else {
-        const fd = new FormData()
-        fd.append('interview_id', interviewId)
-        fd.append('question_id', scenario.id || currentIdx)
-        fd.append('question_text', scenario.text)
-        fd.append('answer_text', answer)
-        fd.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
-        candidateFetch(`${API_BASE_URL}/save-answer`, { method: 'POST', body: fd }).catch(()=>{})
+      const payload = {
+        interview_id: interviewId,
+        question_index: currentIdx,
+        answer_text: answer
       }
+      
+      // If WebSocket is open, send a state change so admins see we submitted something, but we still use API for the actual save
+      if (wsRef?.current?.readyState === WebSocket.OPEN) {
+         wsRef.current.send(JSON.stringify({
+            action: "ai_state_change",
+            state: "thinking"
+         }))
+      }
+
+      candidateFetch(`${API_BASE_URL}/case-study/submit-answer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).catch(()=>{})
     }
 
     // Should we ask a follow-up or move to next scenario?
