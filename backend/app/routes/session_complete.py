@@ -261,34 +261,21 @@ def complete_session(
                                 case_std = interview_doc.get("case_study_round")
                                 n_cs_questions = len((case_std or {}).get("questions", []) or []) if case_std else 0
 
-                                saved_r1 = session.get("round1_score")
-                                saved_r2 = session.get("round2_score")
-                                saved_tot = session.get("score")
+                                round1_s = calculate_round1_score(questions, answers, interview_type=interview_type, n_case_study_questions=n_cs_questions)
 
-                                if saved_r1 is not None:
-                                    round1_s = float(saved_r1)
-                                else:
-                                    round1_s = calculate_round1_score(questions, answers, interview_type=interview_type, n_case_study_questions=n_cs_questions)
+                                itype_lower = str(interview_type).strip().lower()
+                                if itype_lower == "technical" and coding_rd:
+                                    round2_s = calculate_coding_score(coding_rd)
+                                elif itype_lower in ("non-technical", "non_technical", "non tech", "nontech") and case_std:
+                                    lang_cs = interview_doc.get("language", "English")
+                                    ctx_cs = f"Profile: {interview_doc.get('profile_text', '')}"
+                                    round2_s = calculate_case_study_round2_score(case_std, n_cs_questions, ctx_cs, lang_cs)
+                                    interviews_collection.update_one(
+                                        {"id": interview_id},
+                                        {"$set": {"case_study_round": case_std}}
+                                    )
 
-                                if saved_r2 is not None:
-                                    round2_s = float(saved_r2)
-                                else:
-                                    itype_lower = str(interview_type).strip().lower()
-                                    if itype_lower == "technical" and coding_rd:
-                                        round2_s = calculate_coding_score(coding_rd)
-                                    elif itype_lower in ("non-technical", "non_technical", "non tech", "nontech") and case_std:
-                                        lang_cs = interview_doc.get("language", "English")
-                                        ctx_cs = f"Profile: {interview_doc.get('profile_text', '')}"
-                                        round2_s = calculate_case_study_round2_score(case_std, n_cs_questions, ctx_cs, lang_cs)
-                                        interviews_collection.update_one(
-                                            {"id": interview_id},
-                                            {"$set": {"case_study_round": case_std}}
-                                        )
-
-                                if saved_tot is not None:
-                                    avg_score = float(saved_tot)
-                                else:
-                                    avg_score = calculate_final_score(round1_s, round2_s)
+                                avg_score = calculate_final_score(round1_s, round2_s)
                         except Exception as e:
                             print(f"Error calculating final score on completion: {e}")
 
