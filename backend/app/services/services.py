@@ -355,6 +355,24 @@ def require_admin_capability(admin_id: str, capability: str, detail: str):
         raise HTTPException(status_code=403, detail=detail)
     return user
 
+def _normalize_pass_flag(value: Any) -> bool:
+    """Accept booleans and stringified booleans coming from runner/LLM results."""
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "y", "passed", "pass"}:
+            return True
+        if normalized in {"false", "0", "no", "n", "failed", "fail"}:
+            return False
+        return bool(normalized)
+    return bool(value)
+
+
 def run_code_against_tests(code: str, task: Dict[str, Any], language: str) -> Dict[str, Any]:
     function_name = task.get("function_name") or "solve"
     tests = task.get("test_cases", [])
@@ -783,10 +801,10 @@ def _collect_runner_output(result: subprocess.CompletedProcess, tests: List[Dict
         "output": console_out,
         "visible_results": visible_results,
         "hidden_summary": {
-            "passed": sum(1 for row in hidden_results if row.get("passed")),
+            "passed": sum(1 for row in hidden_results if _normalize_pass_flag(row.get("passed"))),
             "total": len(hidden_results),
         },
-        "all_passed": all(row.get("passed") for row in all_results) if all_results else False,
+        "all_passed": all(_normalize_pass_flag(row.get("passed")) for row in all_results) if all_results else False,
     }
 
 
