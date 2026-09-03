@@ -9,6 +9,7 @@ import AdminLayout from '../components/admin/AdminLayout'
 import ProfileSettings from '../components/admin/ProfileSettings'
 import { CandidateScorecardModal, LiveResultsModal, RequestCreditsModal, UpgradePlansModal } from '../components/admin/modals/AdminModals'
 import LiveMonitorStreamModal from '../components/admin/modals/LiveMonitorStreamModal'
+import MultiCandidateStreamModal from '../components/admin/modals/MultiCandidateStreamModal'
 import { getComputedStatus } from '../utils/adminFormatters'
 
 import OverviewDashboardPage from './admin/OverviewDashboardPage'
@@ -204,6 +205,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
 
   // Live Stream WebRTC State
   const [isLiveStreamOpen, setIsLiveStreamOpen] = useState(false)
+  const [isMultiLiveStreamOpen, setIsMultiLiveStreamOpen] = useState(false)
   const [liveStreamSession, setLiveStreamSession] = useState(null)
 
   const handleOpenLiveStreamAction = (sessionData) => {
@@ -1270,6 +1272,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
         liveSessions={liveSessions}
         handleOpenScorecard={handleOpenScorecardAction}
         handleOpenLiveStream={handleOpenLiveStreamAction}
+        handleOpenMultiLiveStream={() => setIsMultiLiveStreamOpen(true)}
       />
 
       <LiveMonitorStreamModal
@@ -1279,6 +1282,17 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
           setLiveStreamSession(null)
         }}
         session={liveStreamSession}
+      />
+
+      <MultiCandidateStreamModal
+        isOpen={isMultiLiveStreamOpen}
+        onClose={() => setIsMultiLiveStreamOpen(false)}
+        sessions={liveSessions}
+        onSelectCandidate={(selectedCandidate) => {
+          setIsMultiLiveStreamOpen(false)
+          setLiveStreamSession(selectedCandidate)
+          setIsLiveStreamOpen(true)
+        }}
       />
     </>
   )
