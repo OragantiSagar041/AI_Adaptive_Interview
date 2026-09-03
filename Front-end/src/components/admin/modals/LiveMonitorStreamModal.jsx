@@ -747,8 +747,8 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
           </div>
 
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col justify-center">
-            <span className="text-[0.65rem] font-bold text-slate-500 uppercase tracking-wider mb-1">Current Focus</span>
-            <div className="flex items-center gap-1.5 font-bold text-sm text-slate-800">
+            <span className="text-[0.65rem] font-bold text-black uppercase tracking-wider mb-1">Current Focus</span>
+            <div className="flex items-center gap-1.5 font-bold text-sm text-black">
               {telemetry ? (
                 <>
                   <span className="text-indigo-600">{getRoundIcon(telemetry.round_type)}</span>
