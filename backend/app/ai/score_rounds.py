@@ -418,11 +418,11 @@ def calculate_coding_score(coding_round: dict) -> float:
     return round(min(20.0, max(0.0, coding_score)), 1)
 
 
-def calculate_case_study_round2_score(case_study_round: dict, n_questions: int, context: str = "", language: str = "English") -> float:
+def calculate_case_study_round2_score(case_study_round: dict, n_questions: int, context: str = "", language: str = "English", force_recalculate: bool = False) -> float:
     """
     Returns the Round 2 score for Non-Technical (Case Studies) interviews.
     Each question is worth 10 marks (max 3 questions = max 30 marks).
-    The AI evaluates answers 0-100, then we scale to the per-question mark allocation.
+    If answers already have `ai_score`, it computes mathematically without LLM calls.
     """
     if not case_study_round:
         return 0.0
@@ -433,8 +433,25 @@ def calculate_case_study_round2_score(case_study_round: dict, n_questions: int, 
 
     round2_max = n * 10.0
 
-    # Get AI score out of 100 for the case study
-    cs_score_100 = compute_case_study_score(case_study_round, context, language) or 0.0
+    answers = case_study_round.get("answers", [])
+    
+    needs_llm = force_recalculate
+    if not needs_llm:
+        if not answers:
+            needs_llm = True
+        else:
+            for ans in answers:
+                if not isinstance(ans, dict) or ans.get("ai_score") is None:
+                    needs_llm = True
+                    break
+
+    if needs_llm:
+        # Call LLM to evaluate case study
+        cs_score_100 = compute_case_study_score(case_study_round, context, language) or 0.0
+    else:
+        # Calculate mathematically from cached scores
+        valid_scores = [float(ans.get("ai_score", 0.0)) for ans in answers if isinstance(ans, dict) and ans.get("ai_score") is not None]
+        cs_score_100 = (sum(valid_scores) / len(valid_scores)) if valid_scores else 0.0
 
     # Scale to round2_max
     round2_score = (cs_score_100 / 100.0) * round2_max

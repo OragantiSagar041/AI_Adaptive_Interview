@@ -572,28 +572,26 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
                 except:
                     pass
 
-            saved_r1 = session_data.get("round1_score")
-            saved_r2 = session_data.get("round2_score")
-            saved_total = session_data.get("score")
+            # Round 1 (Verbal): ALWAYS recalculate because it's fast (O(1)) and uses native math, not the LLM.
+            round1_s = calculate_round1_score(questions, results, interview_type=interview_type, n_case_study_questions=n_cs_questions)
 
-            if saved_r1 is not None:
-                round1_s = float(saved_r1)
-            else:
-                round1_s = calculate_round1_score(questions, results, interview_type=interview_type, n_case_study_questions=n_cs_questions)
+            round2_s = 0.0
+            itype_lower = str(interview_type).strip().lower()
+            if itype_lower == "technical" and coding_rd:
+                # Coding Round: ALWAYS recalculate because it just reads test cases, no LLM cost.
+                round2_s = calculate_coding_score(coding_rd)
+            elif itype_lower in ("non-technical", "non_technical", "non tech", "nontech") and case_std:
+                lang_cs = interview_record_for_score.get("language", "English")
+                ctx_cs = f"Profile: {interview_record_for_score.get('profile_text', '')}"
+                round2_s = calculate_case_study_round2_score(case_std, n_cs_questions, ctx_cs, lang_cs)
+                if actual_interview_id:
+                    interviews_collection.update_one(
+                        {"id": actual_interview_id},
+                        {"$set": {"case_study_round": case_std}}
+                    )
 
-            if saved_r2 is not None:
-                round2_s = float(saved_r2)
-            else:
-                itype_lower = str(interview_type).strip().lower()
-                if itype_lower == "technical" and coding_rd:
-                    round2_s = calculate_coding_score(coding_rd)
-                elif itype_lower in ("non-technical", "non_technical", "non tech", "nontech") and case_std:
-                    round2_s = calculate_case_study_round2_score(case_std, n_cs_questions, ctx_cs, lang_cs)
-
-            if saved_total is not None:
-                avg_score = float(saved_total)
-            else:
-                avg_score = calculate_final_score(round1_s, round2_s)
+            # Final Score: ALWAYS recalculate mathematically.
+            avg_score = calculate_final_score(round1_s, round2_s)
         else:
             round1_s = verbal_avg
             avg_score = verbal_avg
