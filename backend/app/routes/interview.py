@@ -871,10 +871,11 @@ async def start_coding_round(
     link_id = interview.get("link_id", "")
     session = interview_sessions_collection.find_one({"link_id": link_id}) if link_id else None
     industry = (session or {}).get("industry", "General")
+    language = interview.get("language", "English")
 
     # generate_coding_task calls an LLM (blocking I/O) — run it off the event loop
     task = await run_in_threadpool(
-        generate_coding_task, profile_text, answers_data, interview_type, industry
+        generate_coding_task, profile_text, answers_data, interview_type, industry, language
     )
 
     coding_round = {
@@ -933,13 +934,16 @@ Extract key non-technical skills from the JD (like team management, stakeholder 
 
 Each scenario should describe a specific situation the candidate might face in this role, and ask them to write their strategy/approach.
 
-Return ONLY a JSON array. Example format:
+Return ONLY a JSON array. 
+CRITICAL: Even though the example below is in English, YOUR output MUST be entirely in {language}. All scenario text, questions, skills, and criteria must be written in {language}.
+
+Example format (Translate values to {language}):
 [
   {{
-    "scenario": "You have just joined as a Project Manager and discover that two senior team members have a long-standing disagreement about the project architecture...",
-    "question": "How would you handle this situation to ensure project delivery stays on track while maintaining team morale?",
-    "skill_tested": "Conflict Resolution & Team Management",
-    "evaluation_criteria": ["Problem identification", "Stakeholder management", "Communication strategy", "Resolution approach"]
+    "scenario": "[Scenario text in {language}]",
+    "question": "[Question text in {language}]",
+    "skill_tested": "[Skill name in {language}]",
+    "evaluation_criteria": ["[Criterion 1 in {language}]", "[Criterion 2 in {language}]"]
   }}
 ]"""
 
