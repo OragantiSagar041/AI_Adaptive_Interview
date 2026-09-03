@@ -134,21 +134,50 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
             })
             pcsRef.current[adminId] = pc
 
+            const streamTier = msg.stream_tier || (adminId.startsWith('grid_') ? 'low' : 'high')
+            const isLowTier = streamTier === 'low'
+            console.log(`[CandidateWebRTC] Negotiating peer connection with tier: ${streamTier.toUpperCase()} for viewer: ${adminId}`)
+
             // Deterministic track mapping:
-            // Transceiver 0 (video) -> Camera
-            // Transceiver 1 (video) -> Screen
-            // Transceiver 2 (audio) -> Mic / Mixed audio
+            // High Tier: Camera + Screen + Audio
+            // Low Tier: Camera only (360p/15fps) to conserve candidate upload and proctor download
+            let cameraSender = null
             if (cameraVideoTrack) {
-              console.log('[CandidateWebRTC] Adding camera track to PC')
-              pc.addTrack(cameraVideoTrack, cameraStream || new MediaStream([cameraVideoTrack]))
+              console.log(`[CandidateWebRTC] Adding camera track (${isLowTier ? '360p/15fps Low Tier' : '720p/30fps High Tier'}) to PC`)
+              cameraSender = pc.addTrack(cameraVideoTrack, cameraStream || new MediaStream([cameraVideoTrack]))
             }
-            if (screenVideoTrack) {
-              console.log('[CandidateWebRTC] Adding screen track to PC')
+            if (!isLowTier && screenVideoTrack) {
+              console.log('[CandidateWebRTC] Adding screen track to PC (High Tier)')
               pc.addTrack(screenVideoTrack, screenStream || new MediaStream([screenVideoTrack]))
             }
-            if (audioTrack) {
-              console.log('[CandidateWebRTC] Adding audio track to PC')
+            if (!isLowTier && audioTrack) {
+              console.log('[CandidateWebRTC] Adding audio track to PC (High Tier)')
               pc.addTrack(audioTrack, new MediaStream([audioTrack]))
+            }
+
+            // Apply Layered Adaptive Stream Subscription (LASS) parameters to camera sender
+            if (cameraSender) {
+              try {
+                const params = cameraSender.getParameters()
+                if (!params.encodings || params.encodings.length === 0) {
+                  params.encodings = [{}]
+                }
+                if (isLowTier) {
+                  // Low Layer: 360p / ~15 FPS / ~220 kbps (matches SFU Simulcast low-tier spec)
+                  params.encodings[0].scaleResolutionDownBy = 2.0
+                  params.encodings[0].maxFramerate = 15
+                  params.encodings[0].maxBitrate = 220000
+                } else {
+                  // High Layer: 720p / ~30 FPS / ~1.5 Mbps (matches SFU Simulcast high-tier spec)
+                  params.encodings[0].scaleResolutionDownBy = 1.0
+                  params.encodings[0].maxFramerate = 30
+                  params.encodings[0].maxBitrate = 1500000
+                }
+                await cameraSender.setParameters(params)
+                console.log(`[CandidateWebRTC] Successfully set ${streamTier.toUpperCase()} tier encoding parameters on camera sender.`)
+              } catch (paramErr) {
+                console.warn('[CandidateWebRTC] Could not set encoding parameters (browser fallback active):', paramErr)
+              }
             }
 
             pc.onicecandidate = (e) => {
