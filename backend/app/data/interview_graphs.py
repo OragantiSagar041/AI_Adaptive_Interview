@@ -122,20 +122,25 @@ class QuestionGenerationState(TypedDict, total=False):
 def qg_generate_all(state: QuestionGenerationState) -> QuestionGenerationState:
     num = state.get("num_questions", 6)
     lang = state.get("language", "English")
+    industry = state.get("industry", "General")
+    int_type = state.get("interview_type", "Technical")
 
     sys = (
-        "You are an expert recruiter. Generate technical interview questions based on the candidate's "
-        "Resume and Job Description. Extract key topics first, then write the questions. "
-        f"All questions MUST be generated strictly in {lang}. Do NOT use English unless the selected language is English. "
+        f"You are an expert recruiter for the {industry} industry. Generate {int_type} interview questions based on the candidate's "
+        "Resume and Job Description. Extract key topics first, then write the questions tailored specifically to the "
+        f"{industry} domain and the {int_type} format. "
+        f"CRITICAL: All questions MUST be generated strictly in {lang}. Do NOT use English unless the selected language is English. "
         "Return JSON."
     )
 
     usr = (
+        f"Industry: {industry}\n"
+        f"Interview Type: {int_type}\n"
         f"JD: {state.get('jd_text', '')}\n"
         f"Resume: {state.get('resume_text', '')}\n"
-        f"Topics: {state.get('extracted_topics')}\n"
-        f"Generate {num} questions in {lang}.\n"
-        "Return JSON: {'questions': [{'question':'...', 'difficulty':'Medium', 'type':'Technical', 'category':'Core'}]}"
+        f"Topics: {state.get('extracted_topics', [])}\n"
+        f"Generate {num} highly relevant questions in {lang}.\n"
+        "Return JSON: {'questions': [{'question':'...', 'difficulty':'Medium', 'type':'Technical/Behavioral', 'category':'Core'}]}"
     )
 
     res = _llm_json(sys, usr, fallback={"questions": []}, temperature=0.7)
