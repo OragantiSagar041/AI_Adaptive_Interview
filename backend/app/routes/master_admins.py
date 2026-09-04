@@ -371,6 +371,11 @@ def add_sub_admin_credits(admin_id: str, data: AddCreditsRequest, current_admin:
                         return_document=ReturnDocument.AFTER,
                         session=db_session,
                     )
+                    
+                if not sa_doc:
+                    db_session.abort_transaction()
+                    raise HTTPException(status_code=400, detail="Insufficient credits in Super Admin account.")
+
 
                 updated_admin = admins_collection.find_one_and_update(
                     admin_query,
@@ -388,12 +393,14 @@ def add_sub_admin_credits(admin_id: str, data: AddCreditsRequest, current_admin:
                     "status": "Completed",
                     "date": datetime.now(timezone.utc).isoformat()
                 }, session=db_session)
+    except HTTPException:
+        raise
     except Exception as tx_err:
         logger.warning(f"Transaction not supported or failed, falling back to direct atomic updates: {tx_err}")
         if company_id:
             try:
                 sa_doc = companies_collection.find_one_and_update(
-                    {"_id": ObjectId(company_id)},
+                    {"_id": ObjectId(company_id), "credits": {"$gte": add_amount}},
                     {"$inc": {"credits": -add_amount}},
                     return_document=ReturnDocument.AFTER
                 )
@@ -402,12 +409,15 @@ def add_sub_admin_credits(admin_id: str, data: AddCreditsRequest, current_admin:
         else:
             try:
                 sa_doc = admins_collection.find_one_and_update(
-                    {"_id": ObjectId(super_admin_id)},
+                    {"_id": ObjectId(super_admin_id), "credits": {"$gte": add_amount}},
                     {"$inc": {"credits": -add_amount}},
                     return_document=ReturnDocument.AFTER
                 )
             except Exception:
                 sa_doc = None
+
+        if not sa_doc:
+            raise HTTPException(status_code=400, detail="Insufficient credits in Super Admin account.")
 
         updated_admin = admins_collection.find_one_and_update(
             admin_query,
