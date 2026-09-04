@@ -362,6 +362,11 @@ export default function AdminLayout({
               )}
 
               <h2 className="text-[17px] font-bold text-slate-800 hidden md:block">Recruiter Management</h2>
+              {/* Credits Badge */}
+              <div className="hidden sm:flex items-center gap-1.5 px-3.5 py-1.5 bg-cyan-100 dark:bg-cyan-950/80 border border-cyan-300 dark:border-cyan-500/60 text-cyan-900 dark:text-cyan-200 rounded-full text-xs font-black shadow-xs">
+                <span className="text-[10px]">🔗</span>
+                {adminUser?.credits ?? 0} credits left
+              </div>
             </div>
 
             {/* Right Side: Theme Toggle, Notifications & User Profile */}

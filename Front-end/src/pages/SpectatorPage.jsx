@@ -499,7 +499,7 @@ export default function SpectatorPage() {
         <div className="bg-slate-900 rounded-2xl border border-white/10 shadow-2xl flex flex-col overflow-hidden max-h-[80vh]">
 
           <div className="p-5 border-b border-white/10 bg-slate-800/40">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Current Focus</h3>
+            <h3 className="text-xs font-bold text-black uppercase tracking-widest mb-3">Current Focus</h3>
             {telemetry ? (
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-indigo-400 font-semibold bg-indigo-500/10 px-3 py-2 rounded-xl border border-indigo-500/20">
@@ -510,7 +510,7 @@ export default function SpectatorPage() {
                   )}
                 </div>
                 {telemetry.question_text && (
-                  <div className="text-sm text-slate-200 leading-relaxed bg-slate-800/80 p-3.5 rounded-xl border border-slate-700/80 font-medium">
+                  <div className="text-sm text-black leading-relaxed bg-slate-800/80 p-3.5 rounded-xl border border-slate-700/80 font-medium">
                     "{telemetry.question_text}"
                   </div>
                 )}
@@ -521,7 +521,7 @@ export default function SpectatorPage() {
           </div>
 
           <div className="flex-1 p-5 overflow-y-auto">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center justify-between">
+            <h3 className="text-xs font-bold text-black uppercase tracking-widest mb-3 flex items-center justify-between">
               Proctoring Events
               {telemetry && typeof telemetry.proctoring_alerts === 'number' && (
                 <span className="text-[11px] font-semibold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20">

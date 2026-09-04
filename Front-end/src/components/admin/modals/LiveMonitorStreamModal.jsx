@@ -82,6 +82,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
   const [generatingLink, setGeneratingLink] = useState(false)
   const [copied, setCopied] = useState(false)
   const [spectatorCount, setSpectatorCount] = useState(0)
+  const [isCandidateNetworkDown, setIsCandidateNetworkDown] = useState(false)
 
   const violationsPollRef = useRef(null)
   const videoRef = useRef(null)
@@ -90,6 +91,10 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
   const pendingIceCandidatesRef = useRef([])
   const streamTimeoutRef = useRef(null)  // fire if no video track arrives in time
   const mountedRef = useRef(false)
+  const lastTelemetryAtRef = useRef(0)
+  const lastBytesReceivedRef = useRef(null)
+  const frozenCountRef = useRef(0)
+  const networkDownRef = useRef(false)
   // Keep a ref to the latest status so the setTimeout inside sendOffer always
   // reads the current value without needing `status` in its dependency array.
   // Without this the useCallback recreates on every status transition, which
@@ -151,10 +156,9 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
     const spectatorPoll = setInterval(() => {
       fetchSpectatorCount()
     }, 20000)
-    return () => clearInterval(spectatorPoll)
-
     return () => {
       clearInterval(violationsPollRef.current)
+      clearInterval(spectatorPoll)
       setViolations([])
       setSpectatorCount(0)
       setShareLink('')
@@ -221,6 +225,62 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
     setRemoteStream(receiverStream)
     if (mountedRef.current) setStatus('streaming')
   }, [])
+
+  // Detect a media-path outage even when the signaling WebSocket remains open.
+  // Two unchanged inbound-RTP samples avoid flagging normal short stalls.
+  useEffect(() => {
+    if (!isOpen || !session) return
+
+    const healthInterval = setInterval(async () => {
+      const pc = pcRef.current
+      if (!pc || !mountedRef.current) return
+
+      const iceDown = ['disconnected', 'failed', 'closed'].includes(pc.iceConnectionState)
+      const telemetryStale = lastTelemetryAtRef.current > 0 && Date.now() - lastTelemetryAtRef.current > 15000
+
+      let mediaFrozen = false
+      try {
+        const stats = await pc.getStats()
+        let bytesReceived = 0
+        let decodedFrames = 0
+        let hasVideoReport = false
+
+        stats.forEach(report => {
+          if (report.type === 'inbound-rtp' && report.kind === 'video') {
+            hasVideoReport = true
+            bytesReceived += report.bytesReceived || 0
+            decodedFrames += report.framesDecoded || 0
+          }
+        })
+
+        if (hasVideoReport && decodedFrames > 0) {
+          mediaFrozen = lastBytesReceivedRef.current === bytesReceived
+          frozenCountRef.current = mediaFrozen ? frozenCountRef.current + 1 : 0
+          lastBytesReceivedRef.current = bytesReceived
+        } else {
+          frozenCountRef.current = 0
+          lastBytesReceivedRef.current = null
+        }
+      } catch {
+        // ICE and telemetry signals still provide a useful fallback.
+      }
+
+      const networkDown = iceDown || telemetryStale || (mediaFrozen && frozenCountRef.current >= 2)
+      if (networkDown !== networkDownRef.current) {
+        networkDownRef.current = networkDown
+        setIsCandidateNetworkDown(networkDown)
+      }
+    }, 2000)
+
+    return () => {
+      clearInterval(healthInterval)
+      lastTelemetryAtRef.current = 0
+      lastBytesReceivedRef.current = null
+      frozenCountRef.current = 0
+      networkDownRef.current = false
+      setIsCandidateNetworkDown(false)
+    }
+  }, [isOpen, session])
 
   /**
    * sendOffer:
@@ -367,7 +427,8 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       ws.send(JSON.stringify({
         type: 'webrtc_offer',
         sdp: offer,
-        admin_id: adminIdRef.current
+        admin_id: adminIdRef.current,
+        stream_tier: 'high'
       }))
 
       if (mountedRef.current) setStatus('negotiating')
@@ -462,7 +523,10 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
         }
 
         if (msg.type === 'telemetry') {
-          if (mountedRef.current) setTelemetry(msg.data)
+          if (mountedRef.current) {
+            lastTelemetryAtRef.current = Date.now()
+            setTelemetry(msg.data)
+          }
 
         } else if (msg.type === 'webrtc_answer') {
           // Strictly ignore SDP answers meant for other admin instances / tabs
@@ -498,7 +562,10 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
           }
 
         } else if (msg.type === 'candidate_disconnected') {
-          if (mountedRef.current) setStatus('disconnected')
+          if (mountedRef.current) {
+            setStatus('disconnected')
+            setIsCandidateNetworkDown(true)
+          }
         }
 
         if (msg.type === 'webrtc_answer') {
@@ -770,8 +837,8 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
           </div>
 
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col justify-center">
-            <span className="text-[0.65rem] font-bold text-slate-500 uppercase tracking-wider mb-1">Current Focus</span>
-            <div className="flex items-center gap-1.5 font-bold text-sm text-slate-800">
+            <span className="text-[0.65rem] font-bold text-black uppercase tracking-wider mb-1">Current Focus</span>
+            <div className="flex items-center gap-1.5 font-bold text-sm text-black">
               {telemetry ? (
                 <>
                   <span className="text-indigo-600">{getRoundIcon(telemetry.round_type)}</span>
@@ -845,6 +912,14 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
             controls
             className={`w-full h-full object-contain ${remoteStream ? 'opacity-100' : 'opacity-0'}`}
           />
+
+          {isCandidateNetworkDown && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/75 p-4 text-center z-20">
+              <div className="w-8 h-8 mb-2 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+              <span className="text-sm font-semibold text-amber-400">Network issue from candidate</span>
+              <span className="mt-1 text-xs text-gray-400">Waiting for candidate connection to recover...</span>
+            </div>
+          )}
 
           {!remoteStream && (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 bg-slate-900/90 z-10">
