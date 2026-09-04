@@ -497,21 +497,21 @@ export default function SpectatorPage() {
         </div>
 
         {/* Right Column (Telemetry & Logs) */}
-        <div className="bg-slate-900 rounded-2xl border border-white/10 shadow-2xl flex flex-col overflow-hidden max-h-[80vh]">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-white/10 shadow-2xl flex flex-col overflow-hidden max-h-[80vh]">
 
-          <div className="p-5 border-b border-white/10 bg-slate-800/40">
-            <h3 className="text-xs font-bold text-black uppercase tracking-widest mb-3">Current Focus</h3>
+          <div className="p-5 border-b border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/40">
+            <h3 className="text-xs font-extrabold text-black dark:text-white uppercase tracking-widest mb-3">Current Focus</h3>
             {telemetry ? (
               <div className="space-y-3">
-                <div className="flex items-center gap-2 text-indigo-400 font-semibold bg-indigo-500/10 px-3 py-2 rounded-xl border border-indigo-500/20">
+                <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-400 font-semibold bg-indigo-50 dark:bg-indigo-500/10 px-3 py-2 rounded-xl border border-indigo-200 dark:border-indigo-500/20">
                   {getRoundIcon(telemetry.round_type)}
-                  <span className="capitalize text-sm">{telemetry.round_type ? `${telemetry.round_type.replace('_', ' ')} Round` : 'Interview Round'}</span>
+                  <span className="capitalize text-sm font-bold text-black dark:text-indigo-300">{telemetry.round_type ? `${telemetry.round_type.replace('_', ' ')} Round` : 'Interview Round'}</span>
                   {telemetry.total_questions > 0 && (
-                    <span className="text-xs text-indigo-300 ml-auto font-mono">Q{telemetry.current_question || 1} of {telemetry.total_questions}</span>
+                    <span className="text-xs text-black dark:text-indigo-300 ml-auto font-mono font-bold">Q{telemetry.current_question || 1} of {telemetry.total_questions}</span>
                   )}
                 </div>
                 {telemetry.question_text && (
-                  <div className="text-sm text-black leading-relaxed bg-slate-800/80 p-3.5 rounded-xl border border-slate-700/80 font-medium">
+                  <div className="text-sm text-black dark:text-slate-100 leading-relaxed bg-white dark:bg-slate-800/80 p-3.5 rounded-xl border border-slate-300 dark:border-slate-700/80 font-medium shadow-sm">
                     "{telemetry.question_text}"
                   </div>
                 )}
