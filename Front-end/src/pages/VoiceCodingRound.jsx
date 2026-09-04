@@ -345,8 +345,8 @@ export default function VoiceCodingRound({
       const res = await candidateFetch(`${API_BASE_URL}/tts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          text, 
+        body: JSON.stringify({
+          text,
           voice: 'shimmer',
           language: ttsLang,
           use_custom_voice: useCustomVoice,
@@ -378,11 +378,11 @@ export default function VoiceCodingRound({
         activeAudioRef.current = null
         onEnd?.()
       }
-      audio.onerror = () => { 
+      audio.onerror = () => {
         setAiStatus('idle')
         setOrbLabel('Zara is watching')
         activeAudioRef.current = null
-        onEnd?.() 
+        onEnd?.()
       }
       audio.play().catch(() => {
           // Fallback to speech synthesis if audio playback fails
@@ -567,7 +567,7 @@ export default function VoiceCodingRound({
         })
       })
     }, 800)
-  }, [])  
+  }, [])
 
   // ── Code Sentinel ─────────────────────────────────────────────────────
   const handleCodeChange = useCallback((value) => {
@@ -671,7 +671,7 @@ export default function VoiceCodingRound({
     submittingRef.current = true
     setIsSubmitting(true)
     stopListening()
-    
+
     // Stop ongoing audio immediately
     if (window.speechSynthesis) window.speechSynthesis.cancel()
     if (activeAudioRef.current) {
@@ -681,7 +681,7 @@ export default function VoiceCodingRound({
     setAiStatus('idle')
 
     const timeoutFlag = typeof isTimeout === 'boolean' ? isTimeout : false;
-    const message = timeoutFlag 
+    const message = timeoutFlag
       ? "Thank you for the interview."
       : "We are saving your interview, please wait.";
 
@@ -709,29 +709,16 @@ export default function VoiceCodingRound({
     }
   }, [stopListening, interviewId, code, selectedLang, onComplete, aiSay])
 
-  const handleSubmitRef = useRef(handleSubmit)
-  useEffect(() => {
-    handleSubmitRef.current = handleSubmit
-  }, [handleSubmit])
-
-  useEffect(() => {
-    timeLeftRef.current = timeLeft
-  }, [timeLeft])
+  // Store latest handleSubmit to avoid timer resets
+  const submitFnRef = useRef(handleSubmit);
+  useEffect(() => { submitFnRef.current = handleSubmit; }, [handleSubmit]);
 
   // Timer
   useEffect(() => {
-    timerExpiredRef.current = false
-    const t = setInterval(() => {
-      const nextValue = timeLeftRef.current <= 1 ? 0 : timeLeftRef.current - 1
-      timeLeftRef.current = nextValue
-      setTimeLeft(nextValue)
-
-      if (nextValue === 0 && !timerExpiredRef.current) {
-        timerExpiredRef.current = true
-        clearInterval(t)
-        handleSubmitRef.current(true)
-      }
-    }, 1000)
+    const t = setInterval(() => setTimeLeft(p => {
+      if (p <= 1) { submitFnRef.current(true); return 0 }
+      return p - 1
+    }), 1000)
     return () => clearInterval(t)
   }, [])
 
@@ -750,9 +737,24 @@ export default function VoiceCodingRound({
     }
     const handleFullscreenChange = async () => {
       if (!document.fullscreenElement) {
-        clearTimeout(fullscreenAlertTimerRef.current)
-        setFullscreenAlert(true)
-        fullscreenAlertTimerRef.current = setTimeout(() => setFullscreenAlert(false), 5000)
+        Swal.fire({
+          icon: 'warning',
+          title: '⚠️ Fullscreen Required',
+          text: 'Exiting fullscreen mode is not allowed during the interview.',
+          showCancelButton: true,
+          confirmButtonText: 'Enable full screen mode',
+          cancelButtonText: 'Exit interview',
+          allowOutsideClick: false,
+          allowEscapeKey: false
+        }).then((result) => {
+          if (result.isConfirmed) {
+            if (document.documentElement.requestFullscreen) {
+              document.documentElement.requestFullscreen().catch(() => { })
+            }
+          } else {
+            window.location.href = '/dashboard'
+          }
+        })
       }
     }
     document.addEventListener('keydown', handleKeyDown)
@@ -898,8 +900,8 @@ export default function VoiceCodingRound({
                     <div>
                       <span className="text-slate-500 mr-1">Expected:</span>
                       <span className="text-amber-300">
-                        {typeof (tc.expected !== undefined ? tc.expected : tc.output) === 'object' 
-                          ? JSON.stringify(tc.expected !== undefined ? tc.expected : tc.output) 
+                        {typeof (tc.expected !== undefined ? tc.expected : tc.output) === 'object'
+                          ? JSON.stringify(tc.expected !== undefined ? tc.expected : tc.output)
                           : String(tc.expected !== undefined ? tc.expected : tc.output)}
                       </span>
                     </div>
@@ -955,7 +957,7 @@ export default function VoiceCodingRound({
               <Editor
                 height="100%"
                 language={selectedLang === 'cpp' ? 'cpp' : selectedLang}
-                value={code}
+                defaultValue={code}
                 onChange={handleCodeChange}
                 onMount={(editor, monaco) => {
                   setupMonacoIntelliSense(monaco)
