@@ -1172,9 +1172,6 @@ def extract_projects(text: str) -> List[Dict]:
 def generate_resume_questions(resume_text: str, language: str = "English", industry: str = "General") -> List[Dict[str, str]]:
     """Generate interview questions based on candidate's resume using AI."""
     print("Generating questions from resume...")
-    
-    if language != "English":
-        return []
         
     experiences = extract_experiences(resume_text)
     projects = extract_projects(resume_text)
