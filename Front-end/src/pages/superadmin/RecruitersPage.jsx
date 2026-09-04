@@ -17,7 +17,6 @@ export default function RecruitersPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [openDropdownId, setOpenDropdownId] = useState(null);
   
@@ -206,10 +205,9 @@ export default function RecruitersPage() {
       r.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       r.username?.toLowerCase().includes(searchTerm.toLowerCase());
       
-    const matchesRole = roleFilter === 'all' || r.role === roleFilter;
     const matchesStatus = statusFilter === 'all' || r.status === statusFilter;
     
-    return matchesSearch && matchesRole && matchesStatus;
+    return matchesSearch && matchesStatus;
   });
 
   const handleDownloadCSV = () => {
@@ -357,15 +355,6 @@ export default function RecruitersPage() {
               )}
             </div>
 
-            {/* Role Filter */}
-            <select
-              value={roleFilter}
-              onChange={e => setRoleFilter(e.target.value)}
-              className="px-3 py-2 text-sm bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer"
-            >
-              <option value="all">All Roles</option>
-              <option value="admin">Admin</option>
-            </select>
 
             {/* Status Filter */}
             <select
