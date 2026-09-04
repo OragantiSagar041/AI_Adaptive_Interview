@@ -13,11 +13,9 @@ import { API_BASE_URL } from '@/apiConfig';
 // ─── Singleton axios instance ────────────────────────────────────────────────
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 8000,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
-    // Tell the browser / Node.js to reuse the TCP connection
-    'Connection': 'keep-alive',
   },
 });
 

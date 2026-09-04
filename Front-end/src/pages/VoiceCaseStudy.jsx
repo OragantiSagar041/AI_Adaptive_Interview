@@ -299,19 +299,40 @@ export default function VoiceCaseStudy({
         playingAudioRef.current = null
       }
       
+      const useCustomVoice = !!(sessionDetail?.voice_clone || sessionDetail?.voice_cloning_enabled || sessionDetail?.custom_voice_id || sessionDetail?.cloned_voice_id);
+      const languageMap = {
+        Hindi: 'hi-IN',
+        Telugu: 'te-IN',
+        Tamil: 'ta-IN',
+        Malayalam: 'ml-IN',
+        Kannada: 'kn-IN',
+        English: 'en-US',
+      };
+      const ttsLang = languageMap[(sessionLang || sessionDetail?.language || 'English').toLowerCase().replace(/^\w/, c => c.toUpperCase())] || 'en-US';
       const res = await candidateFetch(`${API_BASE_URL}/tts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           text, 
           voice: 'shimmer', 
-          language: sessionLang,
-          use_custom_voice: sessionDetail?.voice_clone || sessionDetail?.voice_cloning_enabled || false,
-          ...(sessionDetail?.custom_voice_id ? { voice_id: sessionDetail.custom_voice_id } : {})
+          language: ttsLang, 
+          use_custom_voice: useCustomVoice,
         })
       })
       if (!res.ok) throw new Error('TTS Failed')
       const blob = await res.blob()
+      if (blob.size === 0) {
+        // Fallback to browser SpeechSynthesis if no audio returned
+        const utterance = new SpeechSynthesisUtterance(text)
+        utterance.lang = ttsLang
+        utterance.onend = () => {
+          setAiStatus('idle')
+          onEnd?.()
+        }
+        speechSynthesis.speak(utterance)
+        setAiStatus('speaking')
+        return
+      }
       const url = URL.createObjectURL(blob)
       const audio = new Audio(url)
       playingAudioRef.current = audio

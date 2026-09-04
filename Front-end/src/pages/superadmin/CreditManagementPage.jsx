@@ -246,7 +246,6 @@ export default function CreditManagementPage() {
                 <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider">Date</th>
                 <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider">Admin</th>
                 <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider">Requested</th>
-                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider">Reason</th>
                 <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider text-center">Status</th>
                 <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider text-right">Actions</th>
               </tr>
@@ -254,13 +253,13 @@ export default function CreditManagementPage() {
             <tbody className="divide-y divide-slate-100">
               {loadingRequests ? (
                 <tr>
-                  <td colSpan="6" className="p-16 text-center text-slate-500 dark:text-slate-400 font-semibold">
+                  <td colSpan="5" className="p-16 text-center text-slate-500 dark:text-slate-400 font-semibold">
                     <RefreshCw className="animate-spin text-amber-500 inline mr-2 w-6 h-6" /> Syncing requests...
                   </td>
                 </tr>
               ) : creditRequests.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="p-16 text-center">
+                  <td colSpan="5" className="p-16 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800/50 flex items-center justify-center mb-4">
                         <Activity size={32} className="text-slate-400" />
@@ -289,9 +288,6 @@ export default function CreditManagementPage() {
                         <Coins size={14} />
                         {r.amount || r.amount_requested}
                       </div>
-                    </td>
-                    <td className="p-4 text-sm text-slate-600 dark:text-slate-400 max-w-xs truncate" title={r.reason}>
-                      {r.reason || <span className="italic text-slate-400">No reason provided</span>}
                     </td>
                     <td className="p-4 text-center">
                       <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.7rem] font-bold uppercase tracking-wider ${r.status === 'approved' ? 'bg-emerald-50 text-emerald-600 border border-emerald-200 shadow-sm shadow-emerald-100' : r.status === 'rejected' ? 'bg-rose-50 text-rose-600 border border-rose-200 shadow-sm shadow-rose-100' : 'bg-amber-50 text-amber-600 border border-amber-200 shadow-sm shadow-amber-100'}`}>
@@ -326,18 +322,7 @@ export default function CreditManagementPage() {
         </div>
       </div>
 
-      <Card><CardHeader className="pb-2"><CardTitle className="text-base">Recent ledger</CardTitle></CardHeader>
-        <CardContent><Table>
-          <TableHeader><TableRow><TableHead className="text-left">Time</TableHead><TableHead className="text-left">Organization</TableHead><TableHead className="text-left">Action</TableHead><TableHead className="text-left">Amount</TableHead><TableHead className="text-left">Status</TableHead></TableRow></TableHeader>
-          <TableBody>{ledger.map((l, i) => <TableRow key={i}>
-              <TableCell className="text-muted-foreground text-sm text-left">{l.date ? new Date(l.date).toLocaleString() : ''}</TableCell>
-              <TableCell className="text-left font-medium">{l.org}</TableCell>
-              <TableCell className="text-left">{l.amount > 0 ? "Top-up" : "Usage"}</TableCell>
-              <TableCell className={`text-left font-semibold tabular-nums ${l.amount > 0 ? "text-emerald-600" : "text-rose-600"}`}>{l.amount > 0 ? `+${l.amount.toLocaleString()}` : l.amount.toLocaleString()}</TableCell>
-              <TableCell className="text-muted-foreground text-left">{l.status}</TableCell>
-            </TableRow>)}</TableBody>
-        </Table></CardContent>
-      </Card>
+
     </AdminShell>
   );
 }

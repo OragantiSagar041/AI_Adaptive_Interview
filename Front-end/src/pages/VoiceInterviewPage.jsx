@@ -2716,7 +2716,11 @@ export default function VoiceInterviewPage() {
         <ErrorBoundary>
           <React.Suspense fallback={<div className="flex h-screen items-center justify-center text-white text-xl bg-[#0a0f1e]">Loading coding environment...</div>}>
             <VoiceCodingRound question={codingQuestion} interviewId={interviewId} linkId={linkId} duration={roundDuration} warningsCount={warningsCount}
-              sessionDetail={sessionDetail} language={language} wsRef={wsRef} onComplete={() => {
+              sessionDetail={{
+                ...sessionDetail,
+                voice_clone: voiceCloningEnabledRef.current ?? sessionDetail?.voice_clone,
+                custom_voice_id: voiceCloneIdRef.current || sessionDetail?.custom_voice_id
+              }} language={language} wsRef={wsRef} onComplete={() => {
                 const type = interviewType
                 if (type === 'Non-Technical') {
                   // fetch case study after coding
