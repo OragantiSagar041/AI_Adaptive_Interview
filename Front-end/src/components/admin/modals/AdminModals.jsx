@@ -6,7 +6,7 @@ import Button from '../../Button'
 import Badge from '../../Badge'
 import { toJpeg } from 'html-to-image'
 import { jsPDF } from 'jspdf'
-
+// Lightweight WYSIWYG Editor using native iframe designMode
 // Lightweight WYSIWYG Editor using native iframe designMode
 function IframeWYSIWYG({ initialHtml, onChange }) {
   const iframeRef = useRef(null);
