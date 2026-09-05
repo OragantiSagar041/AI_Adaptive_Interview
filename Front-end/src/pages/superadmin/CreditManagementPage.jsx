@@ -25,6 +25,8 @@ export default function CreditManagementPage() {
   const [open, setOpen] = useState(false);
   const [creditRequests, setCreditRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(false);
+  const [selectedAdminFilter, setSelectedAdminFilter] = useState("all");
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState("all");
   
   const token = useSelector((state) => state.auth.token);
   const dispatch = useDispatch();
@@ -123,13 +125,13 @@ export default function CreditManagementPage() {
 
   const handleGiftClick = async (adminId, orgName) => {
     const { value: amount } = await Swal.fire({
-      title: `Transfer credits`,
-      text: `How many credits do you want to transfer to ${orgName}?`,
+      title: `Add credits`,
+      text: `How many credits do you want to add to ${orgName}?`,
       input: "number",
       inputLabel: "Amount",
       inputPlaceholder: "e.g., 10000",
       showCancelButton: true,
-      confirmButtonText: "Transfer",
+      confirmButtonText: "Add Credits",
       confirmButtonColor: "#4f46e5",
       inputValidator: (value) => {
         if (!value || parseInt(value) <= 0) {
@@ -163,6 +165,26 @@ export default function CreditManagementPage() {
     }
   }
 
+  const adminOptions = Array.from(
+    new Set(
+      creditRequests
+        .map((r) => r.admin_name || r.admin_username)
+        .filter(Boolean)
+    )
+  ).sort();
+
+  const filteredCreditRequests = creditRequests.filter((r) => {
+    const adminName = (r.admin_name || r.admin_username || "").toLowerCase();
+    const matchesAdmin =
+      selectedAdminFilter === "all" || adminName === selectedAdminFilter.toLowerCase();
+
+    const status = (r.status || "pending").toLowerCase();
+    const matchesStatus =
+      selectedStatusFilter === "all" || status === selectedStatusFilter.toLowerCase();
+
+    return matchesAdmin && matchesStatus;
+  });
+
   if (loading) {
     return (
       <AdminShell title="Credit Management" description="Allocate AI credits, monitor usage and audit consumption per recruiter.">
@@ -174,12 +196,7 @@ export default function CreditManagementPage() {
   }
 
   return (
-    <AdminShell title="Credit Management" description="Allocate AI credits, monitor usage and audit consumption per recruiter." actions={
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger asChild><Button><Plus className="h-4 w-4" /> Allocate Credits</Button></DialogTrigger>
-        {rows.length > 0 && <AllocateForm rows={rows} onAllocate={allocate} />}
-      </Dialog>
-    }>
+    <AdminShell title="Credit Management" description="Allocate AI credits, monitor usage and audit consumption per recruiter.">
       <div className="grid gap-3 md:grid-cols-3">
         <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Total system credits</div><div className="mt-1 text-2xl font-semibold">{kpis.total_credits_system.toLocaleString()}</div></CardContent></Card>
         <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Consumed this month</div><div className="mt-1 text-2xl font-semibold">{kpis.credits_consumed_month.toLocaleString()}</div></CardContent></Card>
@@ -208,7 +225,7 @@ export default function CreditManagementPage() {
                   <TableCell><div className="flex items-center gap-2"><Progress value={pct} className="h-1.5" /><span className="w-9 text-right text-xs tabular-nums">{pct}%</span></div></TableCell>
                   <TableCell className="text-right">
                     <Button size="sm" variant="outline" onClick={() => handleGiftClick(r.id, r.org)}>
-                      <Gift className="h-4 w-4" /> Transfer
+                      <Gift className="h-4 w-4" /> Add Credits
                     </Button>
                   </TableCell>
                 </TableRow>;
@@ -244,9 +261,33 @@ export default function CreditManagementPage() {
             <thead>
               <tr className="border-b border-border">
                 <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider">Date</th>
-                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider">Admin</th>
+                <th className="p-2 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider">
+                  <select
+                    value={selectedAdminFilter}
+                    onChange={(e) => setSelectedAdminFilter(e.target.value)}
+                    className="bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-200 font-extrabold uppercase text-[0.75rem] tracking-wider py-1.5 px-2 rounded-lg border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 cursor-pointer transition-colors"
+                  >
+                    <option value="all">Admin (All)</option>
+                    {adminOptions.map((admin) => (
+                      <option key={admin} value={admin} className="bg-white dark:bg-slate-900 normal-case font-medium text-sm text-slate-800 dark:text-slate-100">
+                        {admin}
+                      </option>
+                    ))}
+                  </select>
+                </th>
                 <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider">Requested</th>
-                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider text-center">Status</th>
+                <th className="p-2 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider text-center">
+                  <select
+                    value={selectedStatusFilter}
+                    onChange={(e) => setSelectedStatusFilter(e.target.value)}
+                    className="bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-200 font-extrabold uppercase text-[0.75rem] tracking-wider py-1.5 px-2 rounded-lg border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 cursor-pointer transition-colors"
+                  >
+                    <option value="all">Status (All)</option>
+                    <option value="pending" className="bg-white dark:bg-slate-900 normal-case font-medium text-sm text-slate-800 dark:text-slate-100">Pending</option>
+                    <option value="approved" className="bg-white dark:bg-slate-900 normal-case font-medium text-sm text-slate-800 dark:text-slate-100">Approved</option>
+                    <option value="rejected" className="bg-white dark:bg-slate-900 normal-case font-medium text-sm text-slate-800 dark:text-slate-100">Rejected</option>
+                  </select>
+                </th>
                 <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider text-right">Actions</th>
               </tr>
             </thead>
@@ -257,20 +298,22 @@ export default function CreditManagementPage() {
                     <RefreshCw className="animate-spin text-amber-500 inline mr-2 w-6 h-6" /> Syncing requests...
                   </td>
                 </tr>
-              ) : creditRequests.length === 0 ? (
+              ) : filteredCreditRequests.length === 0 ? (
                 <tr>
                   <td colSpan="5" className="p-16 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800/50 flex items-center justify-center mb-4">
                         <Activity size={32} className="text-slate-400" />
                       </div>
-                      <p className="text-slate-500 dark:text-slate-400 font-medium text-base">No pending credit requests.</p>
-                      <p className="text-slate-400 text-sm mt-1">You're all caught up!</p>
+                      <p className="text-slate-500 dark:text-slate-400 font-medium text-base">No credit requests found.</p>
+                      <p className="text-slate-400 text-sm mt-1">
+                        {creditRequests.length > 0 ? "Try adjusting your filters." : "You're all caught up!"}
+                      </p>
                     </div>
                   </td>
                 </tr>
               ) : (
-                creditRequests.map(r => (
+                filteredCreditRequests.map(r => (
                   <tr key={r.id || r._id} className="hover:bg-amber-50/30 transition-colors">
                     <td className="p-4 text-sm text-slate-500 dark:text-slate-400 font-medium">
                       {r.created_at ? new Date(r.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '-'}
