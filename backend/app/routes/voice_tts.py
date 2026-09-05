@@ -147,7 +147,7 @@ def get_admin_voices(current_admin: dict = Depends(get_current_admin_details)):
 @router.post("/voice-clone-instant")
 async def voice_clone_instant(
     audio: UploadFile = File(...),
-    voice_name: Optional[str] = "CandidateVoice",
+    voice_name: Optional[str] = Form("CandidateVoice"),
     candidate_session: dict = Depends(require_active_candidate),
 ):
     """
@@ -202,13 +202,12 @@ async def voice_clone_instant(
         def _do_clone():
             client = Cartesia(api_key=api_key)
             # Clone the voice from the clip; voices.clone() returns VoiceMetadata directly
-            with open(temp_audio, "rb") as clip_file:
-                new_voice = client.voices.clone(
-                    clip=clip_file,
-                    name=voice_name or "CandidateVoice",
-                    language="en",
-                    description="Auto-cloned from interview voice sample",
-                )
+            new_voice = client.voices.clone(
+                filepath=temp_audio,
+                name=voice_name or "CandidateVoice",
+                language="en",
+                description="Auto-cloned from interview voice sample",
+            )
             return new_voice
 
         new_voice_data = await asyncio.get_event_loop().run_in_executor(None, _do_clone)

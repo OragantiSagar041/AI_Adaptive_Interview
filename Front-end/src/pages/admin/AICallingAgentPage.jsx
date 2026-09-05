@@ -1839,6 +1839,7 @@ export default function AICallingAgentPage() {
   const [actionLoadingMap, setActionLoadingMap] = useState({})
 
   // Excel / CSV Bulk dialer state
+  const [dialerLanguage, setDialerLanguage] = useState('')
   const [dialerMode, setDialerMode] = useState('excel') // 'excel' | 'manual'
   const [spreadsheetFileLabel, setSpreadsheetFileLabel] = useState('')
   const [parsedCandidates, setParsedCandidates] = useState([])
@@ -2124,6 +2125,7 @@ export default function AICallingAgentPage() {
         if (selectedJobId) formData.append('job_id', selectedJobId)
         if (appIdToUse) formData.append('application_id', appIdToUse)
         if (manualCall.resume) formData.append('resume', manualCall.resume)
+        formData.append('language', dialerLanguage)
         
         const r = await fetch(`${API_BASE_URL}/api/calls/initiate-manual`, {
           method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: formData
@@ -2353,6 +2355,7 @@ export default function AICallingAgentPage() {
       formData.append('candidate_name', candidate.name || 'Candidate')
       formData.append('job_description', cJd)
       if (selectedJobId) formData.append('job_id', selectedJobId)
+      formData.append('language', dialerLanguage)
 
       try {
         const response = await fetch(`${API_BASE_URL}/api/calls/initiate-manual`, {
@@ -2673,6 +2676,29 @@ export default function AICallingAgentPage() {
                           </button>
                         </div>
 
+                        {/* Bulk Settings */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-2">
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-[0.7rem] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                              Agent Language
+                            </label>
+                            <select 
+                              value={dialerLanguage}
+                              onChange={(e) => setDialerLanguage(e.target.value)}
+                              className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-100 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 cursor-pointer transition-all"
+                            >
+                              <option value="" disabled>Select Language</option>
+                              <option value="english">English</option>
+                              <option value="telugu">Telugu</option>
+                              <option value="hindi">Hindi</option>
+                              <option value="tamil">Tamil</option>
+                              <option value="malayalam">Malayalam</option>
+                              <option value="kannada">Kannada</option>
+                              <option value="multilingual">Multilingual (Auto-match candidate)</option>
+                            </select>
+                          </div>
+                        </div>
+
                         {/* File Dropzone */}
                         <div className="relative border-2 border-dashed border-indigo-200 hover:border-indigo-500 bg-indigo-50/40 hover:bg-indigo-50/80 rounded-2xl p-6 transition-all text-center group cursor-pointer">
                           <input
@@ -2886,6 +2912,27 @@ export default function AICallingAgentPage() {
                   {/* Mode 2: Manual Form Entry */}
                   {dialerMode === 'manual' && (
                     <div className="space-y-5 bg-white dark:bg-slate-800/60 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pb-2">
+                        <div className="md:col-span-2 flex flex-col gap-1.5">
+                          <label className="text-[0.7rem] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                            Agent Language
+                          </label>
+                          <select 
+                            value={dialerLanguage}
+                            onChange={(e) => setDialerLanguage(e.target.value)}
+                            className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-100 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 cursor-pointer transition-all"
+                          >
+                            <option value="" disabled>Select Language</option>
+                            <option value="english">English</option>
+                            <option value="telugu">Telugu</option>
+                            <option value="hindi">Hindi</option>
+                            <option value="tamil">Tamil</option>
+                            <option value="malayalam">Malayalam</option>
+                            <option value="kannada">Kannada</option>
+                            <option value="multilingual">Multilingual (Auto-match candidate)</option>
+                          </select>
+                        </div>
+                      </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div>
                           <label className="block text-[0.7rem] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Phone Number(s) *</label>
