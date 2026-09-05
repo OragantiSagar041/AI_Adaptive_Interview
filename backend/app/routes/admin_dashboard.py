@@ -408,31 +408,35 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
 
     def get_url_from_raw_path(rpath):
         if not rpath: return None
-        if rpath.startswith("cloudinary-authenticated://"):
-            public_id = rpath.split("://", 1)[1]
-            signed_url, _ = cloudinary.utils.cloudinary_url(
-                public_id,
-                resource_type="video",
-                type="authenticated",
-                secure=True,
-                sign_url=True,
-            )
-            return signed_url
-        if rpath.startswith("http"): return rpath
-        
-        raw_path_fixed = rpath.replace("\\", "/")
-        idx = raw_path_fixed.find("uploads/")
-        
-        if idx != -1: 
-            relative_path = raw_path_fixed[idx:]
-            if os.path.exists(rpath):
-                return relative_path
-            else:
-                # If running locally, the file might be on the production server
-                return "https://ai-adaptive-interview-1hsw.onrender.com/" + relative_path
-                
-        print(f"Recording file not found on disk: {rpath}")
-        return None
+        try:
+            if rpath.startswith("cloudinary-authenticated://"):
+                public_id = rpath.split("://", 1)[1]
+                signed_url, _ = cloudinary.utils.cloudinary_url(
+                    public_id,
+                    resource_type="video",
+                    type="authenticated",
+                    secure=True,
+                    sign_url=True,
+                )
+                return signed_url
+            if rpath.startswith("http"): return rpath
+            
+            raw_path_fixed = rpath.replace("\\", "/")
+            idx = raw_path_fixed.find("uploads/")
+            
+            if idx != -1: 
+                relative_path = raw_path_fixed[idx:]
+                if os.path.exists(rpath):
+                    return relative_path
+                else:
+                    # If running locally, the file might be on the production server
+                    return "https://ai-adaptive-interview-1hsw.onrender.com/" + relative_path
+                    
+            print(f"Recording file not found on disk: {rpath}")
+            return None
+        except Exception as e:
+            print(f"Error generating recording URL for {rpath}: {e}")
+            return None
 
     recording_url = None
     screen_recording_url = None
@@ -533,6 +537,7 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
     avg_score = 0
     round1_s = 0.0
     round2_s = 0.0
+    interview_type = (session_data.get("interview_type") if session_data else None) or "Technical"
     scores = [r["ai_score"] for r in results if r["ai_score"] is not None]
     verbal_avg = round(sum(scores) / len(scores), 1) if scores else 0
 
@@ -638,7 +643,11 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
             except Exception as e:
                 print(f"Error updating detected accent: {e}")
     else:
-        summary = generate_interview_summary(candidate_name or "Candidate", results)
+        try:
+            summary = generate_interview_summary(candidate_name or "Candidate", results)
+        except Exception as sum_err:
+            print(f"Error generating interview summary: {sum_err}")
+            summary = {}
         recommendation = summary.get("recommendation", "No Data")
         strengths = summary.get("strengths", "")
         weaknesses = summary.get("weaknesses", "")
