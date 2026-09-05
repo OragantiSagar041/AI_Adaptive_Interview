@@ -9,9 +9,11 @@ import {
   Mail, Phone, MapPin, Building2, IndianRupee, Clock, Download,
   Play, FileText, Sparkles, Star, Check, X, Calendar, Send,
   MessageSquare, Video, Scale, Loader2, AlertCircle, Monitor,
-  Mic, ShieldAlert, Eye, UserCheck, User, ArrowLeft
+  Mic, ShieldAlert, Eye, UserCheck, User, ArrowLeft,
+  Globe
 } from "lucide-react"
 import { jsPDF } from 'jspdf'
+import { detectNonEnglishText, translateText, translateQAPairs } from '../utils/translation'
 
 // ── Score Ring ──────────────────────────────────────────────────────────────
 function ScoreRing({ value, size = 140, strokeWidth = 12, label, tone }) {
@@ -85,6 +87,58 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
   const [notesSaving, setNotesSaving] = useState(false)
   const [showScheduleModal, setShowScheduleModal] = useState(false)
 
+  // Translation States
+  const [translations, setTranslations] = useState({})
+  const [translatingKeys, setTranslatingKeys] = useState({})
+
+  const handleTranslateSingle = async (key, text, questionText = '') => {
+    if ((!text || !text.trim()) && (!questionText || !questionText.trim())) return
+    if (translatingKeys[key]) return
+    setTranslatingKeys(prev => ({ ...prev, [key]: true }))
+    try {
+      const items = [{
+        id: key,
+        question_text: questionText || '',
+        answer_text: text || ''
+      }]
+      const results = await translateQAPairs(items, 'en', API_BASE_URL, token)
+      if (results && results[0]) {
+        const r = results[0]
+        setTranslations(prev => ({
+          ...prev,
+          [key]: {
+            id: key,
+            originalText: r.original_answer_text || text,
+            translatedText: r.answer_text,
+            originalQuestion: r.original_question_text || questionText,
+            translatedQuestion: r.question_text,
+            isTranslated: true,
+            view: 'translated',
+            sourceLangName: 'English (Translated)'
+          }
+        }))
+      }
+    } catch (e) {
+      console.error("Translation error:", e)
+    } finally {
+      setTranslatingKeys(prev => {
+        const next = { ...prev }
+        delete next[key]
+        return next
+      })
+    }
+  }
+
+  const toggleAnswerView = (key) => {
+    setTranslations(prev => {
+      if (!prev[key]) return prev
+      return {
+        ...prev,
+        [key]: { ...prev[key], view: prev[key].view === 'translated' ? 'original' : 'translated' }
+      }
+    })
+  }
+
   const token = useSelector(state => state.auth.token)
   const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
 
@@ -95,6 +149,8 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
     setDetail(null)
     setAtsData(null)
     setError(null)
+    setTranslations({})
+    setTranslatingKeys({})
 
     const linkId = candidate.link_id || candidate.id || candidate._id
     if (!linkId || linkId.startsWith("ai_call_")) {
@@ -848,7 +904,11 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                     {c.answers.map((a, idx) => (
                       <div key={idx} className="rounded-lg border border-slate-100 p-4 bg-slate-50">
                         <div className="flex items-start justify-between gap-2 mb-2">
-                          <p className="text-sm font-bold text-slate-700">Q{idx + 1}. {a.question_text}</p>
+                          <p className="text-sm font-bold text-slate-700">
+                            Q{idx + 1}. {(translations[`page_ans_${idx}`]?.isTranslated && translations[`page_ans_${idx}`]?.view === 'translated' && translations[`page_ans_${idx}`]?.translatedQuestion)
+                              ? translations[`page_ans_${idx}`].translatedQuestion
+                              : a.question_text}
+                          </p>
                           <div className="flex items-center gap-2 shrink-0">
                             {Number(a.time_spent_seconds || 0) > 0 && (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
@@ -862,7 +922,71 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                             )}
                           </div>
                         </div>
-                        <p className="text-sm text-slate-600">{a.answer_text}</p>
+                        {(() => {
+                          const ansKey = `page_ans_${idx}`
+                          const nonEnglish = detectNonEnglishText(a.answer_text, c.language || c.detected_language || '')
+                          const trans = translations[ansKey]
+                          return (
+                            <div className="mt-2">
+                              <div className="flex items-center justify-between gap-2 mb-1">
+                                <div className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                                  <MessageSquare size={10} /> Candidate Answer
+                                  {nonEnglish.isNonEnglish && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                      <Globe size={9} /> {nonEnglish.languageName} detected
+                                    </span>
+                                  )}
+                                  {trans?.isTranslated && trans.view === 'translated' && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                      <Check size={9} /> English Translated
+                                    </span>
+                                  )}
+                                </div>
+                                {a.answer_text && a.answer_text.trim() && (
+                                  <div>
+                                    {trans?.isTranslated ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleAnswerView(ansKey)}
+                                        className="text-xs font-bold text-indigo-600 hover:text-indigo-800"
+                                      >
+                                        {trans.view === 'translated' ? 'Show Original' : 'Show English'}
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleTranslateSingle(ansKey, a.answer_text, a.question_text)}
+                                        disabled={translatingKeys[ansKey]}
+                                        className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2 py-0.5 rounded transition-all"
+                                      >
+                                        {translatingKeys[ansKey] ? (
+                                          <span className="inline-flex items-center gap-1">
+                                            <Loader2 size={10} className="animate-spin" /> Translating...
+                                          </span>
+                                        ) : (
+                                          <span className="inline-flex items-center gap-1">
+                                            <Globe size={10} /> Translate
+                                          </span>
+                                        )}
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                              {trans?.isTranslated && trans.view === 'translated' ? (
+                                <div className="bg-indigo-50/50 border border-indigo-200 rounded-lg p-2.5 text-sm text-slate-800">
+                                  <div className="text-[10px] font-bold text-indigo-700 mb-1 flex items-center justify-between">
+                                    <span>Translated from {trans.sourceLangName || "Detected Language"}</span>
+                                    <button type="button" onClick={() => toggleAnswerView(ansKey)} className="text-slate-500 hover:text-indigo-700 underline font-normal">View Original</button>
+                                  </div>
+                                  <p className="text-slate-800">{trans.translatedText}</p>
+                                </div>
+                              ) : (
+                                <p className="text-sm text-slate-600">{a.answer_text}</p>
+                              )}
+                            </div>
+                          )
+                        })()}
                         {a.ai_feedback && (
                           <p className="mt-2 text-xs text-slate-500 italic border-t border-slate-200 pt-2">{a.ai_feedback}</p>
                         )}
