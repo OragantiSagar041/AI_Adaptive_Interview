@@ -200,7 +200,7 @@ export default function RecruitersPage() {
   const recruiters = data?.recruiters || [];
   const weeklyActivity = data?.weekly_activity || [];
 
-  const filteredRecruiters = recruiters.filter(r => {
+  const filteredRecruiters = recruiters.filter(r => r.role !== 'super_admin').filter(r => {
     const matchesSearch = !searchTerm || 
       r.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       r.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -272,7 +272,7 @@ export default function RecruitersPage() {
         <div className="lg:col-span-5 grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-4">
           <KPICard 
             title="Total Recruiters" 
-            value={kpis.total_recruiters ?? recruiters.length} 
+            value={recruiters.filter(r => r.role !== 'super_admin').length} 
             subtitle="Registered platform accounts"
             icon={<Users className="w-5 h-5 text-indigo-600" />} 
             badge="Platform Total"
@@ -280,7 +280,7 @@ export default function RecruitersPage() {
           />
           <KPICard 
             title="Active Now" 
-            value={kpis.active_now ?? recruiters.filter(r => r.status === 'Active').length} 
+            value={recruiters.filter(r => r.role !== 'super_admin' && r.status === 'Active').length} 
             subtitle="Enabled recruiter accounts"
             icon={<UserCheck className="w-5 h-5 text-emerald-600" />} 
             badge="Active"
@@ -364,7 +364,6 @@ export default function RecruitersPage() {
               className="px-3 py-2 text-sm bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer"
             >
               <option value="all">All Roles</option>
-              <option value="super_admin">Super Admin</option>
               <option value="admin">Admin</option>
             </select>
 

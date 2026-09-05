@@ -387,13 +387,15 @@ async def generate_more_questions_endpoint(
                         loaded_questions = json.loads(row.get("questions", "[]"))
                         session = {
                             "id": interview_id,
+                            "link_id": session_row.get("link_id"),
                             "source": row.get("source"),
                             "profile_text": row.get("profile_text", ""),
                             "questions": loaded_questions,
                             "answers": {},
                             "industry": row.get("industry") or row.get("industry_type") or session_row.get("industry") or session_row.get("industry_type") or "General",
                             "interview_type": row.get("interview_type") or session_row.get("interview_type") or "Technical",
-                            "language": row.get("language") or session_row.get("language") or "English"
+                            "language": row.get("language") or session_row.get("language") or "English",
+                            "case_study_count": session_row.get("case_study_count", 3)
                         }
                         set_session(interview_id, session)
                     except Exception:
@@ -869,10 +871,11 @@ async def start_coding_round(
     link_id = interview.get("link_id", "")
     session = interview_sessions_collection.find_one({"link_id": link_id}) if link_id else None
     industry = (session or {}).get("industry", "General")
+    language = interview.get("language", "English")
 
     # generate_coding_task calls an LLM (blocking I/O) — run it off the event loop
     task = await run_in_threadpool(
-        generate_coding_task, profile_text, answers_data, interview_type, industry
+        generate_coding_task, profile_text, answers_data, interview_type, industry, language
     )
 
     coding_round = {
@@ -931,13 +934,16 @@ Extract key non-technical skills from the JD (like team management, stakeholder 
 
 Each scenario should describe a specific situation the candidate might face in this role, and ask them to write their strategy/approach.
 
-Return ONLY a JSON array. Example format:
+Return ONLY a JSON array. 
+CRITICAL: Even though the example below is in English, YOUR output MUST be entirely in {language}. All scenario text, questions, skills, and criteria must be written in {language}.
+
+Example format (Translate values to {language}):
 [
   {{
-    "scenario": "You have just joined as a Project Manager and discover that two senior team members have a long-standing disagreement about the project architecture...",
-    "question": "How would you handle this situation to ensure project delivery stays on track while maintaining team morale?",
-    "skill_tested": "Conflict Resolution & Team Management",
-    "evaluation_criteria": ["Problem identification", "Stakeholder management", "Communication strategy", "Resolution approach"]
+    "scenario": "[Scenario text in {language}]",
+    "question": "[Question text in {language}]",
+    "skill_tested": "[Skill name in {language}]",
+    "evaluation_criteria": ["[Criterion 1 in {language}]", "[Criterion 2 in {language}]"]
   }}
 ]"""
 
@@ -1138,7 +1144,13 @@ async def start_case_study_round(
     # Get the number of questions and industry from the session
     link_id = interview.get("link_id", "")
     session = interview_sessions_collection.find_one({"link_id": link_id}) if link_id else None
-    num_questions = (session or {}).get("case_study_count", 3) or 3
+    
+    # Try getting case_study_count from RAM first, then DB, default to 3
+    num_questions = interview.get("case_study_count")
+    if num_questions is None:
+        num_questions = (session or {}).get("case_study_count", 3)
+    
+    num_questions = int(num_questions) if num_questions is not None else 3
     num_questions = max(1, min(8, num_questions))
     industry = (session or {}).get("industry", "General")
     language = interview.get("language", "English")

@@ -59,6 +59,7 @@ export default function MasterPage() {
   const [editPlanCredits, setEditPlanCredits] = useState(250)
   const [editPlanPrice, setEditPlanPrice] = useState(0)
   const [editPlanFeatures, setEditPlanFeatures] = useState([])
+  const [activeFeatures, setActiveFeatures] = useState([])
   const [editPlanLoading, setEditPlanLoading] = useState(false)
 
   // Create tenant form state
@@ -82,6 +83,7 @@ export default function MasterPage() {
     if (adminRole === 'master') {
       fetchCompanies()
       fetchPlans()
+      fetchFeatures()
     }
   }, [adminRole])
 
@@ -128,6 +130,18 @@ export default function MasterPage() {
       console.error(e)
     } finally {
       setLoadingPlans(false)
+    }
+  }
+
+  async function fetchFeatures() {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/platform/features`)
+      const data = await res.json()
+      if (res.ok && data.features) {
+        setActiveFeatures(data.features)
+      }
+    } catch (e) {
+      console.error("Error fetching features:", e)
     }
   }
 
@@ -1086,33 +1100,7 @@ export default function MasterPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-2 max-h-[180px] overflow-y-auto border border-slate-200 rounded-xl p-3.5 bg-slate-50">
                   {Array.from(new Set([
-                    'Super Admin Dashboard',
-                    'Team Management',
-                    'Dashboard',
-                    'Interviews',
-                    'Qualified Candidates',
-                    'Rejected Candidates',
-                    'Create Interview',
-                    'AI Calling Agent',
-                    'Jobs',
-                    'Organizations',
-                    'Recruiters',
-                    'Credit Management',
-                    'Subscription Management',
-                    'Integrations',
-                    'Security',
-                    'Settings',
-                    'Live Results',
-                    'Analytics & Reports',
-                    'Bulk Email Invites',
-                    'Resume Parsing',
-                    'Custom Branding',
-                    'Priority Support',
-                    'API Access',
-                    'Export Data',
-                    'Role-Based Access',
-                    'Industry Type',
-                    'ATS Score',
+                    ...activeFeatures,
                     ...(editPlanFeatures || [])
                   ])).map(f => {
                     const isChecked = editPlanFeatures.includes(f)

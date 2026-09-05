@@ -2819,8 +2819,11 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                   </div>
                 </div>
               </Card>
+<<<<<<< HEAD
 
               
+=======
+>>>>>>> e43f875063689541717a4506348bc2f9fe99e732
             </div>
           </div>
         )}

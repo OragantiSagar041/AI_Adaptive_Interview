@@ -264,6 +264,11 @@ def score_answer_task(
                     language = (interview_row or {}).get("language", "English")
                     context  = f"Profile: {(interview_row or {}).get('profile_text', '')}"
                     round2_s = calculate_case_study_round2_score(case_study_data, n_cs_questions, context, language)
+                    if actual_interview_id:
+                        interviews_collection.update_one(
+                            {"id": actual_interview_id},
+                            {"$set": {"case_study_round": case_study_data}}
+                        )
                 # Normal / other types: round2_s stays 0.0
 
                 avg_score = calculate_final_score(round1_s, round2_s)

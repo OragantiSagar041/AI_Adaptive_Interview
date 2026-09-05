@@ -62,6 +62,7 @@ import {
   LiveResultsModal
 } from '../admin/modals/AdminModals'
 import LiveMonitorStreamModal from '../admin/modals/LiveMonitorStreamModal'
+import MultiCandidateStreamModal from '../admin/modals/MultiCandidateStreamModal'
 import axios from 'axios'
 import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead } from '../../utils/api'
 
@@ -268,6 +269,7 @@ export default function SuperAdminLayout() {
 
   // Live Stream WebRTC State
   const [isLiveStreamOpen, setIsLiveStreamOpen] = useState(false)
+  const [isMultiLiveStreamOpen, setIsMultiLiveStreamOpen] = useState(false)
   const [liveStreamSession, setLiveStreamSession] = useState(null)
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024)
@@ -927,6 +929,7 @@ export default function SuperAdminLayout() {
           liveSessions={liveSessions}
           handleOpenScorecard={() => { }}
           handleOpenLiveStream={handleOpenLiveStreamAction}
+          handleOpenMultiLiveStream={() => setIsMultiLiveStreamOpen(true)}
         />
 
         <LiveMonitorStreamModal
@@ -936,6 +939,17 @@ export default function SuperAdminLayout() {
             setLiveStreamSession(null)
           }}
           session={liveStreamSession}
+        />
+
+        <MultiCandidateStreamModal
+          isOpen={isMultiLiveStreamOpen}
+          onClose={() => setIsMultiLiveStreamOpen(false)}
+          sessions={liveSessions}
+          onSelectCandidate={(selectedCandidate) => {
+            setIsMultiLiveStreamOpen(false)
+            setLiveStreamSession(selectedCandidate)
+            setIsLiveStreamOpen(true)
+          }}
         />
 
         {/* Global Copilot */}

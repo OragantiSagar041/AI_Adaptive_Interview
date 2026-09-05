@@ -1179,11 +1179,13 @@ async def start_session_interview(link_id: str = Form(...)):
                     loaded_questions = json.loads(row2.get("questions", "[]"))
                     existing = {
                         "id": existing_interview_id,
+                        "link_id": link_id,
                         "source": row2.get("source"),
                         "profile_text": row2.get("profile_text", ""),
                         "questions": loaded_questions,
                         "answers": {},
-                        "created_at": row2.get("created_at")
+                        "created_at": row2.get("created_at"),
+                        "case_study_count": row.get("case_study_count", 3)
                     }
                     set_session(existing_interview_id, existing)
                 except Exception:
@@ -1326,6 +1328,7 @@ async def start_session_interview(link_id: str = Form(...)):
     # Store interview data (RAM)
     set_session(interview_id, {
         "id": interview_id,
+        "link_id": link_id,
         "source": source,
         "profile_text": content_str[:5000],
         "profile_analysis": profile_analysis,
@@ -1337,7 +1340,8 @@ async def start_session_interview(link_id: str = Form(...)):
         "status": status,
         "language": language,
         "interview_type": interview_type,
-        "industry": industry_val
+        "industry": industry_val,
+        "case_study_count": row.get("case_study_count", 3)
     })
     
     # Store interview data (DB)

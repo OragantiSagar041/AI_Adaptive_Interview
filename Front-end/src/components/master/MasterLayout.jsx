@@ -38,6 +38,15 @@ export default function MasterLayout() {
   const role = useSelector(state => state.auth.role)
   const adminUser = useSelector(state => state.auth.adminUser)
   const userName = adminUser?.name || adminUser?.username || 'Master Admin'
+  const { theme, setTheme } = useTheme()
+
+  useEffect(() => {
+    const hasVisitedMaster = sessionStorage.getItem('masterThemeSet')
+    if (!hasVisitedMaster) {
+      setTheme('light')
+      sessionStorage.setItem('masterThemeSet', 'true')
+    }
+  }, [setTheme])
 
   useEffect(() => {
     if (token) {
@@ -234,7 +243,6 @@ export default function MasterLayout() {
     return 'Master Console'
   }
 
-  const { theme } = useTheme()
   const isDark = theme === 'dark'
 
   return (
