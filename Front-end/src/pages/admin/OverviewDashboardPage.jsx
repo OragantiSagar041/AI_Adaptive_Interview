@@ -582,9 +582,9 @@ export default function OverviewDashboardPage() {
                     </td>
                     <td className="px-6 py-3 text-right">
                       <Button
-                        variant="ghost"
+                        variant="secondary"
                         size="sm"
-                        className="h-8 px-3 text-xs"
+                        className="h-8 px-4 text-xs font-bold bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20 transition-colors"
                         onClick={(e) => { e.stopPropagation(); setSelectedCandidate(c); }}
                       >
                         View
@@ -824,10 +824,9 @@ export default function OverviewDashboardPage() {
             </Card>
 
             <Card
-              className="relative overflow-hidden border-0 p-6 text-primary-foreground shadow-[var(--shadow-glow)]"
-              style={{ background: "var(--gradient-primary)" }}
+              className="relative overflow-hidden border-0 p-6 text-white shadow-lg bg-gradient-to-br from-indigo-600 to-purple-700"
             >
-              <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white dark:bg-slate-800/60/10 blur-2xl" />
+              <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
               <AlertCircle className="h-5 w-5 opacity-90" />
               <h3 className="mt-3 text-base font-semibold">AI Hiring Insight</h3>
               <p className="mt-1.5 text-sm opacity-90">
@@ -836,7 +835,7 @@ export default function OverviewDashboardPage() {
               <Button 
                 size="sm" 
                 variant="secondary" 
-                className="mt-4 bg-white dark:bg-slate-800/60 text-primary hover:bg-white dark:bg-slate-800/60/90"
+                className="mt-4 bg-white text-indigo-700 hover:bg-slate-50 border-0"
                 onClick={() => handleOpenRecordsModal('high_scores', 'High-Scoring Candidates')}
               >
                 Explore cohort

@@ -864,15 +864,15 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
           {/* Live overlay */}
           {status === 'streaming' && telemetry && (
             <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end pointer-events-none">
-              <div className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 text-white flex items-center gap-2 pointer-events-auto">
+              <div className="!bg-slate-950/85 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/20 text-white flex items-center gap-2 pointer-events-auto shadow-lg">
                 <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                <span className="text-xs font-bold uppercase tracking-wider">LIVE</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-white">LIVE</span>
               </div>
-              <div className="bg-black/60 backdrop-blur-md px-3 py-2 rounded-lg border border-white/10 text-white flex flex-col gap-1 pointer-events-auto max-w-[50%]">
-                <span className="text-[0.65rem] text-slate-300 font-bold uppercase truncate">
+              <div className="!bg-slate-950/85 backdrop-blur-md px-3 py-2 rounded-lg border border-white/20 text-white flex flex-col gap-1 pointer-events-auto max-w-[60%] shadow-lg">
+                <span className="text-[0.65rem] text-slate-300 font-extrabold uppercase truncate tracking-wider">
                   {telemetry.round_type === 'coding' ? 'Coding Challenge' : 'Verbal Response'}
                 </span>
-                <span className="text-sm font-bold truncate">
+                <span className="text-sm font-bold truncate text-white">
                   Q{telemetry.current_question}: {telemetry.question_text || 'Interview Question'}
                 </span>
               </div>

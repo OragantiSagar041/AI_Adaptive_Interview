@@ -727,9 +727,10 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         setSessionDetail(payload)
 
         // Ensure Voice Cloning works for Standard interviews
-        if (payload.voice_clone && payload.custom_voice_id) {
-          clonedVoiceIdRef.current = payload.custom_voice_id
-          setClonedVoiceId(payload.custom_voice_id)
+        if (payload.custom_voice_id || payload.cloned_voice_id) {
+          const vId = payload.custom_voice_id || payload.cloned_voice_id
+          clonedVoiceIdRef.current = vId
+          setClonedVoiceId(vId)
         }
 
         if (payload.is_deactivated) {
@@ -2196,10 +2197,10 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         text,
         voice: 'shimmer',
         language: sessionDetail?.language || 'English',
-        use_custom_voice: !!sessionDetail?.voice_clone
-
+        use_custom_voice: !!(sessionDetail?.voice_clone || sessionDetail?.voice_cloning_enabled || sessionDetail?.custom_voice_id || clonedVoiceIdRef.current)
       }
-      if (clonedVoiceIdRef.current) bodyPayload.voice_id = clonedVoiceIdRef.current
+      const activeVoiceId = clonedVoiceIdRef.current || sessionDetail?.custom_voice_id || sessionDetail?.cloned_voice_id
+      if (activeVoiceId) bodyPayload.voice_id = activeVoiceId
 
       // Check TTS cache first — same question text + voice doesn't need a new network call.
       const ttsCacheKey = `${text}::${clonedVoiceIdRef.current || 'default'}`
