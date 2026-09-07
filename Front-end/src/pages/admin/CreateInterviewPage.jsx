@@ -2774,10 +2774,6 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                   </div>
                 </div>
               </Card>
-
-
-
-
             </div>
           </div>
         )}
