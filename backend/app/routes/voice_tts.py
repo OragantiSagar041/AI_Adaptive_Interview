@@ -289,7 +289,27 @@ async def generate_tts(
         "Kannada":   "kn-IN-SapnaNeural",
         "English":   base_edge_voice,
     }
-    requested_lang = req.language.title()
+    # Map BCP-47 codes (sent by frontend, e.g. "te-IN") to full language names
+    bcp47_to_lang_name = {
+        "hi-in": "Hindi",
+        "hi":    "Hindi",
+        "te-in": "Telugu",
+        "te":    "Telugu",
+        "ta-in": "Tamil",
+        "ta":    "Tamil",
+        "ml-in": "Malayalam",
+        "ml":    "Malayalam",
+        "kn-in": "Kannada",
+        "kn":    "Kannada",
+        "en-in": "English",
+        "en-us": "English",
+        "en-gb": "English",
+        "en":    "English",
+    }
+    # Normalise: accept both full names ("Telugu") and BCP-47 codes ("te-IN")
+    raw_lang = (req.language or "English").strip()
+    normalised_lang = bcp47_to_lang_name.get(raw_lang.lower(), raw_lang.title())
+    requested_lang = normalised_lang
     edge_voice = edge_language_map.get(requested_lang, base_edge_voice)
 
     # Cartesia multilingual language code mapping
@@ -323,12 +343,16 @@ async def generate_tts(
         "indonesian": "id",
         "thai": "th",
     }
-    cartesia_lang = cartesia_language_map.get(str(req.language or "English").strip().lower(), "en")
+    cartesia_lang = cartesia_language_map.get(normalised_lang.lower(), "en")
 
     # ──────────────────────────────────────────────────────────────────────────
     # 2. Cartesia path — for ALL languages when keys are configured and voice cloning is enabled
     # ──────────────────────────────────────────────────────────────────────────
-    if is_voice_cloning_enabled and cartesia_api_key and target_voice_id:
+    
+    # Cartesia sonic-multilingual supported languages. Unsupported languages should skip straight to Edge TTS to avoid timeouts.
+    cartesia_supported = {"en", "fr", "de", "es", "pt", "zh", "ja", "hi", "it", "ko", "nl", "pl", "ru", "sv", "tr"}
+    
+    if is_voice_cloning_enabled and cartesia_api_key and target_voice_id and (cartesia_lang in cartesia_supported):
         try:
             import asyncio
             # pyrefly: ignore [missing-import]
@@ -336,8 +360,12 @@ async def generate_tts(
 
             def _call_cartesia(voice_id_to_use: str):
                 client = Cartesia(api_key=cartesia_api_key)
+                
+                # Use sonic-multilingual if not English
+                model = "sonic-multilingual" if cartesia_lang != "en" else "sonic-latest"
+                
                 result = client.tts.generate(
-                    model_id="sonic-latest",
+                    model_id=model,
                     transcript=req.text,
                     voice={"mode": "id", "id": voice_id_to_use},
                     language=cartesia_lang,

@@ -143,15 +143,21 @@ def qg_generate_all(state: QuestionGenerationState) -> QuestionGenerationState:
         "Return JSON: {'questions': [{'question':'...', 'difficulty':'Medium', 'type':'Technical/Behavioral', 'category':'Core'}]}"
     )
 
-    res = _llm_json(sys, usr, fallback={"questions": []}, temperature=0.7)
-
-    state["drafts"] = res.get("questions", [])
+    try:
+        res = _llm_json(sys, usr, fallback={"questions": []}, temperature=0.7)
+        state["drafts"] = res.get("questions", [])
+    except Exception as e:
+        # If LLM call fails (quota or network), fall back to empty drafts to trigger validation fallback
+        print(f"LLM generation failed ({e}). Using offline fallback.")
+        state["drafts"] = []
     return state
 
 def qg_validate_format(state: QuestionGenerationState) -> QuestionGenerationState:
     drafts = state.get("drafts", [])
     lang = state.get("language", "English")
     valid_qs = []
+    seen_questions = set()  # dedup guard
+
     for i, d in enumerate(drafts):
         try:
             default_q = "Could you describe your experience with technology?"
@@ -159,28 +165,24 @@ def qg_validate_format(state: QuestionGenerationState) -> QuestionGenerationStat
                 try:
                     from app.data.offline_language_fallback import OFFLINE_LANGUAGE_TECHNICAL_QUESTIONS
                     lang_tech = OFFLINE_LANGUAGE_TECHNICAL_QUESTIONS.get(lang, [])
-                    if lang_tech:
-                        default_q = lang_tech[i % len(lang_tech)]
+                    if lang_tech and i < len(lang_tech):  # only use index if within bounds — no modulo cycling
+                        default_q = lang_tech[i]
                 except Exception:
                     pass
             q = _parse_with_schema(json.dumps(d), InterviewQuestion, InterviewQuestion(question=default_q, id=i+1))
             q.id = i + 1
             item = q.to_dict()
-            item["_generation_origin"] = "LLM" if item.get("question") != default_q else "validation fallback"
-            valid_qs.append(item)
+            q_text = item.get("question", "").strip().lower()
+            if q_text and q_text not in seen_questions:  # skip duplicates
+                seen_questions.add(q_text)
+                item["_generation_origin"] = "LLM" if item.get("question") != default_q else "validation fallback"
+                valid_qs.append(item)
         except Exception:
             pass
     if not valid_qs:
-        fallback_q = "Could you tell me about your experience?"
-        if lang != "English":
-            try:
-                from app.data.offline_language_fallback import OFFLINE_LANGUAGE_INTRO_QUESTIONS
-                fallback_q = OFFLINE_LANGUAGE_INTRO_QUESTIONS.get(lang, fallback_q)
-            except Exception:
-                pass
-        item = InterviewQuestion(question=fallback_q, id=1).to_dict()
-        item["_generation_origin"] = "validation fallback"
-        valid_qs = [item]
+        print("[Validation] No valid questions parsed. Returning empty list to trigger offline fallback.")
+        # Returning empty lets the robust offline generator handle it gracefully without duplication.
+
     state["result"] = valid_qs
     return state
 

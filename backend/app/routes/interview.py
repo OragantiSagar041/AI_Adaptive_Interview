@@ -994,36 +994,73 @@ def _generate_case_study_questions_offline(job_description: str, num_questions: 
     
     # Map of skills to scenario templates
     from app.data.industry_fallback_data import INDUSTRY_CASE_STUDIES
+    
     # Try to get specific industry scenarios first
     if language != "English":
-        try:
-            from app.data.offline_language_fallback import OFFLINE_LANGUAGE_CASE_STUDIES
-            lang_cases = OFFLINE_LANGUAGE_CASE_STUDIES.get(language, [])
-            if lang_cases:
-                import random
-                selected = random.sample(lang_cases, min(num_questions, len(lang_cases)))
-                results = []
-                for idx, c in enumerate(selected):
-                    sep = "।" if "।" in c else "."
-                    parts = c.split(sep, 1)
-                    if len(parts) > 1 and parts[1].strip():
-                        scenario = parts[0].strip() + sep
-                        question = parts[1].strip()
-                    else:
-                        scenario = c
-                        question = c
-                    results.append({
-                        "id": str(idx + 1),
-                        "scenario": scenario,
-                        "question": question,
-                        "skill_tested": "Scenario",
-                        "difficulty": "Medium",
-                        "time_limit": 300,
-                        "evaluation_criteria": ["Analysis", "Problem Solving", "Communication"]
-                    })
-                return results
-        except ImportError:
-            pass
+        # Fallback generic industry-aware templates for non-English languages
+        lang_industry_cases = {
+            "Telugu": [
+                "{industry} పరిశ్రమలో మీరు ఒక కీలకమైన ప్రాజెక్ట్‌కు నాయకత్వం వహిస్తున్నారని ఊహించుకోండి, కానీ ఇద్దరు వాటాదారులు ఒక దిశపై తీవ్రంగా విభేదిస్తున్నారు. దీనిని పరిష్కరించడానికి మీ వ్యూహాన్ని వివరించండి.",
+                "{industry} రంగానికి చెందిన మీ బృందం తక్కువ పనితీరు కనబరుస్తోంది. మీరు మూలకారణాన్ని ఎలా నిర్ధారిస్తారు మరియు టర్న్‌అరౌండ్ ప్లాన్‌ను ఎలా అమలు చేస్తారు?",
+                "కోతల కారణంగా మీ {industry} ప్రాజెక్ట్ 20% బడ్జెట్‌ను కోల్పోయింది, కానీ డెలివరీ గడువు అలాగే ఉంది. మీరు ప్రాజెక్ట్ డెలివరీని ఎలా పునఃప్రణాళిక చేస్తారు?"
+            ],
+            "Hindi": [
+                "कल्पना करें कि आप {industry} उद्योग में एक महत्वपूर्ण परियोजना का नेतृत्व कर रहे हैं, लेकिन दो प्रमुख हितधारक दिशा को लेकर दृढ़ता से असहमत हैं। इसे हल करने के लिए अपनी रणनीति बताएं।",
+                "{industry} क्षेत्र में आपकी टीम का प्रदर्शन खराब है। आप मूल कारण का निदान कैसे करेंगे और सुधार योजना कैसे लागू करेंगे?",
+                "कटौती के कारण आपके {industry} प्रोजेक्ट का 20% बजट कम हो गया है, लेकिन डिलीवरी की समय सीमा वही है। आप प्रोजेक्ट डिलीवरी की फिर से योजना कैसे बनाएंगे?"
+            ],
+            "Tamil": [
+                "{industry} துறையில் ஒரு முக்கியமான திட்டத்தை நீங்கள் வழிநடத்துகிறீர்கள் என்று கற்பனை செய்து பாருங்கள், ஆனால் இரண்டு முக்கிய பங்குதாரர்கள் திசை குறித்து கடுமையாக உடன்படவில்லை. இதைத் தீர்ப்பதற்கான உங்கள் உத்தியை விளக்குங்கள்.",
+                "{industry} துறையில் உங்கள் குழு சிறப்பாக செயல்படவில்லை. மூல காரணத்தை எவ்வாறு கண்டறிந்து, மேம்பாட்டுத் திட்டத்தை செயல்படுத்துவீர்கள்?",
+                "செலவுக் குறைப்பு காரணமாக உங்கள் {industry} திட்டம் 20% பட்ஜெட்டை இழந்துள்ளது, ஆனால் டெலிவரி கெடு அப்படியே உள்ளது. திட்ட விநியோகத்தை எவ்வாறு மீண்டும் திட்டமிடுவீர்கள்?"
+            ],
+            "Malayalam": [
+                "{industry} വ്യവസായത്തിൽ നിങ്ങൾ ഒരു നിർണായക പ്രോജക്റ്റ് നയിക്കുകയാണെന്ന് സങ്കൽപ്പിക്കുക, എന്നാൽ രണ്ട് പ്രധാന പങ്കാളികൾ ലക്ഷ്യത്തെക്കുറിച്ച് ശക്തമായി വിയോജിക്കുന്നു. ഇത് പരിഹരിക്കുന്നതിനുള്ള നിങ്ങളുടെ തന്ത്രം വിശദീകരിക്കുക.",
+                "{industry} മേഖലയിലെ നിങ്ങളുടെ ടീം മോശം പ്രകടനമാണ് കാഴ്ചവെക്കുന്നത്. അടിസ്ഥാന കാരണം നിങ്ങൾ എങ്ങനെ കണ്ടെത്തുകയും ഒരു പരിഹാര പദ്ധതി നടപ്പിലാക്കുകയും ചെയ്യും?",
+                "ചെലവ് ചുരുക്കൽ കാരണം നിങ്ങളുടെ {industry} പ്രോജക്റ്റിന് 20% ബജറ്റ് നഷ്ടപ്പെട്ടു, പക്ഷേ ഡെലിവറി സമയപരിധി മാറ്റമില്ലാതെ തുടരുന്നു. നിങ്ങൾ എങ്ങനെ പ്രോജക്റ്റ് ഡെലിവറി പുനഃക്രമീകരിക്കും?"
+            ],
+            "Kannada": [
+                "{industry} ಉದ್ಯಮದಲ್ಲಿ ನೀವು ನಿರ್ಣಾಯಕ ಯೋಜನೆಯನ್ನು ಮುನ್ನಡೆಸುತ್ತಿದ್ದೀರಿ ಎಂದು ಕಲ್ಪಿಸಿಕೊಳ್ಳಿ, ಆದರೆ ಇಬ್ಬರು ಪ್ರಮುಖ ಪಾಲುದಾರರು ದಿಕ್ಕಿನ ಬಗ್ಗೆ ಬಲವಾಗಿ ಭಿನ್ನಾಭಿಪ್ರಾಯ ಹೊಂದಿದ್ದಾರೆ. ಇದನ್ನು ಪರಿಹರಿಸಲು ನಿಮ್ಮ ತಂತ್ರವನ್ನು ವಿವರಿಸಿ.",
+                "{industry} ವಲಯದಲ್ಲಿ ನಿಮ್ಮ ತಂಡ ಕಳಪೆ ಸಾಧನೆ ಮಾಡುತ್ತಿದೆ. ಮೂಲ ಕಾರಣವನ್ನು ನೀವು ಹೇಗೆ ನಿರ್ಣಯಿಸುತ್ತೀರಿ ಮತ್ತು ಸುಧಾರಣಾ ಯೋಜನೆಯನ್ನು ಹೇಗೆ ಜಾರಿಗೆ ತರುತ್ತೀರಿ?",
+                "ಕಡಿತದಿಂದಾಗಿ ನಿಮ್ಮ {industry} ಯೋಜನೆಯು 20% ಬಜೆಟ್ ಅನ್ನು ಕಳೆದುಕೊಂಡಿದೆ, ಆದರೆ ವಿತರಣಾ ಗಡುವು ಹಾಗೆಯೇ ಉಳಿದಿದೆ. ಪ್ರಾಜೆಕ್ಟ್ ವಿತರಣೆಯನ್ನು ನೀವು ಹೇಗೆ ಮರು-ಯೋಜಿಸುತ್ತೀರಿ?"
+            ]
+        }
+        
+        import random
+        lang_cases = lang_industry_cases.get(language)
+        
+        # If we don't have industry templates for this language, fallback to the generic IT cases
+        if not lang_cases:
+            try:
+                from app.data.offline_language_fallback import OFFLINE_LANGUAGE_CASE_STUDIES
+                lang_cases = OFFLINE_LANGUAGE_CASE_STUDIES.get(language, [])
+            except ImportError:
+                lang_cases = []
+                
+        if lang_cases:
+            selected = random.sample(lang_cases, min(num_questions, len(lang_cases)))
+            results = []
+            for idx, c in enumerate(selected):
+                # Inject industry into the template
+                formatted_c = c.replace("{industry}", industry)
+                sep = "।" if "।" in formatted_c else "."
+                parts = formatted_c.split(sep, 1)
+                if len(parts) > 1 and parts[1].strip():
+                    scenario = parts[0].strip() + sep
+                    question = parts[1].strip()
+                else:
+                    scenario = formatted_c
+                    question = formatted_c
+                results.append({
+                    "id": str(idx + 1),
+                    "scenario": scenario,
+                    "question": question,
+                    "skill_tested": f"{industry} Scenario",
+                    "difficulty": "Medium",
+                    "time_limit": 300,
+                    "evaluation_criteria": ["Analysis", "Problem Solving", "Communication"]
+                })
+            return results
 
     industry_cases = INDUSTRY_CASE_STUDIES.get(industry)
     if industry_cases:
@@ -1165,7 +1202,16 @@ async def start_case_study_round(
     # Normalize question shape
     normalized_questions = []
     for idx, q in enumerate(questions):
-        text = q.get('text') or q.get('scenario') or q.get('question') or ''
+        # Create a combined text that contains both the scenario and the specific question
+        scenario_text = q.get('scenario', '')
+        question_text = q.get('question', '')
+        
+        # If they are exactly the same, avoid duplicating them
+        if scenario_text and question_text and scenario_text != question_text:
+            text = f"{scenario_text} {question_text}".strip()
+        else:
+            text = q.get('text') or scenario_text or question_text or ''
+            
         normalized_questions.append({
             "id": q.get("id") or f"cs_{idx}",
             "type": "case_study",
