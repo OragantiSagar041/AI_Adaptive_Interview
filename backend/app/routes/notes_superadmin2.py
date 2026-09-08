@@ -302,9 +302,14 @@ def get_superadmin_credit_stats(current_admin: dict = Depends(get_current_admin_
             
         total_credits = total_company_credits + total_admin_credits
         consumed_credits = interview_sessions_collection.count_documents({"created_at": {"$gte": thirty_days_ago}})
+        
+        # 2nd Approach: Global Recruiter Refills
+        active_topups = credit_ledger_collection.count_documents({"date": {"$gte": thirty_days_ago}})
     else:
         # Scoped logic for specific company super-admins
         total_credits = 0
+        active_topups = 0
+        
         if company_id:
             try:
                 c = companies_collection.find_one({"_id": ObjectId(company_id)})
@@ -326,6 +331,12 @@ def get_superadmin_credit_stats(current_admin: dict = Depends(get_current_admin_
                     {"created_by": {"$in": company_admin_ids}}
                 ]
             })
+            
+            # 2nd Approach: Recruiter Refills for this company
+            active_topups = credit_ledger_collection.count_documents({
+                "company_id": company_id, 
+                "date": {"$gte": thirty_days_ago}
+            })
         else:
             # Standalone admin fallback
             try:
@@ -340,13 +351,19 @@ def get_superadmin_credit_stats(current_admin: dict = Depends(get_current_admin_
                 "created_at": {"$gte": thirty_days_ago},
                 "$or": [{"admin_id": admin_id}, {"created_by": admin_id}]
             })
+            
+            # 2nd Approach: Recruiter Refills for standalone admin
+            active_topups = credit_ledger_collection.count_documents({
+                "super_admin_id": admin_id, 
+                "date": {"$gte": thirty_days_ago}
+            })
     
     return {
         "status": "success",
         "kpis": {
             "total_credits_system": total_credits,
             "credits_consumed_month": consumed_credits,
-            "active_topups": 12
+            "active_topups": active_topups
         },
         "usage_chart": usage_data,
         "history": history

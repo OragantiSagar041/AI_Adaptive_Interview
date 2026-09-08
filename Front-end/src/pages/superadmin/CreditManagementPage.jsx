@@ -91,10 +91,16 @@ export default function CreditManagementPage() {
           const sessionsCreated = a.sessions_created || 0;
           const remaining = a.credits || 0;
           
-          // Use the exact ledger history (total_allocated_credits) if available, otherwise fallback to legacy approximation
-          const allocated = a.total_allocated_credits !== undefined 
+          // Base allocated from backend history
+          let allocated = a.total_allocated_credits !== undefined 
             ? a.total_allocated_credits 
             : (sessionsCreated + remaining);
+            
+          // FIX: If remaining credits exceed the tracked allocation (e.g., due to initial credits 
+          // given at creation that weren't logged in total_allocated_credits), adjust it.
+          if (allocated < remaining + sessionsCreated) {
+              allocated = remaining + sessionsCreated;
+          }
             
           // True utilization based on total gifted credits minus what they have left
           const used = allocated - remaining;
@@ -104,7 +110,8 @@ export default function CreditManagementPage() {
             org: a.name || a.username,
             allocated,
             used,
-            remaining
+            remaining,
+            refillCount: a.refill_count || 0
           };
         }));
       }
@@ -241,6 +248,7 @@ export default function CreditManagementPage() {
             <TableHead className="text-right">Used</TableHead>
             <TableHead className="text-right">Remaining</TableHead>
             <TableHead className="w-[220px]">Utilization</TableHead>
+            <TableHead className="text-center">Top-ups</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow></TableHeader>
           <TableBody>
@@ -253,6 +261,13 @@ export default function CreditManagementPage() {
                   <TableCell className="text-right tabular-nums">{r.used.toLocaleString()}</TableCell>
                   <TableCell className={`text-right tabular-nums font-medium ${low ? "text-rose-600" : "text-emerald-600"}`}>{r.remaining.toLocaleString()}</TableCell>
                   <TableCell><div className="flex items-center gap-2"><Progress value={pct} className="h-1.5" /><span className="w-9 text-right text-xs tabular-nums">{pct}%</span></div></TableCell>
+                  <TableCell>
+                    <div className="flex justify-center">
+                      <div className="inline-flex items-center justify-center min-w-[28px] px-2 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-600 text-xs font-semibold shadow-sm" title={`${r.refillCount} total top-ups received`}>
+                        {r.refillCount}
+                      </div>
+                    </div>
+                  </TableCell>
                   <TableCell className="text-right">
                     <Button size="sm" variant="outline" onClick={() => handleGiftClick(r.id, r.org)}>
                       <Gift className="h-4 w-4" /> Add Credits
