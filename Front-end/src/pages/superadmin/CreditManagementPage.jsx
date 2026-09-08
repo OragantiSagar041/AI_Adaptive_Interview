@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Gift, Plus, Loader2, CreditCard, RefreshCw, Activity, Coins, Check, X } from "lucide-react";
+import { Gift, Plus, Loader2, CreditCard, RefreshCw, Activity, Coins, Check, X, Flame, Rocket } from "lucide-react";
 import { toast } from "sonner";
 import Swal from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
@@ -198,9 +198,39 @@ export default function CreditManagementPage() {
   return (
     <AdminShell title="Credit Management" description="Allocate AI credits, monitor usage and audit consumption per recruiter.">
       <div className="grid gap-3 md:grid-cols-3">
-        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Total system credits</div><div className="mt-1 text-2xl font-semibold">{kpis.total_credits_system.toLocaleString()}</div></CardContent></Card>
-        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Consumed this month</div><div className="mt-1 text-2xl font-semibold">{kpis.credits_consumed_month.toLocaleString()}</div></CardContent></Card>
-        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Active top-ups</div><div className="mt-1 text-2xl font-semibold text-emerald-600">{kpis.active_topups}</div></CardContent></Card>
+        <Card>
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <div className="text-xs text-muted-foreground">Total system credits</div>
+              <div className="mt-1 text-2xl font-semibold">{kpis.total_credits_system.toLocaleString()}</div>
+            </div>
+            <div className="w-12 h-12 rounded-full flex items-center justify-center bg-gradient-to-b from-blue-400 to-blue-700 shadow-[0_6px_12px_rgba(37,99,235,0.4),inset_0_2px_0_rgba(255,255,255,0.4),inset_0_-3px_0_rgba(0,0,0,0.2)] text-white">
+              <Coins size={22} strokeWidth={2.5} className="drop-shadow-md" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <div className="text-xs text-muted-foreground">Consumed this month</div>
+              <div className="mt-1 text-2xl font-semibold">{kpis.credits_consumed_month.toLocaleString()}</div>
+            </div>
+            <div className="w-12 h-12 rounded-full flex items-center justify-center bg-gradient-to-b from-orange-400 to-red-600 shadow-[0_6px_12px_rgba(239,68,68,0.4),inset_0_2px_0_rgba(255,255,255,0.4),inset_0_-3px_0_rgba(0,0,0,0.2)] text-white">
+              <Flame size={22} strokeWidth={2.5} className="drop-shadow-md" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <div className="text-xs text-muted-foreground">Active top-ups</div>
+              <div className="mt-1 text-2xl font-semibold text-emerald-600">{kpis.active_topups}</div>
+            </div>
+            <div className="w-12 h-12 rounded-full flex items-center justify-center bg-gradient-to-b from-emerald-400 to-teal-600 shadow-[0_6px_12px_rgba(16,185,129,0.4),inset_0_2px_0_rgba(255,255,255,0.4),inset_0_-3px_0_rgba(0,0,0,0.2)] text-white">
+              <Rocket size={22} strokeWidth={2.5} className="drop-shadow-md" />
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <Card><CardHeader className="pb-2"><CardTitle className="text-base">Per-recruiter usage</CardTitle></CardHeader>

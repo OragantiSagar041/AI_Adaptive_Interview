@@ -286,16 +286,60 @@ def get_superadmin_credit_stats(current_admin: dict = Depends(get_current_admin_
         for d in history_docs
     ]
     
-    total_company_credits = 0
-    for c in companies_collection.find({}, {"credits": 1}):
-        total_company_credits += int(c.get("credits") or 0)
-        
-    total_admin_credits = 0
-    for a in admins_collection.find({"company_id": {"$exists": False}}, {"credits": 1}):
-        total_admin_credits += int(a.get("credits") or 0)
-        
-    total_credits = total_company_credits + total_admin_credits
-    consumed_credits = interview_sessions_collection.count_documents({"created_at": {"$gte": thirty_days_ago}})
+    company_id = current_admin.get("company_id")
+    admin_id = current_admin.get("admin_id") or str(current_admin.get("_id", ""))
+    role = current_admin.get("role")
+    
+    if role == "master" and not company_id:
+        # Global stats logic for system master
+        total_company_credits = 0
+        for c in companies_collection.find({}, {"credits": 1}):
+            total_company_credits += int(c.get("credits") or 0)
+            
+        total_admin_credits = 0
+        for a in admins_collection.find({"company_id": {"$exists": False}}, {"credits": 1}):
+            total_admin_credits += int(a.get("credits") or 0)
+            
+        total_credits = total_company_credits + total_admin_credits
+        consumed_credits = interview_sessions_collection.count_documents({"created_at": {"$gte": thirty_days_ago}})
+    else:
+        # Scoped logic for specific company super-admins
+        total_credits = 0
+        if company_id:
+            try:
+                c = companies_collection.find_one({"_id": ObjectId(company_id)})
+            except Exception:
+                c = companies_collection.find_one({"_id": company_id})
+                
+            if c:
+                total_credits = int(c.get("credits") or 0)
+                
+            # Filter consumed credits strictly to this company's recruiters
+            company_admin_ids = [str(a["_id"]) for a in admins_collection.find({"company_id": company_id}, {"_id": 1})]
+            if admin_id not in company_admin_ids:
+                company_admin_ids.append(admin_id)
+                
+            consumed_credits = interview_sessions_collection.count_documents({
+                "created_at": {"$gte": thirty_days_ago},
+                "$or": [
+                    {"admin_id": {"$in": company_admin_ids}}, 
+                    {"created_by": {"$in": company_admin_ids}}
+                ]
+            })
+        else:
+            # Standalone admin fallback
+            try:
+                a = admins_collection.find_one({"_id": ObjectId(admin_id)})
+            except Exception:
+                a = admins_collection.find_one({"_id": admin_id})
+                
+            if a:
+                total_credits = int(a.get("credits") or 0)
+                
+            consumed_credits = interview_sessions_collection.count_documents({
+                "created_at": {"$gte": thirty_days_ago},
+                "$or": [{"admin_id": admin_id}, {"created_by": admin_id}]
+            })
     
     return {
         "status": "success",
