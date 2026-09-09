@@ -107,6 +107,7 @@ class DecisionRequest(BaseModel):
     link_id: str
     decision: str # 'selected' or 'rejected'
     admin_id: Optional[str] = None
+    talent_pool_status: Optional[str] = None
 
 class RecordingUploadFailure(BaseModel):
     interview_id: str

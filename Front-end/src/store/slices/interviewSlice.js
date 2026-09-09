@@ -54,13 +54,14 @@ export const handleDeleteSession = createAsyncThunk(
 
 export const handleUpdateDecision = createAsyncThunk(
   'interview/updateDecision',
-  async ({ linkId, decision }, { getState, dispatch, rejectWithValue }) => {
+  async ({ linkId, decision, talent_pool_status }, { getState, dispatch, rejectWithValue }) => {
     try {
       const { API_BASE_URL, token } = getState().auth
-      await axios.post(`${API_BASE_URL}/admin/update-decision`, {
-        link_id: linkId,
-        decision
-      }, {
+      const payload = { link_id: linkId, decision }
+      if (talent_pool_status) {
+        payload.talent_pool_status = talent_pool_status
+      }
+      await axios.post(`${API_BASE_URL}/admin/update-decision`, payload, {
         headers: { Authorization: `Bearer ${token}` }
       })
       alert(`Candidate marked as ${decision.toUpperCase()} successfully.`)

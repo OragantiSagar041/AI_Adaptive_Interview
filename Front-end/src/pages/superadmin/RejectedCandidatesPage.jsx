@@ -16,9 +16,12 @@ function scoreTone(score) {
   return "text-rose-600 font-bold"
 }
 
-function StatCard({ icon: Icon, label, value, accent }) {
+function StatCard({ icon: Icon, label, value, accent, onClick, isActive }) {
   return (
-    <div className="bg-card rounded-xl border border-border shadow-sm p-5 hover:shadow-md transition-shadow">
+    <div 
+      onClick={onClick}
+      className={`bg-card rounded-xl border ${isActive ? 'border-indigo-500 ring-2 ring-indigo-500/20 shadow-md' : 'border-border shadow-sm'} p-5 hover:shadow-md transition-all ${onClick ? 'cursor-pointer hover:border-indigo-300' : ''}`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{label}</p>
@@ -47,6 +50,7 @@ export default function RejectedCandidatesPage() {
   const [subAdmins, setSubAdmins] = useState([])
   const [pipelineFilter, setPipelineFilter] = useState('all')
 
+  const [talentPoolFilter, setTalentPoolFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [jobFilter, setJobFilter] = useState('all')
   const [dateFilter, setDateFilter] = useState('')
@@ -87,6 +91,11 @@ export default function RejectedCandidatesPage() {
         if (candidateDate !== dateFilter) return false
       }
 
+      if (talentPoolFilter !== 'all') {
+        const tps = c.talent_pool_status || 'archived';
+        if (tps !== talentPoolFilter) return false;
+      }
+
       if (!q) return true
       return (
         (c.candidate_name || "").toLowerCase().includes(q) ||
@@ -94,7 +103,7 @@ export default function RejectedCandidatesPage() {
         (c.email || "").toLowerCase().includes(q)
       )
     })
-  }, [search, jobFilter, dateFilter, rejectedCandidates])
+  }, [search, jobFilter, dateFilter, rejectedCandidates, talentPoolFilter])
 
   const handleExportAction = () => {
     if (filtered.length === 0) {
@@ -117,6 +126,11 @@ export default function RejectedCandidatesPage() {
     const now = new Date();
     return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
   }).length
+
+  const talentPoolCount = rejectedCandidates.filter(c => c.talent_pool_status === 'talent_pool').length;
+  const futureRoleCount = rejectedCandidates.filter(c => c.talent_pool_status === 'future_role').length;
+  const reconsiderCountCards = rejectedCandidates.filter(c => c.talent_pool_status === 'reconsideration').length;
+  const archivedCount = rejectedCandidates.filter(c => !c.talent_pool_status || c.talent_pool_status === 'archived').length;
 
   return (
     <div className="flex flex-col gap-6 min-h-screen bg-background p-6 pb-12">
@@ -364,10 +378,38 @@ export default function RejectedCandidatesPage() {
           <p className="text-sm text-slate-500 dark:text-slate-400 font-medium mt-1">Not every rejected candidate should be permanently discarded.</p>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard icon={Users} label="Talent Pool Candidates" value={Math.floor(totalRejected * 0.2)} accent="bg-emerald-500/15 dark:bg-emerald-500/25 border border-emerald-400/30 text-emerald-600 dark:text-emerald-400" />
-          <StatCard icon={RotateCcw} label="Eligible for Future Roles" value={Math.floor(totalRejected * 0.15)} accent="bg-sky-500/15 dark:bg-sky-500/25 border border-sky-400/30 text-sky-600 dark:text-sky-400" />
-          <StatCard icon={ArrowRightLeft} label="Reconsideration Requests" value={0} accent="bg-amber-500/15 dark:bg-amber-500/25 border border-amber-400/30 text-amber-600 dark:text-amber-400" />
-          <StatCard icon={FileText} label="Archived Candidates" value={totalRejected} accent="bg-purple-500/15 dark:bg-purple-500/25 border border-purple-400/30 text-purple-600 dark:text-purple-400" />
+          <StatCard 
+            icon={Users} 
+            label="Talent Pool Candidates" 
+            value={talentPoolCount} 
+            accent="bg-emerald-500/15 dark:bg-emerald-500/25 border border-emerald-400/30 text-emerald-600 dark:text-emerald-400" 
+            onClick={() => setTalentPoolFilter(talentPoolFilter === 'talent_pool' ? 'all' : 'talent_pool')}
+            isActive={talentPoolFilter === 'talent_pool'}
+          />
+          <StatCard 
+            icon={RotateCcw} 
+            label="Eligible for Future Roles" 
+            value={futureRoleCount} 
+            accent="bg-sky-500/15 dark:bg-sky-500/25 border border-sky-400/30 text-sky-600 dark:text-sky-400" 
+            onClick={() => setTalentPoolFilter(talentPoolFilter === 'future_role' ? 'all' : 'future_role')}
+            isActive={talentPoolFilter === 'future_role'}
+          />
+          <StatCard 
+            icon={ArrowRightLeft} 
+            label="Reconsideration Requests" 
+            value={reconsiderCountCards} 
+            accent="bg-amber-500/15 dark:bg-amber-500/25 border border-amber-400/30 text-amber-600 dark:text-amber-400" 
+            onClick={() => setTalentPoolFilter(talentPoolFilter === 'reconsideration' ? 'all' : 'reconsideration')}
+            isActive={talentPoolFilter === 'reconsideration'}
+          />
+          <StatCard 
+            icon={FileText} 
+            label="Archived Candidates" 
+            value={archivedCount} 
+            accent="bg-purple-500/15 dark:bg-purple-500/25 border border-purple-400/30 text-purple-600 dark:text-purple-400" 
+            onClick={() => setTalentPoolFilter(talentPoolFilter === 'archived' ? 'all' : 'archived')}
+            isActive={talentPoolFilter === 'archived'}
+          />
         </div>
       </section>
 

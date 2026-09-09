@@ -451,6 +451,7 @@ def get_admin_rejected(pipeline: Optional[str] = "all", current_admin: dict = De
             "avg_score": score,
             "created_at": app.get("applied_at") or app.get("updated_at") or datetime.now(timezone.utc).isoformat(),
             "decision": "rejected",
+            "talent_pool_status": app.get("talent_pool_status"),
             "status": "completed",
             "application_id": app_id,
             "is_deactivated": False
@@ -772,6 +773,7 @@ def get_superadmin_rejected(adminId: Optional[str] = None, pipeline: Optional[st
             "avg_score": score,
             "created_at": app.get("applied_at") or app.get("updated_at") or datetime.now(timezone.utc).isoformat(),
             "decision": "rejected",
+            "talent_pool_status": app.get("talent_pool_status"),
             "status": "completed",
             "application_id": app_id,
             "is_deactivated": False

@@ -360,8 +360,31 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
     const linkId = candidate.link_id || candidate.id || candidate._id;
     if (!linkId) return;
 
+    let talentPoolStatus = null;
+    if (newDecision === 'rejected') {
+      const { isConfirmed, value: status } = await Swal.fire({
+        title: 'Reject Candidate',
+        text: 'Would you like to keep this candidate in the talent pool?',
+        icon: 'warning',
+        input: 'select',
+        inputOptions: {
+          'archived': 'Standard Rejection (Archive)',
+          'talent_pool': 'Add to Talent Pool (Silver Medalist)',
+          'future_role': 'Eligible for Future Roles (Culture Fit)',
+          'reconsideration': 'Flag for Reconsideration (Second Chance)'
+        },
+        inputValue: 'archived',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, reject candidate',
+        confirmButtonColor: '#e11d48',
+        cancelButtonText: 'Cancel'
+      });
+      if (!isConfirmed) return;
+      talentPoolStatus = status;
+    }
+
     try {
-      await dispatch(handleUpdateDecision({ linkId, decision: newDecision })).unwrap()
+      await dispatch(handleUpdateDecision({ linkId, decision: newDecision, talent_pool_status: talentPoolStatus })).unwrap()
       Swal.fire('Success', `Candidate marked as ${newDecision.toUpperCase()}`, 'success')
       onOpenChange(false)
       const basePath = window.location.pathname.startsWith('/superadmin') ? '/superadmin' : '/admin'
@@ -516,12 +539,31 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
 
   // Action handlers
   const handleReject = async () => {
-    if (!window.confirm("Are you sure you want to reject this candidate?")) return
+    const { isConfirmed, value: status } = await Swal.fire({
+      title: 'Reject Candidate',
+      text: 'Would you like to keep this candidate in the talent pool?',
+      icon: 'warning',
+      input: 'select',
+      inputOptions: {
+        'archived': 'Standard Rejection (Archive)',
+        'talent_pool': 'Add to Talent Pool (Silver Medalist)',
+        'future_role': 'Eligible for Future Roles (Culture Fit)',
+        'reconsideration': 'Flag for Reconsideration (Second Chance)'
+      },
+      inputValue: 'archived',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, reject candidate',
+      confirmButtonColor: '#e11d48',
+      cancelButtonText: 'Cancel'
+    });
+
+    if (!isConfirmed) return;
     const appId = c.link_id || candidate.link_id || c.id || candidate.id || c._id || candidate._id
     try {
       await axios.post(`${API_BASE_URL}/admin/update-decision`, {
         link_id: appId,
-        decision: "rejected"
+        decision: "rejected",
+        talent_pool_status: status
       }, { headers: { Authorization: `Bearer ${token}` } })
       onOpenChange(false)
 

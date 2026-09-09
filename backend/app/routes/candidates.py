@@ -1520,19 +1520,23 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
 
             # Update job_applications_collection if app exists
             if app:
+                update_fields = {
+                    "decision": data.decision,
+                    "last_action_by_name": admin_name,
+                    "last_action_by_role": admin_role,
+                    "last_action_by_id": admin_id,
+                    "last_action_status": data.decision,
+                    "last_action_at": now_iso,
+                    "decision_by_name": admin_name,
+                    "decision_by_role": admin_role,
+                    "decision_at": now_iso
+                }
+                if data.talent_pool_status is not None:
+                    update_fields["talent_pool_status"] = data.talent_pool_status
+
                 job_applications_collection.update_one(
                     {"_id": app["_id"]},
-                    {"$set": {
-                        "decision": data.decision,
-                        "last_action_by_name": admin_name,
-                        "last_action_by_role": admin_role,
-                        "last_action_by_id": admin_id,
-                        "last_action_status": data.decision,
-                        "last_action_at": now_iso,
-                        "decision_by_name": admin_name,
-                        "decision_by_role": admin_role,
-                        "decision_at": now_iso
-                    }}
+                    {"$set": update_fields}
                 )
 
             # Always update or upsert omni_call_logs_collection
@@ -1545,6 +1549,8 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
                 "decision_by_role": admin_role,
                 "decision_at": now_iso
             }
+            if data.talent_pool_status is not None:
+                omni_update["talent_pool_status"] = data.talent_pool_status
             if log and log.get("candidate_name"):
                 omni_update["candidate_name"] = log.get("candidate_name")
             if log and log.get("user_name"):
@@ -1562,14 +1568,17 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
 
             # Update interview_sessions_collection if present
             if session:
+                sess_update = {
+                    "decision": data.decision,
+                    "decision_by_name": admin_name,
+                    "decision_by_role": admin_role,
+                    "decision_at": now_iso
+                }
+                if data.talent_pool_status is not None:
+                    sess_update["talent_pool_status"] = data.talent_pool_status
                 interview_sessions_collection.update_one(
                     {"_id": session["_id"]},
-                    {"$set": {
-                        "decision": data.decision,
-                        "decision_by_name": admin_name,
-                        "decision_by_role": admin_role,
-                        "decision_at": now_iso
-                    }}
+                    {"$set": sess_update}
                 )
 
             name = (app.get("name") if app else None) or (log.get("candidate_name") if log else None) or (session.get("candidate_name") if session else None) or "Candidate"
@@ -1605,15 +1614,19 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
         now_iso = datetime.now(timezone.utc).isoformat()
         
         # 2. Update DB
+        sess_update = {
+            "decision": data.decision,
+            "decision_by_name": admin_name,
+            "decision_by_role": admin_role,
+            "decision_by_id": admin_id,
+            "decision_at": now_iso
+        }
+        if data.talent_pool_status is not None:
+            sess_update["talent_pool_status"] = data.talent_pool_status
+
         interview_sessions_collection.update_one(
             {"link_id": data.link_id},
-            {"$set": {
-                "decision": data.decision,
-                "decision_by_name": admin_name,
-                "decision_by_role": admin_role,
-                "decision_by_id": admin_id,
-                "decision_at": now_iso
-            }}
+            {"$set": sess_update}
         )
         print(f" DB Updated for {data.link_id}")
         from app.routes.interview import sync_session_to_application
