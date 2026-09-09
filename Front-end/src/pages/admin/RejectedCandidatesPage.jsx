@@ -114,6 +114,20 @@ export default function RejectedCandidatesPage() {
   const reconsiderCountCards = rejectedCandidates.filter(c => c.talent_pool_status === 'reconsideration').length;
   const archivedCount = rejectedCandidates.filter(c => !c.talent_pool_status || c.talent_pool_status === 'archived').length;
 
+  // Technical rejection: failed on technical/skills score (avg_score < 50) but communication was acceptable
+  const technicalRejectionCount = rejectedCandidates.filter(c => {
+    const avg = Number(c.avg_score ?? c.score ?? 0);
+    const comm = Number(c.communication_score ?? 50);
+    return avg < 50 && comm >= 50;
+  }).length;
+
+  // Communication rejection: had decent technical ability but failed on communication
+  const communicationRejectionCount = rejectedCandidates.filter(c => {
+    const avg = Number(c.avg_score ?? c.score ?? 0);
+    const comm = Number(c.communication_score ?? 50);
+    return comm < 50 && avg >= 50;
+  }).length;
+
   return (
     <div className="flex flex-col gap-6 min-h-screen bg-background p-6 pb-12">
       {/* Header */}
@@ -145,8 +159,8 @@ export default function RejectedCandidatesPage() {
       {/* Stats row 2 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard icon={ClipboardList} label="Recruiter Decisions" value={totalRejected} accent="bg-blue-500/15 dark:bg-blue-500/25 border border-blue-400/30 text-blue-600 dark:text-blue-400" />
-        <StatCard icon={AlertTriangle} label="Technical Rejections" value={Math.floor(totalRejected * 0.4)} accent="bg-orange-500/15 dark:bg-orange-500/25 border border-orange-400/30 text-orange-600 dark:text-orange-400" />
-        <StatCard icon={MessageSquare} label="Communication Rejections" value={Math.floor(totalRejected * 0.3)} accent="bg-sky-500/15 dark:bg-sky-500/25 border border-sky-400/30 text-sky-600 dark:text-sky-400" />
+        <StatCard icon={AlertTriangle} label="Technical Rejections" value={technicalRejectionCount} accent="bg-orange-500/15 dark:bg-orange-500/25 border border-orange-400/30 text-orange-600 dark:text-orange-400" />
+        <StatCard icon={MessageSquare} label="Communication Rejections" value={communicationRejectionCount} accent="bg-sky-500/15 dark:bg-sky-500/25 border border-sky-400/30 text-sky-600 dark:text-sky-400" />
         <StatCard icon={Calendar} label="This Month" value={thisMonthCount} accent="bg-violet-500/15 dark:bg-violet-500/25 border border-violet-400/30 text-violet-600 dark:text-violet-400" />
       </div>
 
