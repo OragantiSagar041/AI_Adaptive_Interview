@@ -1091,34 +1091,58 @@ def upload_full_recording(
                     if bytes_written > max_recording_bytes:
                         raise HTTPException(status_code=413, detail="Recording too large. Maximum size is 500MB.")
                     buffer.write(chunk)
-        except Exception:
-            if os.path.exists(file_path):
-                os.remove(file_path)
-            raise
-            
-        # Upload to Cloudinary
-        try:
-            upload_result = cloudinary.uploader.upload_large(
-                file_path,
-                resource_type="video",
-                type="authenticated",
-                folder="hireiq_interview_recordings",
-            )
-            cloudinary_public_id = upload_result.get("public_id")
-            normalized_path = f"cloudinary-authenticated://{cloudinary_public_id}"
-            
-            # Clean up local file after successful upload
-            os.remove(file_path)
-            
-        except Exception as cloud_e:
-            logger.exception("Recording upload to private Cloudinary storage failed")
-            if os.getenv("ENV", "local") == "production":
+        except Exception as e:
+            logger.warning(f"Client disconnected or upload interrupted: {e}. Saving {bytes_written} bytes as truncated recording.")
+            recording_truncated = True
+            if bytes_written == 0:
                 if os.path.exists(file_path):
                     os.remove(file_path)
-                raise HTTPException(
-                    status_code=503,
-                    detail="Secure recording storage is temporarily unavailable",
-                ) from cloud_e
+                raise
+            
+        # Upload to Cloudinary using round-robin rotation
+        cloudinary_public_id = None
+        normalized_path = None
+        
+        try:
+            from app.core.cloudinary_manager import cloudinary_manager
+            
+            # Try uploading using the round-robin accounts
+            last_error = None
+            for account in cloudinary_manager.get_next_accounts_generator():
+                try:
+                    upload_kwargs = {
+                        "resource_type": "video",
+                        "type": "authenticated",
+                        "folder": "hireiq_interview_recordings",
+                        "cloud_name": account.get("cloud_name"),
+                        "api_key": account.get("api_key"),
+                        "api_secret": account.get("api_secret"),
+                    }
+                    
+                    upload_result = cloudinary.uploader.upload_large(
+                        file_path,
+                        **upload_kwargs
+                    )
+                    
+                    cloudinary_public_id = upload_result.get("public_id")
+                    normalized_path = f"cloudinary-authenticated://{cloudinary_public_id}"
+                    
+                    # Clean up local file after successful upload
+                    os.remove(file_path)
+                    last_error = None
+                    break  # Success, exit the retry loop
+                    
+                except Exception as cloud_e:
+                    logger.warning(f"Cloudinary upload failed for key {account.get('api_key')}: {cloud_e}")
+                    last_error = cloud_e
+                    continue # Try the next account
+                    
+            if last_error:
+                raise last_error
+            
+        except Exception as cloud_e:
+            logger.exception("All Cloudinary upload attempts failed")
+            # Fall back to local storage instead of deleting the file
             normalized_path = file_path.replace("\\", "/")
             cloudinary_public_id = None
 
