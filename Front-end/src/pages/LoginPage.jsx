@@ -397,43 +397,23 @@ export default function LoginPage() {
     if (!username || !password) { setLoginError('Please enter both username and password.'); return }
     setLoginLoading(true); setLoginError('')
     try {
-      // ── Step 1: Try Master login first ────────────────────────────────────
-      // The /admin/login endpoint explicitly excludes master-role users.
-      // We probe /master/login; if credentials match we go to /master/dashboard.
       let data = null
       let finalRole = null
 
-      try {
-        const masterRes = await axios.post(API_BASE_URL + '/master/login', { username, password }, { timeout: 10000 })
-        if (masterRes.data?.role === 'master' || masterRes.data?.status === '2fa_required') {
-          data = masterRes.data
-          finalRole = 'master'
-        }
-      } catch (masterErr) {
-        // Not a master user — fall through to admin login below
-        if (masterErr.response?.status !== 401) {
-          // Unexpected error on master route
-          setLoginError(masterErr.response?.data?.detail || masterErr.response?.data?.message || 'Cannot connect to server.')
-          setLoginLoading(false)
-          return
-        }
+      // ── Single Unified Login ────────────────────────────────────
+      const response = await axios.post(API_BASE_URL + '/admin/login', { username, password }, { timeout: 10000 })
+      data = response.data
+      
+      if (data.status === 'expired' || data.status === 'blocked') {
+        setLoginError(data.message || 'Subscription expired.')
+        setLoginLoading(false)
+        return
       }
-
-      // ── Step 2: Regular admin/superadmin login ────────────────────────────
-      if (!data) {
-        const response = await axios.post(API_BASE_URL + '/admin/login', { username, password }, { timeout: 10000 })
-        data = response.data
-        if (data.status === 'expired' || data.status === 'blocked') {
-          setLoginError(data.message || 'Subscription expired.')
-          setLoginLoading(false)
-          return
-        }
-        
-        const role = data.role || 'tenant'
-        if (role === 'super_admin' || role === 'superadmin') finalRole = 'superadmin'
-        else if (role === 'tenant' || role === 'admin') finalRole = 'admin'
-        else finalRole = role
-      }
+      
+      const role = data.role || 'tenant'
+      if (role === 'super_admin' || role === 'superadmin') finalRole = 'superadmin'
+      else if (role === 'tenant' || role === 'admin') finalRole = 'admin'
+      else finalRole = role
       
       // Handle 2FA for both master and admin
       if (data.status === '2fa_required') {

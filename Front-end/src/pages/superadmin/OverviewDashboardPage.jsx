@@ -208,7 +208,26 @@ export default function OverviewDashboardPage() {
         ongoingSpeakingCount={ongoingSpeakingCount}
         ongoingCodingCount={ongoingCodingCount}
         ongoingMonitoredCount={ongoingMonitoredCount}
-        onOpenLiveResults={() => dispatch(setLiveResultsModalOpen(true))}
+        onOpenLiveResults={() => {
+          if (adminUser?.role !== 'master' && !userFeatures.includes('Live Results')) {
+            Swal.fire({
+              title: 'Feature Locked',
+              text: 'Upgrade your plan to access Live Results.',
+              icon: 'info',
+              showCancelButton: true,
+              confirmButtonColor: '#6366f1',
+              cancelButtonColor: '#94a3b8',
+              confirmButtonText: '<i class="fas fa-crown mr-1 text-amber-300"></i> View Plans',
+              cancelButtonText: 'Close'
+            }).then((result) => {
+              if (result.isConfirmed) {
+                window.location.href = '/superadmin/subscription';
+              }
+            });
+            return;
+          }
+          dispatch(setLiveResultsModalOpen(true))
+        }}
         onStatusFilter={(statusVal) => dispatch(setStatusFilter(statusVal))}
         onOpenQualified={() => navigate('/superadmin/qualified-candidates')}
       />

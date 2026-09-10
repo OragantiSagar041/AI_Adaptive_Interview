@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { Users, Star, UserCheck, ClipboardCheck, Target, FileSignature, Search, Filter, Eye, Download, Sparkles } from 'lucide-react'
 import axios from 'axios'
+import Swal from 'sweetalert2'
 import { getComputedStatus } from '../../utils/adminFormatters'
 import { loadSuperAdminQualifiedCandidates, handleSuperAdminExportExcel } from '../../store/slices/candidatesSlice'
 import { setSelectedAdminFilter } from '../../store/slices/dashboardSlice'
@@ -50,8 +51,10 @@ export default function QualifiedCandidatesPage() {
   const dispatch = useDispatch()
   const [selectedCandidate, setSelectedCandidate] = useState(null)
   const token = useSelector(state => state.auth.token)
-  const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
   const adminUser = useSelector(state => state.auth.adminUser)
+  const userFeatures = adminUser?.plan_features || []
+  const hasExportCSV = userFeatures.includes('Export CSV')
+  const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
 
   const candidates = useSelector(state => state.candidates.candidates) || []
   const selectedAdminFilter = useSelector(state => state.dashboard.selectedAdminFilter)
@@ -146,8 +149,21 @@ export default function QualifiedCandidatesPage() {
             </p>
           </div>
           <button
-            onClick={handleExportAction}
-            className="inline-flex items-center gap-2 bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 px-4 py-2 rounded-xl font-bold shadow-sm hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700 transition-all cursor-pointer"
+            onClick={(e) => { if(!hasExportCSV) { e.preventDefault(); Swal.fire({
+  title: 'Feature Locked',
+  text: 'Upgrade your plan to export CSV.',
+  icon: 'info',
+  showCancelButton: true,
+  confirmButtonColor: '#6366f1',
+  cancelButtonColor: '#94a3b8',
+  confirmButtonText: '<i class="fas fa-crown mr-1 text-amber-300"></i> View Plans',
+  cancelButtonText: 'Close'
+}).then((result) => {
+  if (result.isConfirmed) {
+    window.location.href = '/superadmin/subscription';
+  }
+}); } else { handleExportAction(); } } }
+            className={`inline-flex items-center gap-2 bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 px-4 py-2 rounded-xl font-bold shadow-sm hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700 transition-all cursor-pointer ${!hasExportCSV ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             <Download size={16} /> Export CSV
           </button>

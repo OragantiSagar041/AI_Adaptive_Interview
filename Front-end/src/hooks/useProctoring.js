@@ -3,7 +3,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 const DETECT_INTERVAL_MS = 700          // how often a frame is sent to the worker
 
 const PHONE_ALERT_CONFIDENCE = 0.55     // raised to eliminate false positives
-const PHONE_CONSECUTIVE_FRAMES = 4      // 4 consecutive frames (~2.8s)
+const PHONE_CONSECUTIVE_FRAMES = 2      // 2 consecutive frames (~1.4s) for very fast detection
+const PHONE_COOLDOWN_MS = 5000          // 5 seconds cooldown before firing another phone alert
 
 const MULTI_FACE_CONSECUTIVE_FRAMES = 3 // 3 frames (~2.1s) before raising the alert
 const NO_FACE_CONSECUTIVE_FRAMES = 6    // ~4.2s of no face at 700ms interval
@@ -35,6 +36,7 @@ export function useProctoring({
   const intervalRef = useRef(null)
   const inFlightRef = useRef(false) // avoid overlapping detect calls if a frame is slow
   const streakRef = useRef({ multiFace: 0, noFace: 0, phone: 0, eyeAway: 0 })
+  const lastPhoneAlertTimeRef = useRef(0)
 
   const onViolationRef = useRef(onViolation)
   const onTerminateRef = useRef(onTerminate)
@@ -118,8 +120,12 @@ export function useProctoring({
     const isPhone = phoneCandidates?.length > 0 && phoneCandidates[0].score > PHONE_ALERT_CONFIDENCE
     streak.phone = isPhone ? streak.phone + 1 : 0
     if (streak.phone >= PHONE_CONSECUTIVE_FRAMES) {
-      raiseViolation('phone', 'Mobile phone detected in frame')
-      streak.phone = 0 // reset so it can fire again
+      const now = Date.now()
+      if (now - lastPhoneAlertTimeRef.current >= PHONE_COOLDOWN_MS) {
+        raiseViolation('phone', 'Mobile phone detected in frame')
+        lastPhoneAlertTimeRef.current = now
+      }
+      streak.phone = 0 // reset so it can fire again (cooldown prevents spam)
     }
 
     setState((s) => ({

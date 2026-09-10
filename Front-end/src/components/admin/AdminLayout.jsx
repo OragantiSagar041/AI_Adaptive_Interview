@@ -1,3 +1,4 @@
+import Swal from 'sweetalert2';
 import React, { useState, useEffect, useRef } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useNavigate, useLocation, NavLink } from 'react-router-dom'
@@ -220,11 +221,10 @@ export default function AdminLayout({
 
     { id: 'jobs', label: 'Jobs', icon: Briefcase, path: '/admin/jobs' },
   ]
-  const userFeatures = adminUser?.plan_features
-  const filteredNavItems = (userFeatures && userFeatures.length > 0)
-    ? baseNavItems.filter(item => item.id === 'dashboard' || item.id === 'settings' || userFeatures.includes(item.label))
-    : baseNavItems
-  const navItems = (!filteredNavItems || filteredNavItems.length === 0) ? baseNavItems : filteredNavItems
+  const userFeatures = adminUser?.plan_features || [];
+  const navItems = baseNavItems;
+  const currentNavItem = baseNavItems.find(item => location.pathname.startsWith(item.path));
+  const isCurrentPageLocked = currentNavItem && currentNavItem.id !== 'dashboard' && currentNavItem.id !== 'settings' && userFeatures.length > 0 && !userFeatures.includes(currentNavItem.label);
 
   const { theme } = useTheme()
   const isDark = theme === 'dark'
@@ -267,32 +267,67 @@ export default function AdminLayout({
 
           {/* Navigation Items */}
           <div className="space-y-0.5 py-3 overflow-y-auto flex-1 w-full">
-            {navItems.map((item) => (
-              <NavLink
-                key={item.id}
-                to={item.path}
-                title={isSidebarCollapsed ? item.label : undefined}
-                className={({ isActive }) =>
-                  `flex items-center ${isSidebarCollapsed ? 'justify-center px-2' : 'gap-3 px-3'} py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${isActive
-                    ? '!bg-indigo-600 !text-white font-semibold shadow-md shadow-indigo-500/20'
-                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white !bg-transparent dark:!bg-transparent !border-none !shadow-none'
-                  }`
-                }
-              >
-                {({ isActive }) => (
-                  <>
+            {navItems.map((item) => {
+              const isLocked = item.id !== 'dashboard' && item.id !== 'settings' && userFeatures.length > 0 && !userFeatures.includes(item.label);
+              
+              if (isLocked) {
+                return (
+                  <div
+                    key={item.id}
+                    title={isSidebarCollapsed ? item.label + " (Locked)" : undefined}
+                    className={`flex items-center ${isSidebarCollapsed ? 'justify-center px-2' : 'gap-3 px-3'} py-2.5 rounded-xl text-sm font-medium transition-all duration-200 opacity-50 cursor-not-allowed text-slate-500 dark:text-slate-500`}
+                    onClick={() => {
+                      Swal.fire({
+                        title: 'Feature Locked',
+                        text: `Please contact your administrator to upgrade your plan to access ${item.label}.`,
+                        icon: 'info',
+                        confirmButtonColor: '#6366f1',
+                        confirmButtonText: 'Okay'
+                      });
+                    }}
+                  >
                     {item.icon ? (
-                      <item.icon size={18} className={`shrink-0 ${isActive ? '!text-white text-white' : ''}`} />
+                      <item.icon size={18} className="shrink-0" />
                     ) : (
-                      <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-white' : 'bg-current opacity-60'} shrink-0`} />
+                      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-60 shrink-0" />
                     )}
                     {!isSidebarCollapsed && (
-                      <span className={isActive ? '!text-white text-white font-semibold truncate' : 'truncate'}>{item.label}</span>
+                      <div className="flex items-center justify-between w-full truncate">
+                        <span className="truncate">{item.label}</span>
+                        <i className="fas fa-lock text-[10px] ml-2 opacity-60"></i>
+                      </div>
                     )}
-                  </>
-                )}
-              </NavLink>
-            ))}
+                  </div>
+                );
+              }
+              
+              return (
+                <NavLink
+                  key={item.id}
+                  to={item.path}
+                  title={isSidebarCollapsed ? item.label : undefined}
+                  className={({ isActive }) =>
+                    `flex items-center ${isSidebarCollapsed ? 'justify-center px-2' : 'gap-3 px-3'} py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${isActive
+                      ? '!bg-indigo-600 !text-white font-semibold shadow-md shadow-indigo-500/20'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white !bg-transparent dark:!bg-transparent !border-none !shadow-none'
+                    }`
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      {item.icon ? (
+                        <item.icon size={18} className={`shrink-0 ${isActive ? '!text-white text-white' : ''}`} />
+                      ) : (
+                        <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-white' : 'bg-current opacity-60'} shrink-0`} />
+                      )}
+                      {!isSidebarCollapsed && (
+                        <span className={isActive ? '!text-white text-white font-semibold truncate' : 'truncate'}>{item.label}</span>
+                      )}
+                    </>
+                  )}
+                </NavLink>
+              );
+            })}
           </div>
 
           {/* Bottom Sidebar Actions */}
@@ -502,25 +537,51 @@ export default function AdminLayout({
             <div
               className="flex items-center gap-1 px-6 h-14 border-t border-border overflow-x-auto hide-scrollbar bg-background"
             >
-              {navItems.map((item) => (
-                <NavLink
-                  key={item.id}
-                  to={item.path}
-                  className={({ isActive }) =>
-                    `flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 whitespace-nowrap shrink-0 ${isActive
-                      ? 'bg-indigo-600 text-white font-semibold shadow-md shadow-indigo-500/20'
-                      : 'text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-800/80 hover:text-indigo-600 dark:hover:text-indigo-400'
-                    }`
-                  }
-                >
-                  {({ isActive }) => (
-                    <>
-                      {item.icon && <item.icon size={15} className={`shrink-0 ${isActive ? '!text-white text-white' : ''}`} />}
+              {navItems.map((item) => {
+                const isLocked = item.id !== 'dashboard' && item.id !== 'settings' && userFeatures.length > 0 && !userFeatures.includes(item.label);
+                
+                if (isLocked) {
+                  return (
+                    <div
+                      key={item.id}
+                      className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 whitespace-nowrap shrink-0 opacity-50 cursor-not-allowed text-slate-500 dark:text-slate-500"
+                      onClick={() => {
+                        Swal.fire({
+                          title: 'Feature Locked',
+                          text: `Please contact your administrator to upgrade your plan to access ${item.label}.`,
+                          icon: 'info',
+                          confirmButtonColor: '#6366f1',
+                          confirmButtonText: 'Okay'
+                        });
+                      }}
+                    >
+                      {item.icon && <item.icon size={15} className="shrink-0" />}
                       <span>{item.label}</span>
-                    </>
-                  )}
-                </NavLink>
-              ))}
+                      <i className="fas fa-lock text-[10px] ml-1 opacity-60"></i>
+                    </div>
+                  );
+                }
+
+                return (
+                  <NavLink
+                    key={item.id}
+                    to={item.path}
+                    className={({ isActive }) =>
+                      `flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 whitespace-nowrap shrink-0 ${isActive
+                        ? 'bg-indigo-600 text-white font-semibold shadow-md shadow-indigo-500/20'
+                        : 'text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-800/80 hover:text-indigo-600 dark:hover:text-indigo-400'
+                      }`
+                    }
+                  >
+                    {({ isActive }) => (
+                      <>
+                        {item.icon && <item.icon size={15} className={`shrink-0 ${isActive ? '!text-white text-white' : ''}`} />}
+                        <span>{item.label}</span>
+                      </>
+                    )}
+                  </NavLink>
+                );
+              })}
               <div className="ml-auto flex items-center gap-2 pl-4 border-l border-slate-200/50">
                 <button
                   onClick={() => dispatch(setLiveResultsModalOpen(true))}
@@ -543,7 +604,19 @@ export default function AdminLayout({
 
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto bg-background/60 relative p-4 lg:p-8">
-          {children}
+          {isCurrentPageLocked ? (
+            <div className="flex flex-col items-center justify-center h-[70vh] text-center">
+              <div className="bg-slate-100 dark:bg-slate-800 p-6 rounded-full mb-6">
+                <i className="fas fa-lock text-5xl text-slate-400 dark:text-slate-500"></i>
+              </div>
+              <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-3">Access Denied</h2>
+              <p className="text-slate-500 dark:text-slate-400 max-w-md mb-8">
+                The <strong>{currentNavItem?.label}</strong> feature is not included in your current plan. Please contact your administrator to upgrade your plan.
+              </p>
+            </div>
+          ) : (
+            children
+          )}
         </main>
       </div>
 

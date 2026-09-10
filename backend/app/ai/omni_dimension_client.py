@@ -140,6 +140,8 @@ def start_omni_call(
     resume_text: str,
     duration: int,
     skills: str,
+    language: str = "english",
+    welcome_message: Optional[str] = None,
     api_key: Optional[str] = None
 ):
     """
@@ -167,8 +169,14 @@ def start_omni_call(
         "resume_text": resume_text,
         "interview_duration": duration,
         "required_skills": skills,
-        "voice_id": voice_id
+        "voice_id": voice_id,
+        "language": language
     }
+    
+    if welcome_message:
+        context["welcome_message"] = welcome_message
+        context["greeting_message"] = welcome_message
+        context["first_ideal_message"] = welcome_message
     
     _, _, resolved_agent_id = get_omni_account(api_key)
     try:

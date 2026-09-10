@@ -185,6 +185,7 @@ async def initiate_manual_ai_call(
     skills: Optional[str] = Form(""),
     job_id: Optional[str] = Form(None),
     application_id: Optional[str] = Form(None),
+    language: Optional[str] = Form("english"),
     resume: UploadFile = File(None),
     current_admin: dict = Depends(get_current_admin_details)
 ):
@@ -206,6 +207,31 @@ async def initiate_manual_ai_call(
         )
 
     phone_number = digits_only
+    
+    # Process language instruction
+    lang = (language or "english").lower().strip()
+    lang_instruction = ""
+    if lang == "multilingual":
+        lang_instruction = "\n\nCRITICAL INSTRUCTION: You are a highly capable multilingual AI. You must actively listen to the language the candidate uses and instantly reply in that exact same language. Start your very first greeting in a multilingual or neutral way, and if the candidate speaks a different language, seamlessly switch your spoken language to match them immediately."
+        welcome_message = "Hello, नमस्ते, నమస్కారం. Which language would you prefer to speak in?"
+    elif lang != "english":
+        greetings = {
+            "telugu": "నమస్కారం, నేను ఇంటర్వ్యూ కోసం కాల్ చేస్తున్నాను. మనం ప్రారంభించవచ్చా?",
+            "hindi": "नमस्ते, मैं इंटरव्यू के लिए कॉल कर रहा हूँ। क्या हम शुरू कर सकते हैं?",
+            "tamil": "வணக்கம், நான் நேர்காண，க்காக அழைக்கிறேன். நாம் ஆரம்பிக்கலாமா?",
+            "malayalam": "നമസ്കാരം, ഞാൻ ഇന്റർവ്യൂവിന് വേണ്ടിയാണ് വിളിക്കുന്നത്. നമുക്ക് തുടങ്ങാമോ?",
+            "kannada": "ನಮಸ್ಕಾರ, ನಾನು ಸಂದರ್ಶನಕ್ಕಾಗಿ ಕರೆ ಮಾಡುತ್ತಿದ್ದೇನೆ. ನಾವು ಪ್ರಾರಂಭಿಸಬಹುದೇ?"
+        }
+        welcome_message = greetings.get(lang, f"Hello, I am calling for the interview in {lang.capitalize()}. Shall we begin?")
+        lang_instruction = (
+            f"\n\nCRITICAL INSTRUCTION: You MUST conduct this entire interview exclusively in {lang.capitalize()}. "
+            f"Even if the candidate answers in English or any other language, you MUST strictly reply only in {lang.capitalize()}. "
+            f"DO NOT switch your speaking language under any circumstances. Ignore the candidate's language and strictly stick to {lang.capitalize()}."
+        )
+    else:
+        welcome_message = "Hello, am I speaking with the candidate? Shall we begin the interview?"
+        
+    final_job_description = (job_description or "") + lang_instruction
 
     try:
         from app.ai import omni_dimension_client
@@ -247,13 +273,49 @@ async def initiate_manual_ai_call(
             except Exception as e:
                 print(f"Error loading resume in manual AI call: {e}")
             
+        from app.ai.omni_dimension_client import get_omni_account, get_omni_dimension_api_key
+        api_key = get_omni_dimension_api_key()
+        
+        try:
+            client, agent, agent_id = get_omni_account(api_key)
+            # Map language names to specific language IDs/codes to avoid language mix-ups
+            lang_id_map = {
+                "telugu": "te-IN",
+                "hindi": "hi-IN",
+                "tamil": "ta-IN",
+                "malayalam": "ml-IN",
+                "kannada": "kn-IN",
+                "marathi": "mr-IN",
+                "bengali": "bn-IN",
+                "gujarati": "gu-IN",
+                "spanish": "es-ES",
+                "french": "fr-FR",
+                "german": "de-DE",
+                "english": "en-US"
+            }
+            mapped_lang_id = lang_id_map.get(lang.lower(), "en-US") if lang != "multilingual" else "en-US"
+            
+            update_data = {
+                "welcome_message": welcome_message,
+                "greeting_message": welcome_message,
+                "first_ideal_message": welcome_message,
+                "language": mapped_lang_id, # Sending specific language ID to Omni Dimension
+                "language_code": mapped_lang_id # Sometimes APIs use language_code instead
+            }
+            if hasattr(client, 'agent') and hasattr(client.agent, 'update'):
+                client.agent.update(agent_id, update_data)
+        except Exception as update_err:
+            print(f"Warning: Could not dynamically update agent settings before call: {update_err}")
+
         response = omni_dimension_client.start_omni_call(
             phone_number=phone_number,
             candidate_name=candidate_name,
-            job_description=job_description,
+            job_description=final_job_description,
             resume_text=resume_text,
             duration=duration,
-            skills=skills
+            skills=skills,
+            language=mapped_lang_id,
+            welcome_message=welcome_message
         )
         
         call_id = ""

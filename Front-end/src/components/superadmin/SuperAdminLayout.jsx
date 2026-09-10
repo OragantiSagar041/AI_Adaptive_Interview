@@ -33,6 +33,8 @@ import {
   Link,
   ClipboardList,
   User
+,
+  Lock
 } from 'lucide-react'
 import ThemeToggle from '../ThemeToggle'
 import { useTheme } from '../../context/ThemeContext'
@@ -78,9 +80,8 @@ export const superAdminNavItems = [
   { id: 'recruiters', label: 'Recruiters', icon: UserCheck, path: '/superadmin/recruiters' },
   { id: 'credit', label: 'Credit Management', icon: Coins, path: '/superadmin/credit' },
   { id: 'subscription', label: 'Subscription Management', icon: CreditCard, path: '/superadmin/subscription' },
-  // { id: 'integrations', label: 'Integrations', icon: Link, path: '/superadmin/integrations' },
-  // { id: 'audit', label: 'Audit Logs', path: '/superadmin/audit' },
   { id: 'security', label: 'Security', icon: Shield, path: '/superadmin/security' },
+  { id: 'notifications', label: 'Notifications', icon: Bell, path: '/superadmin/notifications' },
 ]
 
 import { setSelectedCandidate, setLiveResultsModalOpen, handleUpdateDecision } from '../../store/slices/interviewSlice'
@@ -301,6 +302,23 @@ export default function SuperAdminLayout() {
 
   const handleOpenLiveStreamAction = (sessionData) => {
     if (!sessionData) return
+    if (!isMaster && !userFeatures.includes('Live Results')) {
+      Swal.fire({
+        title: 'Feature Locked',
+        text: 'Upgrade your plan to access Live Results.',
+        icon: 'info',
+        showCancelButton: true,
+        confirmButtonColor: '#6366f1',
+        cancelButtonColor: '#94a3b8',
+        confirmButtonText: '<i class="fas fa-crown mr-1 text-amber-300"></i> View Plans',
+        cancelButtonText: 'Close'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          window.location.href = '/superadmin/subscription';
+        }
+      });
+      return;
+    }
     let resolvedSession = sessionData
     if (typeof sessionData === 'string') {
       const found = liveSessions?.find(s => s.link_id === sessionData || s.session_id === sessionData || s.id === sessionData || s._id === sessionData)
@@ -502,10 +520,11 @@ export default function SuperAdminLayout() {
   const userRole = (role || adminUser?.role || '').toLowerCase()
   const isMaster = userRole === 'master'
   const userFeatures = adminUser?.plan_features || []
-  const filteredNavItems = (userFeatures && userFeatures.length > 0 && !isMaster)
-    ? superAdminNavItems.filter(item => userFeatures.includes(item.label))
-    : superAdminNavItems
-  const navItems = isMaster ? superAdminNavItems : (filteredNavItems.length > 0 ? filteredNavItems : superAdminNavItems)
+    const currentNavItem = superAdminNavItems.find(item => location.pathname.startsWith(item.path))
+    const isCurrentPageLocked = currentNavItem && !isMaster && !userFeatures.includes(currentNavItem.label)
+
+  
+  const navItems = superAdminNavItems;
 
   return (
     <SidebarProvider>
@@ -544,22 +563,62 @@ export default function SuperAdminLayout() {
                   <SidebarMenu>
                     {navItems.map((item) => {
                       const isActive = location.pathname.startsWith(item.path);
+                        const isLocked = !isMaster && !userFeatures.includes(item.label);
+
                       return (
                         <SidebarMenuItem key={item.id}>
-                          <NavLink
-                            to={item.path}
-                            className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${isActive
-                              ? '!bg-indigo-600 !text-white font-semibold shadow-md shadow-indigo-500/20'
-                              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white !bg-transparent dark:!bg-transparent !border-none !shadow-none'
-                              }`}
-                          >
+                          
+                            {isLocked ? (
+                              <div
+                                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 opacity-60 cursor-not-allowed text-slate-500 dark:text-slate-500`}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  Swal.fire({
+                                    title: 'Feature Locked',
+                                    text: `Please upgrade your plan to access ${item.label}.`,
+                                    icon: 'info',
+                                    showCancelButton: true,
+                                    confirmButtonColor: '#6366f1',
+                                    cancelButtonColor: '#94a3b8',
+                                    confirmButtonText: '<i class="fas fa-crown mr-1 text-amber-300"></i> View Plans',
+                                    cancelButtonText: 'Close'
+                                  }).then((result) => {
+                                    if (result.isConfirmed) {
+                                      window.location.href = '/superadmin/subscription';
+                                    }
+                                  });
+                                }}
+                              >
+                                
                             {item.icon ? (
                               <item.icon size={16} className={`shrink-0 group-data-[collapsible=icon]:mr-0 mr-1 ${isActive ? '!text-white text-white' : ''}`} />
                             ) : (
                               <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-white' : 'bg-current opacity-60'} shrink-0 group-data-[collapsible=icon]:mr-0 mr-1`} />
                             )}
                             <span className={`truncate group-data-[collapsible=icon]:hidden ${isActive ? '!text-white text-white font-semibold' : ''}`}>{item.label}</span>
-                          </NavLink>
+{isLocked && <i className="fas fa-lock ml-auto text-xs opacity-50"></i>}
+                          
+                              </div>
+                            ) : (
+                              <NavLink
+                                to={item.path}
+                                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${isActive
+                                  ? '!bg-indigo-600 !text-white font-semibold shadow-md shadow-indigo-500/20'
+                                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white !bg-transparent dark:!bg-transparent !border-none !shadow-none'
+                                  }`}
+                              >
+                                
+                            {item.icon ? (
+                              <item.icon size={16} className={`shrink-0 group-data-[collapsible=icon]:mr-0 mr-1 ${isActive ? '!text-white text-white' : ''}`} />
+                            ) : (
+                              <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-white' : 'bg-current opacity-60'} shrink-0 group-data-[collapsible=icon]:mr-0 mr-1`} />
+                            )}
+                            <span className={`truncate group-data-[collapsible=icon]:hidden ${isActive ? '!text-white text-white font-semibold' : ''}`}>{item.label}</span>
+{isLocked && <i className="fas fa-lock ml-auto text-xs opacity-50"></i>}
+                          
+                              </NavLink>
+                            )}
+
                         </SidebarMenuItem>
                       );
                     })}
@@ -570,11 +629,33 @@ export default function SuperAdminLayout() {
 
             <SidebarFooter className="p-3 border-t border-border space-y-0.5 shrink-0 transition-colors">
               <button
-                onClick={() => dispatch(setLiveResultsModalOpen(true))}
+                onClick={() => {
+                    if (!isMaster && !userFeatures.includes('Live Results')) {
+                      Swal.fire({
+                        title: 'Feature Locked',
+                        text: 'Upgrade your plan to access Live Results.',
+                        icon: 'info',
+                        showCancelButton: true,
+                        confirmButtonColor: '#6366f1',
+                        cancelButtonColor: '#94a3b8',
+                        confirmButtonText: '<i class="fas fa-crown mr-1 text-amber-300"></i> View Plans',
+                        cancelButtonText: 'Close'
+                      }).then((result) => {
+                        if (result.isConfirmed) {
+                          window.location.href = '/superadmin/subscription';
+                        }
+                      });
+                      return;
+                    }
+                    dispatch(setLiveResultsModalOpen(true));
+                  }}
                 className="flex items-center justify-center md:justify-start gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white !bg-transparent dark:!bg-transparent !border-none !shadow-none cursor-pointer text-left overflow-hidden"
               >
                 <Radio size={16} className="shrink-0" />
-                <span className="group-data-[collapsible=icon]:hidden truncate">Live Results</span>
+                <span className="group-data-[collapsible=icon]:hidden truncate flex items-center justify-between w-full">
+                    Live Results
+                    {!isMaster && !userFeatures.includes('Live Results') && <Lock size={14} className="text-slate-400" />}
+                  </span>
               </button>
               <button
                 onClick={() => setShowCreditsModal(true)}
@@ -765,27 +846,83 @@ export default function SuperAdminLayout() {
             >
               {navItems.map((item) => {
                 const isActive = location.pathname.startsWith(item.path);
-                return (
-                  <NavLink
-                    key={item.id}
-                    to={item.path}
-                    className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 whitespace-nowrap shrink-0 ${isActive
-                      ? 'bg-indigo-600 text-white font-semibold shadow-md shadow-indigo-500/20'
-                      : 'text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-800/80 hover:text-indigo-600 dark:hover:text-indigo-400'
-                      }`}
-                  >
+                        const isLocked = !isMaster && !userFeatures.includes(item.label);
+
+                return isLocked ? (
+                      <div
+                        key={item.id}
+                        className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 whitespace-nowrap shrink-0 opacity-60 cursor-not-allowed text-slate-500 dark:text-slate-500`}
+                        onClick={(e) => {
+                                  e.preventDefault();
+                                  Swal.fire({
+                                    title: 'Feature Locked',
+                                    text: `Please upgrade your plan to access ${item.label}.`,
+                                    icon: 'info',
+                                    showCancelButton: true,
+                                    confirmButtonColor: '#6366f1',
+                                    cancelButtonColor: '#94a3b8',
+                                    confirmButtonText: '<i class="fas fa-crown mr-1 text-amber-300"></i> View Plans',
+                                    cancelButtonText: 'Close'
+                                  }).then((result) => {
+                                    if (result.isConfirmed) {
+                                      window.location.href = '/superadmin/subscription';
+                                    }
+                                  });
+                                }}
+                      >
+                        
                     {item.icon && <item.icon size={15} className={`shrink-0 ${isActive ? 'text-white' : ''}`} />}
                     <span>{item.label}</span>
-                  </NavLink>
-                );
+{isLocked && <i className="fas fa-lock ml-2 text-xs opacity-50"></i>}
+                  
+                      </div>
+                    ) : (
+                      <NavLink
+                        key={item.id}
+                        to={item.path}
+                        className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 whitespace-nowrap shrink-0 ${isActive
+                          ? 'bg-indigo-600 text-white font-semibold shadow-md shadow-indigo-500/20'
+                          : 'text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-800/80 hover:text-indigo-600 dark:hover:text-indigo-400'
+                          }`}
+                      >
+                        
+                    {item.icon && <item.icon size={15} className={`shrink-0 ${isActive ? 'text-white' : ''}`} />}
+                    <span>{item.label}</span>
+{isLocked && <i className="fas fa-lock ml-2 text-xs opacity-50"></i>}
+                  
+                      </NavLink>
+                    )
               })}
               <div className="ml-auto flex items-center gap-2 pl-4 border-l border-slate-200/50">
                 <button
-                  onClick={() => dispatch(setLiveResultsModalOpen(true))}
+                  onClick={() => {
+                    if (!isMaster && !userFeatures.includes('Live Results')) {
+                      Swal.fire({
+                        title: 'Feature Locked',
+                        text: 'Upgrade your plan to access Live Results.',
+                        icon: 'info',
+                        showCancelButton: true,
+                        confirmButtonColor: '#6366f1',
+                        cancelButtonColor: '#94a3b8',
+                        confirmButtonText: '<i class="fas fa-crown mr-1 text-amber-300"></i> View Plans',
+                        cancelButtonText: 'Close'
+                      }).then((result) => {
+                        if (result.isConfirmed) {
+                          window.location.href = '/superadmin/subscription';
+                        }
+                      });
+                      return;
+                    }
+                    dispatch(setLiveResultsModalOpen(true));
+                  }}
                   className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 text-slate-500 hover:bg-slate-100 hover:text-slate-800 whitespace-nowrap shrink-0"
                 >
                   <Radio size={15} />
-                  Live Results
+                  
+                    <span className="flex items-center gap-1">
+                      Live Results
+                      {!isMaster && !userFeatures.includes('Live Results') && <Lock size={12} className="text-slate-400" />}
+                    </span>
                 </button>
                 <button
                   onClick={() => setShowCreditsModal(true)}
@@ -802,7 +939,25 @@ export default function SuperAdminLayout() {
           <main className="flex-1 overflow-y-auto bg-transparent relative">
             <div className="relative">
               <div className="p-4 lg:p-8">
-                <Outlet context={{ handleOpenLiveStreamAction }} />
+                {isCurrentPageLocked ? (
+                    <div className="flex flex-col items-center justify-center h-[70vh] text-center">
+                      <div className="bg-slate-100 dark:bg-slate-800 p-6 rounded-full mb-6">
+                        <i className="fas fa-lock text-5xl text-slate-400 dark:text-slate-500"></i>
+                      </div>
+                      <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-3">Access Denied</h2>
+                      <p className="text-slate-500 dark:text-slate-400 max-w-md mb-8">
+                        The <strong>{currentNavItem.label}</strong> feature is not included in your current plan. Please upgrade to access this page.
+                      </p>
+                      <button 
+                        onClick={() => navigate('/superadmin/subscription')}
+                        className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/30 transition-all active:scale-95 flex items-center gap-2"
+                      >
+                        <i className="fas fa-credit-card"></i> View Plans
+                      </button>
+                    </div>
+                  ) : (
+                    <Outlet context={{ handleOpenLiveStreamAction }} />
+                  )}
               </div>
             </div>
           </main>

@@ -269,7 +269,11 @@ def admin_login(data: AdminLogin, request: Request):
     # strict_session_timeout defaults to False — only enabled if the superadmin explicitly turns it on.
     # When ENABLED: 8 hours (enough for a full working day — the old 30min was auto-logging everyone out)
     # When DISABLED (default): 7 days
-    expires_delta = timedelta(hours=8) if global_policies.get("strict_session_timeout", False) else None
+    # Master users NEVER get strict session timeout.
+    if user.get("role") == "master":
+        expires_delta = None
+    else:
+        expires_delta = timedelta(hours=8) if global_policies.get("strict_session_timeout", False) else None
 
     access_token = create_access_token(data={"sub": str(user["_id"]), "role": user.get("role", "tenant"), "company_id": str(user.get("company_id", ""))}, expires_delta=expires_delta)
     
@@ -503,14 +507,6 @@ def upsert_plan(data: PlanUpdate, master_id: str = Depends(get_current_admin), c
         }},
         upsert=True
     )
-
-    try:
-        admins_collection.update_many(
-            {"plan": data.plan_name, "role": {"$ne": "master"}},
-            {"$set": {"plan_features": data.features}}
-        )
-    except Exception as e:
-        logger.warning(f"Failed to sync plan_features to existing admins: {e}")
 
     return {"status": "success", "message": f"Plan '{data.plan_name}' saved"}
 

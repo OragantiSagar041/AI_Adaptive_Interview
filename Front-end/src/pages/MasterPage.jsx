@@ -8,7 +8,53 @@ import { RefreshCw } from 'lucide-react'
 import DemoRequests from './master/DemoRequests'
 import CompanyRevenue from './master/CompanyRevenue'
 
-
+const FEATURE_GROUPS = [
+  {
+    category: "Dashboard & Analytics",
+    main: "Dashboard",
+    sub: ["Super Admin Dashboard", "Analytics & Reports", "Export Data"]
+  },
+  {
+    category: "Create Interview Session",
+    main: "Create Interview",
+    sub: [
+      "Single Candidate", "Bulk Send", "Bulk Email Invites", "Job Description", 
+      "Custom Screening Questions", "Custom AI Interviewer Instructions", "Interview Format", 
+      "Interview Type", "Interview Schedule", "Record Interview Video", "Voice Cloning", 
+      "HR Screening Questions"
+    ]
+  },
+  {
+    category: "Interviews & Candidates",
+    main: "Interviews",
+    sub: ["Qualified Candidates", "Rejected Candidates", "Live Results", "Resume Parsing", "ATS Score"]
+  },
+  {
+    category: "AI Calling Agent",
+    main: "AI Calling Agent",
+    sub: []
+  },
+  {
+    category: "Jobs & Recruiting",
+    main: "Jobs",
+    sub: ["Recruiters", "Industry Type"]
+  },
+  {
+    category: "Team Management",
+    main: "Team Management",
+    sub: ["Organizations", "Role-Based Access"]
+  },
+  {
+    category: "Billing & Subscriptions",
+    main: "Subscription Management",
+    sub: ["Credit Management"]
+  },
+  {
+    category: "Settings & Setup",
+    main: "Settings",
+    sub: ["Security", "Integrations", "Custom Branding", "Priority Support", "API Access"]
+  }
+];
 
 export default function MasterPage() {
   const navigate = useNavigate()
@@ -59,6 +105,7 @@ export default function MasterPage() {
   const [editPlanCredits, setEditPlanCredits] = useState(250)
   const [editPlanPrice, setEditPlanPrice] = useState(0)
   const [editPlanFeatures, setEditPlanFeatures] = useState([])
+  const [selectedModule, setSelectedModule] = useState(null)
   const [activeFeatures, setActiveFeatures] = useState([])
   const [editPlanLoading, setEditPlanLoading] = useState(false)
 
@@ -355,6 +402,7 @@ export default function MasterPage() {
     setEditPlanCredits(p.credits_granted || 250)
     setEditPlanPrice(p.price || 0)
     setEditPlanFeatures(p.features || [])
+    setSelectedModule(null)
     setIsEditPlanModalOpen(true)
   }
 
@@ -1084,45 +1132,104 @@ export default function MasterPage() {
               </div>
 
               <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <label className="text-xs font-semibold text-slate-500">
-                    Select Available Features ({editPlanFeatures.length} chosen)
-                  </label>
-                  {editPlanFeatures.length > 0 && (
+                {selectedModule === null ? (
+                  // MAIN MODULE LIST VIEW
+                  <>
+                    <div className="flex justify-between items-center">
+                      <label className="text-xs font-semibold text-slate-500">
+                        Configure Plan Modules ({editPlanFeatures.length} total features selected)
+                      </label>
+                      {editPlanFeatures.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setEditPlanFeatures([])}
+                          className="text-[11px] text-rose-500 hover:underline"
+                        >
+                          Clear All
+                        </button>
+                      )}
+                    </div>
+                    <div className="max-h-[350px] overflow-y-auto border border-slate-200 rounded-xl bg-slate-50 divide-y divide-slate-200">
+                      {FEATURE_GROUPS.map((group, idx) => {
+                        const isMainChecked = editPlanFeatures.includes(group.main);
+                        return (
+                          <div key={idx} className="p-4 flex items-center justify-between hover:bg-slate-100 transition-colors">
+                            <label className="flex items-center gap-3 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={isMainChecked}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setEditPlanFeatures([...editPlanFeatures, group.main]);
+                                  } else {
+                                    setEditPlanFeatures(editPlanFeatures.filter(f => f !== group.main && !group.sub.includes(f)));
+                                  }
+                                }}
+                                className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
+                              />
+                              <span className={`font-bold text-sm ${isMainChecked ? 'text-indigo-700' : 'text-slate-700'}`}>
+                                {group.category} <span className="text-xs text-slate-400 font-normal ml-2">({group.main})</span>
+                              </span>
+                            </label>
+                            
+                            {group.sub.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedModule(group)}
+                                disabled={!isMainChecked}
+                                className={`text-xs px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1 transition-all ${isMainChecked ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200 cursor-pointer' : 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-60'}`}
+                              >
+                                Sub-Features <i className="fas fa-chevron-right text-[10px]" />
+                              </button>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  // SUB-FEATURES VIEW
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4">
                     <button
                       type="button"
-                      onClick={() => setEditPlanFeatures([])}
-                      className="text-[11px] text-rose-500 hover:underline"
+                      onClick={() => setSelectedModule(null)}
+                      className="text-xs text-slate-500 hover:text-slate-800 font-semibold flex items-center gap-2 cursor-pointer transition-colors"
                     >
-                      Clear All
+                      <i className="fas fa-arrow-left" /> Back to Modules
                     </button>
-                  )}
-                </div>
-                <div className="grid grid-cols-2 gap-2 max-h-[180px] overflow-y-auto border border-slate-200 rounded-xl p-3.5 bg-slate-50">
-                  {Array.from(new Set([
-                    ...activeFeatures,
-                    ...(editPlanFeatures || [])
-                  ])).map(f => {
-                    const isChecked = editPlanFeatures.includes(f)
-                    return (
-                      <label key={f} className="flex items-center gap-2.5 text-xs text-slate-600 hover:text-slate-800 cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setEditPlanFeatures([...editPlanFeatures, f])
-                            } else {
-                              setEditPlanFeatures(editPlanFeatures.filter(x => x !== f))
-                            }
-                          }}
-                          className="w-4 h-4 accent-indigo-500 rounded cursor-pointer"
-                        />
-                        <span>{f}</span>
-                      </label>
-                    )
-                  })}
-                </div>
+                    
+                    <div className="border-t border-slate-200 pt-3">
+                      <h4 className="text-sm font-bold text-indigo-700 mb-1">{selectedModule.category} Settings</h4>
+                      <p className="text-[11px] text-slate-500 mb-3">Select the specific features available within this module.</p>
+                      
+                      <div className="grid grid-cols-2 gap-y-3 gap-x-4">
+                        {selectedModule.sub.map(subFeat => {
+                          const isSubChecked = editPlanFeatures.includes(subFeat);
+                          return (
+                            <label 
+                              key={subFeat} 
+                              className="flex items-center gap-2.5 text-xs select-none cursor-pointer text-slate-700 hover:text-slate-900"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSubChecked}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setEditPlanFeatures([...editPlanFeatures, subFeat]);
+                                  } else {
+                                    setEditPlanFeatures(editPlanFeatures.filter(x => x !== subFeat));
+                                  }
+                                }}
+                                className="w-4 h-4 rounded accent-indigo-500 cursor-pointer"
+                              />
+                              <span>{subFeat}</span>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

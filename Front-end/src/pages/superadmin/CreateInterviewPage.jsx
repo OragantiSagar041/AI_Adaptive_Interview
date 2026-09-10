@@ -1479,7 +1479,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
               {/* Card 3: Advanced AI Customizations (Accordions) */}
               <div className="flex flex-col gap-4">
                 {/* Custom Questions Section */}
-                <div className="border border-slate-200 dark:border-slate-700/80 rounded-2xl overflow-hidden bg-white dark:bg-slate-800/60/82 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-slate-300">
+                <FeatureLockOverlay isLocked={!hasCustomScreening} featureName="Custom Screening Questions">
+<div className="border border-slate-200 dark:border-slate-700/80 rounded-2xl overflow-hidden bg-white dark:bg-slate-800/60/82 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-slate-300">
                   <div className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-900/50/50 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2">
                       <i className="fas fa-question-circle text-primary"></i> Custom Screening Questions (Optional)
@@ -1597,9 +1598,11 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     )}
                   </div>
                 </div>
+</FeatureLockOverlay>
 
                 {/* AI Instructions Section */}
-                <div className="border border-slate-200 dark:border-slate-700/80 rounded-2xl overflow-hidden bg-white dark:bg-slate-800/60/82 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-slate-300">
+                <FeatureLockOverlay isLocked={!hasCustomAIInstructions} featureName="Custom AI Interviewer Instructions">
+<div className="border border-slate-200 dark:border-slate-700/80 rounded-2xl overflow-hidden bg-white dark:bg-slate-800/60/82 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-slate-300">
                   <div className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-900/50/50 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2">
                       <i className="fas fa-robot text-primary"></i> Custom AI Interviewer Instructions (Optional)
@@ -1717,6 +1720,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     )}
                   </div>
                 </div>
+</FeatureLockOverlay>
               </div>
 
             </div>
@@ -1807,7 +1811,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     }}
                   />
 
-                  <div className="sm:col-span-2">
+                  <FeatureLockOverlay isLocked={!hasIndustry} featureName="Industry Type">
+<div className="sm:col-span-2">
                     <Select
                       label="Industry Type"
                       value={singleCandidate.industry}
@@ -1847,6 +1852,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       ]}
                     />
                   </div>
+</FeatureLockOverlay>
 
                   {singleCandidate.interviewType === 'Non-Technical' && (
                     <div className="sm:col-span-2">
@@ -2152,7 +2158,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
               {/* Card 2: Accordion Options */}
               <div className="flex flex-col gap-4">
                 {/* Custom Questions Section (Bulk) */}
-                <div className="border border-slate-200 dark:border-slate-700/80 rounded-2xl overflow-hidden bg-white dark:bg-slate-800/60/82 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-slate-300">
+                <FeatureLockOverlay isLocked={!hasCustomScreening} featureName="Custom Screening Questions">
+<div className="border border-slate-200 dark:border-slate-700/80 rounded-2xl overflow-hidden bg-white dark:bg-slate-800/60/82 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-slate-300">
                   <div className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-900/50/50 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2">
                       <i className="fas fa-question-circle text-primary"></i> Custom Screening Questions (Optional)
@@ -2270,9 +2277,11 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     )}
                   </div>
                 </div>
+</FeatureLockOverlay>
 
                 {/* AI Instructions Section (Bulk) */}
-                <div className="border border-slate-200 dark:border-slate-700/80 rounded-2xl overflow-hidden bg-white dark:bg-slate-800/60/82 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-slate-300">
+                <FeatureLockOverlay isLocked={!hasCustomAIInstructions} featureName="Custom AI Interviewer Instructions">
+<div className="border border-slate-200 dark:border-slate-700/80 rounded-2xl overflow-hidden bg-white dark:bg-slate-800/60/82 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-slate-300">
                   <div className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-900/50/50 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2">
                       <i className="fas fa-robot text-primary"></i> Custom AI Interviewer Instructions (Optional)
@@ -2390,6 +2399,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     )}
                   </div>
                 </div>
+</FeatureLockOverlay>
               </div>
 {/* Card 5: Excel/CSV Upload Dropzone */}
               <div className="bg-white dark:bg-slate-800/60/82 backdrop-blur-md border border-[#e5edf7] rounded-2xl p-5 text-slate-800 dark:text-slate-100 flex flex-col gap-4 shadow-[0_18px_40px_rgba(17,24,39,0.06)] hover:border-slate-350 transition-all duration-200">
@@ -2597,7 +2607,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     }}
                   />
 
-                  <div className="sm:col-span-2">
+                  <FeatureLockOverlay isLocked={!hasIndustry} featureName="Industry Type">
+<div className="sm:col-span-2">
                     <Select
                       label="Industry Type"
                       value={bulkConfig.industry}
@@ -2613,6 +2624,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       ]}
                     />
                   </div>
+</FeatureLockOverlay>
 
                   {bulkConfig.interviewType === 'Non-Technical' && (
                     <div className="sm:col-span-2">

@@ -53,6 +53,7 @@ from app.routes.platform import router as platform_router
 
 from app.routes.conversation_flow import router as conversation_flow_router
 from app.routes.omni_sync import router as omni_sync_router
+from app.routes.translation import router as translation_router
 import app.services.transcription as transcription                # Voice transcription sub-router
 from app.routes import voice_routes     # WebRTC voice routes
 from app.core import config
@@ -300,6 +301,7 @@ app.include_router(conversation_flow_router)
 app.include_router(omni_sync_router)
 app.include_router(transcription.router)
 app.include_router(voice_routes.router)
+app.include_router(translation_router)
 
 # Subscription Management — dedicated modular router
 from app.routes.subscription import router as subscription_router

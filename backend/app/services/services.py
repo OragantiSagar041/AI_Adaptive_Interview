@@ -1285,7 +1285,7 @@ def generate_resume_questions(resume_text: str, language: str = "English", indus
         "What's your approach to debugging complex issues in your code?",
         "Can you describe a time when you had to collaborate with a difficult team member and how you handled it?"
     ]
-    
+
     # Add generic questions if we don't have enough
     while len(questions) < 10 and generic_questions:
         questions.append({
@@ -1295,11 +1295,25 @@ def generate_resume_questions(resume_text: str, language: str = "English", indus
             "type": "General",
             "category": "Professional Development"
         })
-    
+
+    # ── Dedup pass: remove questions with identical text before saving to session ──
+    seen_q_texts = set()
+    unique_questions = []
+    for q in questions:
+        q_text = (q.get("question") or q.get("text") or "").strip().lower()
+        if q_text and q_text not in seen_q_texts:
+            seen_q_texts.add(q_text)
+            unique_questions.append(q)
+    questions = unique_questions
+
+    # Re-assign sequential IDs after dedup
+    for idx, q in enumerate(questions, start=1):
+        q["id"] = idx
+
     # Ensure we don't have too many questions
     if len(questions) > 25:
         questions = questions[:25]
-    
+
     print(f"Generated {len(questions)} questions for the interview")
     return questions
 
@@ -1356,21 +1370,24 @@ def generate_jd_questions(jd_text: str, ai_instructions: str = "", interview_typ
     """Generate interview questions based on Job Description using AI."""
     print(f"Generating questions from Job Description for {interview_type} interview...")
     
-    intro_q_text = "Can you please introduce yourself and tell us why you are interested in this specific role?"
-    if language != "English":
-        try:
-            from app.data.offline_language_fallback import OFFLINE_LANGUAGE_INTRO_QUESTIONS
-            intro_q_text = OFFLINE_LANGUAGE_INTRO_QUESTIONS.get(language, intro_q_text)
-        except ImportError:
-            pass
-
+    # Get Phase 1 questions for the opening
+    from app.data.offline_language_fallback import OFFLINE_LANGUAGE_PHASE1_QUESTIONS
+    phase1_qs = OFFLINE_LANGUAGE_PHASE1_QUESTIONS.get(language, OFFLINE_LANGUAGE_PHASE1_QUESTIONS["English"])
+    
     questions = [
         {
             "id": 1,
-            "question": intro_q_text,
+            "question": phase1_qs[0],
             "difficulty": "Easy",
             "type": "Self-Introduction",
-            "category": "Basic"
+            "category": "Experience"
+        },
+        {
+            "id": 2,
+            "question": phase1_qs[1],
+            "difficulty": "Easy",
+            "type": "Motivation",
+            "category": "Motivation"
         }
     ]
 
@@ -1530,6 +1547,16 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
         except ImportError:
             pass
 
+    # Get Phase 1 questions for the opening
+    try:
+        from app.data.offline_language_fallback import OFFLINE_LANGUAGE_PHASE1_QUESTIONS
+        phase1_qs = OFFLINE_LANGUAGE_PHASE1_QUESTIONS.get(language, OFFLINE_LANGUAGE_PHASE1_QUESTIONS["English"])
+    except ImportError:
+        phase1_qs = [
+            "Can you briefly walk me through your professional journey and what led you to apply for this role?",
+            "What specifically caught your eye about this firm and the job description we posted?"
+        ]
+
     opening = [
         {
             "id": 1,
@@ -1537,6 +1564,20 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
             "difficulty": "Easy",
             "type": "Self-Introduction",
             "category": "Basic"
+        },
+        {
+            "id": 2,
+            "question": phase1_qs[0],
+            "difficulty": "Easy",
+            "type": "Background",
+            "category": "Experience"
+        },
+        {
+            "id": 3,
+            "question": phase1_qs[1],
+            "difficulty": "Easy",
+            "type": "Motivation",
+            "category": "Motivation"
         }
     ]
     
@@ -1711,18 +1752,15 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
 
 def _generate_offline_questions(resume_text: str, jd_text: str, total_count: int, interview_type: str = "Technical", industry: str = "General", language: str = "English") -> List[Dict[str, str]]:
     """
-    Intelligent Interview Coach Offline Generator
-    Adapts based on Total Time (total_count) and Presence of Resume (Single vs Bulk).
-    Ensures a continuous flow of questions spanning Self-Intro, Skills, Projects, JD, and HR.
+    Intelligent Interview Coach Offline Generator.
+    No question is ever repeated — modulo cycling removed throughout.
     """
-    import re
+    import re, random
     questions = []
-    
+
     has_resume = bool(resume_text and len(resume_text.strip()) > 50)
-    text_to_parse = (resume_text + " " + jd_text).lower()
     jd_lower = jd_text.lower()
-    
-    # ── 1. Extract Technical Skills ──
+
     tech_keywords = [
         "Python", "Java", "JavaScript", "TypeScript", "React", "Angular", "Vue", "Node.js",
         "Express", "Django", "Flask", "FastAPI", "Spring Boot", "Spring", ".NET", "C#", "C++",
@@ -1734,27 +1772,64 @@ def _generate_offline_questions(resume_text: str, jd_text: str, total_count: int
         "Algorithms", "HTML", "CSS", "Tailwind", "Bootstrap", "Git", "Linux",
         "Agile", "Scrum", "JIRA", "Figma"
     ]
-    
+
     resume_skills = [kw for kw in tech_keywords if kw.lower() in resume_text.lower()] if has_resume else []
     jd_skills = [kw for kw in tech_keywords if kw.lower() in jd_lower]
-    
     generic_skills = ["programming fundamentals", "system architecture", "version control", "database design", "debugging"]
+
     hr_questions = [
+        # Teamwork & Conflict
         "Tell me about a time you faced a difficult challenge at work and how you overcame it.",
-        "How do you handle tight deadlines or stressful situations?",
         "Describe a situation where you had a conflict with a team member. How was it resolved?",
-        "What motivates you the most in your professional career?",
+        "Can you share an example of how you successfully worked in a remote or distributed team?",
+        "Tell me about a time you had to convince a skeptical stakeholder to support your idea.",
+        "Describe a situation where you had to work with someone whose work style was very different from yours.",
+        "Tell me about a time you had to take ownership of a mistake made by your team.",
+        "How have you handled a situation where team priorities changed suddenly mid-sprint?",
+        "Describe a time you mentored or coached a junior colleague. What was the outcome?",
+        "Tell me about a situation where you had to deliver critical feedback to a peer.",
+        "How do you build trust with a new team when you join a project mid-way?",
+        # Deadlines & Pressure
+        "How do you handle tight deadlines or stressful situations?",
         "How do you prioritize your tasks when you have multiple urgent requests?",
+        "Describe a time when you had to deliver a project with fewer resources than planned.",
+        "Tell me about a time you had to cut scope to meet a deadline. How did you decide what to cut?",
+        "How do you manage your energy and focus when working on long, high-pressure projects?",
+        "Describe a time when you had to juggle multiple deadlines simultaneously. How did you cope?",
+        # Learning & Growth
         "Tell me about a time you had to learn a new concept quickly.",
+        "How do you ensure you stay updated with industry trends?",
+        "What is the most technically complex thing you have learned in the past year?",
+        "Describe a time you had to step outside your comfort zone professionally.",
+        "How do you approach a domain or technology you have never worked with before?",
+        # Achievements & Failures
         "What is your proudest professional achievement?",
         "Describe a time you failed or made a mistake. What did you learn from it?",
-        "How do you ensure you stay updated with industry trends?",
-        "Can you share an example of how you successfully worked in a remote or distributed team?"
+        "Tell me about a project that did not go as planned. What would you do differently?",
+        "What is the most impactful improvement you have made to a codebase or process?",
+        "Describe a time you identified and fixed a critical production issue. Walk me through your approach.",
+        # Motivation & Career
+        "What motivates you the most in your professional career?",
+        "Where do you see yourself professionally in the next three years?",
+        "Why are you looking to move on from your current or most recent role?",
+        "What type of work environment brings out the best in you?",
+        "How do you define success in your role?",
+        # Problem-Solving & Decision Making
+        "Walk me through how you approach a problem you have never encountered before.",
+        "Tell me about a time you had to make a high-stakes decision with incomplete information.",
+        "Describe a situation where you disagreed with a technical decision made by your manager. How did you handle it?",
+        "How do you evaluate trade-offs when there is no clearly correct technical choice?",
+        "Tell me about a time you proposed and led a process improvement. What was the result?",
+        # Communication
+        "How do you explain a complex technical concept to a non-technical stakeholder?",
+        "Describe a time when miscommunication caused a problem. How did you resolve it?",
+        "How do you adapt your communication style when working with both technical and business teams?",
+        "Tell me about a time you had to present a complex technical finding to senior leadership.",
+        "How do you ensure alignment across different teams working on the same project?",
     ]
-    
-    # We apportion the questions to ensure an endless stream depending on total_count
-    target = max(10, total_count + 15) # Generate significantly more to ensure an endless flow
-    
+
+    target = max(10, total_count + 15)
+
     # ── If language is NOT English, use fully translated offline questions ──
     if language != "English":
         try:
@@ -1763,129 +1838,144 @@ def _generate_offline_questions(resume_text: str, jd_text: str, total_count: int
             lang_tmpl = OFFLINE_LANGUAGE_TEMPLATE_QUESTIONS.get(language, [])
             lang_case = OFFLINE_LANGUAGE_CASE_STUDY_TEMPLATES.get(language, [])
         except ImportError:
-            lang_tech = []
-            lang_tmpl = []
-            lang_case = []
-            
-        # Check if the selected language has offline templates in the configuration
+            lang_tech, lang_tmpl, lang_case = [], [], []
+
         has_offline_templates = bool(lang_tech or lang_tmpl or lang_case)
         if has_offline_templates:
-            if interview_type == "Non-Technical":
-                non_tech_keywords = ["Team Management", "Leadership", "Stakeholder Management", "Conflict Resolution", "Project Management", "Agile", "Budgeting", "Client Relations"]
+            if interview_type == "Non-Technical" or "Normal" in interview_type:
+                non_tech_keywords = ["Team Management", "Leadership", "Stakeholder Management", "Conflict Resolution",
+                                     "Project Management", "Agile", "Budgeting", "Client Relations"]
                 jd_non_tech = [kw for kw in non_tech_keywords if kw.lower() in jd_lower]
-                if not jd_non_tech: jd_non_tech = ["Team Collaboration", "Problem Solving", "Time Management"]
-                
+                if not jd_non_tech:
+                    jd_non_tech = ["Team Collaboration", "Problem Solving", "Time Management"]
                 if lang_case:
-                    for i in range(max(10, target)):
-                        skill = jd_non_tech[i % len(jd_non_tech)]
-                        template = lang_case[i % len(lang_case)]
-                        try:
-                            q_text = template.format(skill=skill, industry=industry)
-                        except (KeyError, IndexError):
-                            q_text = template.replace("{skill}", skill).replace("{industry}", industry)
-                        questions.append({
-                            "question": q_text,
-                            "difficulty": ["Medium", "Hard"][i % 2],
-                            "type": "Behavioral",
-                            "category": f"{skill} Case Study",
-                            "_generation_origin": "offline case study"
-                        })
+                    shuffled_lang_case = random.sample(lang_case, len(lang_case))
+                    used_keys = set()
+                    for i, template in enumerate(shuffled_lang_case):
+                        for skill in jd_non_tech:
+                            key = f"{template[:30]}|{skill}"
+                            if key not in used_keys:
+                                used_keys.add(key)
+                                try:
+                                    q_text = template.format(skill=skill, industry=industry)
+                                except (KeyError, IndexError):
+                                    q_text = template.replace("{skill}", skill).replace("{industry}", industry)
+                                questions.append({"question": q_text, "difficulty": ["Medium", "Hard"][i % 2],
+                                                  "type": "Behavioral", "category": f"{skill} Case Study",
+                                                  "_generation_origin": "offline case study"})
+                # dedup
+                seen = set()
+                questions = [q for q in questions if not (q["question"].strip().lower() in seen or seen.add(q["question"].strip().lower()))]
                 return questions[:target]
             else:
-                # Get skills from resume/JD to personalize template questions
                 skills_to_ask = resume_skills if resume_skills else jd_skills
                 if not skills_to_ask:
                     skills_to_ask = generic_skills
-                
-                # Add all the pre-translated technical questions
-                for i, q_text in enumerate(lang_tech):
-                    questions.append({
-                        "question": q_text,
-                        "difficulty": ["Easy", "Medium", "Hard"][i % 3],
-                        "type": "Technical",
-                        "category": "Technical Expertise",
-                        "_generation_origin": "offline technical"
-                    })
-                
-                # Add skill-specific questions using translated templates
+
                 if lang_tmpl:
-                    for i in range(max(10, target - len(questions))):
-                        skill = skills_to_ask[i % len(skills_to_ask)]
-                        template = lang_tmpl[i % len(lang_tmpl)]
-                        try:
-                            q_text = template.format(skill=skill, industry=industry)
-                        except (KeyError, IndexError):
-                            q_text = template.replace("{skill}", skill).replace("{industry}", industry)
-                        questions.append({
-                            "question": q_text,
-                            "difficulty": ["Medium", "Hard"][i % 2],
-                            "type": "Technical",
-                            "category": f"{skill} Expertise",
-                            "_generation_origin": "offline technical"
-                        })
-                
+                    shuffled_lang_tmpl = random.sample(lang_tmpl, len(lang_tmpl))
+                    used_keys = set()
+                    for template in shuffled_lang_tmpl:
+                        for skill in skills_to_ask:
+                            key = f"{template[:30]}|{skill}"
+                            if key not in used_keys:
+                                used_keys.add(key)
+                                try:
+                                    q_text = template.format(skill=skill, industry=industry)
+                                except (KeyError, IndexError):
+                                    q_text = template.replace("{skill}", skill).replace("{industry}", industry)
+                                questions.append({"question": q_text, "difficulty": "Medium",
+                                                  "type": "Technical", "category": f"{industry} Expertise",
+                                                  "_generation_origin": "offline technical"})
+
+                if lang_tech:
+                    shuffled_lang_tech = random.sample(lang_tech, len(lang_tech))
+                    for i, q_text in enumerate(shuffled_lang_tech):
+                        questions.append({"question": q_text, "difficulty": ["Easy", "Medium", "Hard"][i % 3],
+                                          "type": "Technical", "category": "Technical Expertise",
+                                          "_generation_origin": "offline technical"})
+
+                seen = set()
+                questions = [q for q in questions if not (q["question"].strip().lower() in seen or seen.add(q["question"].strip().lower()))]
                 return questions[:target]
-    
-    # --- PHASE 1: SELF-INTRO / BACKGROUND ---
-    if has_resume:
-        questions.append({"question": "Can you briefly walk me through your professional journey and what led you to apply for this role?", "difficulty": "Easy", "type": "Background", "category": "Experience"})
-        questions.append({"question": "What specifically caught your eye about this firm and the job description we posted?", "difficulty": "Easy", "type": "Motivation", "category": "Motivation"})
-    else:
-        questions.append({"question": "Could you provide a high-level overview of your background and your core expertise?", "difficulty": "Easy", "type": "Background", "category": "Experience"})
-        questions.append({"question": "What is the single most important skill you bring to the table that aligns with this role?", "difficulty": "Easy", "type": "Motivation", "category": "Skills"})
-        
+
+    # ── English path ──────────────────────────────────────────────────────────
+
     # --- PHASE 2: SKILLS OR SCENARIOS ---
     if interview_type == "Non-Technical":
-        non_tech_keywords = [
-            "Team Management", "Leadership", "Stakeholder Management", "Conflict Resolution", 
-            "Project Management", "Agile", "Budgeting", "Client Relations", 
-            "Strategic Planning", "Process Improvement", "Risk Management"
-        ]
+        non_tech_keywords = ["Team Management", "Leadership", "Stakeholder Management", "Conflict Resolution",
+                             "Project Management", "Agile", "Budgeting", "Client Relations",
+                             "Strategic Planning", "Process Improvement", "Risk Management"]
         jd_non_tech = [kw for kw in non_tech_keywords if kw.lower() in jd_lower]
-        if not jd_non_tech: jd_non_tech = ["Team Collaboration", "Problem Solving", "Time Management"]
-        
+        if not jd_non_tech:
+            jd_non_tech = ["Team Collaboration", "Problem Solving", "Time Management"]
+
         case_study_templates = [
             f"Imagine you are leading a critical project involving {{skill}} within the {industry} industry, but two key stakeholders strongly disagree on the direction. Walk me through your step-by-step strategy to resolve this.",
             f"You are tasked with improving our current approach to {{skill}} for a leading {industry} company with a limited budget and a tight deadline. How do you plan your delivery?",
             f"Your team in the {industry} sector is underperforming in the area of {{skill}}. How would you diagnose the root cause and implement a turnaround plan?",
             f"A major client in the {industry} space is unhappy with recent deliverables related to {{skill}}. How do you handle the immediate conversation and what is your remediation plan?",
-            f"Describe a hypothetical scenario in the {industry} industry where {{skill}} processes break down entirely. What are your immediate actions to stabilize operations and communicate with leadership?"
+            f"Describe a hypothetical scenario in the {industry} industry where {{skill}} processes break down entirely. What are your immediate actions to stabilize operations and communicate with leadership?",
         ]
-        
-        skills_count = max(3, int(target * 0.25))
-        for i in range(skills_count):
-            skill = jd_non_tech[i % len(jd_non_tech)]
-            template = case_study_templates[i % len(case_study_templates)]
-            q = template.format(skill=skill)
-            questions.append({"question": q, "difficulty": "Medium", "type": "Behavioral", "category": f"{skill} Case Study"})
+        shuffled_templates = random.sample(case_study_templates, len(case_study_templates))
+        used_keys = set()
+        for template in shuffled_templates:
+            for skill in jd_non_tech:
+                key = f"{template[:30]}|{skill}"
+                if key not in used_keys:
+                    used_keys.add(key)
+                    questions.append({"question": template.format(skill=skill), "difficulty": "Medium",
+                                      "type": "Behavioral", "category": f"{skill} Case Study"})
     else:
+        # Technical / Standard path
         skills_to_ask = resume_skills if resume_skills else jd_skills
-        if not skills_to_ask: skills_to_ask = generic_skills
+        if not skills_to_ask:
+            skills_to_ask = generic_skills
         skills_count = max(3, int(target * 0.25))
-        
-        # Pull industry specific questions if available
-        industry_q = []
-        
-        if not industry_q:
-            industry_q = INDUSTRY_TECHNICAL_QUESTIONS.get(industry, [])
-        
-        for i in range(skills_count):
-            skill = skills_to_ask[i % len(skills_to_ask)]
-            
-            if i < len(industry_q):
-                q = industry_q[i].replace("Information Technology", skill)
-                q = industry_q[i] # Just use the industry specific question
-                category = f"{industry} Expertise"
-            else:
-                if i % 3 == 0:
-                    q = f"In the context of the {industry} industry, how would you rate your proficiency with {skill}? Can you describe a significant project where you utilized it to solve a complex problem?"
-                elif i % 3 == 1:
-                    q = f"What are some common pitfalls or challenges you encounter when working with {skill} on {industry} projects, and how do you mitigate them?"
-                else:
-                    q = f"If you were to mentor a junior developer entering the {industry} sector on {skill}, what core principles would you emphasize?"
-                category = f"{skill} Deep-Dive"
-                
-            questions.append({"question": q, "difficulty": "Medium", "type": "Technical", "category": category})
+
+        industry_q = INDUSTRY_TECHNICAL_QUESTIONS.get(industry, [])
+
+        skill_templates_eng = [
+            "In the context of the {industry} industry, how would you rate your proficiency with {skill}? Can you describe a significant project where you utilized it to solve a complex problem?",
+            "What are some common pitfalls or challenges you encounter when working with {skill} on {industry} projects, and how do you mitigate them?",
+            "If you were to mentor a junior developer entering the {industry} sector on {skill}, what core principles would you emphasize?",
+            "How has your understanding of {skill} evolved over the years? What changed most significantly?",
+            "Can you walk me through a time when {skill} was the decisive technology in a {industry} project?",
+            "What best practices do you follow when writing or reviewing {skill} code in a {industry} context?",
+            "How do you stay current with updates and changes in {skill}?",
+            "Describe a situation where you had to optimise or refactor {skill}-related code. What was the business impact?",
+            "What is one thing most developers get wrong about {skill} that you have learned to avoid?",
+            "How do you test and validate the correctness of your work when using {skill}?",
+        ]
+
+        used_skill_keys = set()
+        q_count = 0
+        # First use industry-specific questions (no cycling — each used once)
+        for iq in industry_q:
+            if q_count >= skills_count:
+                break
+            key = iq.strip().lower()
+            if key not in used_skill_keys:
+                used_skill_keys.add(key)
+                questions.append({"question": iq, "difficulty": "Medium", "type": "Technical",
+                                   "category": f"{industry} Expertise"})
+                q_count += 1
+
+        # Then use skill templates (template × skill combinations, no repeats)
+        for template in skill_templates_eng:
+            for skill in skills_to_ask:
+                if q_count >= skills_count:
+                    break
+                key = f"{template[:25]}|{skill}"
+                if key not in used_skill_keys:
+                    used_skill_keys.add(key)
+                    q_text = template.replace("{skill}", skill).replace("{industry}", industry)
+                    questions.append({"question": q_text, "difficulty": "Medium", "type": "Technical",
+                                      "category": f"{skill} Deep-Dive"})
+                    q_count += 1
+            if q_count >= skills_count:
+                break
+
     # --- PHASE 3: PROJECTS ---
     projects_count = max(2, int(target * 0.15))
     if has_resume:
@@ -1893,41 +1983,101 @@ def _generate_offline_questions(resume_text: str, jd_text: str, total_count: int
         found_projects = []
         for pattern in project_patterns:
             found_projects.extend([m.strip() for m in re.findall(pattern, resume_text, re.IGNORECASE) if len(m.strip()) > 3])
-        found_projects = list(set(found_projects))
-        
-        for i in range(projects_count):
-            proj = found_projects[i % len(found_projects)] if found_projects else "your most complex technical project"
-            if i % 2 == 0:
-                q = f"Let's discuss {proj}. Walk me through the architecture and the major technical decisions you made."
-            else:
-                q = f"Regarding {proj}, what was the most difficult bug or bottleneck you encountered and how did you resolve it?"
-            questions.append({"question": q, "difficulty": "Hard", "type": "Project", "category": "Architecture"})
+        found_projects = list(dict.fromkeys(found_projects))
+
+        project_templates = [
+            "Let's discuss {proj}. Walk me through the architecture and the major technical decisions you made.",
+            "Regarding {proj}, what was the most difficult bug or bottleneck you encountered and how did you resolve it?",
+            "How did you measure the success of {proj}? What metrics or outcomes did you track?",
+            "If you had to rebuild {proj} from scratch today, what would you do differently?",
+            "What was the biggest technical risk in {proj} and how did you manage it?",
+            "How did {proj} scale as user demand grew? What challenges did that introduce?",
+            "What was the deployment strategy for {proj}, and how did you handle rollbacks?",
+            "How did you ensure code quality and test coverage in {proj}?",
+            "What security considerations did you address while building {proj}?",
+            "Describe the team structure for {proj}. How did you coordinate technical decisions across the team?",
+        ]
+        used_proj_keys = set()
+        p_count = 0
+        for template in project_templates:
+            for proj in (found_projects if found_projects else ["your most complex technical project"]):
+                if p_count >= projects_count:
+                    break
+                key = f"{template[:25]}|{proj}"
+                if key not in used_proj_keys:
+                    used_proj_keys.add(key)
+                    questions.append({"question": template.replace("{proj}", proj), "difficulty": "Hard",
+                                      "type": "Project", "category": "Architecture"})
+                    p_count += 1
+            if p_count >= projects_count:
+                break
     else:
-        for i in range(projects_count):
-            if i % 2 == 0:
-                q = "Tell me about the most impactful project you have delivered in your career. What was your specific contribution?"
-            else:
-                q = "Walk me through a project where the requirements were vague or constantly changing. How did you manage it?"
+        generic_project_qs = [
+            "Tell me about the most impactful project you have delivered in your career. What was your specific contribution?",
+            "Walk me through a project where the requirements were vague or constantly changing. How did you manage it?",
+            "Describe a project where you had to collaborate closely with non-technical stakeholders.",
+            "What is the largest codebase you have worked on? How did you navigate and contribute to it?",
+            "Describe a time you introduced a new tool, framework, or process to a project. How was it received?",
+            "Tell me about a project that required significant performance optimisation. What did you do?",
+            "How have you handled technical debt on a project that had aggressive delivery timelines?",
+            "Walk me through the most challenging integration you have built between two systems.",
+            "Describe a project where security was a primary concern. What measures did you put in place?",
+            "Tell me about a project you are particularly proud of that is not on your resume.",
+            "How do you approach estimating timelines for a project with high technical uncertainty?",
+            "Describe a time when a project you worked on failed or was cancelled. What did you take away?",
+            "What is the most creative solution you have implemented to solve a technical problem?",
+            "Tell me about a time you had to balance technical excellence with shipping speed.",
+            "How do you ensure knowledge transfer when you hand over a project to another developer?",
+        ]
+        for q in generic_project_qs[:projects_count]:
             questions.append({"question": q, "difficulty": "Medium", "type": "Project", "category": "Execution"})
 
     # --- PHASE 4: JOB DESCRIPTION COMPLIANCE ---
     jd_count = max(3, int(target * 0.25))
-    jd_focus = jd_skills if jd_skills else ["the core tools required for this position", "our tech stack"]
-    for i in range(jd_count):
-        focus = jd_focus[i % len(jd_focus)]
-        if i % 2 == 0:
-            q = f"This role heavily involves {focus}. Could you share an experience that demonstrates your readiness for this?"
-        else:
-            q = f"In the context of the job description requiring strong {focus} expertise, how do you handle scalable architectures?"
-        questions.append({"question": q, "difficulty": "Hard", "type": "Role Fit", "category": "JD Requirement"})
+    jd_focus = jd_skills if jd_skills else ["the core tools required for this position", "our tech stack", "required domain expertise"]
+    jd_templates = [
+        "This role heavily involves {focus}. Could you share an experience that demonstrates your readiness for this?",
+        "In the context of the job description requiring strong {focus} expertise, how do you handle scalable architectures?",
+        "What has been the most challenging aspect of working with {focus} in your past roles?",
+        "How have you applied {focus} to solve a real business problem, not just a technical one?",
+        "What is the most advanced feature or technique you have used within {focus}?",
+        "How do you debug or troubleshoot difficult issues specifically related to {focus}?",
+        "What production incident involving {focus} taught you the most, and what did you change afterwards?",
+        "How do you evaluate whether {focus} is the right tool for a given problem versus an alternative?",
+        "Describe how you have improved team velocity or code quality through better use of {focus}.",
+        "What gaps do you still feel you have in {focus}, and how are you addressing them?",
+    ]
+    used_jd_keys = set()
+    jd_q_count = 0
+    for template in jd_templates:
+        for focus in jd_focus:
+            if jd_q_count >= jd_count:
+                break
+            key = f"{template[:25]}|{focus}"
+            if key not in used_jd_keys:
+                used_jd_keys.add(key)
+                questions.append({"question": template.replace("{focus}", focus), "difficulty": "Hard",
+                                  "type": "Role Fit", "category": "JD Requirement"})
+                jd_q_count += 1
+        if jd_q_count >= jd_count:
+            break
 
-    # --- PHASE 5: HR / BEHAVIORAL ---
-    hr_count = max(5, int(target * 0.25))
-    for i in range(hr_count):
-        q = hr_questions[i % len(hr_questions)]
+    # --- PHASE 5: HR / BEHAVIORAL (no cycling — pool is now 40 questions) ---
+    hr_count = min(len(hr_questions), max(5, int(target * 0.25)))
+    for q in hr_questions[:hr_count]:
         questions.append({"question": q, "difficulty": "Medium", "type": "Behavioral", "category": "HR/Culture"})
 
-    return questions
+    # ── Final dedup pass ──────────────────────────────────────────────────────
+    seen_texts = set()
+    unique_questions = []
+    for q in questions:
+        key = q.get("question", "").strip().lower()
+        if key and key not in seen_texts:
+            seen_texts.add(key)
+            unique_questions.append(q)
+
+    return unique_questions
+
 
 
 def _generate_hr_screening_questions(hr_screening: dict, jd_text: str, language: str = "English") -> List[Dict[str, str]]:

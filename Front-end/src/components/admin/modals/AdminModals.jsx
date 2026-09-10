@@ -6,6 +6,7 @@ import Button from '../../Button'
 import Badge from '../../Badge'
 import { toJpeg } from 'html-to-image'
 import { jsPDF } from 'jspdf'
+import { detectNonEnglishText, translateText } from '../../../utils/translation'
 
 // Lightweight WYSIWYG Editor using native iframe designMode
 function IframeWYSIWYG({ initialHtml, onChange }) {
@@ -75,10 +76,46 @@ export function CandidateScorecardModal({
 }) {
   const [activeTab, setActiveTab] = React.useState('verbal');
   const [isGeneratingPdf, setIsGeneratingPdf] = React.useState(false);
+  const [translations, setTranslations] = React.useState({});
+  const [translatingKeys, setTranslatingKeys] = React.useState({});
 
-  // Reset tab when modal opens for a new candidate
+  const handleTranslate = async (key, text) => {
+    if (!text || !text.trim() || translatingKeys[key]) return;
+    setTranslatingKeys(prev => ({ ...prev, [key]: true }));
+    try {
+      const res = await translateText(text, 'en', API_BASE_URL);
+      setTranslations(prev => ({
+        ...prev,
+        [key]: { ...res, originalText: text, view: 'translated' }
+      }));
+    } catch (e) {
+      console.error("Translation error in scorecard:", e);
+    } finally {
+      setTranslatingKeys(prev => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
+  };
+
+  const toggleView = (key) => {
+    setTranslations(prev => {
+      if (!prev[key]) return prev;
+      return {
+        ...prev,
+        [key]: { ...prev[key], view: prev[key].view === 'translated' ? 'original' : 'translated' }
+      };
+    });
+  };
+
+  // Reset tab and translations when modal opens for a new candidate
   React.useEffect(() => {
-    if (isOpen) setActiveTab('verbal');
+    if (isOpen) {
+      setActiveTab('verbal');
+      setTranslations({});
+      setTranslatingKeys({});
+    }
   }, [isOpen, selectedCandidate]);
 
   // Helper to get the overall average directly from the backend to ensure Table and Modal match perfectly
@@ -559,10 +596,65 @@ export function CandidateScorecardModal({
                   </div>
 
                   <div className="mb-4">
-                    <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-2">Candidate's Answer</span>
-                    <p className="text-[0.95rem] text-slate-700 leading-relaxed">
-                      {ans.answer_text || <span className="italic text-slate-400">No transcription available.</span>}
-                    </p>
+                    {(() => {
+                      const ansKey = `scorecard_ans_${idx}`
+                      const nonEnglish = detectNonEnglishText(ans.answer_text, candidateDetail?.language || candidateDetail?.detected_language || '')
+                      const trans = translations[ansKey]
+                      return (
+                        <div>
+                          <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                            <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                              Candidate's Answer
+                              {nonEnglish.isNonEnglish && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                                  <i className="fas fa-globe"></i> {nonEnglish.languageName} detected
+                                </span>
+                              )}
+                              {trans?.isTranslated && trans.view === 'translated' && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  <i className="fas fa-check"></i> English Translated
+                                </span>
+                              )}
+                            </span>
+                            {ans.answer_text && ans.answer_text.trim() && (
+                              <div>
+                                {trans?.isTranslated ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleView(ansKey)}
+                                    className="text-xs font-bold text-indigo-600 hover:text-indigo-800"
+                                  >
+                                    {trans.view === 'translated' ? 'Show Original' : 'Show English'}
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleTranslate(ansKey, ans.answer_text)}
+                                    disabled={translatingKeys[ansKey]}
+                                    className="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-md transition-all shadow-2xs"
+                                  >
+                                    {translatingKeys[ansKey] ? 'Translating...' : 'Translate'}
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          {trans?.isTranslated && trans.view === 'translated' ? (
+                            <div className="bg-indigo-50/50 border border-indigo-200 rounded-lg p-3 text-sm text-slate-800">
+                              <div className="text-[10px] font-bold text-indigo-700 mb-1 flex items-center justify-between">
+                                <span>Translated from {trans.sourceLangName || "Detected Language"}</span>
+                                <button type="button" onClick={() => toggleView(ansKey)} className="text-slate-500 hover:text-indigo-700 underline font-normal">View Original</button>
+                              </div>
+                              <p className="text-[0.95rem] text-slate-800 leading-relaxed">{trans.translatedText}</p>
+                            </div>
+                          ) : (
+                            <p className="text-[0.95rem] text-slate-700 leading-relaxed">
+                              {ans.answer_text || <span className="italic text-slate-400">No transcription available.</span>}
+                            </p>
+                          )}
+                        </div>
+                      )
+                    })()}
                   </div>
 
                   {ans.ai_feedback && (

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
+import Swal from 'sweetalert2';
 import { useOutletContext, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { loadSuperAdminDashboard, loadRecruitmentFunnel, loadPlatformAnalytics, loadLiveSessions } from "@/store/slices/dashboardSlice";
@@ -107,6 +108,8 @@ export default function SuperDashboardPage() {
   const navigate = useNavigate();
   const { handleOpenLiveStreamAction } = useOutletContext() || {};
   const dispatch = useDispatch();
+  const adminUser = useSelector(state => state.auth.adminUser);
+  const userFeatures = adminUser?.plan_features || [];
 
   // Per-stage navigation: each stage routes to the right filtered page
   const handlePipelineStageClick = (stageName) => {
@@ -411,11 +414,28 @@ export default function SuperDashboardPage() {
                   <span
                     className="text-blue-500 font-medium cursor-pointer flex items-center hover:underline"
                     onClick={async () => {
-                      if (showLivePicker) {
-                        setShowLivePicker(false);
-                        return;
-                      }
-                      setShowLivePicker(true);
+                        if (adminUser?.role !== 'master' && !userFeatures.includes('Live Results')) {
+                          Swal.fire({
+                            title: 'Feature Locked',
+                            text: 'Upgrade your plan to access Live Results.',
+                            icon: 'info',
+                            showCancelButton: true,
+                            confirmButtonColor: '#6366f1',
+                            cancelButtonColor: '#94a3b8',
+                            confirmButtonText: '<i class="fas fa-crown mr-1 text-amber-300"></i> View Plans',
+                            cancelButtonText: 'Close'
+                          }).then((result) => {
+                            if (result.isConfirmed) {
+                              window.location.href = '/superadmin/subscription';
+                            }
+                          });
+                          return;
+                        }
+                        if (showLivePicker) {
+                          setShowLivePicker(false);
+                          return;
+                        }
+                        setShowLivePicker(true);
                       setLivePickerLoading(true);
                       try {
                         await dispatch(loadLiveSessions(selectedAdminFilter));
