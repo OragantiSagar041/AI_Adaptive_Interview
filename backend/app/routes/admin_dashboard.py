@@ -1114,55 +1114,32 @@ def upload_full_recording(
                     if bytes_written > max_recording_bytes:
                         raise HTTPException(status_code=413, detail="Recording too large. Maximum size is 500MB.")
                     buffer.write(chunk)
-        except Exception:
-            if os.path.exists(file_path):
-                os.remove(file_path)
-            raise
+        except Exception as e:
+            logger.warning(f"Client disconnected or upload interrupted: {e}. Saving {bytes_written} bytes as truncated recording.")
+            recording_truncated = True
+            if bytes_written == 0:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                raise
             
-        # Upload to Cloudinary
+        # Upload to Cloudinary using round-robin rotation
+        cloudinary_public_id = None
+        normalized_path = None
+        
         try:
-            upload_result = cloudinary.uploader.upload_large(
-                file_path,
-                resource_type="video",
-                type="authenticated",
-                folder="hireiq_interview_recordings",
-            )
-            cloudinary_public_id = upload_result.get("public_id")
-            normalized_path = f"cloudinary-authenticated://{cloudinary_public_id}"
+            from app.core.cloudinary_manager import cloudinary_manager
             
             # Try uploading using the round-robin accounts
             last_error = None
             for account in cloudinary_manager.get_next_accounts_generator():
                 try:
-                    cloud_name = account.get("cloud_name")
-                    api_key = account.get("api_key")
-                    api_secret = account.get("api_secret")
-                    
-                    if not all([cloud_name, api_key, api_secret]):
-                        continue
-                        
-                    # Cloudinary's Python SDK upload_large method has a bug where it
-                    # sometimes ignores credentials passed as kwargs and uses globals.
-                    # We can force it by passing it as a `cloud_name` kwarg but using the 
-                    # api_proxy or environment variable, or we can just safely update the config
-                    # using cloudinary.config() before uploading. Since we're in a threaded
-                    # environment, we'll pass the `cloudinary://` URL explicitly using the 
-                    # undocumented `_connection` override or just set config.
-                    
-                    import cloudinary
-                    
-                    # Temporarily update the global config for this thread
-                    cloudinary.config(
-                        cloud_name=cloud_name,
-                        api_key=api_key,
-                        api_secret=api_secret,
-                        secure=True
-                    )
-                    
                     upload_kwargs = {
                         "resource_type": "video",
                         "type": "authenticated",
-                        "folder": "hireiq_interview_recordings"
+                        "folder": "hireiq_interview_recordings",
+                        "cloud_name": account.get("cloud_name"),
+                        "api_key": account.get("api_key"),
+                        "api_secret": account.get("api_secret"),
                     }
                     
                     upload_result = cloudinary.uploader.upload_large(
@@ -1171,10 +1148,7 @@ def upload_full_recording(
                     )
                     
                     cloudinary_public_id = upload_result.get("public_id")
-                    
-                    # Store the account details in the DB along with the path so we know which 
-                    # credentials to use when generating signed URLs later, since we have multiple keys!
-                    normalized_path = f"cloudinary-authenticated://{cloudinary_public_id}?cloud_name={cloud_name}&api_key={api_key}&api_secret={api_secret}"
+                    normalized_path = f"cloudinary-authenticated://{cloudinary_public_id}"
                     
                     # Clean up local file after successful upload
                     os.remove(file_path)
@@ -1190,14 +1164,8 @@ def upload_full_recording(
                 raise last_error
             
         except Exception as cloud_e:
-            logger.exception("Recording upload to private Cloudinary storage failed")
-            if os.getenv("ENV", "local") == "production":
-                if os.path.exists(file_path):
-                    os.remove(file_path)
-                raise HTTPException(
-                    status_code=503,
-                    detail="Secure recording storage is temporarily unavailable",
-                ) from cloud_e
+            logger.exception("All Cloudinary upload attempts failed")
+            # Fall back to local storage instead of deleting the file
             normalized_path = file_path.replace("\\", "/")
             cloudinary_public_id = None
         # Update database
