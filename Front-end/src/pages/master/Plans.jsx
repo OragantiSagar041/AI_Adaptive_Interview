@@ -7,6 +7,43 @@ import 'sweetalert2/dist/sweetalert2.min.css'
 import axios from 'axios'
 import { superAdminNavItems } from '../../components/superadmin/SuperAdminLayout'
 
+const FEATURE_GROUPS = [
+  { category: "Super Admin Dashboard", main: "Super Admin Dashboard", sub: [] },
+  { category: "Dashboard", main: "Dashboard", sub: [] },
+  { category: "Interviews", main: "Interviews", sub: [] },
+  { 
+    category: "Qualified Candidates", 
+    main: "Qualified Candidates", 
+    sub: ["Export CSV"] 
+  },
+  { 
+    category: "Rejected Candidates", 
+    main: "Rejected Candidates", 
+    sub: ["Talent Pool Management"] 
+  },
+  { 
+    category: "Create Interview", 
+    main: "Create Interview", 
+    sub: [
+      "Single Candidate", "Bulk Send", "Select Candidate from AI Calls", 
+      "Resume Parsing", "ATS Score", "Email Preview", 
+      "Custom Screening Questions", "Custom AI Interviewer Instructions", 
+      "Language", "Industry Type", "Interview Schedule", "Record Interview Video", 
+      "Voice Cloning", "HR Screening Questions", "Standard (Text/Form Based)", 
+      "Voice AI (Real-time Speech)", "Technical (+ Coding)", "Normal (Standard AI)", 
+      "Non-Tech (Case Studies)"
+    ] 
+  },
+  { category: "AI Calling Agent", main: "AI Calling Agent", sub: [] },
+  { category: "Jobs", main: "Jobs", sub: [] },
+  { category: "Recruiters", main: "Recruiters", sub: [] },
+  { category: "Credit Management", main: "Credit Management", sub: [] },
+  { category: "Subscription Management", main: "Subscription Management", sub: [] },
+  { category: "Security", main: "Security", sub: ["Active Security Alerts"] },
+  { category: "Notifications", main: "Notifications", sub: [] },
+  { category: "Live Results", main: "Live Results", sub: [] }
+];
+
 export default function Plans() {
   const token = useSelector(state => state.auth.token) || ''
   const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
@@ -23,6 +60,7 @@ export default function Plans() {
   const [editPlanCredits, setEditPlanCredits] = useState(250)
   const [editPlanPrice, setEditPlanPrice] = useState(0)
   const [editPlanFeatures, setEditPlanFeatures] = useState([])
+  const [selectedModule, setSelectedModule] = useState(null)
   const [editPlanLoading, setEditPlanLoading] = useState(false)
 
   const fetchPlans = async () => {
@@ -53,6 +91,7 @@ export default function Plans() {
     setEditPlanCredits(p.credits_granted || 250)
     setEditPlanPrice(p.price || 0)
     setEditPlanFeatures(p.features || [])
+    setSelectedModule(null)
     setIsEditPlanModalOpen(true)
   }
 
@@ -234,43 +273,104 @@ export default function Plans() {
               </div>
 
               <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                    Select Available Features ({editPlanFeatures.length} chosen)
-                  </label>
-                  {editPlanFeatures.length > 0 && (
+                {selectedModule === null ? (
+                  // MAIN MODULE LIST VIEW
+                  <>
+                    <div className="flex justify-between items-center">
+                      <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                        Configure Plan Modules ({editPlanFeatures.length} total features selected)
+                      </label>
+                      {editPlanFeatures.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setEditPlanFeatures([])}
+                          className="text-[11px] text-rose-500 hover:underline"
+                        >
+                          Clear All
+                        </button>
+                      )}
+                    </div>
+                    <div className="max-h-[60vh] overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-900/50 divide-y divide-slate-200 dark:divide-slate-700">
+                      {FEATURE_GROUPS.map((group, idx) => {
+                        const isMainChecked = editPlanFeatures.includes(group.main);
+                        return (
+                          <div key={idx} className="p-4 flex items-center justify-between hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                            <label className="flex items-center gap-3 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={isMainChecked}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setEditPlanFeatures([...editPlanFeatures, group.main]);
+                                  } else {
+                                    setEditPlanFeatures(editPlanFeatures.filter(f => f !== group.main && !group.sub.includes(f)));
+                                  }
+                                }}
+                                className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
+                              />
+                              <span className={`font-bold text-sm ${isMainChecked ? 'text-indigo-700 dark:text-indigo-400' : 'text-slate-700 dark:text-slate-200'}`}>
+                                {group.category} <span className="text-xs text-slate-400 font-normal ml-2">({group.main})</span>
+                              </span>
+                            </label>
+                            
+                            {group.sub.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedModule(group)}
+                                disabled={!isMainChecked}
+                                className={`text-xs px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1 transition-all ${isMainChecked ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:hover:bg-indigo-900/50 cursor-pointer' : 'bg-slate-200 text-slate-400 dark:bg-slate-800 dark:text-slate-500 cursor-not-allowed opacity-60'}`}
+                              >
+                                Sub-Features <i className="fas fa-chevron-right text-[10px]" />
+                              </button>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  // SUB-FEATURES VIEW
+                  <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl p-4 space-y-4">
                     <button
                       type="button"
-                      onClick={() => setEditPlanFeatures([])}
-                      className="text-[11px] text-rose-500 hover:underline"
+                      onClick={() => setSelectedModule(null)}
+                      className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 font-semibold flex items-center gap-2 cursor-pointer transition-colors"
                     >
-                      Clear All
+                      <i className="fas fa-arrow-left" /> Back to Modules
                     </button>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 max-h-[60vh] overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl p-3.5 bg-slate-50 dark:bg-slate-900/50">
-                  {featureOptions.map(f => {
-                    const isChecked = editPlanFeatures.includes(f)
-                    return (
-                      <label key={f} className="flex items-center gap-2.5 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:text-slate-100 cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setEditPlanFeatures([...editPlanFeatures, f])
-                            } else {
-                              setEditPlanFeatures(editPlanFeatures.filter(x => x !== f))
-                            }
-                          }}
-                          className="w-4 h-4 accent-indigo-500 rounded cursor-pointer"
-                        />
-                        <span>{f}</span>
-                      </label>
-                    )
-                  })}
-                </div>
+                    
+                    <div className="border-t border-slate-200 dark:border-slate-700 pt-3">
+                      <h4 className="text-sm font-bold text-indigo-700 dark:text-indigo-400 mb-1">{selectedModule.category} Settings</h4>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-3">Select the specific features available within this module.</p>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-4">
+                        {selectedModule.sub.map(subFeat => {
+                          const isSubChecked = editPlanFeatures.includes(subFeat);
+                          return (
+                            <label 
+                              key={subFeat} 
+                              className="flex items-center gap-2.5 text-xs select-none cursor-pointer text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSubChecked}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setEditPlanFeatures([...editPlanFeatures, subFeat]);
+                                  } else {
+                                    setEditPlanFeatures(editPlanFeatures.filter(x => x !== subFeat));
+                                  }
+                                }}
+                                className="w-4 h-4 rounded accent-indigo-500 cursor-pointer"
+                              />
+                              <span>{subFeat}</span>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

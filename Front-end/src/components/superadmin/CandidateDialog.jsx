@@ -90,6 +90,8 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
 
   const token = useSelector(state => state.auth.token)
   const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
+  const adminUser = useSelector(state => state.auth.adminUser)
+  const userFeatures = adminUser?.plan_features || []
 
   // Fetch full candidate details when dialog opens
   useEffect(() => {
@@ -481,6 +483,41 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
     const linkId = candidate.link_id || candidate.id || candidate._id;
     if (!linkId) return;
 
+    if (newDecision === 'selected' && !userFeatures.includes('Qualified Candidates')) {
+      Swal.fire({
+        title: 'Feature Locked',
+        text: 'Upgrade your plan to unlock Qualified Candidates.',
+        icon: 'info',
+        showCancelButton: true,
+        confirmButtonColor: '#6366f1',
+        cancelButtonColor: '#94a3b8',
+        confirmButtonText: '<i class="fas fa-crown mr-1 text-amber-300"></i> View Plans',
+        cancelButtonText: 'Close'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          window.location.href = '/superadmin/subscription';
+        }
+      })
+      return;
+    }
+    if (newDecision === 'rejected' && !userFeatures.includes('Rejected Candidates')) {
+      Swal.fire({
+        title: 'Feature Locked',
+        text: 'Upgrade your plan to unlock Rejected Candidates.',
+        icon: 'info',
+        showCancelButton: true,
+        confirmButtonColor: '#6366f1',
+        cancelButtonColor: '#94a3b8',
+        confirmButtonText: '<i class="fas fa-crown mr-1 text-amber-300"></i> View Plans',
+        cancelButtonText: 'Close'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          window.location.href = '/superadmin/subscription';
+        }
+      })
+      return;
+    }
+
     try {
       await dispatch(handleUpdateDecision({ linkId, decision: newDecision })).unwrap()
       Swal.fire('Success', `Candidate marked as ${newDecision.toUpperCase()}`, 'success')
@@ -690,7 +727,8 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
               {/* ─ Overview Tab ─ */}
               {activeTab === 'overview' && (
                 <div className="space-y-6">
-                  <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
+                  {userFeatures.includes('Resume Parsing') ? (
+<section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
                     <h3 className="text-sm font-black text-slate-800 mb-4">Candidate Information</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-5">
                       <InfoRow icon={Mail} label="Email" value={email} />
@@ -709,6 +747,41 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                       <InfoRow icon={MapPin} label="Location" value={c.location} />
                     </div>
                   </section>
+) : (
+  <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm relative overflow-hidden">
+    <div className="filter blur-[6px] opacity-40 pointer-events-none select-none">
+      <h3 className="text-sm font-black text-slate-800 mb-4">Candidate Information</h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-5">
+        <InfoRow icon={Mail} label="Email" value="hidden@example.com" />
+        <InfoRow icon={Phone} label="Mobile" value="+91 XXXXX XXXXX" />
+        <InfoRow icon={Clock} label="Experience" value="Locked" />
+        <InfoRow icon={Building2} label="Current Company" value="Locked" />
+        <InfoRow icon={IndianRupee} label="Current CTC" value="Locked" />
+        <InfoRow icon={IndianRupee} label="Expected CTC" value="Locked" />
+        <InfoRow icon={Clock} label="Notice Period" value="Locked" />
+        <InfoRow icon={MapPin} label="Location" value="Locked" />
+      </div>
+    </div>
+    <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/30 backdrop-blur-[1px] z-10 p-4 text-center">
+      <div className="bg-indigo-100 text-indigo-600 w-12 h-12 flex items-center justify-center rounded-full mb-3 shadow-sm border border-indigo-200">
+        <i className="fas fa-lock text-xl"></i>
+      </div>
+      <h3 className="text-[15px] font-extrabold text-slate-800 mb-1">Resume Parsing Locked</h3>
+      <p className="text-xs font-medium text-slate-500 mb-4 max-w-[200px] leading-relaxed">Upgrade your plan to automatically extract candidate details.</p>
+                          <button 
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              window.location.href = '/superadmin/subscription';
+                            }}
+                            className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-800/60 text-indigo-600 dark:text-indigo-400 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors font-bold text-xs shadow-sm cursor-pointer"
+                          >
+                            <i className="fas fa-crown text-amber-500"></i> View Plans
+                          </button>
+    </div>
+  </section>
+)}
 
                   <section className="bg-card rounded-xl border border-border p-5 shadow-sm">
                     <h3 className="text-sm font-black text-foreground mb-3 flex items-center gap-2">

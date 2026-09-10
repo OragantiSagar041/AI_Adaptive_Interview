@@ -5,6 +5,7 @@ import {
   MessageSquare, Calendar, Search, Eye, Download, Share2, X, FileText, ArrowRightLeft, Recycle
 } from 'lucide-react'
 import axios from 'axios'
+import Swal from 'sweetalert2'
 import { getComputedStatus } from '../../utils/adminFormatters'
 import { loadSuperAdminRejectedCandidates, handleSuperAdminExportExcel } from '../../store/slices/candidatesSlice'
 import { setSelectedAdminFilter } from '../../store/slices/dashboardSlice'
@@ -32,12 +33,44 @@ function StatCard({ icon: Icon, label, value, accent }) {
   )
 }
 
+
+const FeatureLockOverlay = ({ isLocked, featureName, children }) => {
+  if (!isLocked) return children;
+  return (
+    <div className="relative overflow-hidden rounded-xl h-full w-full">
+      <div className="filter blur-[6px] opacity-40 pointer-events-none select-none transition-all duration-300 h-full w-full">
+         {children}
+      </div>
+      <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/30 dark:bg-slate-900/40 backdrop-blur-[1px] z-10 p-4 text-center">
+         <div className="bg-indigo-100 text-indigo-600 w-12 h-12 flex items-center justify-center rounded-full mb-3 shadow-sm border border-indigo-200">
+            <i className="fas fa-lock text-xl"></i>
+         </div>
+         <h3 className="text-[15px] font-extrabold text-slate-800 dark:text-white mb-1">This feature is locked</h3>
+         <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-4 max-w-[200px] leading-relaxed">Upgrade your plan to access {featureName}</p>
+         <button 
+             type="button"
+             className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border-2 border-indigo-100 dark:border-indigo-800/60 text-indigo-600 dark:text-indigo-400 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors font-bold text-xs shadow-sm cursor-pointer"
+             onClick={(e) => {
+               e.preventDefault();
+               e.stopPropagation();
+               window.location.href = '/superadmin/subscription';
+             }}
+           >
+            <i className="fas fa-crown text-[#f59e0b]"></i> Upgrade Plan
+         </button>
+      </div>
+    </div>
+  );
+};
+
 export default function RejectedCandidatesPage() {
   const dispatch = useDispatch()
   const [selectedCandidate, setSelectedCandidate] = useState(null)
   const token = useSelector(state => state.auth.token)
-  const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
   const adminUser = useSelector(state => state.auth.adminUser)
+  const userFeatures = adminUser?.plan_features || []
+  const hasTalentPool = userFeatures.includes('Talent Pool Management')
+  const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
 
   const candidates = useSelector(state => state.candidates.candidates) || []
   const selectedAdminFilter = useSelector(state => state.dashboard.selectedAdminFilter)
@@ -129,7 +162,7 @@ export default function RejectedCandidatesPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={() => alert("Talent pool synced")} className="flex items-center gap-2 px-4 py-2 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-300 font-bold text-sm rounded-xl hover:bg-indigo-100 transition-colors border border-indigo-200 dark:border-indigo-800/60">
+          <button onClick={(e) => { if(!hasTalentPool) { e.preventDefault(); Swal.fire('Locked', 'Upgrade your plan to sync Talent Pool.', 'info'); } else { alert("Talent pool synced"); } } } className={`flex items-center gap-2 px-4 py-2 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-300 font-bold text-sm rounded-xl hover:bg-indigo-100 transition-colors border border-indigo-200 dark:border-indigo-800/60 ${!hasTalentPool ? 'opacity-50 cursor-not-allowed' : ''}`}>
             <Recycle size={16} /> Talent Pool
           </button>
           <button onClick={handleExportAction} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white font-bold text-sm rounded-xl hover:bg-indigo-700 transition-colors shadow-sm">
@@ -356,7 +389,8 @@ export default function RejectedCandidatesPage() {
       </section>
       
       {/* Talent Pool Section */}
-      <section className="bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700/60 shadow-sm p-6 mt-4">
+      <FeatureLockOverlay isLocked={!hasTalentPool} featureName="Talent Pool Management">
+<section className="bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700/60 shadow-sm p-6 mt-4">
         <div className="mb-5">
           <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100 flex items-center gap-2">
             Talent Pool
@@ -369,7 +403,9 @@ export default function RejectedCandidatesPage() {
           <StatCard icon={ArrowRightLeft} label="Reconsideration Requests" value={0} accent="bg-amber-500/15 dark:bg-amber-500/25 border border-amber-400/30 text-amber-600 dark:text-amber-400" />
           <StatCard icon={FileText} label="Archived Candidates" value={totalRejected} accent="bg-purple-500/15 dark:bg-purple-500/25 border border-purple-400/30 text-purple-600 dark:text-purple-400" />
         </div>
-      </section>
+      
+</section>
+</FeatureLockOverlay>
 
       <CandidateDialog 
         candidate={selectedCandidate} 

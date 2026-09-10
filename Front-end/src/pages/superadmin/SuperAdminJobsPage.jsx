@@ -156,6 +156,24 @@ export default function SuperAdminJobsPage() {
   };
 
   const handleScheduleInterview = async (app) => {
+    if (!userFeatures.includes('Create Interview')) {
+      Swal.fire({
+        title: 'Feature Locked',
+        text: 'Upgrade your plan to create interviews.',
+        icon: 'info',
+        showCancelButton: true,
+        confirmButtonColor: '#6366f1',
+        cancelButtonColor: '#94a3b8',
+        confirmButtonText: '<i class="fas fa-crown mr-1 text-amber-300"></i> View Plans',
+        cancelButtonText: 'Close'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          window.location.href = '/superadmin/subscription';
+        }
+      });
+      return;
+    }
+
     if (app.status !== 'Interview Scheduled') {
       try {
         await handleStatusChange(app, 'Interview Scheduled');

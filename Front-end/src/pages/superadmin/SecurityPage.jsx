@@ -1,7 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
-import { ShieldCheck, ShieldAlert, Key, Users, AlertTriangle, X } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Key, Users, AlertTriangle, X, Lock } from 'lucide-react';
+
+const FeatureLockOverlay = ({ isLocked, featureName, children }) => {
+  if (!isLocked) return children;
+  return (
+    <div className="relative overflow-hidden rounded-2xl h-full w-full">
+      <div className="filter blur-[6px] opacity-40 pointer-events-none select-none transition-all duration-300 h-full w-full">
+         {children}
+      </div>
+      <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/30 dark:bg-slate-900/40 backdrop-blur-[1px] z-10 p-4 text-center">
+         <div className="bg-indigo-100 text-indigo-600 w-12 h-12 flex items-center justify-center rounded-full mb-3 shadow-sm border border-indigo-200">
+            <Lock size={20} strokeWidth={2.5} />
+         </div>
+         <h4 className="font-bold text-slate-800 dark:text-slate-100 mb-1">Feature Locked</h4>
+         <p className="text-sm text-slate-600 dark:text-slate-400 font-medium max-w-xs">
+           Upgrade your plan to access {featureName}
+         </p>
+      </div>
+    </div>
+  );
+};
 
 const ToggleSwitch = ({ checked, onChange }) => (
   <button
@@ -38,8 +58,13 @@ import { API_BASE_URL } from '../../apiConfig';
 
 const COLORS = ['#6366f1', '#10b981', '#f43f5e'];
 
+
+
+
 export default function SecurityPage() {
-  const { token } = useSelector(state => state.auth);
+  const { token, adminUser } = useSelector(state => state.auth);
+  const userFeatures = adminUser?.plan_features || [];
+  const hasActiveSecurityAlerts = userFeatures.includes('Active Security Alerts');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -199,69 +224,71 @@ export default function SecurityPage() {
         </div>
 
         {/* Security Alerts */}
-        <div
-          className="bg-white dark:bg-slate-800/60 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800"
-        >
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="w-6 h-6 text-rose-500" />
-              <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Active Security Alerts</h2>
-            </div>
-            <select
-              value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value)}
-              className="px-3 py-1.5 border border-slate-300 bg-white dark:bg-slate-800/60 rounded-lg text-sm text-slate-700 dark:text-slate-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="all">All Roles</option>
-              <option value="super_admin">Super Admins</option>
-              <option value="tenant">Recruiters</option>
-            </select>
-          </div>
-          
-          <div className="space-y-4 max-h-64 overflow-y-auto custom-scrollbar pr-2">
-            {alerts.length > 0 ? (
-              alerts.map((alert, idx) => {
-                const isFailed = alert.type?.toLowerCase().includes("failed");
-                const isSuccess = alert.type?.toLowerCase().includes("successful");
-                const cardStyle = isFailed
-                  ? "bg-rose-50 border-rose-200 text-rose-800"
-                  : isSuccess
-                  ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                  : "bg-indigo-50 border-indigo-200 text-indigo-800";
-                const badgeStyle = isFailed
-                  ? "text-rose-600"
-                  : isSuccess
-                  ? "text-emerald-600"
-                  : "text-indigo-600";
-                return (
-                  <div key={idx} className={`p-4 rounded-xl border flex justify-between items-center ${cardStyle}`}>
-                    <div>
-                      <h4 className="font-semibold">{alert.type}</h4>
-                      <p className="text-sm opacity-80">IP: {alert.ip}</p>
-                    </div>
-                    <span className={`text-xs font-medium bg-white dark:bg-slate-800/60 px-2 py-1 rounded-md shadow-sm ${badgeStyle}`}>
-                      {alert.time}
-                    </span>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="p-8 text-center text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-300">
-                <ShieldCheck className="w-12 h-12 text-emerald-400 mx-auto mb-3 opacity-50" />
-                <p>No active security alerts.</p>
-                <p className="text-sm mt-1">Your system is secure.</p>
-              </div>
-            )}
-          </div>
-          
-          <button 
-            onClick={() => setIsModalOpen(true)}
-            className="w-full mt-6 py-3 px-4 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-semibold rounded-xl shadow-md hover:shadow-lg transition-all duration-300 flex items-center justify-center gap-2 group transform hover:-translate-y-0.5"
+        <FeatureLockOverlay isLocked={!hasActiveSecurityAlerts} featureName="Active Security Alerts">
+          <div
+            className="bg-white dark:bg-slate-800/60 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 h-full"
           >
-            <ShieldCheck className="w-5 h-5 text-indigo-200 group-hover:text-white transition-colors" />
-            <span>Review Security Policies</span>
-          </button>
-        </div>
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="w-6 h-6 text-rose-500" />
+                <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Active Security Alerts</h2>
+              </div>
+              <select
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value)}
+                className="px-3 py-1.5 border border-slate-300 bg-white dark:bg-slate-800/60 rounded-lg text-sm text-slate-700 dark:text-slate-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="all">All Roles</option>
+                <option value="super_admin">Super Admins</option>
+                <option value="tenant">Recruiters</option>
+              </select>
+            </div>
+            
+            <div className="space-y-4 max-h-64 overflow-y-auto custom-scrollbar pr-2">
+              {alerts.length > 0 ? (
+                alerts.map((alert, idx) => {
+                  const isFailed = alert.type?.toLowerCase().includes("failed");
+                  const isSuccess = alert.type?.toLowerCase().includes("successful");
+                  const cardStyle = isFailed
+                    ? "bg-rose-50 border-rose-200 text-rose-800"
+                    : isSuccess
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                    : "bg-indigo-50 border-indigo-200 text-indigo-800";
+                  const badgeStyle = isFailed
+                    ? "text-rose-600"
+                    : isSuccess
+                    ? "text-emerald-600"
+                    : "text-indigo-600";
+                  return (
+                    <div key={idx} className={`p-4 rounded-xl border flex justify-between items-center ${cardStyle}`}>
+                      <div>
+                        <h4 className="font-semibold">{alert.type}</h4>
+                        <p className="text-sm opacity-80">IP: {alert.ip}</p>
+                      </div>
+                      <span className={`text-xs font-medium bg-white dark:bg-slate-800/60 px-2 py-1 rounded-md shadow-sm ${badgeStyle}`}>
+                        {alert.time}
+                      </span>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="p-8 text-center text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-300">
+                  <ShieldCheck className="w-12 h-12 text-emerald-400 mx-auto mb-3 opacity-50" />
+                  <p>No active security alerts.</p>
+                  <p className="text-sm mt-1">Your system is secure.</p>
+                </div>
+              )}
+            </div>
+            
+            <button 
+              onClick={() => setIsModalOpen(true)}
+              className="w-full mt-6 py-3 px-4 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-semibold rounded-xl shadow-md hover:shadow-lg transition-all duration-300 flex items-center justify-center gap-2 group transform hover:-translate-y-0.5"
+            >
+              <ShieldCheck className="w-5 h-5 text-indigo-200 group-hover:text-white transition-colors" />
+              <span>Review Security Policies</span>
+            </button>
+          </div>
+        </FeatureLockOverlay>
       </div>
 
       {/* Security Policies Modal */}
