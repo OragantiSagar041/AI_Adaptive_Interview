@@ -538,8 +538,8 @@ export default function SuperAdminLayout() {
             className="border-r border-border overflow-hidden bg-sidebar"
             collapsible="icon"
           >
-            <SidebarHeader className="h-16 px-6 py-0 flex items-center justify-center shrink-0 border-b border-border transition-colors">
-              <div className="flex items-center gap-3 w-full overflow-hidden">
+            <SidebarHeader className="h-16 px-6 py-0 flex items-center justify-center shrink-0 border-b border-border transition-colors group-data-[collapsible=icon]:px-2">
+              <div className="flex items-center gap-3 w-full overflow-hidden group-data-[collapsible=icon]:justify-center">
                 <div
                   className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-white p-1 cursor-pointer"
                   style={{
@@ -570,7 +570,7 @@ export default function SuperAdminLayout() {
                           
                             {isLocked ? (
                               <div
-                                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 opacity-60 cursor-not-allowed text-slate-500 dark:text-slate-500`}
+                                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 opacity-60 cursor-not-allowed text-slate-500 dark:text-slate-500 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0`}
                                 onClick={(e) => {
                                   e.preventDefault();
                                   Swal.fire({
@@ -602,7 +602,7 @@ export default function SuperAdminLayout() {
                             ) : (
                               <NavLink
                                 to={item.path}
-                                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${isActive
+                                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 ${isActive
                                   ? '!bg-indigo-600 !text-white font-semibold shadow-md shadow-indigo-500/20'
                                   : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white !bg-transparent dark:!bg-transparent !border-none !shadow-none'
                                   }`}
@@ -649,7 +649,7 @@ export default function SuperAdminLayout() {
                     }
                     dispatch(setLiveResultsModalOpen(true));
                   }}
-                className="flex items-center justify-center md:justify-start gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white !bg-transparent dark:!bg-transparent !border-none !shadow-none cursor-pointer text-left overflow-hidden"
+                className="flex items-center justify-center md:justify-start gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white !bg-transparent dark:!bg-transparent !border-none !shadow-none cursor-pointer text-left overflow-hidden group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
               >
                 <Radio size={16} className="shrink-0" />
                 <span className="group-data-[collapsible=icon]:hidden truncate flex items-center justify-between w-full">
@@ -659,7 +659,7 @@ export default function SuperAdminLayout() {
               </button>
               <button
                 onClick={() => setShowCreditsModal(true)}
-                className="flex items-center justify-center md:justify-start gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white !bg-transparent dark:!bg-transparent !border-none !shadow-none cursor-pointer text-left overflow-hidden"
+                className="flex items-center justify-center md:justify-start gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white !bg-transparent dark:!bg-transparent !border-none !shadow-none cursor-pointer text-left overflow-hidden group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
               >
                 <Coins size={16} className="shrink-0" />
                 <span className="group-data-[collapsible=icon]:hidden truncate">Available Credits</span>
