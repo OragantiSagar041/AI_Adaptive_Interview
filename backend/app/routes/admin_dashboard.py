@@ -1133,13 +1133,35 @@ def upload_full_recording(
             last_error = None
             for account in cloudinary_manager.get_next_accounts_generator():
                 try:
+                    cloud_name = account.get("cloud_name")
+                    api_key = account.get("api_key")
+                    api_secret = account.get("api_secret")
+                    
+                    if not all([cloud_name, api_key, api_secret]):
+                        continue
+                        
+                    # Cloudinary's Python SDK upload_large method has a bug where it
+                    # sometimes ignores credentials passed as kwargs and uses globals.
+                    # We can force it by passing it as a `cloud_name` kwarg but using the 
+                    # api_proxy or environment variable, or we can just safely update the config
+                    # using cloudinary.config() before uploading. Since we're in a threaded
+                    # environment, we'll pass the `cloudinary://` URL explicitly using the 
+                    # undocumented `_connection` override or just set config.
+                    
+                    import cloudinary
+                    
+                    # Temporarily update the global config for this thread
+                    cloudinary.config(
+                        cloud_name=cloud_name,
+                        api_key=api_key,
+                        api_secret=api_secret,
+                        secure=True
+                    )
+                    
                     upload_kwargs = {
                         "resource_type": "video",
                         "type": "authenticated",
-                        "folder": "hireiq_interview_recordings",
-                        "cloud_name": account.get("cloud_name"),
-                        "api_key": account.get("api_key"),
-                        "api_secret": account.get("api_secret"),
+                        "folder": "hireiq_interview_recordings"
                     }
                     
                     upload_result = cloudinary.uploader.upload_large(
@@ -1148,7 +1170,10 @@ def upload_full_recording(
                     )
                     
                     cloudinary_public_id = upload_result.get("public_id")
-                    normalized_path = f"cloudinary-authenticated://{cloudinary_public_id}"
+                    
+                    # Store the account details in the DB along with the path so we know which 
+                    # credentials to use when generating signed URLs later, since we have multiple keys!
+                    normalized_path = f"cloudinary-authenticated://{cloudinary_public_id}?cloud_name={cloud_name}&api_key={api_key}&api_secret={api_secret}"
                     
                     # Clean up local file after successful upload
                     os.remove(file_path)
