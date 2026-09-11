@@ -330,7 +330,7 @@ def _offline_coding_fallback(profile_text: str) -> Dict[str, Any]:
     return random.choice(tasks_pool)
 
 
-def generate_coding_task(profile_text: str, answers_data: List[Dict[str, Any]], interview_type: str = "Technical", industry: str = "General") -> Dict[str, Any]:
+def generate_coding_task(profile_text: str, answers_data: List[Dict[str, Any]], interview_type: str = "Technical", industry: str = "General", language: str = "English") -> Dict[str, Any]:
     answers_summary = "\n".join(
         f"- Q: {a.get('question_text', '')}\n  A: {_truncate(a.get('answer_text', ''), 220)}"
         for a in answers_data[-5:]
@@ -366,6 +366,7 @@ Return JSON with:
 - test_cases (Must be an empty array: [])
 
 Make the task a deep business or management scenario in the '{industry}' industry that requires the candidate to type out a structured, written strategy. Do NOT ask for code.
+CRITICAL: All text fields (title, description, constraints, evaluation_focus) MUST be written in {language}. Do NOT use English unless {language} is English.
 """
     else:
         system_prompt = (
@@ -396,6 +397,7 @@ Return JSON with:
 - test_cases (exactly 14 items, each with input as JSON array args, expected, visible where first 3 are true and last 11 are false)
 
 Make the task a pure function problem using only cross-language friendly inputs and outputs such as strings, numbers, booleans, or flat arrays. It should be solvable in 20-30 minutes and suitable for Python, JavaScript, Java, or C. The context and scenario of the problem MUST be heavily themed around the '{industry}' industry.
+All text fields MUST be written in English.
 """
 
     result = _llm_json(system_prompt, user_prompt, fallback)

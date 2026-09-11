@@ -261,10 +261,8 @@ def complete_session(
                                 case_std = interview_doc.get("case_study_round")
                                 n_cs_questions = len((case_std or {}).get("questions", []) or []) if case_std else 0
 
-                                # Round 1: dynamic based on interview type
                                 round1_s = calculate_round1_score(questions, answers, interview_type=interview_type, n_case_study_questions=n_cs_questions)
 
-                                # Round 2: route by interview type
                                 itype_lower = str(interview_type).strip().lower()
                                 if itype_lower == "technical" and coding_rd:
                                     round2_s = calculate_coding_score(coding_rd)
@@ -272,9 +270,12 @@ def complete_session(
                                     lang_cs = interview_doc.get("language", "English")
                                     ctx_cs = f"Profile: {interview_doc.get('profile_text', '')}"
                                     round2_s = calculate_case_study_round2_score(case_std, n_cs_questions, ctx_cs, lang_cs)
-                                # Normal / other types: round2_s stays 0.0
+                                    interviews_collection.update_one(
+                                        {"id": interview_id},
+                                        {"$set": {"case_study_round": case_std}}
+                                    )
 
-                            avg_score = calculate_final_score(round1_s, round2_s)
+                                avg_score = calculate_final_score(round1_s, round2_s)
                         except Exception as e:
                             print(f"Error calculating final score on completion: {e}")
 

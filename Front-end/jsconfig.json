@@ -6,7 +6,6 @@
     "jsx": "react-jsx",
     "checkJs": false,
     "forceConsistentCasingInFileNames": false,
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     }

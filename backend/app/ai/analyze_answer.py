@@ -314,7 +314,7 @@ Return VALID JSON ONLY:
                 raise Exception("No JSON found in AI response")
             
     except Exception as e:
-        print(f"⚠️ Analysis API Failed: {e}")
+        print(f"[Fallback] Analysis API Failed: {e}")
 
         # ── FALLBACK: Dynamic offline scoring (evaluate answer against actual question) ──
         result_dict = _dynamic_offline_evaluation(

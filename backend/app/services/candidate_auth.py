@@ -43,6 +43,8 @@ def require_active_candidate(
             "status": 1,
             "is_deactivated": 1,
             "cloned_voice_id": 1,
+            "custom_voice_id": 1,
+            "voice_clone": 1,
         },
     )
     if not session:

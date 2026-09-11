@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { RefreshCw, Video, X, Monitor, Eye, ShieldAlert, Download } from 'lucide-react'
+import { RefreshCw, Video, X, Monitor, Eye, ShieldAlert, Download, Camera, LayoutGrid } from 'lucide-react'
 import { API_BASE_URL } from '../../../apiConfig'
 import Modal from '../../Modal'
 import Button from '../../Button'
@@ -1120,7 +1120,8 @@ export function LiveResultsModal({
   ongoingCodingCount,
   liveSessions,
   handleOpenScorecard,
-  handleOpenLiveStream
+  handleOpenLiveStream,
+  handleOpenMultiLiveStream
 }) {
   const onlineLiveSessions = Array.isArray(liveSessions)
     ? liveSessions.filter(session => session.online)
@@ -1139,9 +1140,24 @@ export function LiveResultsModal({
       subtitle="Real-time monitoring of candidates currently attempting or configured for interviews"
       maxWidth="max-w-5xl"
       footer={
-        <Button onClick={onClose} variant="primary">
-          Close Monitor
-        </Button>
+        <div className="flex items-center justify-between w-full">
+          {handleOpenMultiLiveStream && onlineLiveSessions.length > 0 ? (
+            <Button
+              onClick={() => {
+                onClose()
+                handleOpenMultiLiveStream()
+              }}
+              variant="outline"
+              className="flex items-center gap-2 text-xs font-semibold border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+            >
+              <LayoutGrid size={14} />
+              Open Multi-Stream Grid ({onlineLiveSessions.length})
+            </Button>
+          ) : <div />}
+          <Button onClick={onClose} variant="primary">
+            Close Monitor
+          </Button>
+        </div>
       }
     >
       <div className="flex flex-col gap-6 text-slate-300">

@@ -98,24 +98,49 @@ router = APIRouter()
 def get_admin_voices(current_admin: dict = Depends(get_current_admin_details)):
     """
     Returns available Cartesia custom voices configured in the backend .env file.
-    Keys like CARTESIA_VOICE_ID and CARTESIA_VOICE_ID_MALE are loaded.
+    Keys like CARTESIA_VOICE_ID and CARTESIA_VOICE_ID_1 are loaded.
+    Attempts to fetch human-readable voice names from Cartesia where available.
     """
     env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
-    load_dotenv(env_path, override=False)
+    load_dotenv(env_path, override=True)
     
+    cartesia_api_key = os.getenv("CARTESIA_API_KEY", "").strip()
+    cartesia_client = None
+    if cartesia_api_key:
+        try:
+            from cartesia import Cartesia
+            cartesia_client = Cartesia(api_key=cartesia_api_key)
+        except Exception as e:
+            logger.warning(f"Could not initialize Cartesia in get_admin_voices: {e}")
+
+    def _get_cartesia_name(voice_id: str) -> Optional[str]:
+        if not cartesia_client or not voice_id:
+            return None
+        try:
+            v_obj = cartesia_client.voices.get(id=voice_id)
+            return getattr(v_obj, "name", None)
+        except Exception:
+            return None
+
     voices = []
-    
-    # Check for the default one
-    default_voice_id = os.getenv("CARTESIA_VOICE_ID")
-    if default_voice_id:
-        voices.append({"name": "Default Voice", "id": default_voice_id})
-        
-    # Check for anything starting with CARTESIA_VOICE_ID_
-    for key, value in os.environ.items():
+    seen_ids = set()
+
+    # Collect configured CARTESIA_VOICE_ID_* entries
+    for key, value in sorted(os.environ.items()):
         if key.startswith("CARTESIA_VOICE_ID_") and value:
-            # e.g., CARTESIA_VOICE_ID_MALE -> "Male"
+            val = str(value).strip()
             name_part = key.replace("CARTESIA_VOICE_ID_", "").replace("_", " ").title()
-            voices.append({"name": name_part, "id": value})
+            real_name = _get_cartesia_name(val)
+            display_name = f"{name_part} ({real_name})" if real_name else name_part
+            voices.append({"name": display_name, "id": val})
+            seen_ids.add(val)
+
+    # Default configured voice
+    default_voice_id = str(os.getenv("CARTESIA_VOICE_ID") or "").strip()
+    if default_voice_id and default_voice_id not in seen_ids:
+        real_name = _get_cartesia_name(default_voice_id)
+        display_name = f"Default Voice ({real_name})" if real_name else "Default Voice"
+        voices.insert(0, {"name": display_name, "id": default_voice_id})
             
     return {"status": "success", "voices": voices}
 
@@ -229,22 +254,32 @@ async def generate_tts(
     - If Cartesia quota is exceeded, the API key is missing, or any other error
       occurs, the system silently falls back to the free Microsoft Edge TTS voice.
     """
-    load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"), override=False)
+    load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"), override=True)
     cartesia_api_key = os.getenv("CARTESIA_API_KEY", "").strip()
-    session_voice_id = str(candidate_session.get("cloned_voice_id") or "").strip()
+    default_cartesia_voice = os.getenv("CARTESIA_VOICE_ID", "").strip()
+    session_cloned_voice = str(candidate_session.get("cloned_voice_id") or "").strip()
+    session_custom_voice = str(candidate_session.get("custom_voice_id") or "").strip()
     requested_voice_id = str(req.voice_id or "").strip()
-    # Only reject if the session has its own cloned voice AND the requested ID doesn't match it.
-    # If there is no per-session clone, allow the request through to use the global CARTESIA_VOICE_ID.
-    if session_voice_id and requested_voice_id and not hmac.compare_digest(requested_voice_id, session_voice_id):
+
+    # Security check: If a per-session clone exists and a different requested_voice_id is passed, reject.
+    if session_cloned_voice and requested_voice_id and not hmac.compare_digest(requested_voice_id, session_cloned_voice):
         raise HTTPException(status_code=403, detail="Voice ID does not belong to this interview session")
-    # A per-session clone takes priority over the configured global voice.
-    cartesia_voice_id = session_voice_id or os.getenv("CARTESIA_VOICE_ID", "").strip()
+
+    # Priority: on-the-fly session clone > interview-configured custom voice > requested voice > global default Cartesia voice
+    target_voice_id = (
+        session_cloned_voice
+        or session_custom_voice
+        or requested_voice_id
+        or default_cartesia_voice
+    )
+
+    is_voice_cloning_enabled = bool(req.use_custom_voice)
 
     from fastapi.responses import StreamingResponse
     import io
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 1. Build Edge TTS regional voice map (used as fallback AND for regional languages)
+    # 1. Build Edge TTS regional voice map (used as fallback for regional languages)
     # ──────────────────────────────────────────────────────────────────────────
     base_edge_voice = "en-US-JennyNeural" if req.voice in ("shimmer", "nova") else "en-US-AriaNeural"
     edge_language_map = {
@@ -257,29 +292,56 @@ async def generate_tts(
     }
     requested_lang = req.language.title()
     edge_voice = edge_language_map.get(requested_lang, base_edge_voice)
-    is_regional = requested_lang in edge_language_map and requested_lang != "English"
+
+    # Cartesia multilingual language code mapping
+    cartesia_language_map = {
+        "english": "en",
+        "hindi": "hi",
+        "telugu": "te",
+        "tamil": "ta",
+        "kannada": "kn",
+        "malayalam": "ml",
+        "bengali": "bn",
+        "marathi": "mr",
+        "gujarati": "gu",
+        "punjabi": "pa",
+        "french": "fr",
+        "german": "de",
+        "spanish": "es",
+        "japanese": "ja",
+        "chinese": "zh",
+        "russian": "ru",
+        "arabic": "ar",
+        "portuguese": "pt",
+        "italian": "it",
+        "korean": "ko",
+        "dutch": "nl",
+        "polish": "pl",
+        "swedish": "sv",
+        "turkish": "tr",
+        "tagalog": "tl",
+        "vietnamese": "vi",
+        "indonesian": "id",
+        "thai": "th",
+    }
+    cartesia_lang = cartesia_language_map.get(str(req.language or "English").strip().lower(), "en")
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 2. Cartesia path — only for English when keys are configured
+    # 2. Cartesia path — for ALL languages when keys are configured and voice cloning is enabled
     # ──────────────────────────────────────────────────────────────────────────
-    used_cartesia = False
-    temp_filename = f"temp_tts_{uuid.uuid4().hex}.mp3"
-    
-    # Determine the actual voice ID to use
-    actual_cartesia_voice_id = cartesia_voice_id
-
-    if req.use_custom_voice and cartesia_api_key and actual_cartesia_voice_id and not is_regional:
+    if is_voice_cloning_enabled and cartesia_api_key and target_voice_id:
         try:
             import asyncio
             # pyrefly: ignore [missing-import]
             from cartesia import Cartesia
 
-            def _call_cartesia():
+            def _call_cartesia(voice_id_to_use: str):
                 client = Cartesia(api_key=cartesia_api_key)
                 result = client.tts.generate(
-                    model_id="sonic-2",
+                    model_id="sonic-latest",
                     transcript=req.text,
-                    voice={"mode": "id", "id": actual_cartesia_voice_id},
+                    voice={"mode": "id", "id": voice_id_to_use},
+                    language=cartesia_lang,
                     output_format={
                         "container": "mp3",
                         "encoding": "mp3",
@@ -288,10 +350,21 @@ async def generate_tts(
                 )
                 return result.read()
 
-            audio_bytes = await asyncio.get_event_loop().run_in_executor(None, _call_cartesia)
+            try:
+                audio_bytes = await asyncio.get_event_loop().run_in_executor(
+                    None, lambda: _call_cartesia(target_voice_id)
+                )
+            except Exception as primary_err:
+                logger.warning(f"[TTS] Cartesia custom voice {target_voice_id} failed: {primary_err}. Attempting default voice.")
+                if default_cartesia_voice and default_cartesia_voice != target_voice_id:
+                    audio_bytes = await asyncio.get_event_loop().run_in_executor(
+                        None, lambda: _call_cartesia(default_cartesia_voice)
+                    )
+                else:
+                    raise primary_err
 
             if audio_bytes:
-                print(f"[TTS] Cartesia: OK ({len(audio_bytes)} bytes) | voice={cartesia_voice_id}")
+                print(f"[TTS] Cartesia: OK ({len(audio_bytes)} bytes) | voice={target_voice_id} | lang={cartesia_lang}")
                 return StreamingResponse(io.BytesIO(audio_bytes), media_type="audio/mpeg")
             else:
                 print(f"[TTS] Cartesia error: No audio returned. Falling back to Edge TTS.")
@@ -306,12 +379,13 @@ async def generate_tts(
         print(f"[TTS] Using Microsoft Edge TTS | voice={edge_voice} | lang={requested_lang}")
         communicate = edge_tts.Communicate(req.text, edge_voice)
         
-        async def edge_tts_stream():
-            async for chunk in communicate.stream():
-                if chunk["type"] == "audio":
-                    yield chunk["data"]
-                    
-        return StreamingResponse(edge_tts_stream(), media_type="audio/mpeg")
+        # Collect all audio chunks into a single bytes object for reliable playback
+        audio_chunks = []
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                audio_chunks.append(chunk["data"])
+        audio_bytes = b"".join(audio_chunks)
+        return StreamingResponse(io.BytesIO(audio_bytes), media_type="audio/mpeg")
     except Exception as edge_err:
         print(f"[TTS] Edge TTS Error: {edge_err}")
         raise HTTPException(status_code=500, detail=f"TTS generation failed: {edge_err}")

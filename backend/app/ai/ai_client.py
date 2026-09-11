@@ -304,21 +304,21 @@ def chat_completion(
             err_msg = str(openrouter_exc)
             if _is_quota_error(openrouter_exc):
                 _mark_quota_exhausted(err_msg)
-                print(f"⚡ OpenRouter quota hit: {err_msg}. Switching to HuggingFace fallback...")
+                print(f"OpenRouter quota hit: {err_msg}. Switching to HuggingFace fallback...")
             else:
-                print(f"⚠️ OpenRouter failed: {openrouter_exc}. Switching to HuggingFace fallback...")
+                print(f"OpenRouter failed: {openrouter_exc}. Switching to HuggingFace fallback...")
     else:
         if _is_in_cooldown():
-            print("⏳ OpenRouter is in cooldown. Using HuggingFace fallback...")
+            print("OpenRouter is in cooldown. Using HuggingFace fallback...")
         else:
-            print("⚠️ No OpenRouter API key. Using HuggingFace fallback...")
+            print("No OpenRouter API key. Using HuggingFace fallback...")
 
     # 2. Fallback: HuggingFace (Groq is reserved for voice transcription only)
     try:
-        print("🤗 Calling HuggingFace fallback model...")
+        print("Calling HuggingFace fallback model...")
         return _call_huggingface(messages, temperature=temperature, timeout=timeout)
     except Exception as hf_exc:
-        print(f"❌ All LLM providers failed: OpenRouter and HuggingFace.")
+        print(f"All LLM providers failed: OpenRouter and HuggingFace.")
         raise RuntimeError("QUOTA_EXHAUSTED_INSTANT_OFFLINE")
 
 

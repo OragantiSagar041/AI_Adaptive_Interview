@@ -800,9 +800,9 @@ export default function SuperAdminJobsPage() {
             className="bg-white dark:bg-slate-800/60/95 backdrop-blur-xl rounded-[2rem] shadow-[0_20px_60px_rgba(0,0,0,0.15)] border border-white/60 w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col relative my-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="absolute top-0 left-0 w-full h-28 bg-gradient-to-b from-indigo-50/80 to-transparent pointer-events-none rounded-t-[2rem]" />
+            <div className="absolute top-0 left-0 w-full h-28 bg-gradient-to-b from-indigo-50/80 dark:from-indigo-950/40 to-transparent pointer-events-none rounded-t-[2rem]" />
 
-            <div className="p-7 border-b border-indigo-100/50 flex items-center justify-between relative z-10">
+            <div className="p-7 border-b border-indigo-100/50 dark:border-indigo-900/50 flex items-center justify-between relative z-10">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/20">
                   <Briefcase size={24} />
@@ -827,7 +827,7 @@ export default function SuperAdminJobsPage() {
                   <input
                     type="text" name="title" required
                     value={formData.title} onChange={handleInputChange}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/50 focus:outline-none focus:bg-white dark:bg-slate-800/60 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 font-medium placeholder:text-slate-400"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 focus:outline-none focus:bg-white dark:bg-slate-800/60 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 font-medium placeholder:text-slate-400"
                     placeholder="e.g. Senior Frontend Developer"
                   />
                 </div>
@@ -838,7 +838,7 @@ export default function SuperAdminJobsPage() {
                     <input
                       type="text" name="experience" required
                       value={formData.experience} onChange={handleInputChange}
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/50 focus:outline-none focus:bg-white dark:bg-slate-800/60 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 font-medium placeholder:text-slate-400"
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 focus:outline-none focus:bg-white dark:bg-slate-800/60 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 font-medium placeholder:text-slate-400"
                       placeholder="e.g. 3-5 Years"
                     />
                   </div>
@@ -846,7 +846,7 @@ export default function SuperAdminJobsPage() {
                     <label className="block text-[0.7rem] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5 ml-1">Work Mode</label>
                     <select
                       name="workMode" value={formData.workMode} onChange={handleInputChange}
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/50 focus:outline-none focus:bg-white dark:bg-slate-800/60 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 font-medium"
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 focus:outline-none focus:bg-white dark:bg-slate-800/60 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 font-medium"
                     >
                       <option value="Remote">Remote</option>
                       <option value="Hybrid">Hybrid</option>
@@ -861,7 +861,7 @@ export default function SuperAdminJobsPage() {
                     <input
                       type="text" name="location" required
                       value={formData.location} onChange={handleInputChange}
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/50 focus:outline-none focus:bg-white dark:bg-slate-800/60 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 font-medium placeholder:text-slate-400"
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 focus:outline-none focus:bg-white dark:bg-slate-800/60 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 font-medium placeholder:text-slate-400"
                       placeholder="e.g. San Francisco"
                     />
                   </div>
@@ -870,7 +870,7 @@ export default function SuperAdminJobsPage() {
                     <input
                       type="text" name="salary"
                       value={formData.salary} onChange={handleInputChange}
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/50 focus:outline-none focus:bg-white dark:bg-slate-800/60 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 font-medium placeholder:text-slate-400"
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 focus:outline-none focus:bg-white dark:bg-slate-800/60 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 font-medium placeholder:text-slate-400"
                       placeholder="e.g. 15 LPA"
                     />
                   </div>
@@ -879,7 +879,7 @@ export default function SuperAdminJobsPage() {
                     <input
                       type="text" name="bond"
                       value={formData.bond} onChange={handleInputChange}
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/50 focus:outline-none focus:bg-white dark:bg-slate-800/60 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 font-medium placeholder:text-slate-400"
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 focus:outline-none focus:bg-white dark:bg-slate-800/60 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 font-medium placeholder:text-slate-400"
                       placeholder="e.g. 1 Year"
                     />
                   </div>
@@ -890,7 +890,7 @@ export default function SuperAdminJobsPage() {
                   <input
                     type="text" name="skills" required
                     value={formData.skills} onChange={handleInputChange}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/50 focus:outline-none focus:bg-white dark:bg-slate-800/60 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 font-medium placeholder:text-slate-400"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 focus:outline-none focus:bg-white dark:bg-slate-800/60 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 font-medium placeholder:text-slate-400"
                     placeholder="e.g. React, Node.js, AWS"
                   />
                 </div>
@@ -918,7 +918,7 @@ export default function SuperAdminJobsPage() {
                     name="description" required
                     value={formData.description} onChange={handleInputChange}
                     rows="4"
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50/50 focus:outline-none focus:bg-white dark:bg-slate-800/60 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 font-medium placeholder:text-slate-400 resize-none"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 focus:outline-none focus:bg-white dark:bg-slate-800/60 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 font-medium placeholder:text-slate-400 resize-none"
                     placeholder="Describe the role, responsibilities, and requirements..."
                   ></textarea>
                 </div>
