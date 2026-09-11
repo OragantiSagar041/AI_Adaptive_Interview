@@ -10,9 +10,11 @@ import {
   Mail, Phone, MapPin, Building2, IndianRupee, Clock, Download,
   Play, FileText, Sparkles, Star, Check, X, Calendar, Send,
   MessageSquare, Video, Scale, Loader2, AlertCircle, Monitor,
-  Mic, ShieldAlert, Eye, ChevronRight, Code, UserCheck, User, ExternalLink, ArrowLeft
+  Mic, ShieldAlert, Eye, ChevronRight, Code, UserCheck, User, ExternalLink, ArrowLeft,
+  Globe
 } from "lucide-react"
 import { jsPDF } from 'jspdf'
+import { detectNonEnglishText, translateText, translateQAPairs } from '../../utils/translation'
 
 // ── Score Ring ──────────────────────────────────────────────────────────────
 function ScoreRing({ value, size = 140, strokeWidth = 12, label, tone }) {
@@ -89,8 +91,157 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   const [notesSaving, setNotesSaving] = useState(false)
   const [showScheduleModal, setShowScheduleModal] = useState(false)
 
+  // Translation States for Candidate Answers
+  const [translations, setTranslations] = useState({})
+  const [translatingKeys, setTranslatingKeys] = useState({})
+  const [translatingAll, setTranslatingAll] = useState(false)
+  const [allTranslated, setAllTranslated] = useState(false)
+
+  const handleTranslateSingle = async (key, text, questionText = '') => {
+    if ((!text || !text.trim()) && (!questionText || !questionText.trim())) return
+    if (translatingKeys[key]) return
+    setTranslatingKeys(prev => ({ ...prev, [key]: true }))
+    try {
+      const items = [{
+        id: key,
+        question_text: questionText || '',
+        answer_text: text || ''
+      }]
+      const results = await translateQAPairs(items, 'en', API_BASE_URL, token)
+      if (results && results[0]) {
+        const r = results[0]
+        setTranslations(prev => ({
+          ...prev,
+          [key]: {
+            id: key,
+            originalText: r.original_answer_text || text,
+            translatedText: r.answer_text,
+            originalQuestion: r.original_question_text || questionText,
+            translatedQuestion: r.question_text,
+            isTranslated: true,
+            view: 'translated',
+            sourceLangName: 'English (Translated)'
+          }
+        }))
+      }
+    } catch (e) {
+      console.error("Translation error:", e)
+    } finally {
+      setTranslatingKeys(prev => {
+        const next = { ...prev }
+        delete next[key]
+        return next
+      })
+    }
+  }
+
+  const toggleAnswerView = (key, view) => {
+    setTranslations(prev => {
+      if (!prev[key]) return prev
+      return {
+        ...prev,
+        [key]: {
+          ...prev[key],
+          view: view || (prev[key].view === 'translated' ? 'original' : 'translated')
+        }
+      }
+    })
+  }
+
+  const handleToggleTranslateAll = async () => {
+    if (translatingAll) return
+
+    if (allTranslated) {
+      setTranslations(prev => {
+        const updated = { ...prev }
+        Object.keys(updated).forEach(k => {
+          updated[k] = { ...updated[k], view: 'original' }
+        })
+        return updated
+      })
+      setAllTranslated(false)
+      return
+    }
+
+    const currentCandidate = detail || candidate || {}
+    const itemsToTranslate = []
+    const currentAnswers = (currentCandidate.answers || []).filter(a =>
+      transcriptTab === 'coding'
+        ? a.question_text?.toLowerCase().includes('coding round') || a.question_text?.toLowerCase().includes('case study')
+        : !a.question_text?.toLowerCase().includes('coding round') && !a.question_text?.toLowerCase().includes('case study')
+    )
+
+    currentAnswers.forEach((a, idx) => {
+      const key = `ans_${idx}`
+      itemsToTranslate.push({
+        id: key,
+        question_text: a.question_text || '',
+        answer_text: a.answer_text || ''
+      })
+    })
+
+    if (transcriptTab === 'coding' && currentCandidate.case_study_round?.questions?.length > 0) {
+      currentCandidate.case_study_round.questions.forEach((q, idx) => {
+        const qText = typeof q === 'object' ? (q.scenario || q.question || q.text || q.title || JSON.stringify(q)) : q
+        const ansObj = currentCandidate.case_study_round.answers?.[idx]
+        const aText = typeof ansObj === 'object' ? ansObj?.answer_text : ansObj
+        itemsToTranslate.push({
+          id: `cs_${idx}`,
+          question_text: qText || '',
+          answer_text: aText || ''
+        })
+      })
+    }
+
+    if (itemsToTranslate.length === 0) return
+
+    // If already all translated in state, simply toggle view to 'translated'
+    const allCached = itemsToTranslate.every(it => translations[it.id]?.isTranslated)
+    if (allCached) {
+      setTranslations(prev => {
+        const next = { ...prev }
+        itemsToTranslate.forEach(it => {
+          if (next[it.id]) {
+            next[it.id] = { ...next[it.id], view: 'translated' }
+          }
+        })
+        return next
+      })
+      setAllTranslated(true)
+      return
+    }
+
+    setTranslatingAll(true)
+    try {
+      const results = await translateQAPairs(itemsToTranslate, 'en', API_BASE_URL, token)
+      setTranslations(prev => {
+        const next = { ...prev }
+        results.forEach(r => {
+          next[r.id] = {
+            id: r.id,
+            originalText: r.original_answer_text,
+            translatedText: r.answer_text,
+            originalQuestion: r.original_question_text,
+            translatedQuestion: r.question_text,
+            isTranslated: true,
+            view: 'translated',
+            sourceLangName: 'English (Translated)'
+          }
+        })
+        return next
+      })
+      setAllTranslated(true)
+    } catch (err) {
+      console.error("Error translating all questions and answers:", err)
+    } finally {
+      setTranslatingAll(false)
+    }
+  }
+
   const token = useSelector(state => state.auth.token)
   const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
+  const adminUser = useSelector(state => state.auth.adminUser)
+  const userFeatures = adminUser?.plan_features || []
 
   // Fetch full candidate details when dialog opens
   useEffect(() => {
@@ -100,6 +251,10 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
     setAtsData(null)
     setError(null)
     setShowResumeContent(false)
+    setTranslations({})
+    setTranslatingKeys({})
+    setTranslatingAll(false)
+    setAllTranslated(false)
 
     const linkId = candidate.link_id || candidate.id || candidate._id
     if (!linkId || linkId.startsWith("ai_call_")) {
@@ -420,8 +575,11 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
     c.answers.forEach((a, index) => {
       checkPageBreak(10);
       doc.setFont("helvetica", "bold");
-      const qText = `Q${index + 1}: ${a.question_text || 'No question recorded'}`;
-      const qLines = doc.splitTextToSize(qText, pageWidth - 2 * margin);
+      const transItem = translations[`ans_${index}`];
+      const qDisplay = (transItem?.isTranslated && transItem.view === 'translated' && transItem.translatedQuestion)
+        ? `Q${index + 1}: ${transItem.translatedQuestion}`
+        : `Q${index + 1}: ${a.question_text || 'No question recorded'}`;
+      const qLines = doc.splitTextToSize(qDisplay, pageWidth - 2 * margin);
       checkPageBreak(qLines.length * 5 + 30);
       doc.text(qLines, margin, y);
       y += qLines.length * 5 + 3;
@@ -445,11 +603,30 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
       doc.setFontSize(11);
       y += 4;
 
-      doc.setFont("helvetica", "normal");
-      const ansLabel = "Candidate's Answer/Code:";
-      checkPageBreak(5);
-      doc.text(ansLabel, margin, y);
-      y += 5;
+      if (transItem?.isTranslated && transItem.translatedText) {
+        checkPageBreak(5);
+        doc.setFont("helvetica", "bold");
+        doc.text(`Candidate's Answer (English Translation from ${transItem.sourceLangName || 'Original'}):`, margin, y);
+        y += 5;
+        doc.setFont("helvetica", "normal");
+        const tLines = doc.splitTextToSize(transItem.translatedText, pageWidth - 2 * margin);
+        for (let i = 0; i < tLines.length; i++) {
+          checkPageBreak(5);
+          doc.text(tLines[i], margin, y);
+          y += 5;
+        }
+        y += 3;
+        checkPageBreak(5);
+        doc.setFont("helvetica", "italic");
+        doc.text("Original Candidate Answer:", margin, y);
+        y += 5;
+      } else {
+        doc.setFont("helvetica", "normal");
+        const ansLabel = "Candidate's Answer/Code:";
+        checkPageBreak(5);
+        doc.text(ansLabel, margin, y);
+        y += 5;
+      }
 
       doc.setFont("helvetica", "normal");
       const aText = a.answer_text || c.coding_round?.latest_code || 'No answer provided';
@@ -490,6 +667,41 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
     if (!candidate) return;
     const linkId = candidate.link_id || candidate.id || candidate._id;
     if (!linkId) return;
+
+    if (newDecision === 'selected' && !userFeatures.includes('Qualified Candidates')) {
+      Swal.fire({
+        title: 'Feature Locked',
+        text: 'Upgrade your plan to unlock Qualified Candidates.',
+        icon: 'info',
+        showCancelButton: true,
+        confirmButtonColor: '#6366f1',
+        cancelButtonColor: '#94a3b8',
+        confirmButtonText: '<i class="fas fa-crown mr-1 text-amber-300"></i> View Plans',
+        cancelButtonText: 'Close'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          window.location.href = '/superadmin/subscription';
+        }
+      })
+      return;
+    }
+    if (newDecision === 'rejected' && !userFeatures.includes('Rejected Candidates')) {
+      Swal.fire({
+        title: 'Feature Locked',
+        text: 'Upgrade your plan to unlock Rejected Candidates.',
+        icon: 'info',
+        showCancelButton: true,
+        confirmButtonColor: '#6366f1',
+        cancelButtonColor: '#94a3b8',
+        confirmButtonText: '<i class="fas fa-crown mr-1 text-amber-300"></i> View Plans',
+        cancelButtonText: 'Close'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          window.location.href = '/superadmin/subscription';
+        }
+      })
+      return;
+    }
 
     try {
       await dispatch(handleUpdateDecision({ linkId, decision: newDecision })).unwrap()
@@ -698,14 +910,12 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
             ))}
           </div>
 
-          {/* ── Content ── */}
-          <div className="flex-1 overflow-y-auto p-6 bg-background">
-
-            {/* ─ Overview Tab ─ */}
-            {activeTab === 'overview' && (
-              <div className="space-y-6">
-                <section className="bg-card rounded-xl border border-border p-5 shadow-sm">
-                  <h3 className="text-sm font-black text-foreground mb-4">Candidate Information</h3>
+          {/* ─ Overview Tab ─ */}
+          {activeTab === 'overview' && (
+            <div className="space-y-6">
+              {userFeatures.includes('Resume Parsing') ? (
+                <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
+                  <h3 className="text-sm font-black text-slate-800 mb-4">Candidate Information</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-5">
                     <InfoRow icon={Mail} label="Email" value={email} />
                     <InfoRow icon={Phone} label="Mobile" value={phone} />
@@ -723,393 +933,451 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                     <InfoRow icon={MapPin} label="Location" value={c.location} />
                   </div>
                 </section>
-
-                <section className="bg-card rounded-xl border border-border p-5 shadow-sm">
-                  <h3 className="text-sm font-black text-foreground mb-3 flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-indigo-500" /> AI Recommendation
-                  </h3>
-                  <div className="rounded-xl border border-border bg-secondary p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${isQualified ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'}`}>
-                        {c.overall_recommendation || (isQualified ? 'Hire' : 'Reject')}
-                      </span>
-                      <span className="text-sm font-medium text-foreground">
-                        {isQualified ? 'Ready for Technical Round / Hiring' : 'Does not meet required threshold'}
-                      </span>
+              ) : (
+                <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm relative overflow-hidden">
+                  <div className="filter blur-[6px] opacity-40 pointer-events-none select-none">
+                    <h3 className="text-sm font-black text-slate-800 mb-4">Candidate Information</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-5">
+                      <InfoRow icon={Mail} label="Email" value="hidden@example.com" />
+                      <InfoRow icon={Phone} label="Mobile" value="+91 XXXXX XXXXX" />
+                      <InfoRow icon={Clock} label="Experience" value="Locked" />
+                      <InfoRow icon={Building2} label="Current Company" value="Locked" />
+                      <InfoRow icon={IndianRupee} label="Current CTC" value="Locked" />
+                      <InfoRow icon={IndianRupee} label="Expected CTC" value="Locked" />
+                      <InfoRow icon={Clock} label="Notice Period" value="Locked" />
+                      <InfoRow icon={MapPin} label="Location" value="Locked" />
                     </div>
-                    {c.strengths_summary && (
-                      <div className="mb-3">
-                        <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Strengths</div>
-                        <p className="text-sm font-medium text-foreground bg-emerald-500/10 rounded-lg p-3 border border-emerald-500/20">{c.strengths_summary}</p>
-                      </div>
-                    )}
-                    {c.weaknesses_summary && (
-                      <div>
-                        <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Areas to Improve</div>
-                        <p className="text-sm font-medium text-foreground bg-rose-500/10 rounded-lg p-3 border border-rose-500/20">{c.weaknesses_summary}</p>
-                      </div>
-                    )}
-                    {!c.strengths_summary && !c.weaknesses_summary && (
-                      <p className="text-sm text-muted-foreground">No AI summary available for this candidate yet.</p>
-                    )}
+                  </div>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/30 backdrop-blur-[1px] z-10 p-4 text-center">
+                    <div className="bg-indigo-100 text-indigo-600 w-12 h-12 flex items-center justify-center rounded-full mb-3 shadow-sm border border-indigo-200">
+                      <i className="fas fa-lock text-xl"></i>
+                    </div>
+                    <h3 className="text-[15px] font-extrabold text-slate-800 mb-1">Resume Parsing Locked</h3>
+                    <p className="text-xs font-medium text-slate-500 mb-4 max-w-[200px] leading-relaxed">Upgrade your plan to automatically extract candidate details.</p>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        window.location.href = '/superadmin/subscription';
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-800/60 text-indigo-600 dark:text-indigo-400 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors font-bold text-xs shadow-sm cursor-pointer"
+                    >
+                      <i className="fas fa-crown text-amber-500"></i> View Plans
+                    </button>
                   </div>
                 </section>
+              )}
 
-                {/* Integrity */}
-                {c.integrity && (
+              {/* ─ Overview Tab ─ */}
+              {activeTab === 'overview' && (
+                <div className="space-y-6">
                   <section className="bg-card rounded-xl border border-border p-5 shadow-sm">
-                    <h3 className="text-sm font-black text-foreground mb-4 flex items-center gap-2">
-                      <ShieldAlert className="h-4 w-4 text-amber-500" /> Interview Integrity
-                    </h3>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <StatCard label="Tab Switches" value={c.integrity.total_tab_switches} />
-                      <StatCard label="Face Alerts" value={c.integrity.total_face_alerts} />
-                      <StatCard label="Noise Alerts" value={c.integrity.total_noise_alerts} />
-                      <StatCard label="Total Duration" value={`${c.integrity.total_time_minutes} min`} />
+                    <h3 className="text-sm font-black text-foreground mb-4">Candidate Information</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-5">
+                      <InfoRow icon={Mail} label="Email" value={email} />
+                      <InfoRow icon={Phone} label="Mobile" value={phone} />
+                      <InfoRow icon={Clock} label="Experience" value={c.experience} />
+                      <InfoRow icon={Building2} label="Current Company" value={(() => {
+                        const comp = c.current_company;
+                        if (!comp || comp === "N/A" || comp === "Not specified" || /^(technical|skills|apis,?\s*and\s*database)$/i.test(comp)) {
+                          return (c.experience && c.experience.toLowerCase().includes("fresher")) ? "Fresher" : (comp && !/^(technical|skills|apis,?\s*and\s*database)$/i.test(comp) ? comp : "Fresher");
+                        }
+                        return comp;
+                      })()} />
+                      <InfoRow icon={IndianRupee} label="Current CTC" value={c.current_ctc} />
+                      <InfoRow icon={IndianRupee} label="Expected CTC" value={c.expected_ctc} />
+                      <InfoRow icon={Clock} label="Notice Period" value={c.notice_period} />
+                      <InfoRow icon={MapPin} label="Location" value={c.location} />
                     </div>
                   </section>
-                )}
-              </div>
-            )}
 
-            {/* ─ Resume Tab ─ */}
-            {
-              activeTab === 'resume' && (
-                <div className="space-y-6">
-
-                  {/* Resume / Profile Text Card — compact header with expandable content */}
-                  {(resumeUrl || resumeText) && (
-                    <section className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
-
-                      {/* Header row — always visible */}
-                      <div className="flex items-center justify-between px-5 py-4">
-                        <div>
-                          <h3 className="text-sm font-bold text-slate-800">Resume / Profile Text</h3>
-                          <p className="text-xs text-slate-400 mt-0.5">Candidate's submitted resume</p>
+                  <section className="bg-card rounded-xl border border-border p-5 shadow-sm">
+                    <h3 className="text-sm font-black text-foreground mb-3 flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-indigo-500" /> AI Recommendation
+                    </h3>
+                    <div className="rounded-xl border border-border bg-secondary p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${isQualified ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'}`}>
+                          {c.overall_recommendation || (isQualified ? 'Hire' : 'Reject')}
+                        </span>
+                        <span className="text-sm font-medium text-foreground">
+                          {isQualified ? 'Ready for Technical Round / Hiring' : 'Does not meet required threshold'}
+                        </span>
+                      </div>
+                      {c.strengths_summary && (
+                        <div className="mb-3">
+                          <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Strengths</div>
+                          <p className="text-sm font-medium text-foreground bg-emerald-500/10 rounded-lg p-3 border border-emerald-500/20">{c.strengths_summary}</p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setShowResumeContent(prev => !prev)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-100 transition-all shadow-sm hover:scale-[1.02] cursor-pointer"
-                          title="View Candidate Resume"
-                        >
-                          <FileText size={13} className="text-indigo-600" />
-                          Resume
-                          <ChevronRight size={13} className={`text-indigo-500 transition-transform ${showResumeContent ? 'rotate-90' : ''}`} />
-                        </button>
+                      )}
+                      {c.weaknesses_summary && (
+                        <div>
+                          <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Areas to Improve</div>
+                          <p className="text-sm font-medium text-foreground bg-rose-500/10 rounded-lg p-3 border border-rose-500/20">{c.weaknesses_summary}</p>
+                        </div>
+                      )}
+                      {!c.strengths_summary && !c.weaknesses_summary && (
+                        <p className="text-sm text-muted-foreground">No AI summary available for this candidate yet.</p>
+                      )}
+                    </div>
+                  </section>
+
+                  {/* Integrity */}
+                  {c.integrity && (
+                    <section className="bg-card rounded-xl border border-border p-5 shadow-sm">
+                      <h3 className="text-sm font-black text-foreground mb-4 flex items-center gap-2">
+                        <ShieldAlert className="h-4 w-4 text-amber-500" /> Interview Integrity
+                      </h3>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <StatCard label="Tab Switches" value={c.integrity.total_tab_switches} />
+                        <StatCard label="Face Alerts" value={c.integrity.total_face_alerts} />
+                        <StatCard label="Noise Alerts" value={c.integrity.total_noise_alerts} />
+                        <StatCard label="Total Duration" value={`${c.integrity.total_time_minutes} min`} />
+                      </div>
+                    </section>
+                  )}
+                </div>
+              )}
+
+              {/* ─ Resume Tab ─ */}
+              {
+                activeTab === 'resume' && (
+                  <div className="space-y-6">
+
+                    {/* Resume / Profile Text Card — compact header with expandable content */}
+                    {(resumeUrl || resumeText) && (
+                      <section className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
+
+                        {/* Header row — always visible */}
+                        <div className="flex items-center justify-between px-5 py-4">
+                          <div>
+                            <h3 className="text-sm font-bold text-slate-800">Resume / Profile Text</h3>
+                            <p className="text-xs text-slate-400 mt-0.5">Candidate's submitted resume</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowResumeContent(prev => !prev)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-100 transition-all shadow-sm hover:scale-[1.02] cursor-pointer"
+                            title="View Candidate Resume"
+                          >
+                            <FileText size={13} className="text-indigo-600" />
+                            Resume
+                            <ChevronRight size={13} className={`text-indigo-500 transition-transform ${showResumeContent ? 'rotate-90' : ''}`} />
+                          </button>
+                        </div>
+
+                        {/* Expandable content — shown when Resume > is clicked */}
+                        {showResumeContent && (
+                          <div className="border-t border-slate-100">
+
+                            {/* Sub-tabs — only show if both url and text exist */}
+                            {resumeUrl && resumeText && (
+                              <div className="flex items-center gap-2 px-4 pt-3 bg-slate-50/50 border-b border-slate-100">
+                                <button
+                                  type="button"
+                                  onClick={() => setResumeSubTab('document')}
+                                  className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 ${resumeSubTab === 'document'
+                                    ? 'border-indigo-600 text-indigo-700 bg-white shadow-sm'
+                                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                                    }`}
+                                >
+                                  <FileText size={13} /> Resume Document
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setResumeSubTab('parsedText')}
+                                  className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 ${resumeSubTab === 'parsedText'
+                                    ? 'border-indigo-600 text-indigo-700 bg-white shadow-sm'
+                                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                                    }`}
+                                >
+                                  <Check size={13} /> Extracted Text
+                                </button>
+                              </div>
+                            )}
+
+                            {/* Content area */}
+                            <div>
+                              {/* Show document/PDF when: tab is 'document' OR only resumeUrl exists (no text) */}
+                              {(resumeSubTab === 'document' || (!resumeText && resumeUrl)) && resumeUrl && (
+                                <div>
+                                  {resumeFullUrl && isPdf ? (
+                                    <iframe
+                                      src={resumeFullUrl}
+                                      title="Candidate Resume"
+                                      className="w-full h-[600px] border-none bg-white"
+                                    />
+                                  ) : (
+                                    <div className="p-8 text-center bg-white space-y-4">
+                                      <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto shadow-inner">
+                                        <FileText size={32} />
+                                      </div>
+                                      <div>
+                                        <h4 className="font-extrabold text-slate-800 text-base">Resume File Attached</h4>
+                                        <p className="text-xs text-slate-500 mt-1 font-mono">{resumeFilename || resumeUrl}</p>
+                                      </div>
+                                      <a
+                                        href={resumeFullUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl transition-all shadow-md shadow-indigo-200"
+                                      >
+                                        <Download size={16} /> Download File
+                                      </a>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Show extracted text when: tab is 'parsedText' OR only resumeText exists (no url) */}
+                              {(resumeSubTab === 'parsedText' || (!resumeUrl && resumeText)) && resumeText && (
+                                <div className="p-6">
+                                  <pre className="text-sm text-slate-700 bg-slate-50 rounded-xl p-5 whitespace-pre-wrap font-sans border border-slate-200 leading-relaxed max-h-[500px] overflow-y-auto">
+                                    {resumeText}
+                                  </pre>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </section>
+                    )}
+
+                    {/* ATS Score */}
+                    <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-black text-slate-800">ATS Resume Match Score</h3>
+                        {atsLoading ? (
+                          <div className="flex items-center gap-1.5 text-xs text-indigo-600 font-medium">
+                            <Loader2 size={14} className="animate-spin" /> Analyzing…
+                          </div>
+                        ) : atsData ? (
+                          <span className="text-lg font-black text-indigo-600">{atsData.score}%</span>
+                        ) : null}
                       </div>
 
-                      {/* Expandable content — shown when Resume > is clicked */}
-                      {showResumeContent && (
-                        <div className="border-t border-slate-100">
-
-                          {/* Sub-tabs — only show if both url and text exist */}
-                          {resumeUrl && resumeText && (
-                            <div className="flex items-center gap-2 px-4 pt-3 bg-slate-50/50 border-b border-slate-100">
-                              <button
-                                type="button"
-                                onClick={() => setResumeSubTab('document')}
-                                className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 ${resumeSubTab === 'document'
-                                  ? 'border-indigo-600 text-indigo-700 bg-white shadow-sm'
-                                  : 'border-transparent text-slate-500 hover:text-slate-800'
-                                  }`}
-                              >
-                                <FileText size={13} /> Resume Document
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setResumeSubTab('parsedText')}
-                                className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 ${resumeSubTab === 'parsedText'
-                                  ? 'border-indigo-600 text-indigo-700 bg-white shadow-sm'
-                                  : 'border-transparent text-slate-500 hover:text-slate-800'
-                                  }`}
-                              >
-                                <Check size={13} /> Extracted Text
-                              </button>
-                            </div>
-                          )}
-
-                          {/* Content area */}
-                          <div>
-                            {/* Show document/PDF when: tab is 'document' OR only resumeUrl exists (no text) */}
-                            {(resumeSubTab === 'document' || (!resumeText && resumeUrl)) && resumeUrl && (
-                              <div>
-                                {resumeFullUrl && isPdf ? (
-                                  <iframe
-                                    src={resumeFullUrl}
-                                    title="Candidate Resume"
-                                    className="w-full h-[600px] border-none bg-white"
-                                  />
-                                ) : (
-                                  <div className="p-8 text-center bg-white space-y-4">
-                                    <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto shadow-inner">
-                                      <FileText size={32} />
-                                    </div>
-                                    <div>
-                                      <h4 className="font-extrabold text-slate-800 text-base">Resume File Attached</h4>
-                                      <p className="text-xs text-slate-500 mt-1 font-mono">{resumeFilename || resumeUrl}</p>
-                                    </div>
-                                    <a
-                                      href={resumeFullUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl transition-all shadow-md shadow-indigo-200"
-                                    >
-                                      <Download size={16} /> Download File
-                                    </a>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-
-                            {/* Show extracted text when: tab is 'parsedText' OR only resumeText exists (no url) */}
-                            {(resumeSubTab === 'parsedText' || (!resumeUrl && resumeText)) && resumeText && (
-                              <div className="p-6">
-                                <pre className="text-sm text-slate-700 bg-slate-50 rounded-xl p-5 whitespace-pre-wrap font-sans border border-slate-200 leading-relaxed max-h-[500px] overflow-y-auto">
-                                  {resumeText}
-                                </pre>
-                              </div>
-                            )}
+                      {atsData ? (
+                        <>
+                          <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden mb-4">
+                            <div className="h-full bg-indigo-600 rounded-full transition-all duration-700" style={{ width: `${atsData.score}%` }} />
                           </div>
+                          {atsData.summary && (
+                            <p className="text-xs text-slate-500 bg-slate-50 rounded-lg p-3 border mb-4">{atsData.summary}</p>
+                          )}
+                          <div className="grid md:grid-cols-2 gap-5">
+                            <div>
+                              <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                                <Check size={14} className="text-emerald-500" /> Matched Skills ({atsData.matched_skills?.length || 0})
+                              </h4>
+                              <div className="flex flex-wrap gap-2">
+                                {(atsData.matched_skills || []).map(s => (
+                                  <span key={s} className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
+                                    <Check size={12} strokeWidth={3} /> {s}
+                                  </span>
+                                ))}
+                                {!atsData.matched_skills?.length && <p className="text-xs text-slate-400">None found</p>}
+                              </div>
+                            </div>
+                            <div>
+                              <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                                <X size={14} className="text-rose-500" /> Missing Skills ({atsData.missing_skills?.length || 0})
+                              </h4>
+                              <div className="flex flex-wrap gap-2">
+                                {(atsData.missing_skills || []).map(s => (
+                                  <span key={s} className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700">
+                                    <X size={12} strokeWidth={3} /> {s}
+                                  </span>
+                                ))}
+                                {!atsData.missing_skills?.length && <p className="text-xs text-slate-400">None found</p>}
+                              </div>
+                            </div>
+                          </div>
+                        </>
+                      ) : !atsLoading && (
+                        <div className="text-xs text-slate-400 text-center py-4">
+                          {resumeText && !jdText
+                            ? "ATS analysis not available — job description missing."
+                            : !resumeText && jdText
+                              ? "No resume text found for this candidate. ATS analysis requires a resume."
+                              : loading
+                                ? "Loading resume data..."
+                                : "No resume or job description data found for this candidate."}
                         </div>
                       )}
                     </section>
-                  )}
+                  </div>
+                )
+              }
 
-                  {/* ATS Score */}
-                  <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-black text-slate-800">ATS Resume Match Score</h3>
-                      {atsLoading ? (
-                        <div className="flex items-center gap-1.5 text-xs text-indigo-600 font-medium">
-                          <Loader2 size={14} className="animate-spin" /> Analyzing…
-                        </div>
-                      ) : atsData ? (
-                        <span className="text-lg font-black text-indigo-600">{atsData.score}%</span>
-                      ) : null}
+              {/* ─ Interview Tab ─ */}
+              {
+                activeTab === 'interview' && (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <StatCard label="Status" value={c.status || "Completed"} />
+                      <StatCard label="Duration" value={c.integrity ? `${c.integrity.total_time_minutes} min` : "N/A"} />
+                      <StatCard label="Questions Answered" value={c.answers?.length ?? "N/A"} />
                     </div>
 
-                    {atsData ? (
-                      <>
-                        <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden mb-4">
-                          <div className="h-full bg-indigo-600 rounded-full transition-all duration-700" style={{ width: `${atsData.score}%` }} />
-                        </div>
-                        {atsData.summary && (
-                          <p className="text-xs text-slate-500 bg-slate-50 rounded-lg p-3 border mb-4">{atsData.summary}</p>
-                        )}
-                        <div className="grid md:grid-cols-2 gap-5">
+                    {/* Recordings Button */}
+                    {c.record_video !== false && (
+                      <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
+                        <div className="flex items-center justify-between">
                           <div>
-                            <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                              <Check size={14} className="text-emerald-500" /> Matched Skills ({atsData.matched_skills?.length || 0})
-                            </h4>
-                            <div className="flex flex-wrap gap-2">
-                              {(atsData.matched_skills || []).map(s => (
-                                <span key={s} className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
-                                  <Check size={12} strokeWidth={3} /> {s}
-                                </span>
-                              ))}
-                              {!atsData.matched_skills?.length && <p className="text-xs text-slate-400">None found</p>}
-                            </div>
+                            <h3 className="text-sm font-black text-slate-800">Recordings</h3>
+                            <p className="text-xs text-slate-400 font-medium mt-0.5">
+                              {recordingUrl || screenRecordingUrl ? 'Camera & screen recording available' : 'No recordings available'}
+                            </p>
                           </div>
-                          <div>
-                            <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                              <X size={14} className="text-rose-500" /> Missing Skills ({atsData.missing_skills?.length || 0})
-                            </h4>
-                            <div className="flex flex-wrap gap-2">
-                              {(atsData.missing_skills || []).map(s => (
-                                <span key={s} className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700">
-                                  <X size={12} strokeWidth={3} /> {s}
-                                </span>
-                              ))}
-                              {!atsData.missing_skills?.length && <p className="text-xs text-slate-400">None found</p>}
-                            </div>
-                          </div>
-                        </div>
-                      </>
-                    ) : !atsLoading && (
-                      <div className="text-xs text-slate-400 text-center py-4">
-                        {resumeText && !jdText
-                          ? "ATS analysis not available — job description missing."
-                          : !resumeText && jdText
-                            ? "No resume text found for this candidate. ATS analysis requires a resume."
-                            : loading
-                              ? "Loading resume data..."
-                              : "No resume or job description data found for this candidate."}
-                      </div>
-                    )}
-                  </section>
-                </div>
-              )
-            }
-
-            {/* ─ Interview Tab ─ */}
-            {
-              activeTab === 'interview' && (
-                <div className="space-y-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <StatCard label="Status" value={c.status || "Completed"} />
-                    <StatCard label="Duration" value={c.integrity ? `${c.integrity.total_time_minutes} min` : "N/A"} />
-                    <StatCard label="Questions Answered" value={c.answers?.length ?? "N/A"} />
-                  </div>
-
-                  {/* Recordings Button */}
-                  {c.record_video !== false && (
-                    <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="text-sm font-black text-slate-800">Recordings</h3>
-                          <p className="text-xs text-slate-400 font-medium mt-0.5">
-                            {recordingUrl || screenRecordingUrl ? 'Camera & screen recording available' : 'No recordings available'}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {(recordingUrl || screenRecordingUrl) && (
+                          <div className="flex items-center gap-2">
+                            {(recordingUrl || screenRecordingUrl) && (
+                              <button
+                                onClick={handleDownloadRecording}
+                                className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors shadow-sm"
+                                title="Download Recording"
+                              >
+                                <Download size={16} /> Download
+                              </button>
+                            )}
                             <button
-                              onClick={handleDownloadRecording}
+                              onClick={() => setShowRecordingModal(true)}
+                              className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl hover:bg-emerald-100 transition-colors shadow-sm"
+                            >
+                              <Video size={16} /> Recording <ChevronRight size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      </section>
+                    )}
+
+                    {/* Transcript Button */}
+                    {c.answers && c.answers.length > 0 && (
+                      <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="text-sm font-black text-slate-800">Interview Q&A</h3>
+                            <p className="text-xs text-slate-400 font-medium mt-0.5">{c.answers.length} questions answered</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={handleDownloadTranscript}
                               className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors shadow-sm"
-                              title="Download Recording"
+                              title="Download Transcript"
                             >
                               <Download size={16} /> Download
                             </button>
-                          )}
-                          <button
-                            onClick={() => setShowRecordingModal(true)}
-                            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl hover:bg-emerald-100 transition-colors shadow-sm"
-                          >
-                            <Video size={16} /> Recording <ChevronRight size={14} />
-                          </button>
+                            <button
+                              onClick={() => setShowTranscriptModal(true)}
+                              className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-violet-600 bg-violet-50 border border-violet-100 rounded-xl hover:bg-violet-100 transition-colors shadow-sm"
+                            >
+                              <MessageSquare size={16} /> Transcript <ChevronRight size={14} />
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    </section>
-                  )}
-
-                  {/* Transcript Button */}
-                  {c.answers && c.answers.length > 0 && (
-                    <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="text-sm font-black text-slate-800">Interview Q&A</h3>
-                          <p className="text-xs text-slate-400 font-medium mt-0.5">{c.answers.length} questions answered</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={handleDownloadTranscript}
-                            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors shadow-sm"
-                            title="Download Transcript"
-                          >
-                            <Download size={16} /> Download
-                          </button>
-                          <button
-                            onClick={() => setShowTranscriptModal(true)}
-                            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-violet-600 bg-violet-50 border border-violet-100 rounded-xl hover:bg-violet-100 transition-colors shadow-sm"
-                          >
-                            <MessageSquare size={16} /> Transcript <ChevronRight size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    </section>
-                  )}
-                </div>
-              )
-            }
-
-            {/* ─ Evaluation Tab ─ */}
-            {
-              activeTab === 'evaluation' && (
-                <div className="space-y-10">
-                  <div className="flex justify-center mt-6">
-                    <ScoreRing value={aiScore} size={160} strokeWidth={14} />
+                      </section>
+                    )}
                   </div>
+                )
+              }
 
-                  {scoreItems.length > 0 ? (
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-6 px-4">
-                      {scoreItems.map(([label, val]) => (
-                        <div key={label} className="bg-white rounded-2xl border border-slate-200/60 p-6 flex flex-col items-center shadow-sm">
-                          <ScoreRing value={Number(val || 0)} size={90} strokeWidth={9}
-                            tone={Number(val) >= 80 ? "success" : Number(val) >= 60 ? "" : "danger"} />
-                          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mt-6 text-center">{label}</div>
+              {/* ─ Evaluation Tab ─ */}
+              {
+                activeTab === 'evaluation' && (
+                  <div className="space-y-10">
+                    <div className="flex justify-center mt-6">
+                      <ScoreRing value={aiScore} size={160} strokeWidth={14} />
+                    </div>
+
+                    {scoreItems.length > 0 ? (
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-6 px-4">
+                        {scoreItems.map(([label, val]) => (
+                          <div key={label} className="bg-white rounded-2xl border border-slate-200/60 p-6 flex flex-col items-center shadow-sm">
+                            <ScoreRing value={Number(val || 0)} size={90} strokeWidth={9}
+                              tone={Number(val) >= 80 ? "success" : Number(val) >= 60 ? "" : "danger"} />
+                            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mt-6 text-center">{label}</div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-10 text-slate-400 text-sm font-medium">
+                        Evaluation scores not available yet. The candidate may not have completed the interview.
+                      </div>
+                    )}
+
+                    {(() => {
+                      const rawVal = c.detected_accent || c.detected_language_accent || (c.language ? `${c.language} (Indian Accent)` : "English (Indian Accent)");
+                      let lang = "English";
+                      let accent = "Indian Accent";
+                      if (rawVal && rawVal.includes("(")) {
+                        const parts = rawVal.split("(");
+                        lang = parts[0].trim();
+                        accent = parts[1].replace(")", "").trim();
+                      } else if (rawVal && rawVal.includes("•")) {
+                        const parts = rawVal.split("•");
+                        lang = parts[0].trim();
+                        accent = parts[1].trim();
+                      } else if (rawVal && rawVal !== "Unknown") {
+                        lang = rawVal;
+                        accent = "Standard Accent";
+                      }
+
+                      return (
+                        <div className="bg-slate-50 dark:bg-slate-900/80 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
+                              <Mic size={18} />
+                            </div>
+                            <div>
+                              <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Detected Language & Accent</div>
+                              <div className="text-sm font-black flex items-center gap-2 mt-0.5">
+                                <span className="text-slate-800 dark:text-slate-100 font-bold">{lang}</span>
+                                <span className="text-slate-400 dark:text-slate-600">•</span>
+                                <span className="text-indigo-600 dark:text-indigo-400 font-bold">{accent}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 text-xs font-bold border border-indigo-200/60 dark:border-indigo-800">
+                              {lang}
+                            </span>
+                            <span className="px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 text-xs font-bold border border-indigo-200/60 dark:border-indigo-800">
+                              {accent}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )
+              }
+
+              {/* ─ Timeline Tab ─ */}
+              {
+                activeTab === 'timeline' && (
+                  <div className="max-w-2xl mx-auto py-6">
+                    <div className="relative border-l-2 border-slate-200 ml-4 space-y-8">
+                      {timeline.map((step, i) => (
+                        <div key={step.label} className="relative pl-8">
+                          <span className={`absolute -left-[11px] top-0.5 flex h-5 w-5 items-center justify-center rounded-full ring-4 ring-slate-50 shadow-sm ${step.done ? (step.bad ? "bg-rose-500 text-white" : "bg-indigo-600 text-white") : "bg-white border-2 border-slate-300"}`}>
+                            {step.done && <Check size={12} strokeWidth={4} />}
+                          </span>
+                          <div className="flex items-center gap-3">
+                            <h4 className={`text-sm font-black ${step.done ? (step.bad ? "text-rose-700" : "text-slate-800") : "text-slate-400"}`}>
+                              {step.label}
+                            </h4>
+                            {i === timeline.findIndex(t => !t.done) && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 uppercase tracking-wider">Next up</span>
+                            )}
+                          </div>
+                          {step.done && <p className="text-xs font-medium text-slate-500 mt-1">Completed.</p>}
                         </div>
                       ))}
                     </div>
-                  ) : (
-                    <div className="text-center py-10 text-slate-400 text-sm font-medium">
-                      Evaluation scores not available yet. The candidate may not have completed the interview.
-                    </div>
-                  )}
-
-                  {(() => {
-                    const rawVal = c.detected_accent || c.detected_language_accent || (c.language ? `${c.language} (Indian Accent)` : "English (Indian Accent)");
-                    let lang = "English";
-                    let accent = "Indian Accent";
-                    if (rawVal && rawVal.includes("(")) {
-                      const parts = rawVal.split("(");
-                      lang = parts[0].trim();
-                      accent = parts[1].replace(")", "").trim();
-                    } else if (rawVal && rawVal.includes("•")) {
-                      const parts = rawVal.split("•");
-                      lang = parts[0].trim();
-                      accent = parts[1].trim();
-                    } else if (rawVal && rawVal !== "Unknown") {
-                      lang = rawVal;
-                      accent = "Standard Accent";
-                    }
-
-                    return (
-                      <div className="bg-slate-50 dark:bg-slate-900/80 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
-                            <Mic size={18} />
-                          </div>
-                          <div>
-                            <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Detected Language & Accent</div>
-                            <div className="text-sm font-black flex items-center gap-2 mt-0.5">
-                              <span className="text-slate-800 dark:text-slate-100 font-bold">{lang}</span>
-                              <span className="text-slate-400 dark:text-slate-600">•</span>
-                              <span className="text-indigo-600 dark:text-indigo-400 font-bold">{accent}</span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 text-xs font-bold border border-indigo-200/60 dark:border-indigo-800">
-                            {lang}
-                          </span>
-                          <span className="px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 text-xs font-bold border border-indigo-200/60 dark:border-indigo-800">
-                            {accent}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              )
-            }
-
-            {/* ─ Timeline Tab ─ */}
-            {
-              activeTab === 'timeline' && (
-                <div className="max-w-2xl mx-auto py-6">
-                  <div className="relative border-l-2 border-slate-200 ml-4 space-y-8">
-                    {timeline.map((step, i) => (
-                      <div key={step.label} className="relative pl-8">
-                        <span className={`absolute -left-[11px] top-0.5 flex h-5 w-5 items-center justify-center rounded-full ring-4 ring-slate-50 shadow-sm ${step.done ? (step.bad ? "bg-rose-500 text-white" : "bg-indigo-600 text-white") : "bg-white border-2 border-slate-300"}`}>
-                          {step.done && <Check size={12} strokeWidth={4} />}
-                        </span>
-                        <div className="flex items-center gap-3">
-                          <h4 className={`text-sm font-black ${step.done ? (step.bad ? "text-rose-700" : "text-slate-800") : "text-slate-400"}`}>
-                            {step.label}
-                          </h4>
-                          {i === timeline.findIndex(t => !t.done) && (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 uppercase tracking-wider">Next up</span>
-                          )}
-                        </div>
-                        {step.done && <p className="text-xs font-medium text-slate-500 mt-1">Completed.</p>}
-                      </div>
-                    ))}
                   </div>
-                </div>
-              )
-            }
-          </div>
+                )
+              }
+            </div>
 
           {/* ─ Notes Side Panel ─ */}
           {
@@ -1448,6 +1716,28 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                 >
                   Coding or Case Study
                 </button>
+
+                <div className="ml-auto flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleToggleTranslateAll}
+                    disabled={translatingAll}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border transition-all bg-white hover:bg-indigo-50 text-indigo-600 border-indigo-200 shadow-xs active:scale-95 disabled:opacity-50"
+                    title={allTranslated ? "Translate / View Original" : "Translate questions and answers to English"}
+                  >
+                    {translatingAll ? (
+                      <>
+                        <Loader2 size={13} className="animate-spin text-indigo-600" />
+                        <span>Translating...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Globe size={13} className="text-indigo-600" />
+                        <span>Translate</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
 
@@ -1464,21 +1754,38 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                     return (
                       <div key={idx} className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
                         {/* Question Header */}
-                        <div className="flex items-start justify-between gap-3 p-4 bg-slate-50 border-b border-slate-100">
-                          <div className="flex items-start gap-2 flex-1 min-w-0">
-                            <span className="mt-0.5 shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-indigo-600 text-white text-[10px] font-black">Q{idx + 1}</span>
-                            <p className="text-sm font-bold text-slate-800 leading-snug whitespace-pre-wrap">
-                              {a.question_text?.toLowerCase().includes('coding round')
-                                ? (a.question_text || '').replace(/(Input:)/gi, '\n\n$1').replace(/(Output:)/gi, '\n$1').replace(/(Constraints:)/gi, '\n\n$1').replace(/(Example:)/gi, '\n\n$1').trim()
-                                : (a.question_text || 'No question recorded')}
-                            </p>
-                          </div>
-                          {a.ai_score !== null && a.ai_score !== undefined && (
-                            <span className={`shrink-0 text-xs font-black px-2.5 py-1 rounded-full ${scoreBg}`}>
-                              AI Score: {score.toFixed(0)}%
-                            </span>
-                          )}
-                        </div>
+                        {(() => {
+                          const ansKey = `ans_${idx}`
+                          const transState = translations[ansKey]
+                          const isQTranslated = transState?.isTranslated && transState.view === 'translated' && transState.translatedQuestion
+                          const rawQText = isQTranslated ? transState.translatedQuestion : (a.question_text || 'No question recorded')
+                          const formattedQText = a.question_text?.toLowerCase().includes('coding round')
+                            ? rawQText.replace(/(Input:)/gi, '\n\n$1').replace(/(Output:)/gi, '\n$1').replace(/(Constraints:)/gi, '\n\n$1').replace(/(Example:)/gi, '\n\n$1').trim()
+                            : rawQText
+
+                          return (
+                            <div className="flex items-start justify-between gap-3 p-4 bg-slate-50 border-b border-slate-100">
+                              <div className="flex items-start gap-2 flex-1 min-w-0">
+                                <span className="mt-0.5 shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-indigo-600 text-white text-[10px] font-black">Q{idx + 1}</span>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-bold text-slate-800 leading-snug whitespace-pre-wrap">
+                                    {formattedQText}
+                                  </p>
+                                  {isQTranslated && transState.originalQuestion && transState.originalQuestion !== transState.translatedQuestion && (
+                                    <p className="text-[11px] text-slate-400 mt-1 italic line-clamp-2" title={transState.originalQuestion}>
+                                      Original: {transState.originalQuestion}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                              {a.ai_score !== null && a.ai_score !== undefined && (
+                                <span className={`shrink-0 text-xs font-black px-2.5 py-1 rounded-full ${scoreBg}`}>
+                                  AI Score: {score.toFixed(0)}%
+                                </span>
+                              )}
+                            </div>
+                          )
+                        })()}
 
                         <div className="p-4 space-y-4">
                           {/* Stats row: WPM + alerts */}
@@ -1609,14 +1916,99 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                           ) : (
                             <>
                               {/* Candidate Answer */}
-                              <div>
-                                <div className="text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                                  <MessageSquare size={10} /> Candidate Answer
-                                </div>
-                                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
-                                  {a.answer_text || <span className="italic text-slate-400">No answer recorded</span>}
-                                </div>
-                              </div>
+                              {(() => {
+                                const ansKey = `ans_${idx}`
+                                const nonEnglishInfo = detectNonEnglishText(a.answer_text, c.language || c.detected_language || '')
+                                const transState = translations[ansKey]
+                                return (
+                                  <div>
+                                    <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
+                                      <div className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                                        <MessageSquare size={10} /> Candidate Answer
+                                        {nonEnglishInfo.isNonEnglish && (
+                                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                            <Globe size={9} /> {nonEnglishInfo.languageName} detected
+                                          </span>
+                                        )}
+                                        {transState?.isTranslated && transState.view === 'translated' && (
+                                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                            <Check size={9} /> English Translated
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      {/* Translation Action Button */}
+                                      {a.answer_text && a.answer_text.trim() && (
+                                        <div className="flex items-center gap-2">
+                                          {transState?.isTranslated ? (
+                                            <div className="inline-flex items-center bg-slate-200/80 p-0.5 rounded-lg text-[10px] font-bold">
+                                              <button
+                                                type="button"
+                                                onClick={() => toggleAnswerView(ansKey, 'original')}
+                                                className={`px-2 py-0.5 rounded-md transition-all ${transState.view === 'original' ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
+                                              >
+                                                Original
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={() => toggleAnswerView(ansKey, 'translated')}
+                                                className={`px-2 py-0.5 rounded-md transition-all ${transState.view === 'translated' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
+                                              >
+                                                English
+                                              </button>
+                                            </div>
+                                          ) : (
+                                            <button
+                                              type="button"
+                                              onClick={() => handleTranslateSingle(ansKey, a.answer_text, a.question_text)}
+                                              disabled={translatingKeys[ansKey]}
+                                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${nonEnglishInfo.isNonEnglish
+                                                  ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-xs hover:from-indigo-500 hover:to-violet-500 ring-2 ring-indigo-300/40'
+                                                  : 'bg-white hover:bg-slate-100 text-slate-600 hover:text-indigo-600 border border-slate-200 shadow-xs'
+                                                }`}
+                                              title="Translate candidate answer to English"
+                                            >
+                                              {translatingKeys[ansKey] ? (
+                                                <>
+                                                  <Loader2 size={11} className="animate-spin text-indigo-500" />
+                                                  <span>Translating...</span>
+                                                </>
+                                              ) : (
+                                                <>
+                                                  <Globe size={11} />
+                                                  <span>Translate</span>
+                                                </>
+                                              )}
+                                            </button>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {transState?.isTranslated && transState.view === 'translated' ? (
+                                      <div className="bg-indigo-50/50 border border-indigo-200 rounded-xl p-3.5 text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
+                                        <div className="flex items-center justify-between text-[10px] font-bold text-indigo-700 pb-1.5 mb-1.5 border-b border-indigo-100/80">
+                                          <span className="flex items-center gap-1">
+                                            <Globe size={10} /> English Translation (from {transState.sourceLangName || "original"})
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={() => toggleAnswerView(ansKey, 'original')}
+                                            className="text-slate-500 hover:text-indigo-700 hover:underline font-semibold"
+                                          >
+                                            View Original
+                                          </button>
+                                        </div>
+                                        <p className="text-slate-800 leading-relaxed">{transState.translatedText}</p>
+                                      </div>
+                                    ) : (
+                                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                                        {a.answer_text || <span className="italic text-slate-400">No answer recorded</span>}
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              })()}
 
                               {/* Corrected Answer */}
                               {a.corrected_answer && a.corrected_answer !== 'N/A' && a.corrected_answer !== 'Scoring in progress...' && (
@@ -1666,7 +2058,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                                   const qText = typeof q === 'object' ? (q.scenario || q.question || q.text || q.title || JSON.stringify(q)) : q;
                                   const ansObj = c.case_study_round.answers?.[idx];
                                   const aText = typeof ansObj === 'object' ? ansObj?.answer_text : ansObj;
-                                  
+
                                   return (
                                     <div key={idx} className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
                                       <div className="flex items-center justify-between gap-2 p-4 bg-slate-50 border-b border-slate-100">
@@ -1689,18 +2081,108 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                                       <div className="p-4 space-y-4">
                                         <div>
                                           <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Scenario / Question</div>
-                                          <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{qText}</div>
-                                        </div>
-                                        {aText && (
-                                          <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                                              <Mic size={10} /> Candidate Response
-                                            </div>
-                                            <div className="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
-                                              {aText}
-                                            </div>
+                                          <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                                            {translations[`cs_${idx}`]?.isTranslated && translations[`cs_${idx}`]?.view === 'translated' && translations[`cs_${idx}`]?.translatedQuestion
+                                              ? translations[`cs_${idx}`].translatedQuestion
+                                              : qText}
                                           </div>
-                                        )}
+                                          {translations[`cs_${idx}`]?.isTranslated && translations[`cs_${idx}`]?.view === 'translated' && translations[`cs_${idx}`]?.originalQuestion && translations[`cs_${idx}`]?.originalQuestion !== translations[`cs_${idx}`]?.translatedQuestion && (
+                                            <p className="text-[11px] text-slate-400 mt-1 italic" title={translations[`cs_${idx}`].originalQuestion}>
+                                              Original: {translations[`cs_${idx}`].originalQuestion}
+                                            </p>
+                                          )}
+                                        </div>
+                                        {aText && (() => {
+                                          const csKey = `cs_${idx}`
+                                          const csNonEnglish = detectNonEnglishText(aText, c.language || c.detected_language || '')
+                                          const csTransState = translations[csKey]
+                                          return (
+                                            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                                              <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
+                                                <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                                                  <Mic size={10} /> Candidate Response
+                                                  {csNonEnglish.isNonEnglish && (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                                      <Globe size={9} /> {csNonEnglish.languageName} detected
+                                                    </span>
+                                                  )}
+                                                  {csTransState?.isTranslated && csTransState.view === 'translated' && (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                      <Check size={9} /> English Translated
+                                                    </span>
+                                                  )}
+                                                </div>
+
+                                                {/* Case Study Translation Action Button */}
+                                                {aText.trim() && (
+                                                  <div className="flex items-center gap-2">
+                                                    {csTransState?.isTranslated ? (
+                                                      <div className="inline-flex items-center bg-slate-200/80 p-0.5 rounded-lg text-[10px] font-bold">
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => toggleAnswerView(csKey, 'original')}
+                                                          className={`px-2 py-0.5 rounded-md transition-all ${csTransState.view === 'original' ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
+                                                        >
+                                                          Original
+                                                        </button>
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => toggleAnswerView(csKey, 'translated')}
+                                                          className={`px-2 py-0.5 rounded-md transition-all ${csTransState.view === 'translated' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
+                                                        >
+                                                          English
+                                                        </button>
+                                                      </div>
+                                                    ) : (
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => handleTranslateSingle(csKey, aText, qText)}
+                                                        disabled={translatingKeys[csKey]}
+                                                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${csNonEnglish.isNonEnglish
+                                                            ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-xs hover:from-indigo-500 hover:to-violet-500 ring-2 ring-indigo-300/40'
+                                                            : 'bg-white hover:bg-slate-100 text-slate-600 hover:text-indigo-600 border border-slate-200 shadow-xs'
+                                                          }`}
+                                                        title="Translate candidate response and question to English"
+                                                      >
+                                                        {translatingKeys[csKey] ? (
+                                                          <>
+                                                            <Loader2 size={11} className="animate-spin text-indigo-500" />
+                                                            <span>Translating...</span>
+                                                          </>
+                                                        ) : (
+                                                          <>
+                                                            <Globe size={11} />
+                                                            <span>Translate</span>
+                                                          </>
+                                                        )}
+                                                      </button>
+                                                    )}
+                                                  </div>
+                                                )}
+                                              </div>
+
+                                              {csTransState?.isTranslated && csTransState.view === 'translated' ? (
+                                                <div className="bg-indigo-50/50 border border-indigo-200 rounded-lg p-3 text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
+                                                  <div className="flex items-center justify-between text-[10px] font-bold text-indigo-700 pb-1 mb-1 border-b border-indigo-100">
+                                                    <span>Translated to English ({csTransState.sourceLangName || "Detected Language"})</span>
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => toggleAnswerView(csKey, 'original')}
+                                                      className="text-slate-500 hover:text-indigo-700 hover:underline font-semibold"
+                                                    >
+                                                      View Original
+                                                    </button>
+                                                  </div>
+                                                  <p className="text-slate-800">{csTransState.translatedText}</p>
+                                                </div>
+                                              ) : (
+                                                <div className="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
+                                                  {aText}
+                                                </div>
+                                              )}
+                                            </div>
+                                          )
+                                        })()}
                                         {ansObj?.ai_feedback && (
                                           <div>
                                             <div className="text-[10px] font-black text-indigo-500 uppercase tracking-wider mb-1.5 flex items-center gap-1 mt-4">

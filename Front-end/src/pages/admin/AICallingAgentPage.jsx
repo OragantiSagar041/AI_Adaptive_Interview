@@ -240,9 +240,8 @@ function CyanToggleSwitch({ checked, onChange, label = "" }) {
   return (
     <div className="flex items-center gap-2.5 select-none cursor-pointer" onClick={() => onChange(!checked)}>
       {label && <span className={`text-xs font-bold ${checked ? "text-slate-800 dark:text-slate-100" : "text-slate-400"}`}>{label}</span>}
-      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
-        checked ? "bg-emerald-500/20 text-emerald-500 border-emerald-500/40" : "bg-slate-700/50 text-slate-400 border-slate-600"
-      }`}>
+      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${checked ? "bg-emerald-500/20 text-emerald-500 border-emerald-500/40" : "bg-slate-700/50 text-slate-400 border-slate-600"
+        }`}>
         {checked ? "ON" : "OFF"}
       </span>
       <div className={`w-9 h-4.5 rounded-full p-0.5 transition-colors flex items-center border ${checked ? "bg-indigo-600 border-indigo-500 justify-end" : "bg-slate-600 border-slate-500 justify-start"
@@ -1731,6 +1730,7 @@ export default function AICallingAgentPage() {
   const [actionLoadingMap, setActionLoadingMap] = useState({})
 
   // Excel / CSV Bulk dialer state
+  const [dialerLanguage, setDialerLanguage] = useState('')
   const [dialerMode, setDialerMode] = useState('excel') // 'excel' | 'manual'
   const [spreadsheetFileLabel, setSpreadsheetFileLabel] = useState('')
   const [parsedCandidates, setParsedCandidates] = useState([])
@@ -1989,6 +1989,7 @@ export default function AICallingAgentPage() {
         if (selectedJobId) formData.append('job_id', selectedJobId)
         if (appIdToUse) formData.append('application_id', appIdToUse)
         if (manualCall.resume) formData.append('resume', manualCall.resume)
+        formData.append('language', dialerLanguage)
 
         const r = await fetch(`${API_BASE_URL}/api/calls/initiate-manual`, {
           method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: formData
@@ -2218,6 +2219,7 @@ export default function AICallingAgentPage() {
       formData.append('candidate_name', candidate.name || 'Candidate')
       formData.append('job_description', cJd)
       if (selectedJobId) formData.append('job_id', selectedJobId)
+      formData.append('language', dialerLanguage)
 
       try {
         const response = await fetch(`${API_BASE_URL}/api/calls/initiate-manual`, {
@@ -2530,6 +2532,29 @@ export default function AICallingAgentPage() {
                           </button>
                         </div>
 
+                        {/* Bulk Settings */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-2">
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-[0.7rem] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                              Agent Language
+                            </label>
+                            <select
+                              value={dialerLanguage}
+                              onChange={(e) => setDialerLanguage(e.target.value)}
+                              className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-100 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 cursor-pointer transition-all"
+                            >
+                              <option value="" disabled>Select Language</option>
+                              <option value="english">English</option>
+                              <option value="telugu">Telugu</option>
+                              <option value="hindi">Hindi</option>
+                              <option value="tamil">Tamil</option>
+                              <option value="malayalam">Malayalam</option>
+                              <option value="kannada">Kannada</option>
+                              <option value="multilingual">Multilingual (Auto-match candidate)</option>
+                            </select>
+                          </div>
+                        </div>
+
                         {/* File Dropzone */}
                         <div className="relative border-2 border-dashed border-indigo-200 hover:border-indigo-500 bg-indigo-50/40 hover:bg-indigo-50/80 rounded-2xl p-6 transition-all text-center group cursor-pointer">
                           <input
@@ -2741,38 +2766,114 @@ export default function AICallingAgentPage() {
                   }
 
                   {/* Mode 2: Manual Form Entry */}
-                  {
-                    dialerMode === 'manual' && (
-                      <div className="space-y-5 bg-white dark:bg-slate-800/60 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                          <div>
-                            <label className="block text-[0.7rem] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Phone Number(s) *</label>
-                            <input
-                              type="text"
-                              value={manualCall.phone}
-                              onChange={e => {
-                                const val = e.target.value.replace(/[^\d,\s]/g, '');
-                                setManualCall({ ...manualCall, phone: val });
-                                if (val.trim().length === 0) {
-                                  setPhoneError('Phone number is required');
-                                } else {
-                                  setPhoneError('');
-                                }
-                              }}
-                              onBlur={e => {
-                                if (manualCall.phone.trim().length === 0) {
-                                  setPhoneError('Phone number is required');
-                                } else {
-                                  setPhoneError('');
-                                }
-                              }}
-                              className={`w-full px-4 py-3 bg-slate-50 dark:bg-slate-900/50 border ${phoneError ? 'border-rose-500 focus:ring-rose-500/20 focus:border-rose-500' : 'border-slate-200 dark:border-slate-700 focus:ring-indigo-500/20 focus:border-indigo-500'} rounded-xl text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 transition-all font-semibold`}
-                              placeholder="e.g. 9876543210, 8765432109"
-                            />
-                            {phoneError && (
-                              <p className="text-xs text-rose-500 font-semibold mt-1.5 flex items-center gap-1">
-                                <AlertCircle size={13} /> {phoneError}
-                              </p>
+                  {dialerMode === 'manual' && (
+                    <div className="space-y-5 bg-white dark:bg-slate-800/60 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pb-2">
+                        <div className="md:col-span-2 flex flex-col gap-1.5">
+                          <label className="text-[0.7rem] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                            Agent Language
+                          </label>
+                          <select
+                            value={dialerLanguage}
+                            onChange={(e) => setDialerLanguage(e.target.value)}
+                            className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-100 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 cursor-pointer transition-all"
+                          >
+                            <option value="" disabled>Select Language</option>
+                            <option value="english">English</option>
+                            <option value="telugu">Telugu</option>
+                            <option value="hindi">Hindi</option>
+                            <option value="tamil">Tamil</option>
+                            <option value="malayalam">Malayalam</option>
+                            <option value="kannada">Kannada</option>
+                            <option value="multilingual">Multilingual (Auto-match candidate)</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div>
+                          <label className="block text-[0.7rem] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Phone Number(s) *</label>
+                          <input
+                            type="text"
+                            value={manualCall.phone}
+                            onChange={e => {
+                              const val = e.target.value.replace(/[^\d,\s]/g, '');
+                              setManualCall({ ...manualCall, phone: val });
+                              if (val.trim().length === 0) {
+                                setPhoneError('Phone number is required');
+                              } else {
+                                setPhoneError('');
+                              }
+                            }}
+                            onBlur={e => {
+                              if (manualCall.phone.trim().length === 0) {
+                                setPhoneError('Phone number is required');
+                              } else {
+                                setPhoneError('');
+                              }
+                            }}
+                            className={`w-full px-4 py-3 bg-slate-50 dark:bg-slate-900/50 border ${phoneError ? 'border-rose-500 focus:ring-rose-500/20 focus:border-rose-500' : 'border-slate-200 dark:border-slate-700 focus:ring-indigo-500/20 focus:border-indigo-500'} rounded-xl text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 transition-all font-semibold`}
+                            placeholder="e.g. 9876543210, 8765432109"
+                          />
+                          {phoneError && (
+                            <p className="text-xs text-rose-500 font-semibold mt-1.5 flex items-center gap-1">
+                              <AlertCircle size={13} /> {phoneError}
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-[0.7rem] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Candidate Name</label>
+                          <input
+                            type="text" value={manualCall.name}
+                            onChange={e => setManualCall({ ...manualCall, name: e.target.value.replace(/[0-9]/g, '') })}
+                            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-semibold"
+                            placeholder="e.g. John Doe"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="block text-[0.7rem] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Job Description</label>
+                          <div className="flex gap-2">
+                            {availableJobs && availableJobs.length > 0 && (
+                              <select
+                                className="bg-indigo-50 border border-indigo-100 text-[0.7rem] font-bold text-indigo-700 rounded-lg px-2 py-1 outline-none focus:border-indigo-500 cursor-pointer"
+                                onChange={async (e) => {
+                                  const jobId = e.target.value;
+                                  setSelectedJobId(jobId);
+                                  setSelectedApplicationId('');
+                                  if (!jobId) {
+                                    setSelectedJob(null);
+                                    setAvailableCandidates([]);
+                                    return;
+                                  }
+                                  try {
+                                    const res = await fetch(`${API_BASE_URL}/api/public/jobs/${jobId}`);
+                                    if (res.ok) {
+                                      const data = await res.json();
+                                      const job = data.job;
+                                      setSelectedJob(job);
+                                      if (job) {
+                                        const desc = `Role: ${job.title}\nExperience: ${job.experience || ''}\nSkills: ${job.skills || ''}\n\n${job.description || ''}`;
+                                        setManualCall(prev => ({ ...prev, jobDesc: desc }));
+                                      }
+                                    }
+                                    const appsRes = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/applications`, { headers });
+                                    if (appsRes.ok) {
+                                      const data = await appsRes.json();
+                                      setAvailableCandidates(data.applications || []);
+                                    } else {
+                                      setAvailableCandidates([]);
+                                    }
+                                  } catch (err) {
+                                    console.error("Error fetching job description/applications:", err);
+                                  }
+                                }}
+                              >
+                                <option value="">Auto-fill from saved Job...</option>
+                                {availableJobs.map(job => (
+                                  <option key={job.job_id || job._id || job.id} value={job.job_id || job._id || job.id}>{job.title}</option>
+                                ))}
+                              </select>
                             )}
                           </div>
                           <div>
@@ -2989,11 +3090,12 @@ export default function AICallingAgentPage() {
                           </button>
                         </div>
                       </div >
-                    )
+                      )
+  }
+                    </div >
+                  )
                   }
-                </div >
-              )}
-            </motion.div >
+                </motion.div >
           </AnimatePresence >
         </div >
       </motion.div >

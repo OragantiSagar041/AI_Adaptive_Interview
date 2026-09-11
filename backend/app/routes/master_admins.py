@@ -264,7 +264,7 @@ def get_sub_admins(current_admin: dict = Depends(get_current_admin_details)):
     query = get_tenant_recruiters_query(current_admin)
     admins = list(admins_collection.find(query, {"password": 0}))
     
-    # Enrich with session count created by each admin
+    # Enrich with session count and refill count created by each admin
     for admin in admins:
         admin["id"] = str(admin["_id"])
         admin["_id"] = str(admin["_id"])
@@ -275,6 +275,10 @@ def get_sub_admins(current_admin: dict = Depends(get_current_admin_details)):
                 {"admin_id": str(admin["id"])},
                 {"created_by": str(admin["id"])}
             ]
+        })
+        # Calculate how many times this specific recruiter received a top-up
+        admin["refill_count"] = credit_ledger_collection.count_documents({
+            "sub_admin_id": str(admin["id"])
         })
         
     return {"status": "success", "data": admins}
@@ -300,7 +304,7 @@ def create_sub_admin(data: SubAdminCreate, current_admin: dict = Depends(get_cur
         "company_id": company_id,
         "created_by": current_admin["admin_id"],
         "credits": data.credits,
-        "total_allocated_credits": data.credits,
+        "total_allocated_credits": data.credits, # Fix: Track initial credits immediately to avoid negative used bug
         "login_enabled": True,
         "created_at": datetime.now(timezone.utc).isoformat()
     }

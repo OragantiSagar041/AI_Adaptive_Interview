@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Gift, Plus, Loader2, CreditCard, RefreshCw, Activity, Coins, Check, X } from "lucide-react";
+import { Gift, Plus, Loader2, CreditCard, RefreshCw, Activity, Coins, Check, X, Flame, Rocket } from "lucide-react";
 import { toast } from "sonner";
 import Swal from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
@@ -91,10 +91,16 @@ export default function CreditManagementPage() {
           const sessionsCreated = a.sessions_created || 0;
           const remaining = a.credits || 0;
           
-          // Use the exact ledger history (total_allocated_credits) if available, otherwise fallback to legacy approximation
-          const allocated = a.total_allocated_credits !== undefined 
+          // Base allocated from backend history
+          let allocated = a.total_allocated_credits !== undefined 
             ? a.total_allocated_credits 
             : (sessionsCreated + remaining);
+            
+          // FIX: If remaining credits exceed the tracked allocation (e.g., due to initial credits 
+          // given at creation that weren't logged in total_allocated_credits), adjust it.
+          if (allocated < remaining + sessionsCreated) {
+              allocated = remaining + sessionsCreated;
+          }
             
           // True utilization based on total gifted credits minus what they have left
           const used = allocated - remaining;
@@ -104,7 +110,8 @@ export default function CreditManagementPage() {
             org: a.name || a.username,
             allocated,
             used,
-            remaining
+            remaining,
+            refillCount: a.refill_count || 0
           };
         }));
       }
@@ -198,9 +205,39 @@ export default function CreditManagementPage() {
   return (
     <AdminShell title="Credit Management" description="Allocate AI credits, monitor usage and audit consumption per recruiter.">
       <div className="grid gap-3 md:grid-cols-3">
-        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Total system credits</div><div className="mt-1 text-2xl font-semibold">{kpis.total_credits_system.toLocaleString()}</div></CardContent></Card>
-        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Consumed this month</div><div className="mt-1 text-2xl font-semibold">{kpis.credits_consumed_month.toLocaleString()}</div></CardContent></Card>
-        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Active top-ups</div><div className="mt-1 text-2xl font-semibold text-emerald-600">{kpis.active_topups}</div></CardContent></Card>
+        <Card>
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <div className="text-xs text-muted-foreground">Total system credits</div>
+              <div className="mt-1 text-2xl font-semibold">{kpis.total_credits_system.toLocaleString()}</div>
+            </div>
+            <div className="w-12 h-12 rounded-full flex items-center justify-center bg-gradient-to-b from-blue-400 to-blue-700 shadow-[0_6px_12px_rgba(37,99,235,0.4),inset_0_2px_0_rgba(255,255,255,0.4),inset_0_-3px_0_rgba(0,0,0,0.2)] text-white">
+              <Coins size={22} strokeWidth={2.5} className="drop-shadow-md" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <div className="text-xs text-muted-foreground">Consumed this month</div>
+              <div className="mt-1 text-2xl font-semibold">{kpis.credits_consumed_month.toLocaleString()}</div>
+            </div>
+            <div className="w-12 h-12 rounded-full flex items-center justify-center bg-gradient-to-b from-orange-400 to-red-600 shadow-[0_6px_12px_rgba(239,68,68,0.4),inset_0_2px_0_rgba(255,255,255,0.4),inset_0_-3px_0_rgba(0,0,0,0.2)] text-white">
+              <Flame size={22} strokeWidth={2.5} className="drop-shadow-md" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <div className="text-xs text-muted-foreground">Active top-ups</div>
+              <div className="mt-1 text-2xl font-semibold text-emerald-600">{kpis.active_topups}</div>
+            </div>
+            <div className="w-12 h-12 rounded-full flex items-center justify-center bg-gradient-to-b from-emerald-400 to-teal-600 shadow-[0_6px_12px_rgba(16,185,129,0.4),inset_0_2px_0_rgba(255,255,255,0.4),inset_0_-3px_0_rgba(0,0,0,0.2)] text-white">
+              <Rocket size={22} strokeWidth={2.5} className="drop-shadow-md" />
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <Card><CardHeader className="pb-2"><CardTitle className="text-base">Per-recruiter usage</CardTitle></CardHeader>
@@ -211,6 +248,7 @@ export default function CreditManagementPage() {
             <TableHead className="text-right">Used</TableHead>
             <TableHead className="text-right">Remaining</TableHead>
             <TableHead className="w-[220px]">Utilization</TableHead>
+            <TableHead className="text-center">Top-ups</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow></TableHeader>
           <TableBody>
@@ -223,6 +261,13 @@ export default function CreditManagementPage() {
                   <TableCell className="text-right tabular-nums">{r.used.toLocaleString()}</TableCell>
                   <TableCell className={`text-right tabular-nums font-medium ${low ? "text-rose-600" : "text-emerald-600"}`}>{r.remaining.toLocaleString()}</TableCell>
                   <TableCell><div className="flex items-center gap-2"><Progress value={pct} className="h-1.5" /><span className="w-9 text-right text-xs tabular-nums">{pct}%</span></div></TableCell>
+                  <TableCell>
+                    <div className="flex justify-center">
+                      <div className="inline-flex items-center justify-center min-w-[28px] px-2 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-600 text-xs font-semibold shadow-sm" title={`${r.refillCount} total top-ups received`}>
+                        {r.refillCount}
+                      </div>
+                    </div>
+                  </TableCell>
                   <TableCell className="text-right">
                     <Button size="sm" variant="outline" onClick={() => handleGiftClick(r.id, r.org)}>
                       <Gift className="h-4 w-4" /> Add Credits

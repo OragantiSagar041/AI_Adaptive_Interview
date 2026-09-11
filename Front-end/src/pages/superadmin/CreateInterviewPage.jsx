@@ -64,6 +64,34 @@ const CustomToggleSwitch = ({ checked, onChange }) => (
     </div>
   </button>
 );
+const FeatureLockOverlay = ({ isLocked, featureName, children }) => {
+  if (!isLocked) return children;
+  return (
+    <div className="relative overflow-hidden rounded-xl h-full w-full">
+      <div className="filter blur-[6px] opacity-40 pointer-events-none select-none transition-all duration-300 h-full w-full">
+         {children}
+      </div>
+      <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/30 dark:bg-slate-900/40 backdrop-blur-[1px] z-10 p-4 text-center">
+         <div className="bg-indigo-100 text-indigo-600 w-12 h-12 flex items-center justify-center rounded-full mb-3 shadow-sm border border-indigo-200">
+            <i className="fas fa-lock text-xl"></i>
+         </div>
+         <h3 className="text-[15px] font-extrabold text-slate-800 dark:text-white mb-1">This feature is locked</h3>
+         <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-4 max-w-[200px] leading-relaxed">Upgrade your plan to access {featureName}</p>
+         <button 
+             type="button"
+             className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border-2 border-indigo-100 dark:border-indigo-800/60 text-indigo-600 dark:text-indigo-400 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors font-bold text-xs shadow-sm cursor-pointer"
+             onClick={(e) => {
+               e.preventDefault();
+               e.stopPropagation();
+               window.location.href = '/superadmin/subscription';
+             }}
+           >
+            <i className="fas fa-crown text-[#f59e0b]"></i> Upgrade Plan
+         </button>
+      </div>
+    </div>
+  );
+};
 
 export default function CreateInterviewPage() {
   const dispatch = useDispatch()
@@ -71,6 +99,11 @@ export default function CreateInterviewPage() {
   const token = useSelector(state => state.auth.token)
   const adminUser = useSelector(state => state.auth.adminUser)
   const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
+
+  const userFeatures = adminUser?.plan_features || []
+  const hasCustomScreening = userFeatures.includes('Custom Screening Questions')
+  const hasCustomAIInstructions = userFeatures.includes('Custom AI Interviewer Instructions')
+  const hasIndustry = userFeatures.includes('Industry Type')
 
   // Form input states
   const [createTab, setCreateTab] = useState(() => {
@@ -1479,7 +1512,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
               {/* Card 3: Advanced AI Customizations (Accordions) */}
               <div className="flex flex-col gap-4">
                 {/* Custom Questions Section */}
-                <div className="border border-slate-200 dark:border-slate-700/80 rounded-2xl overflow-hidden bg-white dark:bg-slate-800/60/82 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-slate-300">
+                <FeatureLockOverlay isLocked={!hasCustomScreening} featureName="Custom Screening Questions">
+<div className="border border-slate-200 dark:border-slate-700/80 rounded-2xl overflow-hidden bg-white dark:bg-slate-800/60/82 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-slate-300">
                   <div className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-900/50/50 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2">
                       <i className="fas fa-question-circle text-primary"></i> Custom Screening Questions (Optional)
@@ -1597,9 +1631,11 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     )}
                   </div>
                 </div>
+</FeatureLockOverlay>
 
                 {/* AI Instructions Section */}
-                <div className="border border-slate-200 dark:border-slate-700/80 rounded-2xl overflow-hidden bg-white dark:bg-slate-800/60/82 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-slate-300">
+                <FeatureLockOverlay isLocked={!hasCustomAIInstructions} featureName="Custom AI Interviewer Instructions">
+<div className="border border-slate-200 dark:border-slate-700/80 rounded-2xl overflow-hidden bg-white dark:bg-slate-800/60/82 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-slate-300">
                   <div className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-900/50/50 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2">
                       <i className="fas fa-robot text-primary"></i> Custom AI Interviewer Instructions (Optional)
@@ -1717,6 +1753,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     )}
                   </div>
                 </div>
+</FeatureLockOverlay>
               </div>
 
             </div>
@@ -1807,7 +1844,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     }}
                   />
 
-                  <div className="sm:col-span-2">
+                  <FeatureLockOverlay isLocked={!hasIndustry} featureName="Industry Type">
+<div className="sm:col-span-2">
                     <Select
                       label="Industry Type"
                       value={singleCandidate.industry}
@@ -1847,6 +1885,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       ]}
                     />
                   </div>
+</FeatureLockOverlay>
 
                   {singleCandidate.interviewType === 'Non-Technical' && (
                     <div className="sm:col-span-2">
@@ -2152,7 +2191,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
               {/* Card 2: Accordion Options */}
               <div className="flex flex-col gap-4">
                 {/* Custom Questions Section (Bulk) */}
-                <div className="border border-slate-200 dark:border-slate-700/80 rounded-2xl overflow-hidden bg-white dark:bg-slate-800/60/82 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-slate-300">
+                <FeatureLockOverlay isLocked={!hasCustomScreening} featureName="Custom Screening Questions">
+<div className="border border-slate-200 dark:border-slate-700/80 rounded-2xl overflow-hidden bg-white dark:bg-slate-800/60/82 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-slate-300">
                   <div className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-900/50/50 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2">
                       <i className="fas fa-question-circle text-primary"></i> Custom Screening Questions (Optional)
@@ -2270,9 +2310,11 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     )}
                   </div>
                 </div>
+</FeatureLockOverlay>
 
                 {/* AI Instructions Section (Bulk) */}
-                <div className="border border-slate-200 dark:border-slate-700/80 rounded-2xl overflow-hidden bg-white dark:bg-slate-800/60/82 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-slate-300">
+                <FeatureLockOverlay isLocked={!hasCustomAIInstructions} featureName="Custom AI Interviewer Instructions">
+<div className="border border-slate-200 dark:border-slate-700/80 rounded-2xl overflow-hidden bg-white dark:bg-slate-800/60/82 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-slate-300">
                   <div className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-900/50/50 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2">
                       <i className="fas fa-robot text-primary"></i> Custom AI Interviewer Instructions (Optional)
@@ -2390,6 +2432,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     )}
                   </div>
                 </div>
+</FeatureLockOverlay>
               </div>
 {/* Card 5: Excel/CSV Upload Dropzone */}
               <div className="bg-white dark:bg-slate-800/60/82 backdrop-blur-md border border-[#e5edf7] rounded-2xl p-5 text-slate-800 dark:text-slate-100 flex flex-col gap-4 shadow-[0_18px_40px_rgba(17,24,39,0.06)] hover:border-slate-350 transition-all duration-200">
@@ -2597,7 +2640,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     }}
                   />
 
-                  <div className="sm:col-span-2">
+                  <FeatureLockOverlay isLocked={!hasIndustry} featureName="Industry Type">
+<div className="sm:col-span-2">
                     <Select
                       label="Industry Type"
                       value={bulkConfig.industry}
@@ -2613,6 +2657,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       ]}
                     />
                   </div>
+</FeatureLockOverlay>
 
                   {bulkConfig.interviewType === 'Non-Technical' && (
                     <div className="sm:col-span-2">

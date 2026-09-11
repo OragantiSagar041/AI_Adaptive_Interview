@@ -353,55 +353,77 @@ def get_superadmin_credit_stats(current_admin: dict = Depends(get_current_admin_
         for d in history_docs
     ]
     
-    admin_id = current_admin.get("admin_id") or str(current_admin.get("_id") or "")
     company_id = current_admin.get("company_id")
+    admin_id = current_admin.get("admin_id") or str(current_admin.get("_id", ""))
+    role = current_admin.get("role")
     
-    from app.routes.superadmin import get_live_super_admin_credits
-    total_company_credits = get_live_super_admin_credits(admin_id, company_id)
-
-    session_query = {}
-    if company_id:
-        session_query["company_id"] = company_id
-    session_query["created_at"] = {"$gte": thirty_days_ago.isoformat()}
-    
-    consumed_credits = interview_sessions_collection.count_documents(session_query)
-    active_topups = credit_ledger_collection.count_documents(ledger_query)
-
-    days_labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-    usage_map = {i: {"used": 0, "purchased": 0} for i in range(7)}
-
-    recent_sessions = list(interview_sessions_collection.find(
-        {"created_at": {"$gte": seven_days_ago.isoformat()}, **({"company_id": company_id} if company_id else {})},
-        {"created_at": 1}
-    ))
-    for s in recent_sessions:
-        try:
-            dt = datetime.fromisoformat(s["created_at"])
-            day_idx = dt.weekday()
-            usage_map[day_idx]["used"] += 1
-        except Exception:
-            pass
-
-    recent_topups = list(credit_ledger_collection.find(
-        {"date": {"$gte": seven_days_ago.isoformat()}, **ledger_query},
-        {"date": 1, "amount": 1}
-    ))
-    for t in recent_topups:
-        try:
-            dt = datetime.fromisoformat(t["date"])
-            day_idx = dt.weekday()
-            usage_map[day_idx]["purchased"] += int(t.get("amount") or 0)
-        except Exception:
-            pass
-
-    usage_data = [
-        {
-            "day": days_labels[idx],
-            "used": usage_map[idx]["used"],
-            "purchased": usage_map[idx]["purchased"]
-        }
-        for idx in range(7)
-    ]
+    if role == "master" and not company_id:
+        # Global stats logic for system master
+        total_company_credits = 0
+        for c in companies_collection.find({}, {"credits": 1}):
+            total_company_credits += int(c.get("credits") or 0)
+            
+        total_admin_credits = 0
+        for a in admins_collection.find({"company_id": {"$exists": False}}, {"credits": 1}):
+            total_admin_credits += int(a.get("credits") or 0)
+            
+        total_credits = total_company_credits + total_admin_credits
+        consumed_credits = interview_sessions_collection.count_documents({"created_at": {"$gte": thirty_days_ago}})
+        
+        # 2nd Approach: Global Recruiter Refills
+        active_topups = credit_ledger_collection.count_documents({"date": {"$gte": thirty_days_ago}})
+    else:
+        # Scoped logic for specific company super-admins
+        total_credits = 0
+        active_topups = 0
+        
+        if company_id:
+            try:
+                c = companies_collection.find_one({"_id": ObjectId(company_id)})
+            except Exception:
+                c = companies_collection.find_one({"_id": company_id})
+                
+            if c:
+                total_credits = int(c.get("credits") or 0)
+                
+            # Filter consumed credits strictly to this company's recruiters
+            company_admin_ids = [str(a["_id"]) for a in admins_collection.find({"company_id": company_id}, {"_id": 1})]
+            if admin_id not in company_admin_ids:
+                company_admin_ids.append(admin_id)
+                
+            consumed_credits = interview_sessions_collection.count_documents({
+                "created_at": {"$gte": thirty_days_ago},
+                "$or": [
+                    {"admin_id": {"$in": company_admin_ids}}, 
+                    {"created_by": {"$in": company_admin_ids}}
+                ]
+            })
+            
+            # 2nd Approach: Recruiter Refills for this company
+            active_topups = credit_ledger_collection.count_documents({
+                "company_id": company_id, 
+                "date": {"$gte": thirty_days_ago}
+            })
+        else:
+            # Standalone admin fallback
+            try:
+                a = admins_collection.find_one({"_id": ObjectId(admin_id)})
+            except Exception:
+                a = admins_collection.find_one({"_id": admin_id})
+                
+            if a:
+                total_credits = int(a.get("credits") or 0)
+                
+            consumed_credits = interview_sessions_collection.count_documents({
+                "created_at": {"$gte": thirty_days_ago},
+                "$or": [{"admin_id": admin_id}, {"created_by": admin_id}]
+            })
+            
+            # 2nd Approach: Recruiter Refills for standalone admin
+            active_topups = credit_ledger_collection.count_documents({
+                "super_admin_id": admin_id, 
+                "date": {"$gte": thirty_days_ago}
+            })
     
     return {
         "status": "success",
