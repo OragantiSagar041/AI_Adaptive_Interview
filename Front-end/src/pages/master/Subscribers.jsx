@@ -1,10 +1,38 @@
  
 import React, { useState, useEffect } from 'react'
 import { useSelector } from 'react-redux'
-import { Search, Calendar, Trash2, Power, PowerOff, X, RefreshCw } from 'lucide-react'
+import { Search, Calendar, Trash2, Power, PowerOff, X, RefreshCw, Settings } from 'lucide-react'
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
 import axios from 'axios'
+
+const FEATURE_GROUPS = [
+  { category: "Super Admin Dashboard", main: "Super Admin Dashboard", sub: [] },
+  { category: "Dashboard", main: "Dashboard", sub: [] },
+  { category: "Interviews", main: "Interviews", sub: [] },
+  { category: "Qualified Candidates", main: "Qualified Candidates", sub: ["Export CSV"] },
+  { category: "Rejected Candidates", main: "Rejected Candidates", sub: ["Talent Pool Management"] },
+  {
+    category: "Create Interview", main: "Create Interview",
+    sub: [
+      "Single Candidate", "Bulk Send", "Select Candidate from AI Calls",
+      "Resume Parsing", "ATS Score", "Email Preview",
+      "Custom Screening Questions", "Custom AI Interviewer Instructions",
+      "Language", "Industry Type", "Interview Schedule", "Record Interview Video",
+      "Voice Cloning", "HR Screening Questions", "Standard (Text/Form Based)",
+      "Voice AI (Real-time Speech)", "Technical (+ Coding)", "Normal (Standard AI)",
+      "Non-Tech (Case Studies)"
+    ]
+  },
+  { category: "AI Calling Agent", main: "AI Calling Agent", sub: [] },
+  { category: "Jobs", main: "Jobs", sub: [] },
+  { category: "Recruiters", main: "Recruiters", sub: [] },
+  { category: "Credit Management", main: "Credit Management", sub: [] },
+  { category: "Subscription Management", main: "Subscription Management", sub: [] },
+  { category: "Security", main: "Security", sub: ["Active Security Alerts"] },
+  { category: "Notifications", main: "Notifications", sub: [] },
+  { category: "Live Results", main: "Live Results", sub: [] },
+]
 
 export default function Subscribers() {
   const token = useSelector(state => state.auth.token) || ''
@@ -30,6 +58,15 @@ export default function Subscribers() {
   const [updateTenantDays, setUpdateTenantDays] = useState(0)
   const [updateTenantCredits, setUpdateTenantCredits] = useState(0)
   const [updateLoading, setUpdateLoading] = useState(false)
+
+  // Custom Features Modal state
+  const [isFeaturesModalOpen, setIsFeaturesModalOpen] = useState(false)
+  const [featModalCompany, setFeatModalCompany] = useState(null)
+  const [featModalSelected, setFeatModalSelected] = useState([])
+  const [featModalLoading, setFeatModalLoading] = useState(false)
+  const [platformFeatures, setPlatformFeatures] = useState([])
+  const [selectedSubModule, setSelectedSubModule] = useState(null)
+  const [allPlans, setAllPlans] = useState([])
 
   const fetchCompanies = async () => {
     setLoading(true)
@@ -191,9 +228,71 @@ export default function Subscribers() {
     }
   }
 
+  const handleOpenFeaturesModal = (c) => {
+    setFeatModalCompany(c)
+
+    if (c.features != null) {
+      // Company already has a custom override — pre-load those
+      setFeatModalSelected([...c.features])
+    } else {
+      // No custom override yet — pre-load from the company's current plan so checkboxes aren't empty
+      const companyPlanKey = (c.subscription_plan || 'trial').toLowerCase()
+      const matchedPlan = allPlans.find(p =>
+        p.plan_name && p.plan_name.toLowerCase().includes(companyPlanKey)
+      )
+      setFeatModalSelected(matchedPlan?.features ? [...matchedPlan.features] : [])
+    }
+
+    setSelectedSubModule(null)
+    setIsFeaturesModalOpen(true)
+  }
+
+  const handleSaveCustomFeatures = async () => {
+    if (!featModalCompany) return
+    setFeatModalLoading(true)
+    try {
+      await axios.put(
+        `${API_BASE_URL}/master/companies/${encodeURIComponent(featModalCompany.id)}?master_id=${encodeURIComponent(adminId)}`,
+        { features: featModalSelected },
+        { headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` } }
+      )
+      Swal.fire({
+        title: 'Saved!',
+        text: `Custom features updated for ${featModalCompany.company_name}.`,
+        icon: 'success',
+        background: '#161c2d',
+        color: '#fff',
+      })
+      setIsFeaturesModalOpen(false)
+      fetchCompanies()
+    } catch (e) {
+      Swal.fire({
+        title: 'Error',
+        text: e.response?.data?.detail || 'Failed to update features.',
+        icon: 'error',
+        background: '#161c2d',
+        color: '#fff',
+      })
+    } finally {
+      setFeatModalLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (token) {
       fetchCompanies()
+      // Fetch all platform features for the checklist
+      axios.get(`${API_BASE_URL}/api/platform/features`, {
+        headers: { Authorization: `Bearer ${token}` }
+      }).then(res => {
+        if (res.data && res.data.features) setPlatformFeatures(res.data.features)
+      }).catch(() => {})
+      // Fetch all plan definitions so we can pre-check the company's current plan features
+      axios.get(`${API_BASE_URL}/master/plans?master_id=${encodeURIComponent(adminId)}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      }).then(res => {
+        if (res.data && res.data.status === 'success') setAllPlans(res.data.data || [])
+      }).catch(() => {})
     }
   }, [token])
 
@@ -401,6 +500,13 @@ export default function Subscribers() {
                             <Calendar size={14} />
                           </button>
                           <button
+                            onClick={() => handleOpenFeaturesModal(c)}
+                            className="p-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-500 hover:bg-indigo-600 hover:text-white border border-indigo-200 dark:border-indigo-700/50 cursor-pointer transition-all"
+                            title="Edit Custom Features for this account"
+                          >
+                            <Settings size={14} />
+                          </button>
+                          <button
                             onClick={() => handleToggleLogin(c.id || c.company_id, c.login_enabled)}
                             className={`p-2 rounded-lg cursor-pointer transition-all border-none ${
                               c.login_enabled
@@ -500,6 +606,148 @@ export default function Subscribers() {
                 className="w-full sm:flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 border-none text-white font-bold cursor-pointer disabled:opacity-50 transition-colors"
               >
                 {updateLoading ? 'Saving...' : 'Update Plan'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+      {/* MODAL: CUSTOM FEATURES — same format as Plans edit modal */}
+      {isFeaturesModalOpen && featModalCompany && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <form
+            onSubmit={(e) => { e.preventDefault(); handleSaveCustomFeatures(); }}
+            className="w-full max-w-3xl bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-2xl space-y-4 text-slate-800 dark:text-slate-100"
+          >
+            {/* Header */}
+            <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-3">
+              <div>
+                <h3 className="font-bold text-slate-800 dark:text-slate-100">
+                  Edit Features — {featModalCompany.company_name}
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Plan: <span className="font-semibold text-indigo-500">{featModalCompany.subscription_plan_label || featModalCompany.subscription_plan || 'Trial'}</span>
+                  &nbsp;·&nbsp; Changes here only affect <strong>this account</strong>.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsFeaturesModalOpen(false)}
+                className="text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 bg-transparent border-none cursor-pointer outline-none"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Feature Module Selector — same logic as Plans.jsx */}
+            <div className="space-y-2">
+              {selectedSubModule === null ? (
+                <>
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                      Configure Plan Modules ({featModalSelected.length} total features selected)
+                    </label>
+                    {featModalSelected.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setFeatModalSelected([])}
+                        className="text-[11px] text-rose-500 hover:underline bg-transparent border-none cursor-pointer"
+                      >
+                        Clear All
+                      </button>
+                    )}
+                  </div>
+                  <div className="max-h-[60vh] overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-900/50 divide-y divide-slate-200 dark:divide-slate-700">
+                    {FEATURE_GROUPS.map((group, idx) => {
+                      const isMainChecked = featModalSelected.includes(group.main)
+                      return (
+                        <div key={idx} className="p-4 flex items-center justify-between hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                          <label className="flex items-center gap-3 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={isMainChecked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setFeatModalSelected(prev => [...prev, group.main])
+                                } else {
+                                  setFeatModalSelected(prev => prev.filter(f => f !== group.main && !group.sub.includes(f)))
+                                }
+                              }}
+                              className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
+                            />
+                            <span className={`font-bold text-sm ${isMainChecked ? 'text-indigo-700 dark:text-indigo-400' : 'text-slate-700 dark:text-slate-200'}`}>
+                              {group.category} <span className="text-xs text-slate-400 font-normal ml-2">({group.main})</span>
+                            </span>
+                          </label>
+                          {group.sub.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedSubModule(group)}
+                              disabled={!isMainChecked}
+                              className={`text-xs px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1 transition-all ${isMainChecked ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:hover:bg-indigo-900/50 cursor-pointer' : 'bg-slate-200 text-slate-400 dark:bg-slate-800 dark:text-slate-500 cursor-not-allowed opacity-60'}`}
+                            >
+                              Sub-Features <i className="fas fa-chevron-right text-[10px]" />
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              ) : (
+                // SUB-FEATURES VIEW
+                <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl p-4 space-y-4">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSubModule(null)}
+                    className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 font-semibold flex items-center gap-2 cursor-pointer transition-colors bg-transparent border-none"
+                  >
+                    <i className="fas fa-arrow-left" /> Back to Modules
+                  </button>
+                  <div className="border-t border-slate-200 dark:border-slate-700 pt-3">
+                    <h4 className="text-sm font-bold text-indigo-700 dark:text-indigo-400 mb-1">{selectedSubModule.category} Settings</h4>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-3">Select the specific features available within this module.</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-4">
+                      {selectedSubModule.sub.map(subFeat => {
+                        const isSubChecked = featModalSelected.includes(subFeat)
+                        return (
+                          <label key={subFeat} className="flex items-center gap-2.5 text-xs select-none cursor-pointer text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100">
+                            <input
+                              type="checkbox"
+                              checked={isSubChecked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setFeatModalSelected(prev => [...prev, subFeat])
+                                } else {
+                                  setFeatModalSelected(prev => prev.filter(x => x !== subFeat))
+                                }
+                              }}
+                              className="w-4 h-4 rounded accent-indigo-500 cursor-pointer"
+                            />
+                            <span>{subFeat}</span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex flex-col-reverse sm:flex-row gap-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => setIsFeaturesModalOpen(false)}
+                className="w-full sm:flex-1 py-2.5 rounded-xl bg-transparent border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700 cursor-pointer transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={featModalLoading}
+                className="w-full sm:flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 border-none text-white font-bold cursor-pointer disabled:opacity-50 transition-colors"
+              >
+                {featModalLoading ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
           </form>

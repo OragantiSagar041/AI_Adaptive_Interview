@@ -527,7 +527,61 @@ def get_master_dashboard_stats(
         }
     }
 
+@router.post("/master/migrate-features")
+def migrate_existing_account_features(master_id: str = Depends(get_current_admin)):
+    """
+    One-time migration: for every company that has features=null (inheriting from the
+    global plan dynamically), snapshot the current effective plan features onto the
+    company document.  After this, editing the global plan template will NOT change
+    any existing account — only newly-created accounts (via Create Tenant) will pick
+    up the plan's features at the moment of creation.
+    """
+    require_master_user(master_id)
+
+    companies = list(companies_collection.find({"features": {"$exists": False}}))
+    # Also catch docs where features is explicitly None
+    companies += list(companies_collection.find({"features": None}))
+
+    updated = 0
+    skipped = 0
+    errors = []
+
+    seen_ids = set()
+    for company in companies:
+        cid = str(company["_id"])
+        if cid in seen_ids:
+            continue
+        seen_ids.add(cid)
+
+        try:
+            plan_name = company.get("subscription_plan", "trial")
+            plan_def = get_plan_definition(plan_name)
+            features_snapshot = list(plan_def.get("features", []))
+
+            companies_collection.update_one(
+                {"_id": company["_id"]},
+                {"$set": {"features": features_snapshot}}
+            )
+            updated += 1
+        except Exception as e:
+            errors.append({"company_id": cid, "error": str(e)})
+            skipped += 1
+
+    return {
+        "status": "success",
+        "updated": updated,
+        "skipped": skipped,
+        "errors": errors,
+        "message": (
+            f"Migrated {updated} companies. "
+            "Existing accounts are now isolated from global plan changes. "
+            "Use the ⚙ button in Subscribers to modify individual account features."
+        )
+    }
+
+
 @router.post("/master/tenants")
+
 def create_tenant(data: TenantCreate, master_id: str = Depends(get_current_admin), current_admin: str = Depends(get_current_admin)):
     require_master_user(master_id)
         
@@ -547,7 +601,10 @@ def create_tenant(data: TenantCreate, master_id: str = Depends(get_current_admin
         "subscription_start": start.isoformat(),
         "subscription_expiry": expiry.isoformat(),
         "credits": data.credits if data.credits > 0 else credits_to_grant,
-        "created_at": start.isoformat()
+        "created_at": start.isoformat(),
+        # Snapshot the plan's features at creation time so that future edits
+        # to the global plan template do NOT affect this account's features.
+        "features": list(plan_def.get("features", [])),
     }
     company_insert = companies_collection.insert_one(new_company)
     company_id = str(company_insert.inserted_id)
@@ -658,6 +715,13 @@ def update_company(company_id: str, data: TenantUpdate, master_id: str = Depends
             {"_id": ObjectId(company_id)},
             {"$push": {"plan_history": history_entry}}
         )
+        
+        # When changing the plan, automatically snapshot the new plan's features
+        # (unless custom features were explicitly passed in this same update)
+        if data.features is None:
+            plan_def = get_plan_definition(req_plan)
+            update_fields["features"] = list(plan_def.get("features", []))
+            
     elif req_plan:
         update_fields["subscription_plan"] = req_plan
         admin_update_fields["subscription_plan"] = req_plan
