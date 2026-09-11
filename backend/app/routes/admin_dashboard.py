@@ -410,7 +410,30 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
         if not rpath: return None
         try:
             if rpath.startswith("cloudinary-authenticated://"):
-                public_id = rpath.split("://", 1)[1]
+                from urllib.parse import urlparse, parse_qs
+                import cloudinary
+                import cloudinary.utils
+                
+                # Parse out the public_id and any custom credentials we saved
+                parsed_uri = urlparse(rpath)
+                public_id = parsed_uri.netloc + parsed_uri.path
+                query_params = parse_qs(parsed_uri.query)
+                
+                # If we saved the specific round-robin account credentials used to upload this,
+                # we must use those exact same credentials to generate the signed URL to view it.
+                cloud_name = query_params.get("cloud_name", [None])[0]
+                api_key = query_params.get("api_key", [None])[0]
+                api_secret = query_params.get("api_secret", [None])[0]
+                
+                if cloud_name and api_key and api_secret:
+                    # Temporarily configure Cloudinary to sign this URL with the correct account
+                    cloudinary.config(
+                        cloud_name=cloud_name,
+                        api_key=api_key,
+                        api_secret=api_secret,
+                        secure=True
+                    )
+                
                 signed_url, _ = cloudinary.utils.cloudinary_url(
                     public_id,
                     resource_type="video",
@@ -1107,8 +1130,64 @@ def upload_full_recording(
             cloudinary_public_id = upload_result.get("public_id")
             normalized_path = f"cloudinary-authenticated://{cloudinary_public_id}"
             
-            # Clean up local file after successful upload
-            os.remove(file_path)
+            # Try uploading using the round-robin accounts
+            last_error = None
+            for account in cloudinary_manager.get_next_accounts_generator():
+                try:
+                    cloud_name = account.get("cloud_name")
+                    api_key = account.get("api_key")
+                    api_secret = account.get("api_secret")
+                    
+                    if not all([cloud_name, api_key, api_secret]):
+                        continue
+                        
+                    # Cloudinary's Python SDK upload_large method has a bug where it
+                    # sometimes ignores credentials passed as kwargs and uses globals.
+                    # We can force it by passing it as a `cloud_name` kwarg but using the 
+                    # api_proxy or environment variable, or we can just safely update the config
+                    # using cloudinary.config() before uploading. Since we're in a threaded
+                    # environment, we'll pass the `cloudinary://` URL explicitly using the 
+                    # undocumented `_connection` override or just set config.
+                    
+                    import cloudinary
+                    
+                    # Temporarily update the global config for this thread
+                    cloudinary.config(
+                        cloud_name=cloud_name,
+                        api_key=api_key,
+                        api_secret=api_secret,
+                        secure=True
+                    )
+                    
+                    upload_kwargs = {
+                        "resource_type": "video",
+                        "type": "authenticated",
+                        "folder": "hireiq_interview_recordings"
+                    }
+                    
+                    upload_result = cloudinary.uploader.upload_large(
+                        file_path,
+                        **upload_kwargs
+                    )
+                    
+                    cloudinary_public_id = upload_result.get("public_id")
+                    
+                    # Store the account details in the DB along with the path so we know which 
+                    # credentials to use when generating signed URLs later, since we have multiple keys!
+                    normalized_path = f"cloudinary-authenticated://{cloudinary_public_id}?cloud_name={cloud_name}&api_key={api_key}&api_secret={api_secret}"
+                    
+                    # Clean up local file after successful upload
+                    os.remove(file_path)
+                    last_error = None
+                    break  # Success, exit the retry loop
+                    
+                except Exception as cloud_e:
+                    logger.warning(f"Cloudinary upload failed for key {account.get('api_key')}: {cloud_e}")
+                    last_error = cloud_e
+                    continue # Try the next account
+                    
+            if last_error:
+                raise last_error
             
         except Exception as cloud_e:
             logger.exception("Recording upload to private Cloudinary storage failed")
@@ -1121,7 +1200,6 @@ def upload_full_recording(
                 ) from cloud_e
             normalized_path = file_path.replace("\\", "/")
             cloudinary_public_id = None
-
         # Update database
         uploaded_at = datetime.now(timezone.utc)
         
