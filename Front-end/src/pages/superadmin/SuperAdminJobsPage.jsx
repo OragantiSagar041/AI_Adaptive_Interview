@@ -31,10 +31,6 @@ const GRADIENT_ACCENTS = [
   'from-sky-500 via-blue-500 to-sky-600',
 ];
 
-const formatPhoneNumber = (phone) => {
-  if (!phone) return '';
-  return phone.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
-};
 
 export default function SuperAdminJobsPage() {
   const dispatch = useDispatch();

@@ -1351,33 +1351,32 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                   </div>
                 )
               }
-
-              {/* ─ Timeline Tab ─ */}
-              {
-                activeTab === 'timeline' && (
-                  <div className="max-w-2xl mx-auto py-6">
-                    <div className="relative border-l-2 border-slate-200 ml-4 space-y-8">
-                      {timeline.map((step, i) => (
-                        <div key={step.label} className="relative pl-8">
-                          <span className={`absolute -left-[11px] top-0.5 flex h-5 w-5 items-center justify-center rounded-full ring-4 ring-slate-50 shadow-sm ${step.done ? (step.bad ? "bg-rose-500 text-white" : "bg-indigo-600 text-white") : "bg-white border-2 border-slate-300"}`}>
-                            {step.done && <Check size={12} strokeWidth={4} />}
-                          </span>
-                          <div className="flex items-center gap-3">
-                            <h4 className={`text-sm font-black ${step.done ? (step.bad ? "text-rose-700" : "text-slate-800") : "text-slate-400"}`}>
-                              {step.label}
-                            </h4>
-                            {i === timeline.findIndex(t => !t.done) && (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 uppercase tracking-wider">Next up</span>
-                            )}
-                          </div>
-                          {step.done && <p className="text-xs font-medium text-slate-500 mt-1">Completed.</p>}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )
-              }
             </div>
+          )}
+
+          {/* ─ Timeline Tab ─ */}
+          {activeTab === 'timeline' && (
+            <div className="max-w-2xl mx-auto py-6">
+              <div className="relative border-l-2 border-slate-200 ml-4 space-y-8">
+                {timeline.map((step, i) => (
+                  <div key={step.label} className="relative pl-8">
+                    <span className={`absolute -left-[11px] top-0.5 flex h-5 w-5 items-center justify-center rounded-full ring-4 ring-slate-50 shadow-sm ${step.done ? (step.bad ? "bg-rose-500 text-white" : "bg-indigo-600 text-white") : "bg-white border-2 border-slate-300"}`}>
+                      {step.done && <Check size={12} strokeWidth={4} />}
+                    </span>
+                    <div className="flex items-center gap-3">
+                      <h4 className={`text-sm font-black ${step.done ? (step.bad ? "text-rose-700" : "text-slate-800") : "text-slate-400"}`}>
+                        {step.label}
+                      </h4>
+                      {i === timeline.findIndex(t => !t.done) && (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 uppercase tracking-wider">Next up</span>
+                      )}
+                    </div>
+                    {step.done && <p className="text-xs font-medium text-slate-500 mt-1">Completed.</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* ─ Notes Side Panel ─ */}
           {
@@ -1500,87 +1499,9 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
               </div>
             </div>
           </div>
-          </div >
         )
 }
 
-
-{/* ── Transcript Sub-Modal ── */ }
-{
-  showTranscriptModal && (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/80 backdrop-blur-md p-4 sm:p-6 pt-16 sm:pt-20" onClick={() => setShowTranscriptModal(false)}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col overflow-hidden my-auto" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-violet-50 text-violet-600 rounded-lg"><MessageSquare size={18} /></div>
-            <div>
-              <h3 className="text-sm font-black text-slate-800">Interview Q&A — Transcript</h3>
-              <p className="text-xs text-slate-400 font-medium">{c.answers?.length} questions · {name}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            {(() => {
-              let displayScore = aiScore;
-              let displayLabel = "AI Score";
-
-              // Determine interview type and max marks dynamically
-              const itype = (c.interview_type || 'Technical').trim().toLowerCase();
-              const isNonTech = ['non-technical', 'non_technical', 'non tech', 'nontech'].includes(itype);
-              const isNormal = !isNonTech && itype !== 'technical';
-
-              // For Non-Tech: derive n_case_study_questions from round2_score / 10 or fallback
-              const round2Max = isNonTech
-                ? Math.min(Math.round((c.round2_score || 0) > 0 ? Math.ceil(c.round2_score / 10) * 10 : (c.case_study_round?.questions?.length || 0) * 10), 30)
-                : isNormal ? 0 : 20;
-              const round1Max = isNormal ? 100 : (100 - round2Max);
-
-              if (transcriptTab === 'verbal') {
-                displayLabel = "Verbal Score";
-                if (c.round1_score !== undefined) {
-                  displayScore = c.round1_score;
-                } else {
-                  // Legacy fallback for old sessions
-                  const verbalAnsForScore = (c.answers || []).filter(a => !a.question_text?.toLowerCase().includes('coding round') && !a.question_text?.toLowerCase().includes('case study'));
-                  const validVerbalAnsForScore = verbalAnsForScore.filter(a => a.ai_score !== null && a.ai_score !== undefined);
-                  displayScore = validVerbalAnsForScore.length > 0 ? (validVerbalAnsForScore.reduce((sum, a) => sum + Number(a.ai_score), 0) / validVerbalAnsForScore.length) * (round1Max / 100) : 0;
-                }
-              } else if (transcriptTab === 'coding') {
-                displayLabel = isNonTech ? "Case Study Score" : "Coding Score";
-                if (c.round2_score !== undefined) {
-                  displayScore = c.round2_score;
-                } else {
-                  // Legacy fallback for old sessions
-                  displayScore = c.coding_round ? round2Max : 0;
-                }
-              }
-
-              const maxForTab = transcriptTab === 'coding' ? round2Max : round1Max;
-              const goodThreshold = maxForTab * 0.75;
-              const okThreshold = maxForTab * 0.5;
-
-              return (
-                <div className="flex flex-col items-end justify-center mr-2">
-                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{displayLabel}</div>
-                  <div className={`text-2xl font-black tabular-nums tracking-tighter mt-0.5 ${displayScore >= goodThreshold ? 'text-emerald-600' : displayScore >= okThreshold ? 'text-amber-500' : 'text-rose-500'}`}>
-                    {displayScore.toFixed(1)}
-                    <span className="text-sm font-bold text-slate-400 ml-1">
-                      / {maxForTab}
-                    </span>
-                  </div>
-                </div>
-              );
-            })()}
-            <button onClick={() => setShowTranscriptModal(false)} className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
-              <X size={18} />
-            </button>
-          </div>
-          <div className="flex-1 overflow-y-auto p-6">
-            <pre className="text-sm text-slate-700 bg-slate-50 rounded-xl p-5 whitespace-pre-wrap font-sans border border-slate-200 leading-relaxed">{resumeText}</pre>
-          </div>
-        </div>
-      </div>
-      )
-        }
 
       {/* ── Recording Sub-Modal ── */}
       {

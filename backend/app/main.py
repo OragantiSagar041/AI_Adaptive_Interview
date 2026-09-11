@@ -52,7 +52,6 @@ from app.routes.plans_routes import router as plans_router
 from app.routes.platform import router as platform_router
 
 from app.routes.conversation_flow import router as conversation_flow_router
-from app.routes.omni_sync import router as omni_sync_router
 from app.routes.translation import router as translation_router
 import app.services.transcription as transcription                # Voice transcription sub-router
 from app.routes import voice_routes     # WebRTC voice routes

@@ -2831,62 +2831,7 @@ export default function AICallingAgentPage() {
                         </div>
                       </div>
                       <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <label className="block text-[0.7rem] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Job Description</label>
-                          <div className="flex gap-2">
-                            {availableJobs && availableJobs.length > 0 && (
-                              <select
-                                className="bg-indigo-50 border border-indigo-100 text-[0.7rem] font-bold text-indigo-700 rounded-lg px-2 py-1 outline-none focus:border-indigo-500 cursor-pointer"
-                                onChange={async (e) => {
-                                  const jobId = e.target.value;
-                                  setSelectedJobId(jobId);
-                                  setSelectedApplicationId('');
-                                  if (!jobId) {
-                                    setSelectedJob(null);
-                                    setAvailableCandidates([]);
-                                    return;
-                                  }
-                                  try {
-                                    const res = await fetch(`${API_BASE_URL}/api/public/jobs/${jobId}`);
-                                    if (res.ok) {
-                                      const data = await res.json();
-                                      const job = data.job;
-                                      setSelectedJob(job);
-                                      if (job) {
-                                        const desc = `Role: ${job.title}\nExperience: ${job.experience || ''}\nSkills: ${job.skills || ''}\n\n${job.description || ''}`;
-                                        setManualCall(prev => ({ ...prev, jobDesc: desc }));
-                                      }
-                                    }
-                                    const appsRes = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/applications`, { headers });
-                                    if (appsRes.ok) {
-                                      const data = await appsRes.json();
-                                      setAvailableCandidates(data.applications || []);
-                                    } else {
-                                      setAvailableCandidates([]);
-                                    }
-                                  } catch (err) {
-                                    console.error("Error fetching job description/applications:", err);
-                                  }
-                                }}
-                              >
-                                <option value="">Auto-fill from saved Job...</option>
-                                {availableJobs.map(job => (
-                                  <option key={job.job_id || job._id || job.id} value={job.job_id || job._id || job.id}>{job.title}</option>
-                                ))}
-                              </select>
-                            )}
-                          </div>
-                          <div>
-                            <label className="block text-[0.7rem] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Candidate Name</label>
-                            <input
-                              type="text" value={manualCall.name}
-                              onChange={e => setManualCall({ ...manualCall, name: e.target.value.replace(/[0-9]/g, '') })}
-                              className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-semibold"
-                              placeholder="e.g. John Doe"
-                            />
-                          </div>
-                        </div>
-                        <div>
+
                           <div className="flex items-center justify-between mb-2">
                             <label className="block text-[0.7rem] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Job Description</label>
                             <div className="flex gap-2">
@@ -3089,16 +3034,14 @@ export default function AICallingAgentPage() {
                             {isCalling ? <><Activity size={16} className="animate-spin" /> Calling...</> : <><Phone size={16} /> Start AI Call</>}
                           </button>
                         </div>
-                      </div >
-                      )
-  }
-                    </div >
-                  )
-                  }
-                </motion.div >
-          </AnimatePresence >
-        </div >
-      </motion.div >
+                      </div>
+                    )}
+                  </div>
+                )}
+                </motion.div>
+          </AnimatePresence>
+        </div>
+      </motion.div>
 
       {selectedCallId && (
         <CallDetailsModal
@@ -3109,6 +3052,6 @@ export default function AICallingAgentPage() {
           token={token}
         />
       )}
-    </div >
+    </div>
   )
 }

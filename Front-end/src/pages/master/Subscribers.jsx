@@ -607,48 +607,25 @@ export default function Subscribers() {
                 <span className="text-[10px] text-slate-400 block -mt-2">Leave as 0 to maintain current values.</span>
               </div>
 
-<<<<<<< HEAD
-  <div className="flex flex-col-reverse sm:flex-row gap-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-    <button
-      type="button"
-      onClick={() => setIsUpdateModalOpen(false)}
-      className="w-full sm:flex-1 py-2.5 rounded-xl bg-transparent border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700 cursor-pointer transition-colors"
-    >
-      Cancel
-    </button>
-    <button
-      type="submit"
-      disabled={updateLoading}
-      className="w-full sm:flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 border-none text-white font-bold cursor-pointer disabled:opacity-50 transition-colors"
-    >
-      {updateLoading ? 'Saving...' : 'Update Plan'}
-    </button>
-  </div>
-            </form >
-          </div >
-        )
-}
-    </div >
-=======
-            <div className="flex flex-col-reverse sm:flex-row gap-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-              <button
-                type="button"
-                onClick={() => setIsUpdateModalOpen(false)}
-                className="w-full sm:flex-1 py-2.5 rounded-xl bg-transparent border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700 cursor-pointer transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={updateLoading}
-                className="w-full sm:flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 border-none text-white font-bold cursor-pointer disabled:opacity-50 transition-colors"
-              >
-                {updateLoading ? 'Saving...' : 'Update Plan'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+              <div className="flex flex-col-reverse sm:flex-row gap-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setIsUpdateModalOpen(false)}
+                  className="w-full sm:flex-1 py-2.5 rounded-xl bg-transparent border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700 cursor-pointer transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updateLoading}
+                  className="w-full sm:flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 border-none text-white font-bold cursor-pointer disabled:opacity-50 transition-colors"
+                >
+                  {updateLoading ? 'Saving...' : 'Update Plan'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
       {/* MODAL: CUSTOM FEATURES — same format as Plans edit modal */}
       {isFeaturesModalOpen && featModalCompany && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -792,6 +769,5 @@ export default function Subscribers() {
         </div>
       )}
     </div>
->>>>>>> 3259271bc09074bce219d264c3d3bc7074f6b0f8
   )
 }
