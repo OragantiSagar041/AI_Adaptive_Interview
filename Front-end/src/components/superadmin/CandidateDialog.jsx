@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
 import Swal from 'sweetalert2'
@@ -10,7 +10,7 @@ import {
   Play, FileText, Sparkles, Star, Check, X, Calendar, Send,
   MessageSquare, Video, Scale, Loader2, AlertCircle, Monitor,
   Mic, ShieldAlert, Eye, ChevronRight, Code, UserCheck, User, ExternalLink, ArrowLeft,
-  Globe
+  Globe, ChevronDown
 } from "lucide-react"
 import { jsPDF } from 'jspdf'
 import { detectNonEnglishText, translateText, translateQAPairs } from '../../utils/translation'
@@ -90,23 +90,52 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   const [notesSaving, setNotesSaving] = useState(false)
   const [showScheduleModal, setShowScheduleModal] = useState(false)
 
-  // Translation States for Candidate Answers
+  // Supported Languages for Transcript Translation
+  const SUPPORTED_TRANSLATION_LANGUAGES = [
+    { code: 'en', label: 'English' },
+    { code: 'hi', label: 'Hindi' },
+    { code: 'te', label: 'Telugu' },
+    { code: 'ta', label: 'Tamil' },
+    { code: 'ml', label: 'Malayalam' },
+  ]
+
+  // Translation States for Candidate Answers & Questions
   const [translations, setTranslations] = useState({})
   const [translatingKeys, setTranslatingKeys] = useState({})
   const [translatingAll, setTranslatingAll] = useState(false)
   const [allTranslated, setAllTranslated] = useState(false)
+  const [selectedTargetLang, setSelectedTargetLang] = useState('original')
+  const [langCache, setLangCache] = useState({})
+  const [showTranslateDropdown, setShowTranslateDropdown] = useState(false)
+  const translateDropdownRef = useRef(null)
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (translateDropdownRef.current && !translateDropdownRef.current.contains(event.target)) {
+        setShowTranslateDropdown(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [])
 
   const handleTranslateSingle = async (key, text, questionText = '') => {
     if ((!text || !text.trim()) && (!questionText || !questionText.trim())) return
     if (translatingKeys[key]) return
     setTranslatingKeys(prev => ({ ...prev, [key]: true }))
+    const targetCode = selectedTargetLang && selectedTargetLang !== 'original' ? selectedTargetLang : 'en'
+    const langObj = SUPPORTED_TRANSLATION_LANGUAGES.find(l => l.code === targetCode)
+    const langLabel = langObj ? langObj.label : 'English'
+
     try {
       const items = [{
         id: key,
         question_text: questionText || '',
         answer_text: text || ''
       }]
-      const results = await translateQAPairs(items, 'en', API_BASE_URL, token)
+      const results = await translateQAPairs(items, targetCode, API_BASE_URL, token)
       if (results && results[0]) {
         const r = results[0]
         setTranslations(prev => ({
@@ -119,7 +148,9 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
             translatedQuestion: r.question_text,
             isTranslated: true,
             view: 'translated',
-            sourceLangName: 'English (Translated)'
+            targetLang: targetCode,
+            targetLangName: langLabel,
+            sourceLangName: langLabel
           }
         }))
       }
@@ -147,10 +178,11 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
     })
   }
 
-  const handleToggleTranslateAll = async () => {
+  const handleLanguageChange = async (targetLang) => {
     if (translatingAll) return
+    setSelectedTargetLang(targetLang)
 
-    if (allTranslated) {
+    if (targetLang === 'original') {
       setTranslations(prev => {
         const updated = { ...prev }
         Object.keys(updated).forEach(k => {
@@ -162,16 +194,25 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
       return
     }
 
+    // Check if translation is already cached for this language
+    if (langCache[targetLang]) {
+      setTranslations(langCache[targetLang])
+      setAllTranslated(true)
+      return
+    }
+
     const currentCandidate = detail || candidate || {}
     const itemsToTranslate = []
-    const currentAnswers = (currentCandidate.answers || []).filter(a =>
-      transcriptTab === 'coding'
-        ? a.question_text?.toLowerCase().includes('coding round') || a.question_text?.toLowerCase().includes('case study')
-        : !a.question_text?.toLowerCase().includes('coding round') && !a.question_text?.toLowerCase().includes('case study')
+
+    // Collect Verbal and Case Study items for translation (Coding round stays English by default)
+    const allAnswers = currentCandidate.answers || []
+    const nonCodingAnswers = allAnswers.filter(a =>
+      !a.question_text?.toLowerCase().includes('coding round')
     )
 
-    currentAnswers.forEach((a, idx) => {
-      const key = `ans_${idx}`
+    nonCodingAnswers.forEach((a, idx) => {
+      const originalIdx = allAnswers.indexOf(a)
+      const key = `ans_${originalIdx !== -1 ? originalIdx : idx}`
       itemsToTranslate.push({
         id: key,
         question_text: a.question_text || '',
@@ -179,7 +220,8 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
       })
     })
 
-    if (transcriptTab === 'coding' && currentCandidate.case_study_round?.questions?.length > 0) {
+    // Also collect direct Case Study round questions & answers
+    if (currentCandidate.case_study_round?.questions?.length > 0) {
       currentCandidate.case_study_round.questions.forEach((q, idx) => {
         const qText = typeof q === 'object' ? (q.scenario || q.question || q.text || q.title || JSON.stringify(q)) : q
         const ansObj = currentCandidate.case_study_round.answers?.[idx]
@@ -194,46 +236,50 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
 
     if (itemsToTranslate.length === 0) return
 
-    // If already all translated in state, simply toggle view to 'translated'
-    const allCached = itemsToTranslate.every(it => translations[it.id]?.isTranslated)
-    if (allCached) {
-      setTranslations(prev => {
-        const next = { ...prev }
-        itemsToTranslate.forEach(it => {
-          if (next[it.id]) {
-            next[it.id] = { ...next[it.id], view: 'translated' }
-          }
-        })
-        return next
-      })
-      setAllTranslated(true)
-      return
-    }
-
     setTranslatingAll(true)
+    const langObj = SUPPORTED_TRANSLATION_LANGUAGES.find(l => l.code === targetLang)
+    const langLabel = langObj ? langObj.label : targetLang
+
     try {
-      const results = await translateQAPairs(itemsToTranslate, 'en', API_BASE_URL, token)
-      setTranslations(prev => {
-        const next = { ...prev }
-        results.forEach(r => {
-          next[r.id] = {
-            id: r.id,
-            originalText: r.original_answer_text,
-            translatedText: r.answer_text,
-            originalQuestion: r.original_question_text,
-            translatedQuestion: r.question_text,
-            isTranslated: true,
-            view: 'translated',
-            sourceLangName: 'English (Translated)'
-          }
-        })
-        return next
+      const results = await translateQAPairs(itemsToTranslate, targetLang, API_BASE_URL, token)
+      const newTranslations = {}
+
+      results.forEach(r => {
+        newTranslations[r.id] = {
+          id: r.id,
+          originalText: r.original_answer_text,
+          translatedText: r.answer_text,
+          originalQuestion: r.original_question_text,
+          translatedQuestion: r.question_text,
+          isTranslated: true,
+          view: 'translated',
+          targetLang: targetLang,
+          targetLangName: langLabel,
+          sourceLangName: langLabel
+        }
       })
+
+      setLangCache(prev => ({ ...prev, [targetLang]: newTranslations }))
+      setTranslations(newTranslations)
       setAllTranslated(true)
     } catch (err) {
-      console.error("Error translating all questions and answers:", err)
+      console.error("Error translating questions and answers to", targetLang, err)
+      Swal.fire({
+        icon: 'error',
+        title: 'Translation Failed',
+        text: `Failed to translate to ${langLabel}. Please try again.`
+      })
+      setSelectedTargetLang('original')
     } finally {
       setTranslatingAll(false)
+    }
+  }
+
+  const handleToggleTranslateAll = () => {
+    if (selectedTargetLang === 'original') {
+      handleLanguageChange('en')
+    } else {
+      handleLanguageChange('original')
     }
   }
 
@@ -254,6 +300,9 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
     setTranslatingKeys({})
     setTranslatingAll(false)
     setAllTranslated(false)
+    setSelectedTargetLang('original')
+    setLangCache({})
+    setShowTranslateDropdown(false)
 
     const linkId = candidate.link_id || candidate.id || candidate._id
     if (!linkId || linkId.startsWith("ai_call_")) {
@@ -429,6 +478,9 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   const c = detail || candidate
   const name = c.candidate_name || candidate.candidate_name || "Unknown Candidate"
   const initials = name.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase()
+  const itype = (c.interview_type || 'Technical').trim().toLowerCase()
+  const isNonTech = ['non-technical', 'non_technical', 'non tech', 'nontech'].includes(itype)
+  const isNormal = !isNonTech && itype !== 'technical'
   // interview_title: try every possible field name
   const jobTitle = c.interview_title || candidate.interview_title || c.job_applied || candidate.job_applied || "Position"
   const email = c.candidate_email || c.email || candidate.candidate_email || candidate.email || "No email provided"
@@ -566,7 +618,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
       checkPageBreak(10);
       doc.setFont("helvetica", "bold");
       const transItem = translations[`ans_${index}`];
-      const qDisplay = (transItem?.isTranslated && transItem.view === 'translated' && transItem.translatedQuestion)
+      const qDisplay = (selectedTargetLang !== 'original' && transItem?.isTranslated && transItem.translatedQuestion)
         ? `Q${index + 1}: ${transItem.translatedQuestion}`
         : `Q${index + 1}: ${a.question_text || 'No question recorded'}`;
       const qLines = doc.splitTextToSize(qDisplay, pageWidth - 2 * margin);
@@ -593,10 +645,10 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
       doc.setFontSize(11);
       y += 4;
 
-      if (transItem?.isTranslated && transItem.translatedText) {
+      if (selectedTargetLang !== 'original' && transItem?.isTranslated && transItem.translatedText) {
         checkPageBreak(5);
         doc.setFont("helvetica", "bold");
-        doc.text(`Candidate's Answer (English Translation from ${transItem.sourceLangName || 'Original'}):`, margin, y);
+        doc.text(`Candidate's Answer (${transItem.targetLangName || 'Translation'}):`, margin, y);
         y += 5;
         doc.setFont("helvetica", "normal");
         const tLines = doc.splitTextToSize(transItem.translatedText, pageWidth - 2 * margin);
@@ -1532,10 +1584,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                     let displayScore = aiScore;
                     let displayLabel = "AI Score";
 
-                    // Determine interview type and max marks dynamically
-                    const itype = (c.interview_type || 'Technical').trim().toLowerCase();
-                    const isNonTech = ['non-technical', 'non_technical', 'non tech', 'nontech'].includes(itype);
-                    const isNormal = !isNonTech && itype !== 'technical';
+
 
                     // For Non-Tech: derive n_case_study_questions from round2_score / 10 or fallback
                     const round2Max = isNonTech
@@ -1592,34 +1641,89 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                 >
                   Verbal
                 </button>
-                <button
-                  onClick={() => setTranscriptTab('coding')}
-                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${transcriptTab === 'coding' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-transparent text-slate-500 hover:bg-slate-200'}`}
-                >
-                  Coding or Case Study
-                </button>
-
-                <div className="ml-auto flex items-center gap-2">
+                {!isNormal && (
                   <button
-                    type="button"
-                    onClick={handleToggleTranslateAll}
-                    disabled={translatingAll}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border transition-all bg-white hover:bg-indigo-50 text-indigo-600 border-indigo-200 shadow-xs active:scale-95 disabled:opacity-50"
-                    title={allTranslated ? "Translate / View Original" : "Translate questions and answers to English"}
+                    onClick={() => {
+                      setTranscriptTab('coding')
+                      if (!isNonTech) setShowTranslateDropdown(false)
+                    }}
+                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${transcriptTab === 'coding' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-transparent text-slate-500 hover:bg-slate-200'}`}
                   >
-                    {translatingAll ? (
-                      <>
-                        <Loader2 size={13} className="animate-spin text-indigo-600" />
-                        <span>Translating...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Globe size={13} className="text-indigo-600" />
-                        <span>Translate</span>
-                      </>
-                    )}
+                    {isNonTech ? 'Case Study' : 'Coding Round'}
                   </button>
-                </div>
+                )}
+
+                {(transcriptTab === 'verbal' || (transcriptTab === 'coding' && isNonTech)) && (
+                  <div className="ml-auto flex items-center gap-2 relative" ref={translateDropdownRef}>
+                    <button
+                      type="button"
+                      onClick={() => setShowTranslateDropdown(prev => !prev)}
+                      disabled={translatingAll}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border transition-all shadow-xs active:scale-95 disabled:opacity-50 ${
+                        translatingAll
+                          ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                          : selectedTargetLang !== 'original'
+                            ? 'bg-indigo-50 border-indigo-300 text-indigo-700 ring-2 ring-indigo-200/50'
+                            : 'bg-white hover:bg-indigo-50 text-indigo-600 border-indigo-200'
+                      }`}
+                      title="Translate questions and answers"
+                    >
+                      {translatingAll ? (
+                        <>
+                          <Loader2 size={13} className="animate-spin text-indigo-600 shrink-0" />
+                          <span>Translating...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Globe size={13} className="text-indigo-600 shrink-0" />
+                          <span>
+                            {selectedTargetLang === 'original'
+                              ? 'Translate'
+                              : (SUPPORTED_TRANSLATION_LANGUAGES.find(l => l.code === selectedTargetLang)?.label || 'Translate')}
+                          </span>
+                          <ChevronDown size={12} className={`transition-transform duration-200 text-indigo-600 ${showTranslateDropdown ? 'rotate-180' : ''}`} />
+                        </>
+                      )}
+                    </button>
+
+                    {showTranslateDropdown && (
+                      <div className="absolute right-0 top-full mt-1.5 w-44 rounded-xl bg-white border border-slate-200 shadow-xl py-1.5 z-50">
+                        <div className="px-3 py-1 text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-100 mb-1">
+                          Select Language
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleLanguageChange('original');
+                            setShowTranslateDropdown(false);
+                          }}
+                          className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-indigo-50 transition-colors ${
+                            selectedTargetLang === 'original' ? 'font-bold text-indigo-600 bg-indigo-50/60' : 'text-slate-700'
+                          }`}
+                        >
+                          <span>Original (Reset)</span>
+                          {selectedTargetLang === 'original' && <Check size={12} className="text-indigo-600 shrink-0" />}
+                        </button>
+                        {SUPPORTED_TRANSLATION_LANGUAGES.map(lang => (
+                          <button
+                            key={lang.code}
+                            type="button"
+                            onClick={() => {
+                              handleLanguageChange(lang.code);
+                              setShowTranslateDropdown(false);
+                            }}
+                            className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-indigo-50 transition-colors ${
+                              selectedTargetLang === lang.code ? 'font-bold text-indigo-600 bg-indigo-50/60' : 'text-slate-700'
+                            }`}
+                          >
+                            <span>{lang.label}</span>
+                            {selectedTargetLang === lang.code && <Check size={12} className="text-indigo-600 shrink-0" />}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
 
@@ -1637,9 +1741,11 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                       <div key={idx} className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
                         {/* Question Header */}
                         {(() => {
-                          const ansKey = `ans_${idx}`
-                          const transState = translations[ansKey]
-                          const isQTranslated = transState?.isTranslated && transState.view === 'translated' && transState.translatedQuestion
+                          const isCodingItem = a.question_text?.toLowerCase().includes('coding round') || (transcriptTab === 'coding' && !isNonTech)
+                          const originalIdx = (c.answers || []).indexOf(a)
+                          const ansKey = `ans_${originalIdx !== -1 ? originalIdx : idx}`
+                          const transState = !isCodingItem ? (translations[ansKey] || Object.values(translations).find(t => (t.originalQuestion && t.originalQuestion === a.question_text) || (t.originalText && t.originalText === a.answer_text))) : null
+                          const isQTranslated = !isCodingItem && selectedTargetLang !== 'original' && transState?.isTranslated && transState.translatedQuestion
                           const rawQText = isQTranslated ? transState.translatedQuestion : (a.question_text || 'No question recorded')
                           const formattedQText = a.question_text?.toLowerCase().includes('coding round')
                             ? rawQText.replace(/(Input:)/gi, '\n\n$1').replace(/(Output:)/gi, '\n$1').replace(/(Constraints:)/gi, '\n\n$1').replace(/(Example:)/gi, '\n\n$1').trim()
@@ -1653,11 +1759,6 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                                   <p className="text-sm font-bold text-slate-800 leading-snug whitespace-pre-wrap">
                                     {formattedQText}
                                   </p>
-                                  {isQTranslated && transState.originalQuestion && transState.originalQuestion !== transState.translatedQuestion && (
-                                    <p className="text-[11px] text-slate-400 mt-1 italic line-clamp-2" title={transState.originalQuestion}>
-                                      Original: {transState.originalQuestion}
-                                    </p>
-                                  )}
                                 </div>
                               </div>
                               {a.ai_score !== null && a.ai_score !== undefined && (
@@ -1799,96 +1900,24 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                             <>
                               {/* Candidate Answer */}
                               {(() => {
-                                const ansKey = `ans_${idx}`
-                                const nonEnglishInfo = detectNonEnglishText(a.answer_text, c.language || c.detected_language || '')
-                                const transState = translations[ansKey]
+                                const isCodingItem = a.question_text?.toLowerCase().includes('coding round') || (transcriptTab === 'coding' && !isNonTech)
+                                const originalIdx = (c.answers || []).indexOf(a)
+                                const ansKey = `ans_${originalIdx !== -1 ? originalIdx : idx}`
+                                const transState = !isCodingItem ? (translations[ansKey] || Object.values(translations).find(t => (t.originalQuestion && t.originalQuestion === a.question_text) || (t.originalText && t.originalText === a.answer_text))) : null
+                                const isAnswerTranslated = !isCodingItem && selectedTargetLang !== 'original' && transState?.isTranslated && transState.translatedText
+                                const displayAnswer = isAnswerTranslated ? transState.translatedText : a.answer_text
+
                                 return (
                                   <div>
                                     <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
                                       <div className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
                                         <MessageSquare size={10} /> Candidate Answer
-                                        {nonEnglishInfo.isNonEnglish && (
-                                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                                            <Globe size={9} /> {nonEnglishInfo.languageName} detected
-                                          </span>
-                                        )}
-                                        {transState?.isTranslated && transState.view === 'translated' && (
-                                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                            <Check size={9} /> English Translated
-                                          </span>
-                                        )}
                                       </div>
-
-                                      {/* Translation Action Button */}
-                                      {a.answer_text && a.answer_text.trim() && (
-                                        <div className="flex items-center gap-2">
-                                          {transState?.isTranslated ? (
-                                            <div className="inline-flex items-center bg-slate-200/80 p-0.5 rounded-lg text-[10px] font-bold">
-                                              <button
-                                                type="button"
-                                                onClick={() => toggleAnswerView(ansKey, 'original')}
-                                                className={`px-2 py-0.5 rounded-md transition-all ${transState.view === 'original' ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
-                                              >
-                                                Original
-                                              </button>
-                                              <button
-                                                type="button"
-                                                onClick={() => toggleAnswerView(ansKey, 'translated')}
-                                                className={`px-2 py-0.5 rounded-md transition-all ${transState.view === 'translated' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
-                                              >
-                                                English
-                                              </button>
-                                            </div>
-                                          ) : (
-                                            <button
-                                              type="button"
-                                              onClick={() => handleTranslateSingle(ansKey, a.answer_text, a.question_text)}
-                                              disabled={translatingKeys[ansKey]}
-                                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                                                nonEnglishInfo.isNonEnglish
-                                                  ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-xs hover:from-indigo-500 hover:to-violet-500 ring-2 ring-indigo-300/40'
-                                                  : 'bg-white hover:bg-slate-100 text-slate-600 hover:text-indigo-600 border border-slate-200 shadow-xs'
-                                              }`}
-                                              title="Translate candidate answer to English"
-                                            >
-                                              {translatingKeys[ansKey] ? (
-                                                <>
-                                                  <Loader2 size={11} className="animate-spin text-indigo-500" />
-                                                  <span>Translating...</span>
-                                                </>
-                                              ) : (
-                                                <>
-                                                  <Globe size={11} />
-                                                  <span>Translate</span>
-                                                </>
-                                              )}
-                                            </button>
-                                          )}
-                                        </div>
-                                      )}
                                     </div>
 
-                                    {transState?.isTranslated && transState.view === 'translated' ? (
-                                      <div className="bg-indigo-50/50 border border-indigo-200 rounded-xl p-3.5 text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
-                                        <div className="flex items-center justify-between text-[10px] font-bold text-indigo-700 pb-1.5 mb-1.5 border-b border-indigo-100/80">
-                                          <span className="flex items-center gap-1">
-                                            <Globe size={10} /> English Translation (from {transState.sourceLangName || "original"})
-                                          </span>
-                                          <button
-                                            type="button"
-                                            onClick={() => toggleAnswerView(ansKey, 'original')}
-                                            className="text-slate-500 hover:text-indigo-700 hover:underline font-semibold"
-                                          >
-                                            View Original
-                                          </button>
-                                        </div>
-                                        <p className="text-slate-800 leading-relaxed">{transState.translatedText}</p>
-                                      </div>
-                                    ) : (
-                                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
-                                        {a.answer_text || <span className="italic text-slate-400">No answer recorded</span>}
-                                      </div>
-                                    )}
+                                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                                      {displayAnswer || <span className="italic text-slate-400">No answer recorded</span>}
+                                    </div>
                                   </div>
                                 )
                               })()}
@@ -1931,8 +1960,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                     ).length === 0 && (
                       <>
                         {(() => {
-                          const itype = (c.interview_type || 'Technical').trim().toLowerCase();
-                          const isNonTech = ['non-technical', 'non_technical', 'non tech', 'nontech'].includes(itype);
+
 
                           if (isNonTech) {
                             return c.case_study_round?.questions?.length > 0 ? (
@@ -1962,108 +1990,35 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                                         })()}
                                       </div>
                                       <div className="p-4 space-y-4">
-                                        <div>
-                                          <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Scenario / Question</div>
-                                          <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
-                                            {translations[`cs_${idx}`]?.isTranslated && translations[`cs_${idx}`]?.view === 'translated' && translations[`cs_${idx}`]?.translatedQuestion
-                                              ? translations[`cs_${idx}`].translatedQuestion
-                                              : qText}
-                                          </div>
-                                          {translations[`cs_${idx}`]?.isTranslated && translations[`cs_${idx}`]?.view === 'translated' && translations[`cs_${idx}`]?.originalQuestion && translations[`cs_${idx}`]?.originalQuestion !== translations[`cs_${idx}`]?.translatedQuestion && (
-                                            <p className="text-[11px] text-slate-400 mt-1 italic" title={translations[`cs_${idx}`].originalQuestion}>
-                                              Original: {translations[`cs_${idx}`].originalQuestion}
-                                            </p>
-                                          )}
-                                        </div>
+                                        {(() => {
+                                          const csKey = `cs_${idx}`
+                                          const csTransState = translations[csKey] || Object.values(translations).find(t => (t.originalQuestion && t.originalQuestion === qText) || (t.originalText && t.originalText === aText))
+                                          const isCsQTranslated = selectedTargetLang !== 'original' && csTransState?.isTranslated && csTransState?.translatedQuestion
+                                          return (
+                                            <div>
+                                              <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Scenario / Question</div>
+                                              <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                                                {isCsQTranslated ? csTransState.translatedQuestion : qText}
+                                              </div>
+                                            </div>
+                                          )
+                                        })()}
                                         {aText && (() => {
                                           const csKey = `cs_${idx}`
-                                          const csNonEnglish = detectNonEnglishText(aText, c.language || c.detected_language || '')
-                                          const csTransState = translations[csKey]
+                                          const csTransState = translations[csKey] || Object.values(translations).find(t => (t.originalQuestion && t.originalQuestion === qText) || (t.originalText && t.originalText === aText))
+                                          const isCsATranslated = selectedTargetLang !== 'original' && csTransState?.isTranslated && csTransState?.translatedText
+                                          const displayResponse = isCsATranslated ? csTransState.translatedText : aText
                                           return (
                                             <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
                                               <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
                                                 <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                                                   <Mic size={10} /> Candidate Response
-                                                  {csNonEnglish.isNonEnglish && (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                                                      <Globe size={9} /> {csNonEnglish.languageName} detected
-                                                    </span>
-                                                  )}
-                                                  {csTransState?.isTranslated && csTransState.view === 'translated' && (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                                      <Check size={9} /> English Translated
-                                                    </span>
-                                                  )}
                                                 </div>
-
-                                                {/* Case Study Translation Action Button */}
-                                                {aText.trim() && (
-                                                  <div className="flex items-center gap-2">
-                                                    {csTransState?.isTranslated ? (
-                                                      <div className="inline-flex items-center bg-slate-200/80 p-0.5 rounded-lg text-[10px] font-bold">
-                                                        <button
-                                                          type="button"
-                                                          onClick={() => toggleAnswerView(csKey, 'original')}
-                                                          className={`px-2 py-0.5 rounded-md transition-all ${csTransState.view === 'original' ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
-                                                        >
-                                                          Original
-                                                        </button>
-                                                        <button
-                                                          type="button"
-                                                          onClick={() => toggleAnswerView(csKey, 'translated')}
-                                                          className={`px-2 py-0.5 rounded-md transition-all ${csTransState.view === 'translated' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
-                                                        >
-                                                          English
-                                                        </button>
-                                                      </div>
-                                                    ) : (
-                                                      <button
-                                                        type="button"
-                                                        onClick={() => handleTranslateSingle(csKey, aText, qText)}
-                                                        disabled={translatingKeys[csKey]}
-                                                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                                                          csNonEnglish.isNonEnglish
-                                                            ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-xs hover:from-indigo-500 hover:to-violet-500 ring-2 ring-indigo-300/40'
-                                                            : 'bg-white hover:bg-slate-100 text-slate-600 hover:text-indigo-600 border border-slate-200 shadow-xs'
-                                                        }`}
-                                                        title="Translate candidate response and question to English"
-                                                      >
-                                                        {translatingKeys[csKey] ? (
-                                                          <>
-                                                            <Loader2 size={11} className="animate-spin text-indigo-500" />
-                                                            <span>Translating...</span>
-                                                          </>
-                                                        ) : (
-                                                          <>
-                                                            <Globe size={11} />
-                                                            <span>Translate</span>
-                                                          </>
-                                                        )}
-                                                      </button>
-                                                    )}
-                                                  </div>
-                                                )}
                                               </div>
 
-                                              {csTransState?.isTranslated && csTransState.view === 'translated' ? (
-                                                <div className="bg-indigo-50/50 border border-indigo-200 rounded-lg p-3 text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
-                                                  <div className="flex items-center justify-between text-[10px] font-bold text-indigo-700 pb-1 mb-1 border-b border-indigo-100">
-                                                    <span>Translated to English ({csTransState.sourceLangName || "Detected Language"})</span>
-                                                    <button
-                                                      type="button"
-                                                      onClick={() => toggleAnswerView(csKey, 'original')}
-                                                      className="text-slate-500 hover:text-indigo-700 hover:underline font-semibold"
-                                                    >
-                                                      View Original
-                                                    </button>
-                                                  </div>
-                                                  <p className="text-slate-800">{csTransState.translatedText}</p>
-                                                </div>
-                                              ) : (
-                                                <div className="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
-                                                  {aText}
-                                                </div>
-                                              )}
+                                              <div className="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
+                                                {displayResponse}
+                                              </div>
                                             </div>
                                           )
                                         })()}

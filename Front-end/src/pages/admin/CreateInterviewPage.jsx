@@ -1743,7 +1743,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                         handleSingleChange('interviewType', 'Normal')
                       }
                     }}
-                    options={['English', 'Hindi', 'Telugu', 'Tamil', 'Malayalam', 'Kannada']}
+                    options={['English', 'Hindi', 'Telugu', 'Tamil', 'Malayalam']}
                   />
 
                   <Input
@@ -2533,7 +2533,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                         handleBulkConfigChange('interviewType', 'Normal')
                       }
                     }}
-                    options={['English', 'Hindi', 'Telugu', 'Tamil', 'Malayalam', 'Kannada']}
+                    options={['English', 'Hindi', 'Telugu', 'Tamil', 'Malayalam']}
                   />
 
                   <Input

@@ -184,38 +184,74 @@ export async function translateText(text, targetLang = "en", apiBaseUrl = "", to
     }
   }
 
-  // 2. Fallback: Browser Direct Google Translate Service
+  // 2. Fallback: Browser Direct Google Translate Service (clients5 Chrome extension endpoint)
   try {
     const encoded = encodeURIComponent(clean);
-    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encoded}`;
+    const url = `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=auto&tl=${targetLang}&q=${encoded}`;
     const response = await axios.get(url, { timeout: 10000 });
     const data = response.data;
 
     let translated = clean;
-    if (Array.isArray(data) && Array.isArray(data[0])) {
-      translated = data[0]
-        .filter((part) => Array.isArray(part) && part[0])
-        .map((part) => part[0])
-        .join("");
+    let detectedCode = "auto";
+
+    if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data[0])) {
+        translated = data
+          .map((part) => (Array.isArray(part) && part[0] ? part[0] : (typeof part === 'string' ? part : '')))
+          .join("");
+        if (Array.isArray(data[0]) && data[0][1]) {
+          detectedCode = String(data[0][1]).toLowerCase();
+        }
+      } else if (typeof data[0] === 'string') {
+        translated = data[0];
+        if (data[1]) detectedCode = String(data[1]).toLowerCase();
+      }
     }
 
-    const detectedCode = (data && (data[2] || data[1])) ? String(data[2] || data[1]).toLowerCase() : "auto";
     const sourceLangName = LANGUAGE_NAMES[detectedCode] || (detectedCode !== "auto" ? detectedCode.toUpperCase() : "Detected Language");
 
-    return {
-      translatedText: translated || clean,
-      sourceLang: detectedCode,
-      sourceLangName,
-      isTranslated: true,
-    };
+    if (translated && translated.trim()) {
+      return {
+        translatedText: translated,
+        sourceLang: detectedCode,
+        sourceLangName,
+        isTranslated: true,
+      };
+    }
   } catch (directErr) {
-    console.error("Direct translation failed:", directErr);
-    return {
-      translatedText: clean,
-      sourceLang: "unknown",
-      sourceLangName: "Original",
-      isTranslated: false,
-    };
+    console.warn("Direct clients5 translation failed, trying gtx endpoint:", directErr);
+    try {
+      const encoded = encodeURIComponent(clean);
+      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encoded}`;
+      const response = await axios.get(url, { timeout: 8000 });
+      const data = response.data;
+
+      let translated = clean;
+      if (Array.isArray(data) && Array.isArray(data[0])) {
+        translated = data[0]
+          .filter((part) => Array.isArray(part) && part[0])
+          .map((part) => part[0])
+          .join("");
+      }
+
+      const detectedCode = (data && (data[2] || data[1])) ? String(data[2] || data[1]).toLowerCase() : "auto";
+      const sourceLangName = LANGUAGE_NAMES[detectedCode] || (detectedCode !== "auto" ? detectedCode.toUpperCase() : "Detected Language");
+
+      return {
+        translatedText: translated || clean,
+        sourceLang: detectedCode,
+        sourceLangName,
+        isTranslated: true,
+      };
+    } catch (gtxErr) {
+      console.error("All direct translations failed:", gtxErr);
+      return {
+        translatedText: clean,
+        sourceLang: "unknown",
+        sourceLangName: "Original",
+        isTranslated: false,
+      };
+    }
   }
 }
 

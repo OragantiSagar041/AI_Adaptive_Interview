@@ -942,34 +942,15 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                                     </span>
                                   )}
                                 </div>
-                                {a.answer_text && a.answer_text.trim() && (
+                                {a.answer_text && a.answer_text.trim() && trans?.isTranslated && (
                                   <div>
-                                    {trans?.isTranslated ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => toggleAnswerView(ansKey)}
-                                        className="text-xs font-bold text-indigo-600 hover:text-indigo-800"
-                                      >
-                                        {trans.view === 'translated' ? 'Show Original' : 'Show English'}
-                                      </button>
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        onClick={() => handleTranslateSingle(ansKey, a.answer_text, a.question_text)}
-                                        disabled={translatingKeys[ansKey]}
-                                        className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2 py-0.5 rounded transition-all"
-                                      >
-                                        {translatingKeys[ansKey] ? (
-                                          <span className="inline-flex items-center gap-1">
-                                            <Loader2 size={10} className="animate-spin" /> Translating...
-                                          </span>
-                                        ) : (
-                                          <span className="inline-flex items-center gap-1">
-                                            <Globe size={10} /> Translate
-                                          </span>
-                                        )}
-                                      </button>
-                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleAnswerView(ansKey)}
+                                      className="text-xs font-bold text-indigo-600 hover:text-indigo-800 cursor-pointer"
+                                    >
+                                      {trans.view === 'translated' ? 'Show Original' : 'Show English'}
+                                    </button>
                                   </div>
                                 )}
                               </div>
