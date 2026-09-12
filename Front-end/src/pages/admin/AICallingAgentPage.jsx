@@ -1419,7 +1419,16 @@ function formatDate(dateString) {
   }
 };
 
-function RecentCallsTab({ calls, loading, onViewDetails }) {
+function RecentCallsTab({ calls, loading, onViewDetails, onRefresh }) {
+  const [yesNoFilter, setYesNoFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [directionFilter, setDirectionFilter] = useState('all');
+  const [durationFilter, setDurationFilter] = useState('all');
+
+  const handleRefresh = () => {
+    if (onRefresh) onRefresh();
+  };
+
   if (loading) return <SectionLoader />
   if (!calls || calls.length === 0) {
     return (
@@ -1436,13 +1445,6 @@ function RecentCallsTab({ calls, loading, onViewDetails }) {
       </div>
     )
   }
-
-
-
-  const [yesNoFilter, setYesNoFilter] = useState('all')
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [directionFilter, setDirectionFilter] = useState('all')
-  const [durationFilter, setDurationFilter] = useState('all')
 
   const displayCalls = calls.filter(call => {
     const st = (call.call_status || call.status || '').toLowerCase();
@@ -1534,8 +1536,18 @@ function RecentCallsTab({ calls, loading, onViewDetails }) {
           <option value="yes">Yes</option>
           <option value="no">No</option>
         </select>
-        <button className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 text-sm font-bold rounded-lg px-3 py-1.5 transition-colors flex items-center gap-2">
-          <RefreshCw size={14} /> Refresh
+        {(yesNoFilter !== 'all' || statusFilter !== 'all' || directionFilter !== 'all' || durationFilter !== 'all') && (
+          <button type="button" onClick={() => {
+            setYesNoFilter('all');
+            setStatusFilter('all');
+            setDirectionFilter('all');
+            setDurationFilter('all');
+          }} className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-rose-500 hover:text-rose-600 hover:bg-rose-50 text-sm font-bold rounded-lg px-3 py-1.5 transition-colors flex items-center gap-2 ml-auto sm:ml-0">
+            <X size={14} /> Clear
+          </button>
+        )}
+        <button type="button" onClick={handleRefresh} className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 text-sm font-bold rounded-lg px-3 py-1.5 transition-colors flex items-center gap-2">
+          <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Refresh
         </button>
       </div>
 
@@ -2602,6 +2614,7 @@ export default function AICallingAgentPage() {
                   calls={recentCalls}
                   loading={loadingMap.recentcalls}
                   onViewDetails={setSelectedCallId}
+                  onRefresh={fetchRecentCalls}
                 />
               )}
               {activeTab === 'approval' && (
