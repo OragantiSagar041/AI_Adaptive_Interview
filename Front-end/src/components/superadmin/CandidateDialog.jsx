@@ -968,77 +968,53 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                   </div>
                 </section>
               )}
-
-              {/* ─ Overview Tab ─ */}
-              {activeTab === 'overview' && (
-                <div className="space-y-6">
-                  <section className="bg-card rounded-xl border border-border p-5 shadow-sm">
-                    <h3 className="text-sm font-black text-foreground mb-4">Candidate Information</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-5">
-                      <InfoRow icon={Mail} label="Email" value={email} />
-                      <InfoRow icon={Phone} label="Mobile" value={phone} />
-                      <InfoRow icon={Clock} label="Experience" value={c.experience} />
-                      <InfoRow icon={Building2} label="Current Company" value={(() => {
-                        const comp = c.current_company;
-                        if (!comp || comp === "N/A" || comp === "Not specified" || /^(technical|skills|apis,?\s*and\s*database)$/i.test(comp)) {
-                          return (c.experience && c.experience.toLowerCase().includes("fresher")) ? "Fresher" : (comp && !/^(technical|skills|apis,?\s*and\s*database)$/i.test(comp) ? comp : "Fresher");
-                        }
-                        return comp;
-                      })()} />
-                      <InfoRow icon={IndianRupee} label="Current CTC" value={c.current_ctc} />
-                      <InfoRow icon={IndianRupee} label="Expected CTC" value={c.expected_ctc} />
-                      <InfoRow icon={Clock} label="Notice Period" value={c.notice_period} />
-                      <InfoRow icon={MapPin} label="Location" value={c.location} />
+              <section className="bg-card rounded-xl border border-border p-5 shadow-sm">
+                <h3 className="text-sm font-black text-foreground mb-3 flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-indigo-500" /> AI Recommendation
+                </h3>
+                <div className="rounded-xl border border-border bg-secondary p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${isQualified ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'}`}>
+                      {c.overall_recommendation || (isQualified ? 'Hire' : 'Reject')}
+                    </span>
+                    <span className="text-sm font-medium text-foreground">
+                      {isQualified ? 'Ready for Technical Round / Hiring' : 'Does not meet required threshold'}
+                    </span>
+                  </div>
+                  {c.strengths_summary && (
+                    <div className="mb-3">
+                      <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Strengths</div>
+                      <p className="text-sm font-medium text-foreground bg-emerald-500/10 rounded-lg p-3 border border-emerald-500/20">{c.strengths_summary}</p>
                     </div>
-                  </section>
-
-                  <section className="bg-card rounded-xl border border-border p-5 shadow-sm">
-                    <h3 className="text-sm font-black text-foreground mb-3 flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-indigo-500" /> AI Recommendation
-                    </h3>
-                    <div className="rounded-xl border border-border bg-secondary p-4">
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${isQualified ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'}`}>
-                          {c.overall_recommendation || (isQualified ? 'Hire' : 'Reject')}
-                        </span>
-                        <span className="text-sm font-medium text-foreground">
-                          {isQualified ? 'Ready for Technical Round / Hiring' : 'Does not meet required threshold'}
-                        </span>
-                      </div>
-                      {c.strengths_summary && (
-                        <div className="mb-3">
-                          <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Strengths</div>
-                          <p className="text-sm font-medium text-foreground bg-emerald-500/10 rounded-lg p-3 border border-emerald-500/20">{c.strengths_summary}</p>
-                        </div>
-                      )}
-                      {c.weaknesses_summary && (
-                        <div>
-                          <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Areas to Improve</div>
-                          <p className="text-sm font-medium text-foreground bg-rose-500/10 rounded-lg p-3 border border-rose-500/20">{c.weaknesses_summary}</p>
-                        </div>
-                      )}
-                      {!c.strengths_summary && !c.weaknesses_summary && (
-                        <p className="text-sm text-muted-foreground">No AI summary available for this candidate yet.</p>
-                      )}
+                  )}
+                  {c.weaknesses_summary && (
+                    <div>
+                      <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Areas to Improve</div>
+                      <p className="text-sm font-medium text-foreground bg-rose-500/10 rounded-lg p-3 border border-rose-500/20">{c.weaknesses_summary}</p>
                     </div>
-                  </section>
-
-                  {/* Integrity */}
-                  {c.integrity && (
-                    <section className="bg-card rounded-xl border border-border p-5 shadow-sm">
-                      <h3 className="text-sm font-black text-foreground mb-4 flex items-center gap-2">
-                        <ShieldAlert className="h-4 w-4 text-amber-500" /> Interview Integrity
-                      </h3>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <StatCard label="Tab Switches" value={c.integrity.total_tab_switches} />
-                        <StatCard label="Face Alerts" value={c.integrity.total_face_alerts} />
-                        <StatCard label="Noise Alerts" value={c.integrity.total_noise_alerts} />
-                        <StatCard label="Total Duration" value={`${c.integrity.total_time_minutes} min`} />
-                      </div>
-                    </section>
+                  )}
+                  {!c.strengths_summary && !c.weaknesses_summary && (
+                    <p className="text-sm text-muted-foreground">No AI summary available for this candidate yet.</p>
                   )}
                 </div>
+              </section>
+
+              {/* Integrity */}
+              {c.integrity && (
+                <section className="bg-card rounded-xl border border-border p-5 shadow-sm">
+                  <h3 className="text-sm font-black text-foreground mb-4 flex items-center gap-2">
+                    <ShieldAlert className="h-4 w-4 text-amber-500" /> Interview Integrity
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <StatCard label="Tab Switches" value={c.integrity.total_tab_switches} />
+                    <StatCard label="Face Alerts" value={c.integrity.total_face_alerts} />
+                    <StatCard label="Noise Alerts" value={c.integrity.total_noise_alerts} />
+                    <StatCard label="Total Duration" value={`${c.integrity.total_time_minutes} min`} />
+                  </div>
+                </section>
               )}
+            </div>
+          )}
 
               {/* ─ Resume Tab ─ */}
               {
@@ -1351,8 +1327,6 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                   </div>
                 )
               }
-            </div>
-          )}
 
           {/* ─ Timeline Tab ─ */}
           {activeTab === 'timeline' && (
