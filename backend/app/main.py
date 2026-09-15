@@ -131,6 +131,7 @@ app = FastAPI(
     description="Backend API for HireIQ AI-powered interviews",
     version="2.0.0",
     lifespan=lifespan,
+    root_path=os.getenv("FASTAPI_ROOT_PATH", "/api"),
 )
 
 app.add_middleware(GZipMiddleware, minimum_size=500)
@@ -257,10 +258,10 @@ app.add_middleware(
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:5174",
-        "http://127.0.0.1:5174",
         "https://hire-ai-iq.netlify.app",
+        "http://sb-lb-1304167006.us-east-1.elb.amazonaws.com",
     ],
-    allow_origin_regex=os.getenv("CORS_ORIGIN_REGEX") or None,
+    allow_origin_regex=os.getenv("CORS_ORIGIN_REGEX") or r"^https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
