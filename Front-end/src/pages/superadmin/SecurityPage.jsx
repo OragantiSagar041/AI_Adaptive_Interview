@@ -15,9 +15,20 @@ const FeatureLockOverlay = ({ isLocked, featureName, children }) => {
             <Lock size={20} strokeWidth={2.5} />
          </div>
          <h4 className="font-bold text-slate-800 dark:text-slate-100 mb-1">Feature Locked</h4>
-         <p className="text-sm text-slate-600 dark:text-slate-400 font-medium max-w-xs">
+         <p className="text-sm text-slate-600 dark:text-slate-400 font-medium max-w-xs mb-4">
            Upgrade your plan to access {featureName}
          </p>
+         <button 
+             type="button"
+             className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border-2 border-indigo-100 dark:border-indigo-800/60 text-indigo-600 dark:text-indigo-400 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors font-bold text-xs shadow-sm cursor-pointer"
+             onClick={(e) => {
+               e.preventDefault();
+               e.stopPropagation();
+               window.location.href = '/superadmin/subscription';
+             }}
+         >
+             <i className="fas fa-crown text-amber-500"></i> Upgrade Plan
+         </button>
       </div>
     </div>
   );
