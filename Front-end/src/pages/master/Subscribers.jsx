@@ -435,28 +435,29 @@ export default function Subscribers() {
       {/* Table view */}
       <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:shadow-none">
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-left">
+          <table className="w-full border-collapse text-center">
             <thead>
               <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
-                <th className="p-4 text-[0.68rem] font-bold uppercase text-slate-400">Company / Admin</th>
+                <th className="p-4 text-[0.68rem] font-bold uppercase text-slate-400 w-[20%]">Company / Admin</th>
                 <th className="p-4 text-[0.68rem] font-bold uppercase text-slate-400">Plan</th>
                 <th className="p-4 text-[0.68rem] font-bold uppercase text-slate-400">Status</th>
                 <th className="p-4 text-[0.68rem] font-bold uppercase text-slate-400">Usage</th>
                 <th className="p-4 text-[0.68rem] font-bold uppercase text-slate-400">Date Registered</th>
                 <th className="p-4 text-[0.68rem] font-bold uppercase text-slate-400">Credits Remaining</th>
+                <th className="p-4 text-[0.68rem] font-bold uppercase text-slate-400">Edit Plans</th>
                 <th className="p-4 text-[0.68rem] font-bold uppercase text-slate-400">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan="7" className="p-10 text-center text-slate-500 dark:text-slate-400">
+                  <td colSpan="8" className="p-10 text-center text-slate-500 dark:text-slate-400">
                     <RefreshCw className="animate-spin text-indigo-600 inline mr-2" /> Syncing subscribers...
                   </td>
                 </tr>
               ) : filteredCompanies.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="p-10 text-center text-slate-500 dark:text-slate-400">
+                  <td colSpan="8" className="p-10 text-center text-slate-500 dark:text-slate-400">
                     No subscriber accounts match the active filter criteria.
                   </td>
                 </tr>
@@ -491,20 +492,28 @@ export default function Subscribers() {
                       </td>
                       <td className="p-4 text-xs font-extrabold text-slate-800 dark:text-slate-100">{c.credits || 0}</td>
                       <td className="p-4">
-                        <div className="flex gap-2">
+                        <div className="flex justify-center">
+                          <div className="relative group">
+                            <button
+                              onClick={() => handleOpenFeaturesModal(c)}
+                              className="p-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-800/50 border border-indigo-200 dark:border-indigo-700/50 cursor-pointer transition-all"
+                            >
+                              <Settings size={14} />
+                            </button>
+                            <span className="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 px-2 py-1 text-[10px] font-medium text-white bg-slate-800 rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                              Edit Plans
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <div className="flex items-center justify-center gap-2">
                           <button
                             onClick={() => handleOpenUpdateModal(c)}
                             className="p-2 rounded-lg bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 cursor-pointer transition-all"
                             title="Extend / Update Subscription"
                           >
                             <Calendar size={14} />
-                          </button>
-                          <button
-                            onClick={() => handleOpenFeaturesModal(c)}
-                            className="p-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-500 hover:bg-indigo-600 hover:text-white border border-indigo-200 dark:border-indigo-700/50 cursor-pointer transition-all"
-                            title="Edit Custom Features for this account"
-                          >
-                            <Settings size={14} />
                           </button>
                           <button
                             onClick={() => handleToggleLogin(c.id || c.company_id, c.login_enabled)}

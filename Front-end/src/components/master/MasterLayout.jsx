@@ -17,12 +17,26 @@ import {
   User,
   TrendingUp,
   Check,
-  Sliders
+  Sliders,
+  PanelLeft
 } from 'lucide-react'
 import { logout, loadSuperAdminProfile } from '../../store/slices/authSlice'
 import { persistor } from '../../store/store'
 import AdminCopilot from '../admin/copilot/AdminCopilot'
 import ThemeToggle from '../ThemeToggle'
+import {
+  SidebarProvider,
+  Sidebar,
+  SidebarContent,
+  SidebarHeader,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarTrigger
+} from '../ui/sidebar'
 import { useTheme } from '../../context/ThemeContext'
 import { getMasterNotifications, markNotificationAsRead, markAllNotificationsAsRead } from '../../utils/api'
 
@@ -86,6 +100,7 @@ export default function MasterLayout() {
   const [notifications, setNotifications] = useState([])
   const [notifDropdownOpen, setNotifDropdownOpen] = useState(false)
   const notifRef = useRef(null)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 
   // Close theme popover, notifications, and profile dropdown when clicking outside
   useEffect(() => {
@@ -246,64 +261,71 @@ export default function MasterLayout() {
   const isDark = theme === 'dark'
 
   return (
+    <SidebarProvider>
     <div className="h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex font-sans w-full overflow-hidden relative">
       {/* Global Premium Background Grid */}
       <div className="absolute inset-0 z-0 pointer-events-none">
-        {/* Grid overlay */}
         <div className="absolute inset-0 bg-grid-fine opacity-60" />
       </div>
 
       {/* Sidebar */}
-      <aside className="hidden w-64 shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/90 backdrop-blur-md md:flex flex-col h-screen relative z-10">
-        {/* Brand / Logo */}
-        <div className="flex items-center gap-3 px-6 h-16 border-b border-border shrink-0">
-          <div
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-white p-1 cursor-pointer"
-            style={{
-              background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)'
-            }}
-          >
-            <Zap className="h-5 w-5 text-white fill-white/20" />
-          </div>
-          <div className="leading-tight">
-            <div className="text-base font-extrabold text-foreground">HireIQ</div>
-            <div className="text-[11px] font-semibold text-primary">Master Admin</div>
-          </div>
-        </div>
-
-        {/* Navigation Items */}
-        <div className="space-y-1 p-3 overflow-y-auto flex-1">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.id}
-              to={item.path}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${isActive
-                  ? '!bg-indigo-600 !text-white font-semibold shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white !bg-transparent dark:!bg-transparent !border-none !shadow-none'
-                }`
-              }
+      <Sidebar
+        className="border-r border-border overflow-hidden bg-sidebar"
+        collapsible="icon"
+      >
+        <SidebarHeader className="h-16 px-6 py-0 flex items-center justify-center shrink-0 border-b border-border transition-colors group-data-[collapsible=icon]:px-2">
+          <div className="flex items-center gap-3 w-full overflow-hidden group-data-[collapsible=icon]:justify-center">
+            <div
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-white p-1 cursor-pointer"
+              style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)' }}
             >
-              {({ isActive }) => (
-                <>
-                  <item.icon className="h-5 w-5 shrink-0" />
-                  {item.label}
-                </>
-              )}
-            </NavLink>
-          ))}
-        </div>
+              <Zap className="h-5 w-5 text-white fill-white/20" />
+            </div>
+            <div className="leading-tight group-data-[collapsible=icon]:hidden truncate">
+              <div className="text-base font-extrabold text-foreground truncate">HireIQ</div>
+              <div className="text-[11px] font-semibold text-primary">Master Admin</div>
+            </div>
+          </div>
+        </SidebarHeader>
 
-        {/* Bottom Sidebar Actions */}
-
-      </aside>
+        <SidebarContent className="p-3">
+          <SidebarGroup className="p-0">
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {navItems.map((item) => {
+                  const isActive = location.pathname.startsWith(item.path)
+                  return (
+                    <SidebarMenuItem key={item.id}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isActive}
+                        className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${isActive
+                          ? '!bg-indigo-600 !text-white font-semibold shadow-md shadow-indigo-500/20'
+                          : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white'
+                        }`}
+                        tooltip={item.label}
+                      >
+                        <NavLink to={item.path}>
+                          <item.icon size={18} className={`shrink-0 ${isActive ? '!text-white' : ''}`} />
+                          <span className={`truncate group-data-[collapsible=icon]:hidden ${isActive ? '!text-white font-semibold' : ''}`}>{item.label}</span>
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  )
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+      </Sidebar>
 
       {/* Main Content Wrapper */}
       <div className="flex-1 flex flex-col min-w-0 h-screen relative z-10">
         {/* Header */}
         <header className="sticky top-0 z-30 border-b border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/80 backdrop-blur-xl flex items-center justify-between px-6 h-16 shadow-xs shrink-0">
           {/* Left Side: Brand & Toggles */}
-          <div className="flex items-center gap-8">
+          <div className="flex items-center gap-4">
+            <SidebarTrigger className="-ml-2 md:mr-2 p-2 rounded-xl text-foreground hover:text-indigo-500 bg-secondary border border-border transition-colors cursor-pointer shrink-0" />
             <h2 className="text-[17px] font-bold text-slate-800 dark:text-slate-100">{getPageTitle()}</h2>
           </div>
 
@@ -441,5 +463,6 @@ export default function MasterLayout() {
       {/* Global Copilot */}
       <AdminCopilot />
     </div>
+    </SidebarProvider>
   )
 }

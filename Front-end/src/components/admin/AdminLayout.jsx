@@ -31,6 +31,19 @@ import { useTheme } from '../../context/ThemeContext'
 import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead } from '../../utils/api'
 import { setLiveResultsModalOpen } from '../../store/slices/interviewSlice'
 import { updateAdminUser } from '../../store/slices/authSlice'
+import {
+  SidebarProvider,
+  Sidebar,
+  SidebarContent,
+  SidebarHeader,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarTrigger
+} from '../ui/sidebar'
 
 function hexToRgba(hex, alpha) {
   const h = hex.replace('#', '')
@@ -233,123 +246,98 @@ export default function AdminLayout({
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   return (
+    <SidebarProvider>
     <div className="h-screen text-slate-900 dark:text-slate-100 flex font-sans overflow-hidden relative bg-slate-50 dark:bg-slate-950">
       {/* Sidebar (Vertical Layout) */}
       {layoutConfig?.layout_type !== "navbar" && (
-        <aside className={`hidden ${isSidebarCollapsed ? 'w-[80px] p-2 items-center' : 'w-64 p-3'} shrink-0 border-r border-border md:flex flex-col h-screen relative z-10 transition-all duration-300 overflow-hidden bg-sidebar`}>
-          {/* Brand / Logo */}
-          <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'gap-3 px-6'} h-16 border-b border-border shrink-0 w-full`}>
-            <div
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-white p-1 cursor-pointer"
-              style={{
-                background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)'
-              }}
-            >
-              {layoutConfig?.navbar_logo ? (
-                <img src={layoutConfig.navbar_logo} alt="Logo" className="h-full w-auto object-contain" />
-              ) : layoutConfig?.favicon ? (
-                <img src={layoutConfig.favicon} alt="Logo" className="h-full w-full object-contain" />
-              ) : (
-                <Zap className="h-5 w-5 text-white fill-white/20" />
-              )}
-            </div>
-            {!isSidebarCollapsed && (
-              <div className="leading-tight truncate">
+        <Sidebar
+          className="border-r border-border overflow-hidden bg-sidebar"
+          collapsible="icon"
+        >
+          <SidebarHeader className="h-16 px-6 py-0 flex items-center justify-center shrink-0 border-b border-border transition-colors group-data-[collapsible=icon]:px-2">
+            <div className="flex items-center gap-3 w-full overflow-hidden group-data-[collapsible=icon]:justify-center">
+              <div
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-white p-1 cursor-pointer"
+                style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)' }}
+              >
+                {layoutConfig?.navbar_logo ? (
+                  <img src={layoutConfig.navbar_logo} alt="Logo" className="h-full w-auto object-contain" />
+                ) : layoutConfig?.favicon ? (
+                  <img src={layoutConfig.favicon} alt="Logo" className="h-full w-full object-contain" />
+                ) : (
+                  <Zap className="h-5 w-5 text-white fill-white/20" />
+                )}
+              </div>
+              <div className="leading-tight group-data-[collapsible=icon]:hidden truncate">
                 <div className="text-base font-extrabold text-foreground truncate" title={adminUser?.company_name || 'HireIQ'}>
                   {adminUser?.company_name || 'HireIQ'}
                 </div>
-                <div className="text-[11px] font-semibold text-primary">
-                  Recruiter
-                </div>
+                <div className="text-[11px] font-semibold text-primary">Recruiter</div>
               </div>
-            )}
-          </div>
+            </div>
+          </SidebarHeader>
 
-          {/* Navigation Items */}
-          <div className="space-y-0.5 py-3 overflow-y-auto flex-1 w-full">
-            {navItems.map((item) => {
-              const isLocked = item.id !== 'dashboard' && item.id !== 'settings' && userFeatures.length > 0 && !userFeatures.includes(item.label);
-              
-              if (isLocked) {
-                return (
-                  <div
-                    key={item.id}
-                    title={isSidebarCollapsed ? item.label + " (Locked)" : undefined}
-                    className={`flex items-center ${isSidebarCollapsed ? 'justify-center px-2' : 'gap-3 px-3'} py-2.5 rounded-xl text-sm font-medium transition-all duration-200 opacity-50 cursor-not-allowed text-slate-500 dark:text-slate-500`}
-                    onClick={() => {
-                      Swal.fire({
-                        title: 'Feature Locked',
-                        text: `Please contact your administrator to upgrade your plan to access ${item.label}.`,
-                        icon: 'info',
-                        confirmButtonColor: '#6366f1',
-                        confirmButtonText: 'Okay'
-                      });
-                    }}
-                  >
-                    {item.icon ? (
-                      <item.icon size={18} className="shrink-0" />
-                    ) : (
-                      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-60 shrink-0" />
-                    )}
-                    {!isSidebarCollapsed && (
-                      <div className="flex items-center justify-between w-full truncate">
-                        <span className="truncate">{item.label}</span>
-                        <i className="fas fa-lock text-[10px] ml-2 opacity-60"></i>
-                      </div>
-                    )}
-                  </div>
-                );
-              }
-              
-              return (
-                <NavLink
-                  key={item.id}
-                  to={item.path}
-                  title={isSidebarCollapsed ? item.label : undefined}
-                  className={({ isActive }) =>
-                    `flex items-center ${isSidebarCollapsed ? 'justify-center px-2' : 'gap-3 px-3'} py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${isActive
-                      ? '!bg-indigo-600 !text-white font-semibold shadow-md shadow-indigo-500/20'
-                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white !bg-transparent dark:!bg-transparent !border-none !shadow-none'
-                    }`
-                  }
-                >
-                  {({ isActive }) => (
-                    <>
-                      {item.icon ? (
-                        <item.icon size={18} className={`shrink-0 ${isActive ? '!text-white text-white' : ''}`} />
-                      ) : (
-                        <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-white' : 'bg-current opacity-60'} shrink-0`} />
-                      )}
-                      {!isSidebarCollapsed && (
-                        <span className={isActive ? '!text-white text-white font-semibold truncate' : 'truncate'}>{item.label}</span>
-                      )}
-                    </>
-                  )}
-                </NavLink>
-              );
-            })}
-          </div>
+          <SidebarContent className="p-3">
+            <SidebarGroup className="p-0">
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {navItems.map((item) => {
+                    const isActive = location.pathname.startsWith(item.path)
+                    const isLocked = item.id !== 'dashboard' && item.id !== 'settings' && userFeatures.length > 0 && !userFeatures.includes(item.label)
+                    return (
+                      <SidebarMenuItem key={item.id}>
+                        {isLocked ? (
+                          <SidebarMenuButton
+                            className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium opacity-50 cursor-not-allowed text-slate-500 dark:text-slate-500 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+                            tooltip={item.label + ' (Locked)'}
+                            onClick={() => Swal.fire({ title: 'Feature Locked', text: `Please contact your administrator to upgrade your plan to access ${item.label}.`, icon: 'info', confirmButtonColor: '#6366f1', confirmButtonText: 'Okay' })}
+                          >
+                            {item.icon ? <item.icon size={18} className="shrink-0" /> : <span className="h-1.5 w-1.5 rounded-full bg-current opacity-60 shrink-0" />}
+                            <span className="truncate group-data-[collapsible=icon]:hidden flex items-center justify-between w-full">
+                              {item.label} <i className="fas fa-lock text-[10px] ml-2 opacity-60"></i>
+                            </span>
+                          </SidebarMenuButton>
+                        ) : (
+                          <SidebarMenuButton
+                            asChild
+                            isActive={isActive}
+                            className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 ${isActive
+                              ? '!bg-indigo-600 !text-white font-semibold shadow-md shadow-indigo-500/20'
+                              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white'
+                            }`}
+                            tooltip={item.label}
+                          >
+                            <NavLink to={item.path}>
+                              {item.icon ? <item.icon size={18} className={`shrink-0 ${isActive ? '!text-white' : ''}`} /> : <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-white' : 'bg-current opacity-60'} shrink-0`} />}
+                              <span className={`truncate group-data-[collapsible=icon]:hidden ${isActive ? '!text-white font-semibold' : ''}`}>{item.label}</span>
+                            </NavLink>
+                          </SidebarMenuButton>
+                        )}
+                      </SidebarMenuItem>
+                    )
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </SidebarContent>
 
-          {/* Bottom Sidebar Actions */}
-          <div className="py-3 border-t border-border space-y-0.5 shrink-0 transition-colors w-full">
+          <SidebarFooter className="p-3 border-t border-border space-y-0.5 shrink-0 transition-colors">
             <button
               onClick={() => dispatch(setLiveResultsModalOpen(true))}
-              title={isSidebarCollapsed ? "Live Results" : undefined}
-              className={`flex items-center ${isSidebarCollapsed ? 'justify-center px-2' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-200 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white !bg-transparent dark:!bg-transparent !border-none !shadow-none cursor-pointer text-left`}
+              className="flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white !bg-transparent !border-none !shadow-none cursor-pointer text-left group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
             >
               <Radio size={18} className="shrink-0" />
-              {!isSidebarCollapsed && <span>Live Results</span>}
+              <span className="group-data-[collapsible=icon]:hidden truncate">Live Results</span>
             </button>
             <button
               onClick={onAddCredits}
-              title={isSidebarCollapsed ? "Request Credits" : undefined}
-              className={`flex items-center ${isSidebarCollapsed ? 'justify-center px-2' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-200 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white !bg-transparent dark:!bg-transparent !border-none !shadow-none cursor-pointer text-left`}
+              className="flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white !bg-transparent !border-none !shadow-none cursor-pointer text-left group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
             >
               <Coins size={18} className="shrink-0" />
-              {!isSidebarCollapsed && <span>Request Credits</span>}
+              <span className="group-data-[collapsible=icon]:hidden truncate">Request Credits</span>
             </button>
-          </div>
-        </aside>
+          </SidebarFooter>
+        </Sidebar>
       )}
 
       {/* Main Content Wrapper */}
@@ -361,13 +349,7 @@ export default function AdminLayout({
             {/* Left Side: Brand & Toggles */}
             <div className="flex items-center gap-6">
               {layoutConfig?.layout_type !== "navbar" && (
-                <button
-                  onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                  title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-                  className="-ml-2 md:mr-2 p-2 rounded-xl text-foreground hover:text-indigo-500 bg-secondary border border-border transition-colors cursor-pointer shrink-0"
-                >
-                  <PanelLeft className="h-4 w-4" />
-                </button>
+                <SidebarTrigger className="-ml-2 md:mr-2 p-2 rounded-xl text-foreground hover:text-indigo-500 bg-secondary border border-border transition-colors cursor-pointer shrink-0" />
               )}
 
               {/* If Navbar mode, show logo in the top bar */}
@@ -623,5 +605,6 @@ export default function AdminLayout({
       {/* Global Admin Copilot */}
       <AdminCopilot />
     </div>
+    </SidebarProvider>
   )
 }
