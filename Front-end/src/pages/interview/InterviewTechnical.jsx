@@ -1199,7 +1199,14 @@ export const InterviewTechnical = () => {
   }
 
   if (error) {
-    return <AccessDeniedScreen error={error} scheduledStart={scheduledStart || sessionDetail?.scheduled_start} />
+    return (
+      <AccessDeniedScreen
+        error={error}
+        scheduledStart={scheduledStart || sessionDetail?.scheduled_start}
+        scheduledEnd={sessionDetail?.scheduled_end}
+        isExpired={sessionDetail?.is_expired}
+      />
+    )
   }
 
   if (isCompleted) {
