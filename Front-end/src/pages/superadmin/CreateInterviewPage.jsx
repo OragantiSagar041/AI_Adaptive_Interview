@@ -129,6 +129,8 @@ export default function CreateInterviewPage() {
       resumeText: '',
       jobDescription: '',
       applicationId: '',
+      jobId: '',
+      jobTitle: '',
       customQuestions: [],
       aiInstructions: [],
       industry: 'General',
@@ -175,6 +177,8 @@ export default function CreateInterviewPage() {
       if (cd.resumeText) defaultState.resumeText = cd.resumeText;
       if (cd.jobDescription) defaultState.jobDescription = cd.jobDescription;
       if (cd.applicationId) defaultState.applicationId = cd.applicationId;
+      if (cd.jobId) defaultState.jobId = cd.jobId;
+      if (cd.jobTitle) defaultState.jobTitle = cd.jobTitle;
     }
 
     return defaultState;
@@ -190,7 +194,9 @@ export default function CreateInterviewPage() {
         phone: cd.phone || prev.phone || '',
         resumeText: cd.resumeText || prev.resumeText || '',
         jobDescription: cd.jobDescription || prev.jobDescription || '',
-        applicationId: cd.applicationId || prev.applicationId || ''
+        applicationId: cd.applicationId || prev.applicationId || '',
+        jobId: cd.jobId || prev.jobId || '',
+        jobTitle: cd.jobTitle || prev.jobTitle || ''
       }));
       setCreateTab('single');
     }
@@ -845,7 +851,9 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
         current_company: singleCandidate.current_company || "",
         notice_period: singleCandidate.notice_period || "",
         ats_score: atsScoreData ? atsScoreData.score : null,
-        jd_file_url: singleCandidate.jdFileUrl || null
+        jd_file_url: singleCandidate.jdFileUrl || null,
+        job_id: singleCandidate.jobId || "",
+        interview_title: singleCandidate.jobTitle || ""
       })).unwrap()
 
       let msg = `Secure interview link created successfully!`

@@ -1598,22 +1598,60 @@ def get_interested_candidates(
                 raw_name = "Abhay Gupta"
 
             phone = str(item.get("to_number") or item.get("phone") or item.get("from_number") or "").strip()
-            email = str(item.get("email") or item.get("candidate_email") or "").strip()
+            # Look for email in explicit fields and extracted_variables
+            email = str(
+                item.get("email") 
+                or item.get("candidate_email") 
+                or extracted.get("email") 
+                or extracted.get("candidate_email") 
+                or ""
+            ).strip()
 
+            # If still no email, regex parse the entire item as a fallback
+            if not email:
+                import re
+                item_str = str(item)
+                match = re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', item_str)
+                if match:
+                    email = match.group(0)
             if not phone:
                 continue
 
             seen_call_ids.add(call_id)
 
             job_title = f"Call #{call_id}"
+            
+            # Extract transcript
+            transcript = item.get("call_conversation") or item.get("transcript") or ""
+            
+            # Prioritize actual resume text first!
             resume_text = (
-                item.get("call_conversation")
-                or item.get("transcript")
+                item.get("resume_text")
+                or transcript
                 or item.get("summary")
                 or item.get("sentiment_analysis_details")
-                or item.get("resume_text")
                 or ""
             )
+
+            # --- CROSS REFERENCE WITH JOB APPLICATIONS ---
+            if phone:
+                from app.db.mongo_db import db
+                # Look up the candidate in job_applications by phone
+                # Sometimes phone has '+' sometimes it doesn't
+                clean_phone = phone.replace("+", "").strip()
+                job_app = db.job_applications.find_one({
+                    "$or": [
+                        {"phone": phone},
+                        {"phone": clean_phone},
+                        {"phone": f"+{clean_phone}"}
+                    ]
+                })
+                if job_app:
+                    if not email:
+                        email = str(job_app.get("email") or "").strip()
+                    # If we don't have a real resume_text (or only have a transcript), prefer the real resume!
+                    if not item.get("resume_text") and job_app.get("resume_text"):
+                        resume_text = job_app.get("resume_text")
 
             candidates.append({
                 "_id": call_id,
@@ -1626,6 +1664,7 @@ def get_interested_candidates(
                 "phone": phone,
                 "job_title": job_title,
                 "resume_text": resume_text,
+                "transcript": transcript,
                 "decision": dec,
                 "interest": "Interested (Approved)"
             })

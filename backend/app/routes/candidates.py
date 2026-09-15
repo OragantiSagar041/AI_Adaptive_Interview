@@ -438,7 +438,9 @@ def create_session(data: CreateSession, current_admin: dict = Depends(get_curren
         "custom_voice_id": data.custom_voice_id,
         "application_id": data.application_id,
         "candidate_phone": data.candidate_phone,
-        "ats_score": data.ats_score
+        "ats_score": data.ats_score,
+        "job_id": data.job_id,
+        "interview_title": data.interview_title
     }
     
     # Task 4: Store scheduled time window

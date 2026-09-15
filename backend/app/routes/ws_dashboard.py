@@ -241,7 +241,7 @@ async def get_dashboard_aggregated_data(
                 "candidate_name": app.get("name") or "Candidate",
                 "candidate_email": app.get("email") or "",
                 "candidate_phone": app.get("phone") or "",
-                "interview_title": app.get("job_title") or "AI Calling Profile",
+                "interview_title": app.get("job_title") or "",
                 "score": score,
                 "avg_score": score,
                 "created_at": app.get("applied_at") or app.get("updated_at") or datetime.now(timezone.utc).isoformat(),
@@ -367,7 +367,7 @@ async def get_dashboard_aggregated_data(
             matched_session = session_map.get(call_id) or name_map.get(c_name.lower())
             cand_email = matched_session.get("candidate_email") or matched_session.get("email") if matched_session else o_call.get("phone_number", "")
             cand_phone = matched_session.get("candidate_phone") or matched_session.get("phone") if matched_session else o_call.get("to_number", "")
-            int_title  = matched_session.get("job_title") or matched_session.get("interview_title") if matched_session else extracted.get("current_role") or "AI Calling Agent"
+            int_title  = matched_session.get("job_title") or matched_session.get("interview_title") if matched_session else extracted.get("current_role") or ""
 
             raw_score = o_call.get("cqs_score")
             try:
