@@ -211,28 +211,6 @@ const AdminCopilot = () => {
     setAttachedFileName('');
     setIsLoading(true);
 
-    const lowerText = textToSend.toLowerCase();
-
-    // Offline Interceptor: Buy Credits
-    const buyMatch = lowerText.match(/buy.*?(\d+)/);
-    if (buyMatch || lowerText.includes("buy credit")) {
-      const amount = buyMatch ? parseInt(buyMatch[1], 10) : 100;
-      setTimeout(() => {
-        setMessages(prev => [...prev, {
-          role: 'assistant',
-          content: `I can help you purchase credits. Please review and confirm the transaction below:`,
-          actionRequired: {
-            action: "buy_credits",
-            amount: amount,
-            admin_username: user?.username || "",
-            reason: "Purchase via platform"
-          }
-        }]);
-        setIsLoading(false);
-      }, 600);
-      return;
-    }
-
     try {
       const history = messages.map(m => ({ role: m.role, content: m.content }));
       

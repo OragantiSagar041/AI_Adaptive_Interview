@@ -739,9 +739,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         if (payload.is_expired) {
           throw new Error("This interview link has expired. Please contact the recruiter for a new link.")
         }
-        if (payload.scheduled_start) {
-          setScheduledStart(payload.scheduled_start)
-        }
         if (payload.is_before_schedule && payload.scheduled_start) {
           setScheduledStart(payload.scheduled_start)
           const startTime = new Date(payload.scheduled_start.endsWith('Z') || payload.scheduled_start.includes('+') ? payload.scheduled_start : payload.scheduled_start + 'Z')

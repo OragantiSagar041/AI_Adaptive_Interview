@@ -284,7 +284,14 @@ export const InterviewNormal = () => {
   }
 
   if (error) {
-    return <AccessDeniedScreen error={error} scheduledStart={scheduledStart || sessionDetail?.scheduled_start} />
+    return (
+      <AccessDeniedScreen
+        error={error}
+        scheduledStart={scheduledStart || sessionDetail?.scheduled_start}
+        scheduledEnd={sessionDetail?.scheduled_end}
+        isExpired={sessionDetail?.is_expired}
+      />
+    )
   }
 
   // Show upload progress / Thank-You screen FIRST — takes priority so the
