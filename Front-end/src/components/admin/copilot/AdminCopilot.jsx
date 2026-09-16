@@ -195,6 +195,26 @@ const AdminCopilot = () => {
     }
   };
 
+  const handleActionComplete = (msgIndex, res, err, updatedData) => {
+    setMessages(prev => {
+      const updated = [...prev];
+      if (updated[msgIndex]?.actionRequired) {
+        updated[msgIndex] = {
+          ...updated[msgIndex],
+          actionRequired: {
+            ...updated[msgIndex].actionRequired,
+            ...(updatedData || {}),
+            status: err ? 'failed' : 'completed',
+            result: res?.message || (res ? "Action completed successfully." : null),
+            link_url: res?.link_url || updated[msgIndex].actionRequired.link_url,
+            error: err || null
+          }
+        };
+      }
+      return updated;
+    });
+  };
+
   const handleSend = async (overrideText = null) => {
     const textToSend = typeof overrideText === 'string' ? overrideText : inputValue;
     if (!textToSend.trim() && !attachedFileText) return;
@@ -463,7 +483,11 @@ const AdminCopilot = () => {
               {/* Render Action Card if present */}
               {msg.actionRequired && (
                 <div className="w-full mt-2">
-                  <CopilotActionCard actionRequired={msg.actionRequired} />
+                  <CopilotActionCard 
+                    actionRequired={msg.actionRequired}
+                    sessionId={currentSessionId}
+                    onComplete={(res, err, updatedData) => handleActionComplete(index, res, err, updatedData)}
+                  />
                 </div>
               )}
             </div>

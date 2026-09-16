@@ -94,6 +94,19 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+def _resolve_frontend_url(http_req: Optional[Request] = None) -> str:
+    if http_req:
+        origin_hdr = http_req.headers.get("origin") or http_req.headers.get("referer")
+        if origin_hdr:
+            try:
+                from urllib.parse import urlparse
+                parsed = urlparse(origin_hdr)
+                if parsed.scheme and parsed.netloc:
+                    return f"{parsed.scheme}://{parsed.netloc}"
+            except Exception:
+                pass
+    return FRONTEND_URL
+
 INTEGRATION_CATALOG = [
     {"id": "greenhouse", "name": "Greenhouse", "category": "ATS"},
     {"id": "lever", "name": "Lever", "category": "ATS"},
@@ -351,7 +364,7 @@ def check_candidate(email: str, current_admin: dict = Depends(get_current_admin_
         return {"exists": False, "error": str(e)}
 
 @router.post("/admin/create-session")
-def create_session(data: CreateSession, current_admin: dict = Depends(get_current_admin_details)):
+def create_session(data: CreateSession, http_req: Request, current_admin: dict = Depends(get_current_admin_details)):
     company_id = current_admin.get("company_id")
     
     # ATOMIC DEDUCTION (Prevents race conditions leading to negative credits)
@@ -461,7 +474,8 @@ def create_session(data: CreateSession, current_admin: dict = Depends(get_curren
     # Credits were already deducted atomically at the beginning of the request.
     # _id is already populated by insert_one
     
-    link_url = f"{FRONTEND_URL}/interview?session_id={link_id}"
+    frontend_base = _resolve_frontend_url(http_req)
+    link_url = f"{frontend_base}/interview?session_id={link_id}"
     
     email_result = queue_or_send_interview_email(session_doc, link_url)
     
@@ -551,7 +565,7 @@ class BulkCreateSession(BaseModel):
         return v
 
 @router.post("/admin/bulk-create-sessions")
-def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTasks, current_admin: dict = Depends(get_current_admin_details)):
+def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTasks, http_req: Request, current_admin: dict = Depends(get_current_admin_details)):
     from bson import ObjectId
     from bson.errors import InvalidId
     
@@ -625,10 +639,11 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
     admin_name = current_admin.get("name") or current_admin.get("username") or "AD"
     prefix = admin_name[:2].upper()
 
+    frontend_base = _resolve_frontend_url(http_req)
     # Step 1: Prepare documents
     for candidate in data.candidates:
         link_id = str(uuid.uuid4())
-        link_url = f"{FRONTEND_URL}/interview?session_id={link_id}"
+        link_url = f"{frontend_base}/interview?session_id={link_id}"
         
         session_doc = {
             "link_id": link_id,
@@ -2263,14 +2278,41 @@ def delete_admin_copilot_session(session_id: str, current_admin: dict = Depends(
 class CopilotExecuteRequest(BaseModel):
     action: str
     data: dict
+    session_id: Optional[str] = None
 
 @router.post("/admin/copilot/execute")
-def admin_copilot_execute(request: CopilotExecuteRequest, current_admin: dict = Depends(get_current_admin_details)):
+def admin_copilot_execute(request: CopilotExecuteRequest, http_req: Request, current_admin: dict = Depends(get_current_admin_details)):
     from datetime import datetime, timezone, timedelta
     try:
         role = current_admin.get("role", "admin")
         admin_id = current_admin.get("admin_id")
+        session_id = request.session_id or request.data.get("session_id")
         
+        def _persist_action_completed(resp):
+            if session_id and admin_id and resp and resp.get("status") == "success":
+                try:
+                    s_doc = copilot_sessions_collection.find_one({"session_id": session_id, "admin_id": admin_id})
+                    if s_doc and "messages" in s_doc:
+                        msgs = s_doc["messages"]
+                        for m in reversed(msgs):
+                            if m.get("actionRequired") and m["actionRequired"].get("action") == request.action:
+                                m["actionRequired"]["status"] = "completed"
+                                m["actionRequired"]["result"] = resp.get("message")
+                                if resp.get("link_url"):
+                                    m["actionRequired"]["link_url"] = resp.get("link_url")
+                                if request.data:
+                                    for k, v in request.data.items():
+                                        if k not in ["session_id", "status", "result"] and v:
+                                            m["actionRequired"][k] = v
+                                break
+                        copilot_sessions_collection.update_one(
+                            {"session_id": session_id, "admin_id": admin_id},
+                            {"$set": {"messages": msgs, "updated_at": datetime.now(timezone.utc).isoformat()}}
+                        )
+                except Exception as sess_err:
+                    print(f"Error persisting copilot action execution status: {sess_err}")
+            return resp
+
         if request.action == "send_feedback":
             email = request.data.get("candidate_email")
             content = request.data.get("content")
@@ -2280,7 +2322,7 @@ def admin_copilot_execute(request: CopilotExecuteRequest, current_admin: dict = 
             from app.services.services import send_interview_email
             # Simulate sending the plain text email using our existing service (it expects HTML but plain text works)
             send_interview_email(email, "Candidate", "", 30, "", custom_html=content.replace("\n", "<br>"))
-            return {"status": "success", "message": f"Successfully sent feedback email to {email}."}
+            return _persist_action_completed({"status": "success", "message": f"Successfully sent feedback email to {email}."})
             
         elif request.action == "request_credits" and role == "admin":
             amount = request.data.get("amount", 10)
@@ -2301,30 +2343,50 @@ def admin_copilot_execute(request: CopilotExecuteRequest, current_admin: dict = 
                 "created_at": datetime.utcnow().isoformat()
             }
             credit_requests_collection.insert_one(req)
-            return {"status": "success", "message": f"Successfully requested {amount} credits."}
+            return _persist_action_completed({"status": "success", "message": f"Successfully requested {amount} credits."})
             
         elif request.action == "transfer_credits" and role in ["super_admin", "superadmin", "master", "admin"]:
             target_username = request.data.get("admin_username")
-            amount = request.data.get("amount")
-            if not target_username or not amount:
-                raise HTTPException(status_code=400, detail="Missing username or amount")
+            raw_amount = request.data.get("amount")
+            if not target_username or raw_amount is None:
+                raise HTTPException(status_code=400, detail="Missing target admin username or credit amount")
             
-            # Find the admin by either username or name
+            try:
+                amount = int(raw_amount)
+            except (ValueError, TypeError):
+                raise HTTPException(status_code=400, detail="Credit amount must be a valid number")
+
+            if amount <= 0:
+                raise HTTPException(status_code=400, detail="Transfer amount must be greater than 0")
+
+            import re
+            clean_name = str(target_username).strip()
+            name_regex = {"$regex": f"^{re.escape(clean_name)}$", "$options": "i"}
             target_admin = admins_collection.find_one({
-                "$or": [{"username": target_username}, {"name": target_username}],
+                "$or": [{"username": name_regex}, {"name": name_regex}],
             })
             if not target_admin:
-                raise HTTPException(status_code=404, detail="Sub-admin not found")
+                raise HTTPException(status_code=404, detail=f"Sub-admin '{target_username}' not found")
                 
             from bson import ObjectId
-            # Perform transfer
-            super_admin_doc = admins_collection.find_one({"_id": ObjectId(admin_id)})
-            if super_admin_doc.get("credits", 0) < amount:
-                raise HTTPException(status_code=400, detail="Insufficient credits")
+            try:
+                super_admin_doc = admins_collection.find_one({"_id": ObjectId(admin_id)})
+            except Exception:
+                super_admin_doc = admins_collection.find_one({"admin_id": str(admin_id)})
+
+            if not super_admin_doc:
+                raise HTTPException(status_code=404, detail="Admin account not found")
+
+            current_credits = super_admin_doc.get("credits", 0)
+            if current_credits < amount:
+                raise HTTPException(status_code=400, detail=f"Insufficient credits. Available: {current_credits}, Requested: {amount}")
                 
-            admins_collection.update_one({"_id": ObjectId(admin_id)}, {"$inc": {"credits": -amount}})
+            admins_collection.update_one({"_id": ObjectId(super_admin_doc["_id"])}, {"$inc": {"credits": -amount}})
             admins_collection.update_one({"_id": target_admin["_id"]}, {"$inc": {"credits": amount, "total_allocated_credits": amount}})
-            return {"status": "success", "message": f"Successfully transferred {amount} credits to {target_username}."}
+            return _persist_action_completed({
+                "status": "success", 
+                "message": f"Successfully transferred {amount} credits to {target_admin.get('username') or target_username}."
+            })
             
         elif request.action == "create_admin" and role in ["super_admin", "superadmin", "master", "admin"]:
             username = request.data.get("username")
@@ -2356,10 +2418,10 @@ def admin_copilot_execute(request: CopilotExecuteRequest, current_admin: dict = 
             new_admin["custom_id"] = get_next_sequence_value("recruiter", "RC")
             admins_collection.insert_one(new_admin)
             
-            return {
+            return _persist_action_completed({
                 "status": "success",
                 "message": f"Successfully created sub-admin '{username}' with email '{email}'. Temporary password: {default_password}"
-            }
+            })
             
         elif request.action == "buy_credits" and role == "super_admin":
             amount = request.data.get("amount")
@@ -2371,14 +2433,14 @@ def admin_copilot_execute(request: CopilotExecuteRequest, current_admin: dict = 
                 raise HTTPException(status_code=400, detail="Amount must be an integer")
                 
             checkout_url = f"https://checkout.stripe.com/pay/mock_session_{amount}_credits"
-            return {
+            return _persist_action_completed({
                 "status": "success", 
                 "message": f"Successfully generated a checkout link for {amount} credits: {checkout_url}"
-            }
+            })
             
         elif request.action == "create_interview":
-            candidate_name = request.data.get("candidate_name")
-            candidate_email = request.data.get("candidate_email")
+            candidate_name = (request.data.get("candidate_name") or "").strip()
+            candidate_email = (request.data.get("candidate_email") or "").strip()
             resume_text = request.data.get("resume_text", "")
             job_description = request.data.get("job_description", "")
             
@@ -2436,7 +2498,8 @@ def admin_copilot_execute(request: CopilotExecuteRequest, current_admin: dict = 
             }
             
             interview_sessions_collection.insert_one(session_doc)
-            link_url = f"{FRONTEND_URL}/interview?session_id={link_id}"
+            frontend_base = _resolve_frontend_url(http_req)
+            link_url = f"{frontend_base}/interview?session_id={link_id}"
             
             try:
                 from app.services.services import send_interview_email
@@ -2452,7 +2515,7 @@ def admin_copilot_execute(request: CopilotExecuteRequest, current_admin: dict = 
             except Exception as e:
                 print("Failed to send email during copilot create_interview:", e)
                 
-            return {"status": "success", "message": f"Successfully created interview for {candidate_name}. Invite sent!", "link_url": link_url}
+            return _persist_action_completed({"status": "success", "message": f"Successfully created interview for {candidate_name}. Invite sent!", "link_url": link_url})
             
         elif request.action == "create_job":
             title = request.data.get("title")
@@ -2482,7 +2545,7 @@ def admin_copilot_execute(request: CopilotExecuteRequest, current_admin: dict = 
             job_dict["job_id"] = f"{job_dict['custom_id']}-{safe_role}-{suffix}"
             
             jobs_collection.insert_one(job_dict)
-            return {"status": "success", "message": f"Successfully created job '{title}'."}
+            return _persist_action_completed({"status": "success", "message": f"Successfully created job '{title}'."})
         elif request.action in ["integrate_platform", "connect_app"]:
             platform_name = request.data.get("platform_name") or request.data.get("app_name") or request.data.get("platform") or request.data.get("name") or "Unknown Platform"
             import uuid
@@ -2530,10 +2593,10 @@ def admin_copilot_execute(request: CopilotExecuteRequest, current_admin: dict = 
                 {"$push": {"integrations": new_entry}}
             )
             
-            return {
+            return _persist_action_completed({
                 "status": "success",
                 "message": f"Successfully connected and configured {integration_name} integration.\n\n**API Key**: `{mock_api_key}`\n**Webhook URL**: `{mock_webhook_url}`\n**Security Whitelist IPs**: `34.202.15.91`, `3.15.82.204`, `52.14.73.11`\n*(Please ensure these IPs are whitelisted in your {integration_name} firewall settings to allow HireIQ to connect securely.)*"
-            }
+            })
             
         elif request.action == "disconnect_app":
             platform_name = request.data.get("platform_name") or request.data.get("app_name") or request.data.get("platform") or request.data.get("name") or "Unknown Platform"
@@ -2565,10 +2628,10 @@ def admin_copilot_execute(request: CopilotExecuteRequest, current_admin: dict = 
                 {"_id": ObjectId(admin_id)},
                 {"$pull": {"integrations": {"platform": platform_name}}}
             )
-            return {
+            return _persist_action_completed({
                 "status": "success",
                 "message": f"Successfully disconnected {integration_name} integration. API keys and webhooks for {integration_name} have been revoked and all traffic disabled."
-            }
+            })
             
         else:
             raise HTTPException(status_code=400, detail=f"Unknown or unauthorized action: {request.action}")

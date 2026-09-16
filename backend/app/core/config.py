@@ -57,7 +57,7 @@ RECORDING_RETENTION_DAYS = max(3, int(os.getenv("RECORDING_RETENTION_DAYS", "3")
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-FRONTEND_URL = "https://www.hireiq.co.in"
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://www.hireiq.co.in").rstrip("/")
 
 # ---------------------------------------------------------------------------
 # Plan definitions
