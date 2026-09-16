@@ -152,7 +152,8 @@ export default function SuperAdminJobsPage() {
   };
 
   const handleScheduleInterview = async (app) => {
-    if (!userFeatures.includes('Create Interview')) {
+    const userFeatures = adminUser?.features || ['Create Interview'];
+    if (!userFeatures.includes('Create Interview') && adminUser?.role !== 'super_admin' && adminUser?.role !== 'master') {
       Swal.fire({
         title: 'Feature Locked',
         text: 'Upgrade your plan to create interviews.',
@@ -1005,20 +1006,18 @@ export default function SuperAdminJobsPage() {
                 {!applicationData.loading && applicationData.list.some(a => a.status === 'Interview Scheduled') && (
                   <button
                     onClick={() => setShowSchedulePanel(v => !v)}
-                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border font-bold text-sm cursor-pointer transition-all ${
-                      showSchedulePanel
+                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border font-bold text-sm cursor-pointer transition-all ${showSchedulePanel
                         ? 'bg-violet-600 text-white border-violet-600 shadow-lg shadow-violet-500/30'
                         : 'bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-700 hover:bg-violet-100 dark:hover:bg-violet-900/40 hover:text-violet-800 dark:hover:text-violet-200'
-                    }`}
+                      }`}
                     title="View Interview Schedule"
                   >
                     <Calendar size={15} />
                     Interview Schedule
-                    <span className={`ml-0.5 text-[10px] font-black px-1.5 py-0.5 rounded-full ${
-                      showSchedulePanel
+                    <span className={`ml-0.5 text-[10px] font-black px-1.5 py-0.5 rounded-full ${showSchedulePanel
                         ? 'bg-white/20 text-white'
                         : 'bg-violet-200/60 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300'
-                    }`}>
+                      }`}>
                       {applicationData.list.filter(a => a.status === 'Interview Scheduled').length}
                     </span>
                   </button>
@@ -1649,11 +1648,9 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
               {resumeFullUrl && isPdf ? (
                 <div className="w-full rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-inner bg-white dark:bg-slate-800/60">
                   <iframe
-                    src={resumeFullUrl}
-                    type="application/pdf"
-                    className="w-full border-none"
-                    style={{ height: '520px' }}
-                    onError={() => setIframeError(true)}
+                    src={`${resumeFullUrl}#toolbar=0&navpanes=0&view=FitH`}
+                    title="Candidate Resume"
+                    className="w-full h-[540px] border-none"
                   />
                 </div>
               ) : resumeFullUrl ? (

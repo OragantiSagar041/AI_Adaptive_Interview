@@ -1,6 +1,9 @@
-const isLocal = typeof window !== 'undefined' && window.location ? ["localhost", "127.0.0.1"].includes(window.location.hostname) : false
-const env = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : {}
-const configuredBaseUrl = String(env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '')
+const isLocalHostname = (hostname) => {
+  return ["localhost", "127.0.0.1"].includes(hostname) || 
+         hostname.startsWith("192.168.") || 
+         hostname.startsWith("10.") || 
+         hostname.startsWith("172.");
+};
 
 const LOCAL_URL = 'http://127.0.0.1:8000'
 const PROD_URL = 'http://sb-lb-1304167006.us-east-1.elb.amazonaws.com'

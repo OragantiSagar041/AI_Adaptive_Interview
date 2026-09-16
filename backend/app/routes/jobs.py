@@ -277,125 +277,34 @@ os.makedirs(UPLOAD_RESUMES_DIR, exist_ok=True)
 os.makedirs(UPLOAD_COVER_LETTERS_DIR, exist_ok=True)
 
 @router.get("/api/public/resumes/{filename}")
-def get_uploaded_resume_file(filename: str, current_admin: dict = Depends(get_current_admin_details)):
+def get_uploaded_resume_file(filename: str):
     """Serve locally stored resumes if not using Cloudinary."""
     safe_filename = os.path.basename(filename)
     file_path = os.path.join(UPLOAD_RESUMES_DIR, safe_filename)
     if not os.path.exists(file_path):
-        matching_files = [f for f in os.listdir(UPLOAD_RESUMES_DIR) if safe_filename.lower() in f.lower() or f.lower().endswith(safe_filename.lower())]
-        if matching_files:
-            file_path = os.path.join(UPLOAD_RESUMES_DIR, matching_files[0])
-            safe_filename = matching_files[0]
-        else:
-            root_uploads = os.path.join(os.getcwd(), "uploads")
-            root_matches = []
-            if os.path.exists(root_uploads):
-                root_matches = [f for f in os.listdir(root_uploads) if os.path.isfile(os.path.join(root_uploads, f)) and (safe_filename.lower() in f.lower() or f.lower().endswith(safe_filename.lower()))]
-            if root_matches:
-                file_path = os.path.join(root_uploads, root_matches[0])
-                safe_filename = root_matches[0]
-            else:
-                try:
-                    import re
-                    from reportlab.lib.pagesizes import letter
-                    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
-                    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-                    from reportlab.lib import colors
-
-                    clean_title = safe_filename.replace('_', ' ').replace('.pdf', '').replace('.txt', '').title()
-                    
-                    # Fetch actual application record from MongoDB
-                    candidate_app = job_applications_collection.find_one({
-                        "$or": [
-                            {"resume_filename": safe_filename},
-                            {"resume_url": {"$regex": re.escape(safe_filename), "$options": "i"}},
-                            {"resume_url": safe_filename},
-                            {"name": {"$regex": re.escape(clean_title), "$options": "i"}}
-                        ]
-                    }) or {}
-
-                    c_name = (candidate_app.get("name") or clean_title).upper()
-                    c_email = candidate_app.get("email") or "Not Provided"
-                    c_phone = candidate_app.get("phone") or "Not Provided"
-                    c_text = (candidate_app.get("resume_text") or "").strip()
-
-                    file_path = os.path.join(UPLOAD_RESUMES_DIR, safe_filename)
-                    doc = SimpleDocTemplate(file_path, pagesize=letter, leftMargin=40, rightMargin=40, topMargin=40, bottomMargin=40)
-                    styles = getSampleStyleSheet()
-                    
-                    title_style = ParagraphStyle(
-                        'CandidateName', parent=styles['Heading1'], fontSize=22, leading=26, textColor=colors.HexColor('#1e1b4b'), fontName='Helvetica-Bold'
-                    )
-                    sub_style = ParagraphStyle(
-                        'CandidateContact', parent=styles['Normal'], fontSize=10, leading=14, textColor=colors.HexColor('#4f46e5'), fontName='Helvetica-Bold', spaceAfter=10
-                    )
-                    heading_style = ParagraphStyle(
-                        'SectionHeading', parent=styles['Heading2'], fontSize=12, leading=16, textColor=colors.HexColor('#334155'), fontName='Helvetica-Bold', spaceBefore=12, spaceAfter=6
-                    )
-                    body_style = ParagraphStyle(
-                        'ResumeBodyText', parent=styles['BodyText'], fontSize=9.5, leading=14, textColor=colors.HexColor('#334155'), fontName='Helvetica'
-                    )
-
-                    elements = [
-                        Paragraph(c_name, title_style),
-                        Spacer(1, 4),
-                        Paragraph(f"Email: {c_email} &nbsp;|&nbsp; Phone: {c_phone}", sub_style),
-                        HRFlowable(width="100%", thickness=1, color=colors.HexColor('#e2e8f0'), spaceAfter=15),
-                    ]
-
-                    if c_text:
-                        elements.append(Paragraph("RESUME SUMMARY & CONTENT", heading_style))
-                        elements.append(Spacer(1, 4))
-                        for paragraph in c_text.split('\n'):
-                            clean_p = paragraph.strip()
-                            if clean_p:
-                                # Escape HTML tags for reportlab
-                                clean_p_escaped = clean_p.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-                                elements.append(Paragraph(clean_p_escaped, body_style))
-                                elements.append(Spacer(1, 4))
-                    else:
-                        elements.append(Paragraph("RESUME DOCUMENT ATTACHMENT", heading_style))
-                        elements.append(Spacer(1, 4))
-                        elements.append(Paragraph(f"Attached resume document record for <b>{c_name}</b>.", body_style))
-                        elements.append(Spacer(1, 6))
-                        elements.append(Paragraph("Candidate evaluation records, score cards, and application details are verified and accessible in the HireIQ portal.", body_style))
-
-                    doc.build(elements)
-                except Exception as gen_err:
-                    print(f"Failed to generate candidate resume PDF: {gen_err}")
-                    return JSONResponse(
-                        status_code=404,
-                        content={"detail": "Resume file not found"},
-                        headers={"X-Frame-Options": "ALLOWALL", "Access-Control-Allow-Origin": "*"}
-                    )
-    ext = safe_filename.lower().split('.')[-1] if '.' in safe_filename else ""
-    mime_map = {
-        "pdf": "application/pdf",
-        "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "doc": "application/msword",
-        "txt": "text/plain",
-        "png": "image/png",
-        "jpg": "image/jpeg",
-        "jpeg": "image/jpeg",
-    }
-    media_type = mime_map.get(ext, "application/octet-stream")
-    return FileResponse(
-        file_path,
-        media_type=media_type,
-        filename=safe_filename,
-        content_disposition_type="inline",
-        headers={"X-Frame-Options": "ALLOWALL", "Access-Control-Allow-Origin": "*"}
-    )
+        from fastapi.responses import HTMLResponse
+        return HTMLResponse(
+            content="""
+            <div style="font-family: ui-sans-serif, system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background-color: #f8fafc; color: #64748b; margin: 0; padding: 20px; text-align: center;">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 16px; color: #94a3b8;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+                <h3 style="margin: 0 0 8px 0; color: #334155; font-size: 1.125rem; font-weight: 600;">Resume File Not Found</h3>
+                <p style="margin: 0; font-size: 0.875rem; max-width: 300px;">The original resume document could not be located on the server. It may have been deleted or moved.</p>
+            </div>
+            """,
+            status_code=404
+        )
+    media_type = "application/pdf" if safe_filename.lower().endswith(".pdf") else "application/octet-stream"
+    return FileResponse(file_path, media_type=media_type)
 
 @router.get("/api/public/cover_letters/{filename}")
-def get_uploaded_cover_letter_file(filename: str, current_admin: dict = Depends(get_current_admin_details)):
+def get_uploaded_cover_letter_file(filename: str):
     """Serve locally stored cover letters."""
     safe_filename = os.path.basename(filename)
     file_path = os.path.join(UPLOAD_COVER_LETTERS_DIR, safe_filename)
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Cover letter file not found")
     media_type = "application/pdf" if safe_filename.lower().endswith(".pdf") else "application/octet-stream"
-    return FileResponse(file_path, media_type=media_type, filename=safe_filename, content_disposition_type="inline")
+    return FileResponse(file_path, media_type=media_type)
 
 
 @router.post("/api/public/jobs/{job_id}/apply")
