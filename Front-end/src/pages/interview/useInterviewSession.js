@@ -2716,6 +2716,18 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       }
     } catch (e) {
       const errMsg = e.response?.data?.detail || e.message || 'Unknown error'
+      
+      // If the session was already completed (e.g. by a concurrent timer or termination), ignore the error silently.
+      if (e.response?.status === 403 && errMsg.toLowerCase().includes('completed')) {
+        console.warn('Ignored 403 already completed during save-answer.')
+        return
+      }
+      // If the submission flow has already been initiated by something else, don't show a blocking modal.
+      if (isSubmittingRef.current) {
+        console.warn('Ignored save-answer error because submission is already in progress.')
+        return
+      }
+
       Swal.fire({
         title: 'Save Failed',
         text: `Failed to save your response. Error: ${errMsg}. Please try again.`,
