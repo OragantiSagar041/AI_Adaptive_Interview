@@ -262,7 +262,6 @@ app.add_middleware(
         "https://hire-ai-iq.netlify.app",
         "http://sb-lb-1304167006.us-east-1.elb.amazonaws.com",
     ],
-    allow_origin_regex=os.getenv("CORS_ORIGIN_REGEX") or r"^https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
