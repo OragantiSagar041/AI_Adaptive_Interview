@@ -131,7 +131,7 @@ app = FastAPI(
     description="Backend API for HireIQ AI-powered interviews",
     version="2.0.0",
     lifespan=lifespan,
-    root_path=os.getenv("FASTAPI_ROOT_PATH", "/api"),
+    root_path=os.getenv("FASTAPI_ROOT_PATH", ""),
 )
 
 app.add_middleware(GZipMiddleware, minimum_size=500)
