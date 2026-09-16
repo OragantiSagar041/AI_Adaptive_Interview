@@ -759,13 +759,24 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
         ...prev,
         name: '',
         email: '',
+        phone: '',
         resumeText: '',
+        resumeFileName: '',
         jobDescription: '',
         customQuestions: '',
         aiInstructions: '',
         scheduledStart: '',
         scheduledEnd: '',
-        jdFileUrl: ''
+        jdFileUrl: '',
+        jobId: '',
+        jobTitle: '',
+        applicationId: '',
+        experience: '',
+        location: '',
+        current_ctc: '',
+        expected_ctc: '',
+        current_company: '',
+        notice_period: ''
       }))
       setAtsScoreData(null)
       setCustomEmailHtml('')
