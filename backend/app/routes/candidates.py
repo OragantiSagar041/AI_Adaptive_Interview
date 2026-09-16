@@ -1772,7 +1772,20 @@ class CopilotRequest(BaseModel):
 @router.post("/admin/copilot")
 def admin_copilot_chat(request: CopilotRequest, raw_request: Request, current_admin: dict = Depends(get_current_admin_details)):
     try:
-        from app.ai.ai_client import chat_completion
+        import os
+        from dotenv import load_dotenv
+        load_dotenv()
+
+        # STRICT GEMINI API KEY ENFORCEMENT:
+        # Copilot works ONLY when GEMINI_API_KEY is configured. If missing or empty, enter Offline Mode with no answers generated.
+        gemini_api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_API_Key")
+        if not gemini_api_key or not gemini_api_key.strip() or gemini_api_key.strip() in ["YOUR_API_KEY", "your_api_key", "<your_api_key>", "your_key_here"]:
+            return {
+                "reply": "[Offline Mode] Copilot is offline. A valid Gemini API Key is required to use Copilot. Please configure GEMINI_API_KEY in backend/.env.",
+                "action_required": None
+            }
+
+        from app.ai.ai_client import call_gemini
         from app.db.mongo_db import db
         from app.services.subscription_service import get_subscription_stats
         
@@ -1867,7 +1880,11 @@ STRICT SCOPE FOR RECRUITER PANEL:
         system_prompt += """
 CRITICAL RULES:
 1. Direct LLM Responses: For general platform questions, metrics, explanations, and advice, answer concisely and directly.
-2. Action Responses: When the user explicitly requests an action, output one short confirmation sentence followed IMMEDIATELY by a JSON block:
+2. Candidate & Interview Reporting:
+   - When reporting recent interviews, ALWAYS preserve the exact chronological order from the context (Item 1 is the most recent).
+   - Display each candidate with their exact Date/Time, Name, Email, Status (e.g. COMPLETED), Score out of 100, and Decision (Qualified, Rejected, or Pending Review).
+   - Never say an interview is 'Pending' when its status is 'COMPLETED'. If a decision has not yet been chosen by the recruiter, state 'Pending Review'.
+3. Action Responses: When the user explicitly requests an action or wants to search/filter candidates by specific name, dates, or criteria, output one short confirmation sentence followed IMMEDIATELY by a JSON block:
    ```json
    {
        "action": "action_name",
@@ -1875,19 +1892,36 @@ CRITICAL RULES:
    }
    ```
    Supported actions:
+   - query_candidates (recruiter & super_admin): {"action": "query_candidates", "candidate_name": "...", "status": "completed", "min_score": 0}
    - send_feedback (recruiter & super_admin): {"action": "send_feedback", "candidate_email": "...", "content": "..."}
    - request_credits (recruiter only): {"action": "request_credits", "amount": 50, "reason": "..."}
    - transfer_credits (super_admin only): {"action": "transfer_credits", "admin_username": "...", "amount": 50}
    - buy_credits (super_admin only): {"action": "buy_credits", "amount": 100}
    - create_admin (super_admin only): {"action": "create_admin", "username": "...", "email": "..."}
    - create_interview (recruiter & super_admin): {"action": "create_interview", "candidate_name": "...", "candidate_email": "...", "resume_text": "...", "job_description": "..."}
-   - query_candidates (recruiter & super_admin): {"action": "query_candidates", "candidate_name": "..."}
    - create_job (recruiter & super_admin): {"action": "create_job", "title": "...", "skills": "...", "description": "..."}
-3. Formatting Rules: Keep responses clean, concise, well-structured with bullet points.
-4. Unrelated Topics: For any non-HireIQ questions, politely state that you are specialized in HireIQ platform features for their panel.
+4. Formatting Rules: Keep responses clean, concise, well-structured with clear bullet points.
+5. Unrelated Topics: For any non-HireIQ questions, politely state that you are specialized in HireIQ platform features for their panel.
 """
 
         context_data = ""
+
+        def _fmt_ist(iso_str):
+            if not iso_str:
+                return "Recent"
+            try:
+                from datetime import datetime, timezone, timedelta
+                if isinstance(iso_str, str):
+                    clean = iso_str.replace("Z", "+00:00")
+                    dt = datetime.fromisoformat(clean)
+                elif isinstance(iso_str, datetime):
+                    dt = iso_str
+                else:
+                    return str(iso_str)[:10]
+                ist = dt.astimezone(timezone(timedelta(hours=5, minutes=30)))
+                return ist.strftime("%d/%m/%y, %I:%M %p")
+            except Exception:
+                return str(iso_str)[:16]
 
         if plans_context:
             context_data += "\n--- ACTIVE SUBSCRIPTION PLANS ---\n" + plans_context + "\n"
@@ -1916,44 +1950,97 @@ CRITICAL RULES:
 
         elif is_super_admin:
             # Query super admin organization info
-            admin_record = admins_collection.find_one({"_id": ObjectId(admin_id)}) if admin_id else None
-            company_credits = admin_record.get("credits", 0) if admin_record else 0
-            
-            sub_admins = list(admins_collection.find({"created_by": admin_id}, {"username": 1, "name": 1, "email": 1, "credits": 1, "_id": 0}).limit(20))
-            recent_sessions = list(interview_sessions_collection.find(
-                {"$or": [{"company_id": company_id}, {"created_by": admin_id}], "status": "completed"},
-                {"candidate_name": 1, "candidate_email": 1, "avg_score": 1, "decision": 1, "_id": 0}
-            ).sort("created_at", -1).limit(10))
+            admin_record = None
+            if admin_id:
+                try:
+                    admin_record = admins_collection.find_one({"_id": ObjectId(admin_id)})
+                except Exception:
+                    admin_record = admins_collection.find_one({"admin_id": str(admin_id)})
+            company_record = None
+            if company_id:
+                try:
+                    company_record = companies_collection.find_one({"_id": ObjectId(company_id)})
+                except Exception:
+                    pass
+            if not company_record and admin_record:
+                c_name = admin_record.get("company_name")
+                if c_name:
+                    company_record = companies_collection.find_one({"name": c_name})
 
-            context_data += f"\n--- YOUR COMPANY METRICS ---\n"
-            context_data += f"- Company Name: {current_admin.get('company_name', 'Your Company')}\n"
+            company_credits = company_record.get("credits", 0) if company_record else (admin_record.get("credits", 0) if admin_record else 0)
+            active_plan = (company_record.get("subscription_plan") or admin_record.get("subscription_plan") or "Advance").capitalize()
+            comp_name_disp = current_admin.get('company_name') or (company_record.get('name') if company_record else 'Your Company')
+            
+            sub_admins = list(admins_collection.find({"$or": [{"created_by": admin_id}, {"company_id": company_id}]}, {"username": 1, "name": 1, "email": 1, "credits": 1, "_id": 0}).limit(20))
+            
+            # Query organization completed sessions
+            base_comp_q = {"$or": [{"company_id": company_id}, {"created_by": admin_id}]}
+            total_comp_interviews = interview_sessions_collection.count_documents(base_comp_q)
+            completed_comp_count = interview_sessions_collection.count_documents({**base_comp_q, "status": "completed"})
+
+            recent_sessions = list(interview_sessions_collection.find(
+                {**base_comp_q, "status": "completed"},
+                {"candidate_name": 1, "candidate_email": 1, "avg_score": 1, "decision": 1, "status": 1, "created_at": 1, "completed_at": 1, "_id": 0}
+            ).sort("created_at", -1).limit(15))
+
+            context_data += f"\n--- YOUR COMPANY METRICS (LIVE DATABASE) ---\n"
+            context_data += f"- Company Name: {comp_name_disp}\n"
+            context_data += f"- Current Active Subscription Plan: {active_plan}\n"
             context_data += f"- Available Credit Balance: {company_credits} credits\n"
+            context_data += f"- Total Company Interviews: {total_comp_interviews}\n"
+            context_data += f"- Completed Interviews: {completed_comp_count}\n"
             context_data += f"- Team Sub-Admins / Recruiters: {len(sub_admins)}\n"
             if sub_admins:
                 context_data += "Recruiter Team Members:\n"
                 for sa in sub_admins:
                     context_data += f"  • {sa.get('name') or sa.get('username')} ({sa.get('email')}) - {sa.get('credits', 0)} credits\n"
             if recent_sessions:
-                context_data += "Recent Company Candidate Interviews:\n"
-                for s in recent_sessions:
-                    context_data += f"  • Candidate: {s.get('candidate_name')} | Score: {s.get('avg_score', 'N/A')}/100 | Decision: {s.get('decision', 'Pending')}\n"
+                context_data += "\n--- RECENT COMPLETED INTERVIEWS (Strict Descending Chronological Order - Newest First) ---\n"
+                for idx, s in enumerate(recent_sessions, 1):
+                    c_name = s.get("candidate_name") or "Unknown"
+                    c_email = s.get("candidate_email") or "N/A"
+                    c_score = s.get("avg_score")
+                    score_disp = f"{c_score}/100" if c_score is not None else "Not Scored"
+                    status_disp = (s.get("status") or "completed").upper()
+                    dec_raw = s.get("decision")
+                    if dec_raw == "selected":
+                        dec_disp = "Qualified"
+                    elif dec_raw == "rejected":
+                        dec_disp = "Rejected"
+                    else:
+                        dec_disp = "Pending Review"
+                    date_disp = _fmt_ist(s.get("created_at"))
+                    context_data += f"{idx}. Date: {date_disp} | Candidate: {c_name} ({c_email}) | Status: {status_disp} | Score: {score_disp} | Decision: {dec_disp}\n"
 
         else: # Recruiter
             admin_record = admins_collection.find_one({"_id": ObjectId(admin_id)}) if admin_id else None
             recruiter_credits = admin_record.get("credits", 0) if admin_record else 0
             
             recent_sessions = list(interview_sessions_collection.find(
-                {"created_by": admin_id},
-                {"candidate_name": 1, "candidate_email": 1, "avg_score": 1, "decision": 1, "status": 1, "_id": 0}
-            ).sort("created_at", -1).limit(10))
+                {"created_by": admin_id, "status": "completed"},
+                {"candidate_name": 1, "candidate_email": 1, "avg_score": 1, "decision": 1, "status": 1, "created_at": 1, "_id": 0}
+            ).sort("created_at", -1).limit(15))
 
-            context_data += f"\n--- RECRUITER METRICS ---\n"
+            context_data += f"\n--- RECRUITER METRICS (LIVE DATABASE) ---\n"
             context_data += f"- Recruiter Name: {user_name}\n"
             context_data += f"- Available Credits: {recruiter_credits}\n"
             if recent_sessions:
-                context_data += "Your Recent Candidate Interviews:\n"
-                for s in recent_sessions:
-                    context_data += f"  • Candidate: {s.get('candidate_name')} | Score: {s.get('avg_score', 'N/A')}/100 | Status: {s.get('status')} | Decision: {s.get('decision', 'Pending')}\n"
+                context_data += "\n--- YOUR RECENT COMPLETED INTERVIEWS (Strict Descending Chronological Order - Newest First) ---\n"
+                for idx, s in enumerate(recent_sessions, 1):
+                    c_name = s.get("candidate_name") or "Unknown"
+                    c_email = s.get("candidate_email") or "N/A"
+                    c_score = s.get("avg_score")
+                    score_disp = f"{c_score}/100" if c_score is not None else "Not Scored"
+                    status_disp = (s.get("status") or "completed").upper()
+                    dec_raw = s.get("decision")
+                    if dec_raw == "selected":
+                        dec_disp = "Qualified"
+                    elif dec_raw == "rejected":
+                        dec_disp = "Rejected"
+                    else:
+                        dec_disp = "Pending Review"
+                    date_disp = _fmt_ist(s.get("created_at"))
+                    context_data += f"{idx}. Date: {date_disp} | Candidate: {c_name} ({c_email}) | Status: {status_disp} | Score: {score_disp} | Decision: {dec_disp}\n"
 
         system_prompt += f"\n{context_data}"
         
@@ -1965,7 +2052,7 @@ CRITICAL RULES:
         messages.append({"role": "user", "content": request.message})
         
         try:
-            response_text = chat_completion(messages, temperature=0.3)
+            response_text = call_gemini(messages, temperature=0.3)
             
             if not response_text or not str(response_text).strip():
                 raise ValueError("Empty response from AI")
@@ -2034,7 +2121,7 @@ CRITICAL RULES:
                         messages.append({"role": "assistant", "content": response_text})
                         messages.append({"role": "user", "content": f"Here are the query results:\n{results_str}\nNow, please answer my original question using this data directly. Format it nicely. Do NOT output another JSON action block."})
                         
-                        final_response = chat_completion(messages, temperature=0.3)
+                        final_response = call_gemini(messages, temperature=0.3)
                         return {"reply": strip_markdown(final_response), "action_required": None}
                         
                     elif "action" in action_data:
@@ -2084,35 +2171,20 @@ CRITICAL RULES:
             return out_res
             
         except Exception as e:
-            print(f"Warning: Copilot AI failed: {e}")
-            
-            # Offline Fallback Logic
-            msg_lower = request.message.lower()
-            
-            offline_responses = {
-                "generate interview questions": "- Navigate to the 'Create Interview' or 'Bulk Send' page.\n- Input your Job Description (JD).\n- The platform will automatically generate interview questions tailored to the JD.",
-                "rank candidates": "- Navigate to the 'Results' dashboard.\n- View the candidates sorted by their ATS Score and overall interview performance score.",
-                "draft feedback emails": "- Navigate to the candidate's specific results page.\n- Click the 'Send Feedback Email' button.\n- A customized draft feedback email will be generated automatically.",
-                "api": "- Configuration: API keys are configured in the 'Settings' section.\n- Quota Limits: If you run out of API quota, the system switches to offline fallbacks for scoring and copilot help.",
-                "quota": "- System Quota: If your API quota limit is reached, essential features will switch to using offline fallback logic.",
-                "buy credits": "- Purchase Credits: Go to the 'Plan & Usage' section of your dashboard.\n- Contact Admin: Alternatively, contact the master administrator for support.",
-                "transfer credits": "- Admin Dashboard: Navigate to the 'Admins' dashboard page.\n- Transfer: Use the 'Add Credits' button next to the sub-admin's account name.",
-                "create admin": "- Sub-Admins Page: Go to the 'Admins' page in the dashboard.\n- Create Recruiter: Click on the 'Create Admin' button.",
-                "hello": f"- Status: Currently operating in offline fallback mode for your {role} account.\n- Reason: API quota has been exceeded.\n- Support: I can answer basic platform navigation and configuration questions.",
-                "hi": f"- Status: Currently operating in offline mode.\n- Navigation: I can help you locate features or modules in the {role} dashboard."
+            print(f"Warning: Copilot Gemini AI failed: {e}")
+            return {
+                "reply": "[Offline Mode] Copilot is offline. Unable to access Gemini API. Please check your GEMINI_API_KEY in backend/.env.",
+                "action_required": None
             }
-            
-            for keyword, response in offline_responses.items():
-                if keyword in msg_lower:
-                    return {"reply": f"[Offline Mode] {strip_markdown(response)}"}
-                    
-            return {"reply": strip_markdown(f"[Offline Mode] - Status: AI connection is currently offline due to quota limits.\n- Support: I can only answer basic FAQ questions for your {role} account right now.")}
 
     except Exception as e:
         import traceback
         tb_str = traceback.format_exc()
         print(f"Error in admin_copilot_chat: {tb_str}")
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}\n{tb_str}")
+        return {
+            "reply": "[Offline Mode] Copilot is offline. A valid Gemini API Key is required to use Copilot.",
+            "action_required": None
+        }
 
 # ─── COPILOT SESSIONS ENDPOINTS ───
 @router.get("/api/admin/copilot/sessions")
