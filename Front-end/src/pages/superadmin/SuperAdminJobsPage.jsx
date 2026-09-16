@@ -156,7 +156,8 @@ export default function SuperAdminJobsPage() {
   };
 
   const handleScheduleInterview = async (app) => {
-    if (!userFeatures.includes('Create Interview')) {
+    const userFeatures = adminUser?.features || ['Create Interview'];
+    if (!userFeatures.includes('Create Interview') && adminUser?.role !== 'super_admin' && adminUser?.role !== 'master') {
       Swal.fire({
         title: 'Feature Locked',
         text: 'Upgrade your plan to create interviews.',
@@ -1653,7 +1654,7 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
               {resumeFullUrl && isPdf ? (
                 <div className="w-full rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-inner bg-white dark:bg-slate-800/60">
                   <iframe
-                    src={resumeFullUrl}
+                    src={`${resumeFullUrl}#toolbar=0&navpanes=0&view=FitH`}
                     title="Candidate Resume"
                     className="w-full h-[540px] border-none"
                   />

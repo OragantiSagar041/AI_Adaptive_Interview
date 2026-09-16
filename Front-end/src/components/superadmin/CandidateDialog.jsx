@@ -1120,7 +1120,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                             <div>
                               {resumeFullUrl && isPdf ? (
                                 <iframe
-                                  src={resumeFullUrl}
+                                  src={`${resumeFullUrl}#toolbar=0&navpanes=0&view=FitH`}
                                   title="Candidate Resume"
                                   className="w-full h-[600px] border-none bg-white dark:bg-slate-900"
                                 />
