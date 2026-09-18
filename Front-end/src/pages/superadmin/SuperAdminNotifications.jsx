@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react'
 import { useSelector } from 'react-redux'
 import { Bell, Trash2, CheckCircle, RefreshCw, AlertCircle, Calendar, CreditCard, Activity, CheckCheck, Loader2 } from 'lucide-react'
+import { useTheme } from '../../context/ThemeContext'
 import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead, deleteNotification } from '../../utils/api'
 
 export default function SuperAdminNotifications() {
   const token = useSelector(state => state.auth.token)
+  const { theme } = useTheme()
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState(null)
@@ -151,20 +153,18 @@ export default function SuperAdminNotifications() {
             <button
               onClick={() => setFilter('all')}
               className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border-none cursor-pointer ${
-                filter === 'all'
-                  ? 'bg-indigo-50 text-indigo-600'
-                  : 'bg-transparent text-slate-400 hover:text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700'
+                filter !== 'all' ? 'bg-transparent text-slate-400 hover:text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700' : ''
               }`}
+              style={filter === 'all' ? (theme === 'dark' ? { backgroundColor: 'rgba(49, 46, 129, 0.6)', color: '#818cf8' } : { backgroundColor: '#eef2ff', color: '#4f46e5' }) : {}}
             >
               All Notifications ({notifications.length})
             </button>
             <button
               onClick={() => setFilter('unread')}
               className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border-none cursor-pointer ${
-                filter === 'unread'
-                  ? 'bg-indigo-50 text-indigo-600'
-                  : 'bg-transparent text-slate-400 hover:text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700'
+                filter !== 'unread' ? 'bg-transparent text-slate-400 hover:text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700' : ''
               }`}
+              style={filter === 'unread' ? (theme === 'dark' ? { backgroundColor: 'rgba(49, 46, 129, 0.6)', color: '#818cf8' } : { backgroundColor: '#eef2ff', color: '#4f46e5' }) : {}}
             >
               Unread ({unreadCount})
             </button>

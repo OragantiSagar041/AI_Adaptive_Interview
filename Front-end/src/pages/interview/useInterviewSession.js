@@ -339,17 +339,25 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   }
 
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.hidden && isDisclaimerAccepted && !showAllSet && !isSubmittingRef.current) {
+    let isFocusLossModalOpen = false
+
+    const handleFocusLoss = (e) => {
+      if (isFocusLossModalOpen) return
+      
+      const isHidden = e.type === 'visibilitychange' && document.hidden
+      const isBlurred = e.type === 'blur'
+
+      if ((isHidden || isBlurred) && isDisclaimerAccepted && !showAllSet && !isSubmittingRef.current) {
         behavioralStatsRef.current.tabSwitches += 1
         globalTabSwitchesRef.current += 1
+        isFocusLossModalOpen = true
 
         recordAlertMetric('tab_switch')
 
-        if (globalTabSwitchesRef.current >= 3) {
+        if (globalTabSwitchesRef.current > 3) {
           Swal.fire({
             title: 'Interview Terminated',
-            text: 'Your interview has been automatically submitted because you exceeded the maximum allowed tab switches (3).',
+            text: 'Your interview has been automatically submitted because you exceeded the maximum allowed background activity violations.',
             icon: 'error',
             background: '#161c2d',
             color: '#fff',
@@ -358,13 +366,13 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
             allowEscapeKey: false,
             customClass: { popup: 'z-[99999]' }
           }).then(() => {
-            handleSubmitInterview(true, "Terminated: Exceeded Tab Switches (3)")
+            handleSubmitInterview(true, "Terminated: Exceeded Tab Switches or Background Activity")
           })
         } else {
           Swal.fire({
             icon: 'error',
-            title: 'Tab Switch Detected',
-            text: `Switching tabs or minimizing the browser is not allowed during this proctored interview. Warning ${globalTabSwitchesRef.current} of 3.`,
+            title: 'Background Activity Detected',
+            text: `Switching tabs, minimizing the browser, or using other applications is not allowed during this proctored interview. Warning ${globalTabSwitchesRef.current} of 3.`,
             confirmButtonText: 'I Understand',
             allowOutsideClick: false,
             allowEscapeKey: false,
@@ -377,12 +385,19 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
               confirmButton: 'bg-primary hover:bg-primary-hover text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none'
             },
             buttonsStyling: false
+          }).then(() => {
+            isFocusLossModalOpen = false
           })
         }
       }
     }
-    document.addEventListener("visibilitychange", handleVisibilityChange)
-    return () => document.removeEventListener("visibilitychange", handleVisibilityChange)
+    
+    document.addEventListener("visibilitychange", handleFocusLoss)
+    window.addEventListener("blur", handleFocusLoss)
+    return () => {
+      document.removeEventListener("visibilitychange", handleFocusLoss)
+      window.removeEventListener("blur", handleFocusLoss)
+    }
   }, [isDisclaimerAccepted, showAllSet])
 
   // ── Screenshot / Screen-capture Prevention ───────────────────────────────
