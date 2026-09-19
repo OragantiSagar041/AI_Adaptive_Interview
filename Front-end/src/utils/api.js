@@ -831,7 +831,7 @@ export const getSuperAdminRejected = async (params) => {
 
 export const superadminInterviewCreate = async (data) => {
   try {
-    const response = await api.post("/superadmin/interview/create", data);
+    const response = await api.post("/api/superadmin/interview/create", data);
     return response.data;
   } catch (error) {
     throw error.response?.data?.detail || error.response?.data?.message || "Failed to create superadmin interview template";

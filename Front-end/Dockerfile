@@ -4,10 +4,10 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
-ARG VITE_API_BASE_URL=http://sb-lb-1304167006.us-east-1.elb.amazonaws.com
-ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
-ARG VITE_API_URL=http://sb-lb-1304167006.us-east-1.elb.amazonaws.com
+ARG VITE_API_URL=https://hireiq.co.in
 ENV VITE_API_URL=$VITE_API_URL
+ARG VITE_API_BASE_URL=https://hireiq.co.in
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
 RUN npm run build
 

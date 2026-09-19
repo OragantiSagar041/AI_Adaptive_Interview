@@ -11,7 +11,7 @@ const configuredBaseUrl = (typeof import.meta !== 'undefined' && import.meta.env
   : '';
 
 const LOCAL_URL = 'http://127.0.0.1:8000'
-const PROD_URL = 'http://sb-lb-1304167006.us-east-1.elb.amazonaws.com'
+const PROD_URL = 'https://hireiq.co.in'
 export const API_BASE_URL = isLocal 
   ? (configuredBaseUrl || LOCAL_URL) 
   : (configuredBaseUrl && !configuredBaseUrl.includes("localhost") && !configuredBaseUrl.includes("127.0.0.1") ? configuredBaseUrl : PROD_URL);

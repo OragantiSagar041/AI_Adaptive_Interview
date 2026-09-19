@@ -79,7 +79,7 @@ export const createSuperAdminInterview = createAsyncThunk(
   async (interviewData, { getState, rejectWithValue }) => {
     try {
       const { API_BASE_URL, token } = getState().auth
-      const res = await axios.post(`${API_BASE_URL}/superadmin/interview/create`, interviewData, {
+      const res = await axios.post(`${API_BASE_URL}/api/superadmin/interview/create`, interviewData, {
         headers: { Authorization: `Bearer ${token}` }
       })
       return res.data
