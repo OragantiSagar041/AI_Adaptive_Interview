@@ -1579,7 +1579,7 @@ export default function VoiceInterviewPage() {
           resolveWhisperStopRef.current = resolve
         })
 
-        // ── RMS analyser: track peak loudness so we can skip /stt on silence ──
+        // 🎙️ Dynamic Endpointing (VAD): Wait for natural pauses before flushing audio 🎙️
         let rmsAnalyserCleanup = null
         try {
           const rmsCtx = new (window.AudioContext || window.webkitAudioContext)()
@@ -1589,7 +1589,16 @@ export default function VoiceInterviewPage() {
           src.connect(analyser)
           const buf = new Float32Array(analyser.fftSize)
           let rafId = 0
-          let lastSilenceReset = 0
+          
+          // VAD Configuration Constants
+          const VAD_SPEECH_THRESHOLD = 0.015 // Threshold for speech vs silence
+          const VAD_SILENCE_MS = 1200        // Flush after 1.2s of continuous silence
+          const VAD_MAX_CHUNK_MS = 14000     // Force flush at 14s to prevent giant chunks
+          
+          let chunkStartTime = Date.now()
+          let lastSpeechTime = Date.now()
+          let hasSpokenInChunk = false
+
           const tickRms = () => {
             analyser.getFloatTimeDomainData(buf)
             let sumSq = 0
@@ -1601,15 +1610,31 @@ export default function VoiceInterviewPage() {
             window.dispatchEvent(new CustomEvent('candidate_audio_rms', { detail: rms }))
 
             const now = Date.now()
-            if (rms > CHUNK_SEND_RMS_THRESHOLD && now - lastSilenceReset > 500) {
+            const chunkDuration = now - chunkStartTime
+
+            if (rms > VAD_SPEECH_THRESHOLD) {
+              lastSpeechTime = now
+              hasSpokenInChunk = true
               hasSpokenThisSessionRef.current = true
-              lastSilenceReset = now
               clearTimeout(silenceTimerRef.current)
               silenceTimerRef.current = setTimeout(() => {
                 if (isListeningRef.current) {
                   finishListening().then(fullAns => onFinish?.(fullAns))
                 }
               }, 8000)
+            }
+
+            const silenceDuration = now - lastSpeechTime
+            const shouldFlush = 
+              (hasSpokenInChunk && silenceDuration > VAD_SILENCE_MS) ||
+              (chunkDuration > VAD_MAX_CHUNK_MS) ||
+              (!hasSpokenInChunk && chunkDuration > 5000)
+
+            if (shouldFlush) {
+              if (whisperRecorderRef.current && whisperRecorderRef.current.state === 'recording') {
+                try { whisperRecorderRef.current.stop() } catch (_) { }
+              }
+              return // Exit the loop, mr.onstop will spin up a new recorder
             }
 
             rafId = requestAnimationFrame(tickRms)
@@ -1666,14 +1691,8 @@ export default function VoiceInterviewPage() {
             }
           }
         }
-        mr.start(3000)
-        whisperFlushTimerRef.current = setInterval(() => {
-          if (whisperRecorderRef.current && whisperRecorderRef.current.state === 'recording') {
-            try {
-              whisperRecorderRef.current.stop()
-            } catch (_) { }
-          }
-        }, 3000)
+        // Start recorder dynamically. The VAD logic (tickRms) will call .stop() automatically.
+        mr.start()
       } catch (err) {
         console.warn('Failed to start Whisper chunk recorder:', err)
         resolveWhisperStopRef.current?.()
