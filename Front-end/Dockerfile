@@ -4,10 +4,10 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
-ARG VITE_API_BASE_URL
-ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
-ARG REACT_APP_API_URL=http://sb-lb-1304167006.us-east-1.elb.amazonaws.com
-ENV REACT_APP_API_URL=$REACT_APP_API_URL
+ARG VITE_API_URL=https://hireiq.co.in
+ENV VITE_API_URL=$VITE_API_URL
+
+
 RUN npm run build
 
 # Production stage
