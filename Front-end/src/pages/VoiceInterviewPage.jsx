@@ -2291,14 +2291,14 @@ export default function VoiceInterviewPage() {
     return () => clearInterval(t)
   }, [round, transitionToNextRound])
 
-  // ── Finish Early handler ──────────────────────────────────────────────────
+  // ── Finish Early / Submit handler ─────────────────────────────────────────
   const handleFinishEarly = useCallback(() => {
     Swal.fire({
-      title: 'Finish Interview?',
-      html: '<p style="color:#94a3b8;font-size:14px">Are you sure you want to end the interview now? Your answers will be saved and submitted.</p>',
+      title: 'Submit Interview?',
+      html: '<p style="color:#94a3b8;font-size:14px">Are you sure you want to end and submit the interview now? Your answers will be saved.</p>',
       icon: 'question',
       showCancelButton: true,
-      confirmButtonText: 'Yes, Finish',
+      confirmButtonText: 'Yes, Submit',
       cancelButtonText: 'Continue Interview',
       confirmButtonColor: '#ef4444',
       cancelButtonColor: '#6366f1',
@@ -2992,18 +2992,18 @@ export default function VoiceInterviewPage() {
         </div>
 
         {/* Rules */}
-        <div className="grid gap-3 text-left bg-[#0d1117] border border-white/10 rounded-2xl p-6 shadow-xl">
-          <h3 className="text-lg font-bold text-white mb-2 border-b border-white/10 pb-2">Interview Rules</h3>
+        <div className="grid gap-3 text-left bg-white dark:bg-[#0d1117] border border-slate-200 dark:border-white/10 rounded-2xl p-6 shadow-xl">
+          <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2 border-b border-slate-200 dark:border-white/10 pb-2">Interview Rules</h3>
           {[
-            { i: 'fa-volume-mute', c: 'text-rose-400', t: 'Ensure you are in a quiet environment without background noise.' },
-            { i: 'fa-window-close', c: 'text-amber-400', t: 'Do not close, refresh, or switch away from this tab.' },
-            { i: 'fa-user-check', c: 'text-emerald-400', t: 'Your microphone, camera, and screen will be recorded.' },
+            { i: 'fa-volume-mute', c: 'text-rose-600 dark:text-rose-400', bg: 'bg-rose-50 dark:bg-rose-500/10', t: 'Ensure you are in a quiet environment without background noise.' },
+            { i: 'fa-window-close', c: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-500/10', t: 'Do not close, refresh, or switch away from this tab.' },
+            { i: 'fa-user-check', c: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-500/10', t: 'Your microphone, camera, and screen will be recorded.' },
           ].map((rule, idx) => (
             <div key={idx} className="flex items-center gap-4">
-              <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center shrink-0">
+              <div className={`w-8 h-8 rounded-full ${rule.bg} flex items-center justify-center shrink-0`}>
                 <i className={`fas ${rule.i} ${rule.c}`} />
               </div>
-              <span className="text-slate-300 text-sm">{rule.t}</span>
+              <span className="text-slate-800 dark:text-slate-200 text-sm font-semibold">{rule.t}</span>
             </div>
           ))}
         </div>
@@ -3432,18 +3432,11 @@ export default function VoiceInterviewPage() {
               {aiStatus === 'listening' ? 'Done Speaking' : 'Speak Answer'}
             </button>
             <button
-              onClick={() => transitionToNextRound(false)}
-              className="px-6 py-3.5 rounded-2xl text-xs font-bold transition-all uppercase tracking-widest bg-white/5 text-slate-400 border border-white/8 hover:bg-white/10"
-              title="Proceed to the next round"
-            >
-              Next Round
-            </button>
-            <button
               onClick={handleFinishEarly}
               className="px-6 py-3.5 rounded-2xl text-xs font-bold transition-all uppercase tracking-widest bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20"
-              title="End interview early"
+              title="Submit interview"
             >
-              Finish Early
+              Submit
             </button>
           </div>
 
