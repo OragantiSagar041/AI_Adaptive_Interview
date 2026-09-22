@@ -1121,11 +1121,18 @@ body,
 }
 
 /* Remove the light noise/grid overlay in dark mode to avoid washed-out look */
-[data-theme="dark"] section#top [aria-hidden="true"] {
+[data-theme="dark"] section#top > div[aria-hidden="true"],
+[data-theme="dark"] section#top > div.pointer-events-none {
   background-image: none !important;
   opacity: 0.03 !important;
   mask-image: none !important;
   -webkit-mask-image: none !important;
+}
+
+/* Ensure all SVG / Lucide icons in hero retain full opacity in dark mode */
+[data-theme="dark"] section#top svg,
+[data-theme="dark"] section#top .lucide {
+  opacity: 1 !important;
 }
 
 /* Soften glass surfaces for dark theme to prevent overly bright panels */
