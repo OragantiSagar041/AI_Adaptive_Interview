@@ -247,7 +247,7 @@ export default function AdminLayout({
 
   return (
     <SidebarProvider>
-    <div className="h-screen text-slate-900 dark:text-slate-100 flex font-sans overflow-hidden relative bg-slate-50 dark:bg-slate-950">
+    <div className="h-screen text-slate-900 dark:text-slate-100 flex font-sans w-full overflow-hidden relative bg-slate-50 dark:bg-slate-950">
       {/* Sidebar (Vertical Layout) */}
       {layoutConfig?.layout_type !== "navbar" && (
         <Sidebar
@@ -341,7 +341,7 @@ export default function AdminLayout({
       )}
 
       {/* Main Content Wrapper */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen relative z-10">
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative z-10">
         {/* Top Header Section */}
         <div className="sticky top-0 z-30 flex flex-col bg-white/70 dark:bg-slate-900/80 backdrop-blur-xl shadow-sm shrink-0 border-b border-slate-200/60 dark:border-slate-800">
 

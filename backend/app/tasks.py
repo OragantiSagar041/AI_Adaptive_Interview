@@ -553,7 +553,7 @@ def send_recruiter_credentials_email_task(
         return {"status": "skipped", "reason": "no_api_key"}
 
     try:
-        FRONTEND_URL = os.getenv("FRONTEND_URL", "https://www.hireiq.co.in")
+        FRONTEND_URL = os.getenv("FRONTEND_URL", "https://hireiq.co.in")
         login_url = f"{FRONTEND_URL}/login"
         
         settings = platform_settings_collection.find_one({"_id": "global_settings"})

@@ -2920,7 +2920,7 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
         print("Warning: BREVO_API_KEY not found in environment")
         return False
 
-    full_link = link_url if link_url.startswith("http") else f"{os.getenv('FRONTEND_URL', 'https://ai-adaptive-interview.vercel.app')}{link_url}"
+    full_link = link_url if link_url.startswith("http") else f"{os.getenv('FRONTEND_URL', 'https://hireiq.co.in')}{link_url}"
 
     html_content = custom_html.strip() if custom_html and custom_html.strip() else build_default_interview_email_html(
         candidate_name=candidate_name,
