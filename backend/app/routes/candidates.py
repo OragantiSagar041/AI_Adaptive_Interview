@@ -12,6 +12,7 @@ import threading, traceback, logging
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Union
+from firebase_admin import auth as firebase_auth_admin
 
 # ---------------------------------------------------------------------------
 # Third-party
@@ -2342,6 +2343,7 @@ def admin_copilot_execute(request: CopilotExecuteRequest, current_admin: dict = 
             return {"status": "success", "message": f"Successfully transferred {amount} credits to {target_username}."}
             
         elif request.action == "create_admin" and role in ["super_admin", "superadmin", "master", "admin"]:
+            print("COPILOT ACTION:", repr(request.action), "ROLE:", repr(role))
             username = request.data.get("username")
             email = request.data.get("email")
             if not username or not email:
@@ -2356,20 +2358,46 @@ def admin_copilot_execute(request: CopilotExecuteRequest, current_admin: dict = 
                 
             import uuid
             default_password = f"SubAdmin{uuid.uuid4().hex[:6]}!"
+
+            try:
+                firebase_user = firebase_auth_admin.create_user(
+                    email=email.strip().lower(),
+                    password=default_password,
+                    display_name=username,
+                    disabled=False,
+                    email_verified=True,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Failed to create Firebase account for new admin: %s - %s",
+                    type(exc).__name__,
+                    str(exc),
+                )
+                raise HTTPException(
+                    status_code=400,
+                    detail="Unable to create Firebase account for this admin.",
+                ) from exc
             
             new_admin = {
                 "username": username,
                 "password": hash_password(default_password),
                 "email": email,
+                "firebase_uid": firebase_user.uid,
+                "firebase_email": firebase_user.email,
                 "name": username,
                 "role": "admin",
                 "company_id": company_id,
                 "credits": 0,
                 "login_enabled": True,
-                "created_at": datetime.now(timezone.utc).isoformat()
+                "created_at": datetime.now(timezone.utc).isoformat(),
             }
             new_admin["custom_id"] = get_next_sequence_value("recruiter", "RC")
             admins_collection.insert_one(new_admin)
+            print("NEW RECRUITER CREATED:")
+            print("USERNAME:", repr(new_admin.get("username")))
+            print("EMAIL:", repr(new_admin.get("email")))
+            print("FIREBASE UID:", repr(new_admin.get("firebase_uid")))
+            print("FIREBASE EMAIL:", repr(new_admin.get("firebase_email")))
             
             return {
                 "status": "success",

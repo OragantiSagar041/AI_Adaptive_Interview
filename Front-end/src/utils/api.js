@@ -1,6 +1,7 @@
 import axios from "axios";
 import { API_BASE_URL } from "../apiConfig";
 import { clearCandidateSessionAuth, getCandidateSessionToken } from "./candidateAuth";
+import { auth } from "../firebase";
 
 // Create a single, consistent Axios instance
 const api = axios.create({
@@ -436,21 +437,35 @@ export const liveHeartbeat = async (data, monitoringToken) => {
 /* =============================================================================
    ADMIN GENERAL & AUTH
 ============================================================================= */
-export const adminLogin = async (data) => {
-  try {
-    const response = await api.post("/admin/login", data);
-    return response.data;
-  } catch (error) {
-    throw error.response?.data?.detail || error.response?.data?.message || "Admin login failed";
-  }
-};
 
-export const firebaseAuth = async (data) => {
+export const firebaseAuth = async (data = {}) => {
   try {
-    const response = await api.post("/admin/firebase-auth", data);
+    const user = auth.currentUser;
+
+    if (!user) {
+      throw new Error("No Firebase user is currently signed in");
+    }
+
+    const idToken = await user.getIdToken(true);
+
+    const response = await api.post(
+      "/admin/firebase-auth",
+      data,
+      {
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      }
+    );
+
     return response.data;
   } catch (error) {
-    throw error.response?.data?.detail || error.response?.data?.message || "Firebase login failed";
+    throw (
+      error.response?.data?.detail ||
+      error.response?.data?.message ||
+      error.message ||
+      "Firebase login failed"
+    );
   }
 };
 
@@ -874,17 +889,7 @@ export const superadminPatchCreditRequest = async (requestId, data) => {
   }
 };
 
-/* =============================================================================
-   MASTER ADMIN
-============================================================================= */
-export const masterLogin = async (data) => {
-  try {
-    const response = await api.post("/master/login", data);
-    return response.data;
-  } catch (error) {
-    throw error.response?.data?.detail || error.response?.data?.message || "Master login failed";
-  }
-};
+
 
 /* ===== MASTER & USER NOTIFICATIONS ===== */
 export const getNotifications = async () => {

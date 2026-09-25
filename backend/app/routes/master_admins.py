@@ -12,7 +12,7 @@ import threading, traceback, logging
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Union
-
+from firebase_admin import auth as firebase_auth_admin
 # ---------------------------------------------------------------------------
 # Third-party
 # ---------------------------------------------------------------------------
@@ -178,10 +178,16 @@ def toggle_admin_login(admin_id: str, master_id: str = Depends(get_current_admin
     company_id = admin.get("company_id") if admin else str(company["_id"])
     
     if admin:
-        admins_collection.update_one(
+        result = admins_collection.update_one(
             {"_id": ObjectId(admin_id)},
             {"$set": {"login_enabled": new_state, "updated_at": now_iso}}
         )
+
+    verify_admin = admins_collection.find_one(
+        {"_id": ObjectId(admin_id)},
+        {"username": 1, "email": 1, "login_enabled": 1, "firebase_uid": 1}
+    )
+
         
     if company_id:
         companies_collection.update_one(
@@ -247,48 +253,90 @@ def get_sub_admins(current_admin: dict = Depends(get_current_admin_details)):
     return {"status": "success", "data": admins}
 
 @router.post("/super-admin/admins")
-def create_sub_admin(data: SubAdminCreate, current_admin: dict = Depends(get_current_admin_details)):
+def create_sub_admin(
+    data: SubAdminCreate,
+    current_admin: dict = Depends(get_current_admin_details),
+):
     if current_admin.get("role") != "super_admin":
         raise HTTPException(status_code=403, detail="Super Admin access required")
+
     company_id = current_admin.get("company_id")
     if not company_id:
-        raise HTTPException(status_code=400, detail="Super Admin is not associated with a company")
-        
+        raise HTTPException(
+            status_code=400,
+            detail="Super Admin is not associated with a company",
+        )
+
     # Check if username already exists
     if admins_collection.find_one({"username": data.username}):
         raise HTTPException(status_code=400, detail="Username already exists")
-        
+
+    # Use a normalized email for the Firebase account and MongoDB record.
+    recruiter_email = data.email.strip()
+    firebase_email = recruiter_email.lower()
+
+    # Check if email already exists in MongoDB.
+    if admins_collection.find_one({"email": recruiter_email}):
+        raise HTTPException(status_code=400, detail="Email already exists")
+
+    # Create the Firebase account first.
+    try:
+        firebase_user = firebase_auth_admin.create_user(
+            email=firebase_email,
+            password=data.password,
+            display_name=data.name,
+            disabled=False,
+            email_verified=True,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Failed to create Firebase account for recruiter: %s - %s",
+            type(exc).__name__,
+            str(exc),
+        )
+        raise HTTPException(
+            status_code=400,
+            detail="Unable to create Firebase account for this recruiter.",
+        ) from exc
+
     new_admin = {
         "username": data.username,
         "password": hash_password(data.password),
-        "email": data.email,
+        "email": recruiter_email,
+        "firebase_uid": firebase_user.uid,
+        "firebase_email": firebase_user.email,
         "name": data.name,
         "role": "admin",
         "company_id": company_id,
         "created_by": current_admin["admin_id"],
         "credits": data.credits,
-        "total_allocated_credits": data.credits, # Fix: Track initial credits immediately to avoid negative used bug
+        "total_allocated_credits": data.credits,
         "login_enabled": True,
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    
+
     new_admin["custom_id"] = get_next_sequence_value("recruiter", "RC")
+
     admins_collection.insert_one(new_admin)
-    
+
     # Trigger credentials email via Celery
     try:
         from app.tasks import send_recruiter_credentials_email_task
+
         send_recruiter_credentials_email_task.delay(
-            recruiter_email=data.email,
+            recruiter_email=recruiter_email,
             recruiter_name=data.name,
             username=data.username,
             password=data.password,
-            description=data.description if data.description else ""
+            description=data.description if data.description else "",
         )
     except Exception as e:
         print(f"Failed to enqueue recruiter credentials email task: {e}")
-        
-    return {"status": "success", "message": "Sub-admin created successfully"}
+
+    return {
+        "status": "success",
+        "message": "Sub-admin created successfully",
+    }
 
 @router.post("/super-admin/admins/{admin_id}/toggle-status")
 def toggle_sub_admin_status(admin_id: str, current_admin: dict = Depends(get_current_admin_details)):

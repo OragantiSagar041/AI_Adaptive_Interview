@@ -366,7 +366,7 @@ def _decode_dashboard_websocket_admin(token: str) -> Dict[str, str]:
         return {
             "admin_id": admin_id,
             "role": str(admin_doc.get("role") or role),
-            "company_id": str(admin_doc.get("company_id") or payload.get("company_id") or ""),
+            "company_id": str(admin_doc.get("company_id") or ""),
         }
     except (jwt.PyJWTError, ValueError, TypeError, InvalidId) as exc:
         raise HTTPException(status_code=401, detail="Invalid or expired dashboard token") from exc

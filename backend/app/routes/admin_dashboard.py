@@ -2265,7 +2265,7 @@ def update_profile(data: UpdateProfileRequest, current_admin: str = Depends(get_
     try:
         from bson import ObjectId
         
-        admin_id_obj = ObjectId(str(data.admin_id))
+        admin_id_obj = ObjectId(str(current_admin))
         admin = admins_collection.find_one({"_id": admin_id_obj})
         if not admin:
             raise HTTPException(status_code=404, detail="Admin not found")
@@ -2352,7 +2352,7 @@ def upload_profile_image(
 ):
     try:
         from bson import ObjectId
-        admin_id_obj = ObjectId(admin_id)
+        admin_id_obj = ObjectId(str(current_admin["admin_id"]))
         admin = admins_collection.find_one({"_id": admin_id_obj})
         if not admin:
             raise HTTPException(status_code=404, detail="Admin not found")

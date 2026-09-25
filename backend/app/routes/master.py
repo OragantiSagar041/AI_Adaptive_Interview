@@ -12,6 +12,8 @@ import threading, traceback, logging
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Union
+from firebase_admin import auth as firebase_auth_admin
+
 
 # ---------------------------------------------------------------------------
 # Third-party
@@ -41,6 +43,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.utils import simpleSplit
 from reportlab.pdfgen import canvas
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from fastapi import Depends, HTTPException, Request
 
 # ---------------------------------------------------------------------------
 # Internal / project
