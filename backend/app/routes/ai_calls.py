@@ -157,9 +157,27 @@ async def initiate_ai_call(session_id: str, request: Request, current_admin: dic
             {"_id": session_data["_id"]},
             {"$set": {
                 "ai_call_id": call_id,
+                "omni_call_id": call_id,
                 "ai_call_status": "initiated",
                 "candidate_phone": phone_number
             }}
+        )
+        # Register in omni_call_logs_collection for tenant tracking
+        omni_call_logs_collection.update_one(
+            {"call_id": call_id},
+            {"$set": {
+                "call_id": call_id,
+                "session_id": str(session_data.get("id") or session_data.get("link_id") or ""),
+                "candidate_name": candidate_name,
+                "phone_number": phone_number,
+                "status": "initiated",
+                "duration": "0m 0s",
+                "recording_url": None,
+                "admin_id": current_admin.get("admin_id"),
+                "company_id": current_admin.get("company_id"),
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }},
+            upsert=True
         )
         return {"status": "success", "call_id": call_id, "message": f"AI Call initiated to {phone_number}"}
     except Exception as e:
@@ -557,19 +575,27 @@ def get_omni_agent_settings(
 ):
     """Fetch the Omni Dimension Agent settings."""
     from app.ai.omni_dimension_client import get_cached_omni_json, get_omni_account, set_cached_omni_json, get_omni_dimension_api_key
+    from app.db.mongo_db import db
     api_key_str = omni_api_key if isinstance(omni_api_key, str) else None
     api_key = (api_key_str or (current_admin.get("omni_api_key") if isinstance(current_admin, dict) else None) or get_omni_dimension_api_key() or "").strip()
+    company_id = current_admin.get("company_id")
+    cache_key = f"agent-settings-{company_id}" if company_id else "agent-settings"
     try:
-        cached = get_cached_omni_json(api_key, "agent-settings")
+        cached = get_cached_omni_json(api_key, cache_key)
         if cached is not None:
             return {"settings": cached}
         _, agent, _ = get_omni_account(api_key)
-        if isinstance(agent, dict):
-            msg = agent.get("welcome_message") or agent.get("greeting_message") or agent.get("first_ideal_message") or ""
-            agent["welcome_message"] = msg
-            agent["greeting_message"] = msg
-        set_cached_omni_json(api_key, "agent-settings", agent)
-        return {"settings": agent}
+        agent_dict = dict(agent) if isinstance(agent, dict) else {}
+        if company_id:
+            custom_doc = db.omni_agent_settings.find_one({"company_id": company_id})
+            if custom_doc:
+                custom_doc.pop("_id", None)
+                agent_dict.update({k: v for k, v in custom_doc.items() if v is not None})
+        msg = agent_dict.get("welcome_message") or agent_dict.get("greeting_message") or agent_dict.get("first_ideal_message") or ""
+        agent_dict["welcome_message"] = msg
+        agent_dict["greeting_message"] = msg
+        set_cached_omni_json(api_key, cache_key, agent_dict)
+        return {"settings": agent_dict}
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": f"Failed to fetch agent settings: {str(e)}"})
 
@@ -587,6 +613,8 @@ def update_omni_agent_settings(
     
     api_key_str = omni_api_key if isinstance(omni_api_key, str) else None
     api_key = (api_key_str or (current_admin.get("omni_api_key") if isinstance(current_admin, dict) else None) or get_omni_dimension_api_key() or "").strip()
+    company_id = current_admin.get("company_id")
+    cache_key = f"agent-settings-{company_id}" if company_id else "agent-settings"
     try:
         client, agent, agent_id = get_omni_account(api_key)
         
@@ -622,10 +650,14 @@ def update_omni_agent_settings(
             logger.warning(f"[agent-settings] SDK update note: {sdk_err}")
 
         updated_agent = {**agent, **update_data, "synced_at": datetime.utcnow().isoformat()}
-        db.omni_agent_settings.update_one({"id": agent.get("id", agent_id)}, {"$set": updated_agent}, upsert=True)
-        db.agents.update_one({"omni_agent_id": str(agent_id)}, {"$set": {"greeting_message": target_message, "welcome_message": target_message, "synced_at": datetime.utcnow().isoformat()}}, upsert=True)
+        if company_id:
+            updated_agent["company_id"] = company_id
+            db.omni_agent_settings.update_one({"company_id": company_id}, {"$set": updated_agent}, upsert=True)
+        else:
+            db.omni_agent_settings.update_one({"id": agent.get("id", agent_id)}, {"$set": updated_agent}, upsert=True)
+            db.agents.update_one({"omni_agent_id": str(agent_id)}, {"$set": {"greeting_message": target_message, "welcome_message": target_message, "synced_at": datetime.utcnow().isoformat()}}, upsert=True)
 
-        set_cached_omni_json(api_key, "agent-settings", updated_agent)
+        set_cached_omni_json(api_key, cache_key, updated_agent)
         set_cached_omni_json(api_key, "account", {"agent": updated_agent, "agent_id": agent_id})
 
         return {"success": True, "settings": updated_agent, "message": "Assistant Settings & Welcome Message saved successfully!"}
@@ -795,12 +827,18 @@ def detach_integration(req: DetachIntegrationRequest, current_admin: dict = Depe
 
 
 @router.get("/api/calls/call-config")
-def get_omni_call_config(current_admin: dict = Depends(get_current_admin_details)):
-    omni_api_key = None
+def get_omni_call_config(
+    current_admin: dict = Depends(get_current_admin_details),
+    omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key")
+):
     """Fetch call configuration from agent settings."""
-    from app.ai.omni_dimension_client import get_omni_account
+    from app.ai.omni_dimension_client import get_omni_account, get_omni_dimension_api_key
+    from app.db.mongo_db import db
+    api_key_str = omni_api_key if isinstance(omni_api_key, str) else None
+    api_key = (api_key_str or (current_admin.get("omni_api_key") if isinstance(current_admin, dict) else None) or get_omni_dimension_api_key() or "").strip()
+    company_id = current_admin.get("company_id")
     try:
-        _, agent, _ = get_omni_account(omni_api_key)
+        _, agent, _ = get_omni_account(api_key)
         config = {
             "silence_timeout": agent.get("silence_timeout"),
             "speech_speed": agent.get("speech_speed"),
@@ -821,6 +859,11 @@ def get_omni_call_config(current_admin: dict = Depends(get_current_admin_details
             "user_idle_threshold_sec": agent.get("user_idle_threshold_sec"),
             "min_speech_duration_ms": agent.get("min_speech_duration_ms"),
         }
+        if company_id:
+            company_doc = db.omni_call_configs.find_one({"company_id": company_id})
+            if company_doc:
+                company_doc.pop("_id", None)
+                config.update({k: v for k, v in company_doc.items() if k in config and v is not None})
         return {"config": config, "success": True}
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": str(e)})
@@ -847,12 +890,19 @@ class CallConfigRequestModel(BaseModel):
     min_speech_duration_ms: Optional[int] = None
 
 @router.post("/api/calls/call-config")
-def update_omni_call_config(req: CallConfigRequestModel, current_admin: dict = Depends(get_current_admin_details)):
-    omni_api_key = None
+def update_omni_call_config(
+    req: CallConfigRequestModel,
+    current_admin: dict = Depends(get_current_admin_details),
+    omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key")
+):
     """Update call configuration in Omni Dimension."""
-    from app.ai.omni_dimension_client import get_omni_account
+    from app.ai.omni_dimension_client import get_omni_account, get_omni_dimension_api_key
+    from app.db.mongo_db import db
+    api_key_str = omni_api_key if isinstance(omni_api_key, str) else None
+    api_key = (api_key_str or (current_admin.get("omni_api_key") if isinstance(current_admin, dict) else None) or get_omni_dimension_api_key() or "").strip()
+    company_id = current_admin.get("company_id")
     try:
-        client, agent, agent_id = get_omni_account(omni_api_key)
+        client, agent, agent_id = get_omni_account(api_key)
         update_data = {k: v for k, v in req.dict().items() if v is not None}
         
         try:
@@ -862,6 +912,12 @@ def update_omni_call_config(req: CallConfigRequestModel, current_admin: dict = D
             print(f"SDK Call Config update note: {sdk_e}")
 
         updated_config = {**agent, **update_data}
+        if company_id:
+            db.omni_call_configs.update_one(
+                {"company_id": company_id},
+                {"$set": {**update_data, "company_id": company_id}},
+                upsert=True
+            )
         return {"success": True, "config": updated_config, "message": "Call configuration updated successfully!"}
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": str(e)})
@@ -878,66 +934,26 @@ def get_omni_post_call_config(
 
     api_key_str = omni_api_key if isinstance(omni_api_key, str) else None
     api_key = (api_key_str or (current_admin.get("omni_api_key") if isinstance(current_admin, dict) else None) or get_omni_dimension_api_key() or "").strip()
+    company_id = current_admin.get("company_id")
 
     try:
-        _, agent, agent_id = get_omni_account(api_key)
-        post_call_list = agent.get("post_call_config_ids", [])
-        
-        if not isinstance(post_call_list, list) or not post_call_list:
-            mongo_doc = db.omni_post_call_configs.find_one({"omni_agent_id": str(agent_id)}) or db.omni_post_call_configs.find_one({})
+        post_call_list = []
+        if company_id:
+            mongo_doc = db.omni_post_call_configs.find_one({"company_id": company_id})
             if mongo_doc and mongo_doc.get("post_call_configs"):
                 post_call_list = mongo_doc.get("post_call_configs")
+
+        if not post_call_list:
+            _, agent, agent_id = get_omni_account(api_key)
+            post_call_list = agent.get("post_call_config_ids", [])
+            if not isinstance(post_call_list, list) or not post_call_list:
+                mongo_doc = db.omni_post_call_configs.find_one({"omni_agent_id": str(agent_id)})
+                if mongo_doc and mongo_doc.get("post_call_configs"):
+                    post_call_list = mongo_doc.get("post_call_configs")
 
         return {"post_call_configs": post_call_list, "config": post_call_list[0] if (isinstance(post_call_list, list) and len(post_call_list) > 0) else {}, "success": True}
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": f"Failed to fetch post call config: {str(e)}"})
-
-
-@router.post("/api/calls/post-call-config")
-def update_omni_post_call_config(
-    req: dict,
-    current_admin: dict = Depends(get_current_admin_details),
-    omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key")
-):
-    """Update post-call configuration in Omni Dimension."""
-    from app.ai.omni_dimension_client import get_omni_account, set_cached_omni_json, get_omni_dimension_api_key
-    from app.db.mongo_db import db
-    import requests
-
-    api_key_str = omni_api_key if isinstance(omni_api_key, str) else None
-    api_key = (api_key_str or (current_admin.get("omni_api_key") if isinstance(current_admin, dict) else None) or get_omni_dimension_api_key() or "").strip()
-
-    try:
-        client, agent, agent_id = get_omni_account(api_key)
-        
-        # Upstream Omni Dimension REST API PUT request
-        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-        update_payload = {"post_call_config_ids": [req]}
-        try:
-            res = requests.put(f"https://backend.omnidim.io/api/v1/agents/{agent_id}", headers=headers, json=update_payload, timeout=10)
-            logger.info(f"[post-call-config] Omni Dimension PUT status: {res.status_code}, body: {res.text}")
-        except Exception as http_e:
-            logger.warning(f"[post-call-config] Upstream HTTP PUT note: {http_e}")
-
-        # SDK fallback (positional: agent_id, data)
-        try:
-            if hasattr(client, 'agent') and hasattr(client.agent, 'update'):
-                client.agent.update(agent_id, update_payload)
-        except Exception as sdk_e:
-            logger.warning(f"[post-call-config] SDK update note: {sdk_e}")
-
-        db.omni_post_call_configs.update_one(
-            {"omni_agent_id": str(agent_id)},
-            {"$set": {"omni_agent_id": str(agent_id), "post_call_configs": [req], "synced_at": datetime.utcnow().isoformat()}},
-            upsert=True
-        )
-
-        set_cached_omni_json(api_key, "post-call-config", [req])
-        set_cached_omni_json(api_key, "agent-settings", {**agent, "post_call_config_ids": [req]})
-
-        return {"success": True, "config": req, "message": "Post-call configuration updated successfully!"}
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"detail": str(e)})
 
 
 class ExtractedVariable(BaseModel):
@@ -957,32 +973,73 @@ class PostCallConfigPayload(BaseModel):
 
 
 @router.post("/api/calls/post-call-config")
-def update_omni_post_call_config(payload: PostCallConfigPayload, current_admin: dict = Depends(get_current_admin_details)):
-    """Update post-call configuration directly into Omni Dimension agent."""
-    omni_api_key = None
-    from app.ai.omni_dimension_client import get_omni_account, set_cached_omni_json
+def update_omni_post_call_config(
+    req: Union[PostCallConfigPayload, dict],
+    current_admin: dict = Depends(get_current_admin_details),
+    omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key")
+):
+    """Update post-call configuration in Omni Dimension."""
+    from app.ai.omni_dimension_client import get_omni_account, set_cached_omni_json, get_omni_dimension_api_key
+    from app.db.mongo_db import db
+    import requests
+
+    api_key_str = omni_api_key if isinstance(omni_api_key, str) else None
+    api_key = (api_key_str or (current_admin.get("omni_api_key") if isinstance(current_admin, dict) else None) or get_omni_dimension_api_key() or "").strip()
+    company_id = current_admin.get("company_id")
+
     try:
-        client, agent, agent_id = get_omni_account(omni_api_key)
+        client, agent, agent_id = get_omni_account(api_key)
         
-        new_config = {
-            "delivery_method": payload.delivery_method,
-            "destination": payload.destination,
-            "webhook_url": payload.webhook_url,
-            "trigger_call_statuses": payload.trigger_call_statuses,
-            "include_summary": payload.call_summary,
-            "include_full_conversation": payload.full_conversation,
-            "include_sentiment": payload.sentiment_analysis,
-            "include_extracted_info": payload.extracted_information,
-            "extracted_variables": [v.dict() for v in payload.extracted_variables]
-        }
-        
-        # Update the agent in Omni Dimension
-        client.agent.update(agent_id=agent_id, data={"post_call_config_ids": [new_config]})
-        
-        # Invalidate local cache so the next GET fetches fresh data
-        set_cached_omni_json(omni_api_key, "account", None)
-        
-        return {"success": True, "message": "Updated successfully"}
+        if isinstance(req, PostCallConfigPayload):
+            config_dict = {
+                "delivery_method": req.delivery_method,
+                "destination": req.destination,
+                "webhook_url": req.webhook_url,
+                "trigger_call_statuses": req.trigger_call_statuses,
+                "include_summary": req.call_summary,
+                "include_full_conversation": req.full_conversation,
+                "include_sentiment": req.sentiment_analysis,
+                "include_extracted_info": req.extracted_information,
+                "extracted_variables": [v.dict() for v in req.extracted_variables]
+            }
+        else:
+            config_dict = req
+
+        # Upstream Omni Dimension REST API PUT request
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        update_payload = {"post_call_config_ids": [config_dict]}
+        try:
+            res = requests.put(f"https://backend.omnidim.io/api/v1/agents/{agent_id}", headers=headers, json=update_payload, timeout=10)
+            logger.info(f"[post-call-config] Omni Dimension PUT status: {res.status_code}, body: {res.text}")
+        except Exception as http_e:
+            logger.warning(f"[post-call-config] Upstream HTTP PUT note: {http_e}")
+
+        # SDK fallback (positional: agent_id, data)
+        try:
+            if hasattr(client, 'agent') and hasattr(client.agent, 'update'):
+                client.agent.update(agent_id, update_payload)
+        except Exception as sdk_e:
+            logger.warning(f"[post-call-config] SDK update note: {sdk_e}")
+
+        save_doc = {"omni_agent_id": str(agent_id), "post_call_configs": [config_dict], "synced_at": datetime.utcnow().isoformat()}
+        if company_id:
+            save_doc["company_id"] = company_id
+            db.omni_post_call_configs.update_one(
+                {"company_id": company_id},
+                {"$set": save_doc},
+                upsert=True
+            )
+        else:
+            db.omni_post_call_configs.update_one(
+                {"omni_agent_id": str(agent_id)},
+                {"$set": save_doc},
+                upsert=True
+            )
+
+        set_cached_omni_json(api_key, "post-call-config", [config_dict])
+        set_cached_omni_json(api_key, "agent-settings", {**agent, "post_call_config_ids": [config_dict]})
+
+        return {"success": True, "config": config_dict, "message": "Post-call configuration updated successfully!"}
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": str(e)})
 
@@ -1039,83 +1096,87 @@ def get_omni_recent_calls(
 
             page += 1
 
+        role = current_admin.get("role")
+        company_id = current_admin.get("company_id")
+        admin_id = current_admin.get("admin_id")
+        allowed_ids = _get_authorized_creator_ids(current_admin)
+
         # Fallback to MongoDB omni_call_logs if API returned no calls
         if not all_calls:
-            mongo_logs = list(db.omni_call_logs.find({}).sort("time_of_call", -1).limit(100))
+            mongo_filter = {}
+            if role != "master":
+                if company_id:
+                    mongo_filter["$or"] = [
+                        {"company_id": company_id},
+                        {"admin_id": {"$in": allowed_ids}}
+                    ]
+                else:
+                    mongo_filter["admin_id"] = {"$in": allowed_ids}
+            mongo_logs = list(db.omni_call_logs.find(mongo_filter).sort("time_of_call", -1).limit(100))
             for m in mongo_logs:
                 m.pop("_id", None)
                 all_calls.append(m)
             
-        role = current_admin.get("role")
-        company_id = current_admin.get("company_id")
-        admin_id = current_admin.get("admin_id")
-        
         session_query = {"omni_call_id": {"$exists": True, "$ne": None}}
         manual_query = {"call_id": {"$exists": True, "$ne": None}}
         
-        if role != "master" and company_id:
-            session_query["company_id"] = company_id
-            manual_query["$or"] = [
-                {"company_id": company_id},
-                {"company_id": {"$exists": False}},
-                {"company_id": None}
-            ]
+        if role != "master":
+            if company_id:
+                session_query["$or"] = [
+                    {"company_id": company_id},
+                    {"created_by": {"$in": allowed_ids}}
+                ]
+                manual_query["$or"] = [
+                    {"company_id": company_id},
+                    {"admin_id": {"$in": allowed_ids}}
+                ]
+            else:
+                session_query["created_by"] = {"$in": allowed_ids}
+                manual_query["admin_id"] = {"$in": allowed_ids}
         
-        all_sessions = list(interview_sessions_collection.find(session_query, {"omni_call_id": 1, "created_by": 1, "candidate_name": 1, "name": 1, "decision": 1}))
-        all_manuals = list(omni_call_logs_collection.find(manual_query, {"call_id": 1, "admin_id": 1, "candidate_name": 1, "name": 1, "decision": 1}))
+        all_sessions = list(interview_sessions_collection.find(session_query, {"omni_call_id": 1, "ai_call_id": 1, "created_by": 1, "candidate_name": 1, "name": 1, "decision": 1}))
+        all_manuals = list(omni_call_logs_collection.find(manual_query, {"call_id": 1, "id": 1, "admin_id": 1, "company_id": 1, "candidate_name": 1, "name": 1, "decision": 1}))
 
-        session_map = {str(s.get("omni_call_id")): s for s in all_sessions if s.get("omni_call_id")}
-        manual_map = {str(m.get("call_id")): m for m in all_manuals if m.get("call_id")}
+        session_map = {}
+        for s in all_sessions:
+            if s.get("omni_call_id"):
+                session_map[str(s["omni_call_id"])] = s
+            if s.get("ai_call_id"):
+                session_map[str(s["ai_call_id"])] = s
 
-        current_admin_identifiers = set()
-        adm_id_val = current_admin.get("admin_id")
-        my_admin_doc = {}
-        if adm_id_val:
-            try:
-                if ObjectId.is_valid(str(adm_id_val)):
-                    my_admin_doc = admins_collection.find_one({"_id": ObjectId(str(adm_id_val))}) or {}
-                else:
-                    my_admin_doc = admins_collection.find_one({"admin_id": str(adm_id_val)}) or {}
-            except Exception:
-                my_admin_doc = {}
-        
-        adm_name = (my_admin_doc.get("name") or "").strip().lower()
-        if adm_name:
-            current_admin_identifiers.add(adm_name)
-            
-        adm_username = (my_admin_doc.get("username") or "").strip().lower()
-        if adm_username:
-            current_admin_identifiers.add(adm_username)
+        manual_map = {}
+        for m in all_manuals:
+            if m.get("call_id"):
+                manual_map[str(m["call_id"])] = m
+            if m.get("id"):
+                manual_map[str(m["id"])] = m
 
         filtered_calls = []
         for call in all_calls:
             if not isinstance(call, dict):
                 continue
             
+            if role == "master":
+                filtered_calls.append(call)
+                continue
+
             cid = str(call.get("id") or call.get("call_id") or "")
             req_id = str(call.get("call_request_id", {}).get("id") or "")
             
             creator_id = None
             if cid in session_map:
                 creator_id = str(session_map[cid].get("created_by") or "")
-            elif req_id in session_map and req_id:
+            elif req_id and req_id in session_map:
                 creator_id = str(session_map[req_id].get("created_by") or "")
             elif cid in manual_map:
                 creator_id = str(manual_map[cid].get("admin_id") or "")
-            elif req_id in manual_map and req_id:
+            elif req_id and req_id in manual_map:
                 creator_id = str(manual_map[req_id].get("admin_id") or "")
             
-            if creator_id:
-                allowed_ids = _get_authorized_creator_ids(current_admin)
-                if creator_id in allowed_ids:
-                    filtered_calls.append(call)
-            else:
+            if creator_id and creator_id in allowed_ids:
                 filtered_calls.append(call)
                     
-        # If filtering produced no results, fall back to all retrieved calls for account
-        if filtered_calls:
-            all_calls = filtered_calls
-        print(f"[recent-calls] Total calls returned for {current_admin.get('admin_id')}: {len(all_calls)}")
+        all_calls = filtered_calls
 
         # Normalise each call record to extract evaluation / score fields
         normalised = []
@@ -1172,9 +1233,6 @@ def get_omni_recent_calls(
 
             if not c_name or c_name in ("Unknown", "Not provided"):
                 c_name = rec.get("to_number") or rec.get("from_number") or "Candidate"
-
-            if c_name and "abba" in str(c_name).lower():
-                c_name = "Abhay Gupta"
 
             rec["candidate_name"] = c_name
             rec["user_name"] = c_name
@@ -1291,13 +1349,52 @@ def get_omni_call_log_details(call_id: str, current_admin: dict = Depends(get_cu
     if not log_data:
         raise HTTPException(status_code=404, detail="Call log details not found in Omni Dimension or Database.")
 
-    # Cross-tenant check: if log belongs to a session, verify access
-    # We first try to find a session linked to this call
-    linked_session = interview_sessions_collection.find_one({"omni_call_id": str(call_id)})
-    if linked_session:
-        _require_admin_session_access(linked_session, current_admin)
-    elif log_data.get("company_id") and current_admin.get("role") != "master":
-        if log_data["company_id"] != current_admin["company_id"]:
+    # Tenancy check: Ensure the call belongs to current_admin's company/account
+    role = current_admin.get("role")
+    company_id = current_admin.get("company_id")
+    allowed_ids = _get_authorized_creator_ids(current_admin)
+
+    if role != "master":
+        call_ids = [str(call_id)]
+        if str(call_id).isdigit():
+            call_ids.append(int(call_id))
+
+        linked_session = interview_sessions_collection.find_one({
+            "$or": [
+                {"omni_call_id": {"$in": call_ids}},
+                {"ai_call_id": {"$in": call_ids}},
+                {"id": str(call_id)},
+                {"link_id": str(call_id)}
+            ]
+        })
+
+        linked_manual = omni_call_logs_collection.find_one({
+            "$or": [
+                {"call_id": {"$in": call_ids}},
+                {"id": {"$in": call_ids}}
+            ]
+        })
+
+        linked_app = job_applications_collection.find_one({"omni_call_id": {"$in": call_ids}})
+
+        authorized = False
+        if linked_session:
+            _require_admin_session_access(linked_session, current_admin)
+            authorized = True
+        elif linked_manual:
+            m_comp = linked_manual.get("company_id")
+            m_adm = str(linked_manual.get("admin_id") or "")
+            if (company_id and m_comp == company_id) or (m_adm and m_adm in allowed_ids):
+                authorized = True
+        elif linked_app:
+            a_comp = linked_app.get("company_id")
+            if not a_comp or (company_id and a_comp == company_id):
+                authorized = True
+        elif log_data.get("company_id"):
+            if log_data["company_id"] == company_id:
+                authorized = True
+
+        if not authorized:
             raise HTTPException(status_code=403, detail="Not authorized to access this call log.")
 
     # Flatten top-level evaluation fields
@@ -1469,7 +1566,15 @@ def get_omni_call_logs(current_admin: dict = Depends(get_current_admin_details))
     try:
         query = {}
         if current_admin.get("role") != "master":
-            query["company_id"] = current_admin.get("company_id")
+            company_id = current_admin.get("company_id")
+            allowed_ids = _get_authorized_creator_ids(current_admin)
+            if company_id:
+                query["$or"] = [
+                    {"company_id": company_id},
+                    {"admin_id": {"$in": allowed_ids}}
+                ]
+            else:
+                query["admin_id"] = {"$in": allowed_ids}
             
         logs = list(omni_call_logs_collection.find(query).sort("created_at", -1))
         for log in logs:
@@ -1533,19 +1638,53 @@ def get_interested_candidates(
     api_key = (api_key_str or (current_admin.get("omni_api_key") if isinstance(current_admin, dict) else None) or get_omni_dimension_api_key() or "").strip()
 
     try:
-        # Pre-fetch decision map from MongoDB omni_call_logs and interview_sessions
-        mongo_logs = list(db.omni_call_logs.find({}))
-        session_logs = list(db.interview_sessions.find({"omni_call_id": {"$exists": True}}))
+        role = current_admin.get("role")
+        company_id = current_admin.get("company_id")
+        allowed_ids = _get_authorized_creator_ids(current_admin)
 
+        if role == "master":
+            mongo_query = {}
+            session_query = {"omni_call_id": {"$exists": True, "$ne": None}}
+        else:
+            if company_id:
+                mongo_query = {
+                    "$or": [
+                        {"company_id": company_id},
+                        {"admin_id": {"$in": allowed_ids}}
+                    ]
+                }
+                session_query = {
+                    "omni_call_id": {"$exists": True, "$ne": None},
+                    "$or": [
+                        {"company_id": company_id},
+                        {"created_by": {"$in": allowed_ids}}
+                    ]
+                }
+            else:
+                mongo_query = {"admin_id": {"$in": allowed_ids}}
+                session_query = {
+                    "omni_call_id": {"$exists": True, "$ne": None},
+                    "created_by": {"$in": allowed_ids}
+                }
+
+        # Pre-fetch decision map from MongoDB omni_call_logs and interview_sessions
+        mongo_logs = list(db.omni_call_logs.find(mongo_query))
+        session_logs = list(db.interview_sessions.find(session_query))
+
+        allowed_call_ids = set()
         decision_map = {}
         for m in mongo_logs:
             cid = str(m.get("call_id") or m.get("id") or "")
+            if cid:
+                allowed_call_ids.add(cid)
             dec = str(m.get("decision") or m.get("last_action_status") or "").lower().strip()
             if cid and dec:
                 decision_map[cid] = dec
 
         for s in session_logs:
-            cid = str(s.get("omni_call_id") or s.get("call_id") or "")
+            cid = str(s.get("omni_call_id") or s.get("ai_call_id") or s.get("call_id") or "")
+            if cid:
+                allowed_call_ids.add(cid)
             dec = str(s.get("decision") or "").lower().strip()
             if cid and dec:
                 decision_map[cid] = dec
@@ -1565,7 +1704,10 @@ def get_interested_candidates(
                 or []
             )
             if isinstance(live_calls, list):
-                raw_logs.extend(live_calls)
+                if role == "master":
+                    raw_logs.extend(live_calls)
+                else:
+                    raw_logs.extend([c for c in live_calls if str(c.get("id") or c.get("call_id") or "") in allowed_call_ids])
         except Exception as sdk_e:
             logger.warning(f"[interested-candidates] SDK fetch note: {sdk_e}")
 
@@ -1584,6 +1726,9 @@ def get_interested_candidates(
 
             call_id = str(item.get("id") or item.get("call_id") or "")
             if not call_id or call_id in seen_call_ids:
+                continue
+
+            if role != "master" and call_id not in allowed_call_ids:
                 continue
 
             # Determine decision for this call
@@ -1610,11 +1755,9 @@ def get_interested_candidates(
             )
 
             if not raw_name or str(raw_name).strip() in ("Not provided", "Unknown", "Approved Candidate", "Candidate", "None", ""):
-                raw_name = "Abhay Gupta" if ("abba" in str(item.get("user_name")).lower() or "abba" in str(item.get("candidate_name")).lower()) else "AI Call Candidate"
+                raw_name = item.get("to_number") or item.get("phone") or "Candidate"
 
             raw_name = str(raw_name).strip()
-            if "abba" in raw_name.lower():
-                raw_name = "Abhay Gupta"
 
             phone = str(item.get("to_number") or item.get("phone") or item.get("from_number") or "").strip()
             # Look for email in explicit fields and extracted_variables
@@ -1655,16 +1798,21 @@ def get_interested_candidates(
             # --- CROSS REFERENCE WITH JOB APPLICATIONS ---
             if phone:
                 from app.db.mongo_db import db
-                # Look up the candidate in job_applications by phone
-                # Sometimes phone has '+' sometimes it doesn't
+                # Look up the candidate in job_applications by phone scoped to company
                 clean_phone = phone.replace("+", "").strip()
-                job_app = db.job_applications.find_one({
+                job_app_query = {
                     "$or": [
                         {"phone": phone},
                         {"phone": clean_phone},
                         {"phone": f"+{clean_phone}"}
                     ]
-                })
+                }
+                if role != "master":
+                    if company_id:
+                        job_app_query["company_id"] = company_id
+                    elif allowed_ids:
+                        job_app_query["created_by"] = {"$in": allowed_ids}
+                job_app = db.job_applications.find_one(job_app_query)
                 if job_app:
                     if not email:
                         email = str(job_app.get("email") or "").strip()

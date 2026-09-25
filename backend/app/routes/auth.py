@@ -186,6 +186,7 @@ def firebase_auth(data: FirebaseAuthRequest):
         "layout_config": plan_context.get("layout_config"),
     }
 
+@router.post("/api/admin/login")
 @router.post("/admin/login")
 def admin_login(data: AdminLogin, request: Request):
     x_forwarded_for = request.headers.get("x-forwarded-for")

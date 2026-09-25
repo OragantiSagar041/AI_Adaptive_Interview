@@ -92,6 +92,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+@router.post("/api/master/login")
 @router.post("/master/login")
 def master_login(data: AdminLogin, request: Request):
     x_forwarded_for = request.headers.get("x-forwarded-for")

@@ -936,21 +936,25 @@ html.admin-layout[data-theme="dark"] .superadmin-jobs-page h1 {
 
 /* scrollbar */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px
+  width: 12px;
+  height: 12px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--background)
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(56, 130, 255, 0.22);
-  border-radius: 8px
+  background: rgba(99, 102, 241, 0.4);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(56, 130, 255, 0.4)
+  background: rgba(99, 102, 241, 0.7);
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 /* Hide scrollbar for Chrome, Safari and Opera */
@@ -1121,11 +1125,18 @@ body,
 }
 
 /* Remove the light noise/grid overlay in dark mode to avoid washed-out look */
-[data-theme="dark"] section#top [aria-hidden="true"] {
+[data-theme="dark"] section#top > div[aria-hidden="true"],
+[data-theme="dark"] section#top > div.pointer-events-none {
   background-image: none !important;
   opacity: 0.03 !important;
   mask-image: none !important;
   -webkit-mask-image: none !important;
+}
+
+/* Ensure all SVG / Lucide icons in hero retain full opacity in dark mode */
+[data-theme="dark"] section#top svg,
+[data-theme="dark"] section#top .lucide {
+  opacity: 1 !important;
 }
 
 /* Soften glass surfaces for dark theme to prevent overly bright panels */

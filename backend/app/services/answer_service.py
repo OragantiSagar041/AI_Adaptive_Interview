@@ -184,27 +184,49 @@ def persist_answer_and_enqueue_scoring(
             language=language,
             answer_version=answer_version,
         )
-    except Exception:
-        scoring_status = "queue_failed"
-        logger.exception(
-            "Answer was saved but could not be queued for scoring: interview=%s question=%s",
-            normalized_interview_id,
-            normalized_question_id,
+    except Exception as queue_err:
+        logger.warning(
+            "Celery queueing failed (Redis unavailable?), falling back to background thread scoring: %s",
+            queue_err,
         )
-        answers_collection.update_one(
-            {
-                "interview_id": normalized_interview_id,
-                "question_id": normalized_question_id,
-                "answer_version": answer_version,
-            },
-            {
-                "$set": {
-                    "scoring_status": scoring_status,
-                    "ai_feedback": "Scoring is delayed and will retry automatically.",
-                    "queue_failed_at": datetime.now(timezone.utc).isoformat(),
-                }
-            },
-        )
+        import threading
+        def _run_scoring_fallback():
+            try:
+                tasks.score_answer_task(
+                    None,
+                    interview_id=normalized_interview_id,
+                    question_id=normalized_question_id,
+                    question_text=normalized_question_text,
+                    answer_text=normalized_answer_text,
+                    context=context,
+                    time_spent_seconds=spent,
+                    time_limit_seconds=limit,
+                    language=language,
+                    answer_version=answer_version,
+                )
+            except Exception as score_err:
+                logger.exception(
+                    "Background thread scoring failed for interview=%s question=%s: %s",
+                    normalized_interview_id,
+                    normalized_question_id,
+                    score_err,
+                )
+                answers_collection.update_one(
+                    {
+                        "interview_id": normalized_interview_id,
+                        "question_id": normalized_question_id,
+                        "answer_version": answer_version,
+                    },
+                    {
+                        "$set": {
+                            "scoring_status": "queue_failed",
+                            "ai_feedback": "Scoring is delayed and will retry automatically.",
+                            "queue_failed_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                    },
+                )
+
+        threading.Thread(target=_run_scoring_fallback, daemon=True).start()
 
     return {
         "status": "saved",

@@ -272,12 +272,6 @@ def sync_all_omni_data(api_key: str = None, voice_id: str = None, agent_id: str 
             call["omni_api_key_hash"] = hashlib.sha256(effective_api_key.encode()).hexdigest()[:16]
             call["_updated_by_sync"] = True
 
-            raw_u = str(call.get("user_name") or "")
-            raw_c = str(call.get("candidate_name") or "")
-            if "abba" in raw_u.lower() or "abba" in raw_c.lower():
-                call["user_name"] = "Abhay Gupta"
-                call["candidate_name"] = "Abhay Gupta"
-                call["name"] = "Abhay Gupta"
 
             # Upsert into omni_call_logs
             db.omni_call_logs.update_one(
