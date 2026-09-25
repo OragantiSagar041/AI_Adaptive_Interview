@@ -57,7 +57,9 @@ RECORDING_RETENTION_DAYS = max(3, int(os.getenv("RECORDING_RETENTION_DAYS", "3")
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-FRONTEND_URL = os.getenv("FRONTEND_URL", "https://www.hireiq.co.in").rstrip("/")
+_ENV = os.getenv("ENV", "local").lower()
+_DEFAULT_FRONTEND = "https://hireiq.co.in" if _ENV == "production" else "http://localhost:5173"
+FRONTEND_URL = os.getenv("FRONTEND_URL", _DEFAULT_FRONTEND).rstrip("/")
 
 # ---------------------------------------------------------------------------
 # Plan definitions

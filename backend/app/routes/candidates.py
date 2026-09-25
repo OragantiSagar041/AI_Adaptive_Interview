@@ -1566,10 +1566,12 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
                 omni_update["candidate_name"] = log.get("candidate_name")
             if log and log.get("user_name"):
                 omni_update["user_name"] = log.get("user_name")
-            if company_id:
+            if company_id and not (log and log.get("company_id")):
                 omni_update["company_id"] = company_id
-            if admin_id:
+            if admin_id and not (log and log.get("admin_id")):
                 omni_update["admin_id"] = admin_id
+            omni_update["decision_by_admin_id"] = admin_id
+            omni_update["decision_by_company_id"] = company_id
 
             omni_call_logs_collection.update_one(
                 {"$or": [{"call_id": {"$in": call_ids_to_try}}, {"id": {"$in": call_ids_to_try}}]},

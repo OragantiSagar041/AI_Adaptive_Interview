@@ -6,7 +6,9 @@ const isLocalHostname = (hostname) => {
 };
 
 const isLocal = typeof window !== "undefined" && isLocalHostname(window.location.hostname);
-const configuredBaseUrl = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) ? import.meta.env.VITE_API_URL.trim().replace(/\/+$/, '') : '';
+const configuredBaseUrl = (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL)) 
+  ? (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL).trim().replace(/\/api\/?$/, '').replace(/\/+$/, '') 
+  : '';
 
 const LOCAL_URL = 'http://127.0.0.1:8000'
 const PROD_URL = 'http://sb-lb-1304167006.us-east-1.elb.amazonaws.com'

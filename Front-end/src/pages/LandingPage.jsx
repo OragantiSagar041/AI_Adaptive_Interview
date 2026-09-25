@@ -302,7 +302,7 @@ function HeroDashboard() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary to-purple-500 grid place-items-center shadow-[0_0_15px_rgba(124,58,237,0.5)]">
-              <Mic className="h-4 w-4 text-primary-foreground" />
+              <Mic className="h-4 w-4 text-white" aria-hidden="false" style={{ color: '#ffffff', stroke: '#ffffff', opacity: 1 }} />
             </div>
             <div>
               <div className="text-sm font-semibold">AI Voice Interview</div>
@@ -496,7 +496,7 @@ function Platform() {
               className="group relative glass rounded-2xl p-6 hover:bg-white/[0.08] transition"
             >
               <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-primary to-purple-500 grid place-items-center shadow-[0_0_15px_rgba(124,58,237,0.5)]">
-                <it.icon className="h-5 w-5 text-primary-foreground" />
+                <it.icon className="h-5 w-5 text-white" style={{ color: '#ffffff', stroke: '#ffffff' }} />
               </div>
               <h3 className="mt-5 text-lg font-bold">{it.title}</h3>
               <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{it.body}</p>
@@ -784,7 +784,7 @@ function Reports() {
           {rows.map((r) => (
             <div key={r} className="glass rounded-xl px-4 py-3 flex items-center gap-3">
               <div className="h-6 w-6 rounded-md bg-gradient-to-br from-primary to-purple-500 grid place-items-center">
-                <Check className="h-3.5 w-3.5 text-primary-foreground" />
+                <Check className="h-3.5 w-3.5 text-white" style={{ color: '#ffffff', stroke: '#ffffff' }} />
               </div>
               <span className="text-sm">{r}</span>
             </div>

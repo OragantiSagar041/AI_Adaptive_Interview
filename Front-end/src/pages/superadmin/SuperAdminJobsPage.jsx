@@ -466,26 +466,28 @@ export default function SuperAdminJobsPage() {
 
           <div className="flex flex-wrap items-center gap-3">
             {/* View Toggle */}
-            <div className="flex items-center bg-secondary rounded-xl p-1 gap-1 border border-border dark:border-slate-700/80">
+            <div className="flex items-center bg-slate-100 dark:bg-slate-900/80 rounded-xl p-1 gap-1.5 border border-slate-300 dark:border-slate-600 shadow-xs">
               <button
+                type="button"
                 onClick={() => setViewMode('grid')}
                 title="Grid View"
-                className={`p-2.5 rounded-lg transition-all border-none cursor-pointer ${viewMode === 'grid'
-                  ? 'bg-card text-indigo-600 dark:text-indigo-400 shadow-sm'
-                  : 'bg-transparent text-muted-foreground hover:text-foreground'
+                className={`p-2 rounded-lg transition-all cursor-pointer border ${viewMode === 'grid'
+                  ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 border-indigo-500/50 dark:border-indigo-400 shadow-xs'
+                  : 'bg-transparent text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700/80 hover:text-slate-900 dark:hover:text-slate-100 hover:border-slate-400 dark:hover:border-slate-500 hover:bg-slate-200/50 dark:hover:bg-slate-800/60'
                   }`}
               >
-                <LayoutGrid size={18} />
+                <LayoutGrid size={18} strokeWidth={2.2} />
               </button>
               <button
+                type="button"
                 onClick={() => setViewMode('list')}
                 title="List View"
-                className={`p-2.5 rounded-lg transition-all border-none cursor-pointer ${viewMode === 'list'
-                  ? 'bg-card text-indigo-600 dark:text-indigo-400 shadow-sm'
-                  : 'bg-transparent text-muted-foreground hover:text-foreground'
+                className={`p-2 rounded-lg transition-all cursor-pointer border ${viewMode === 'list'
+                  ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 border-indigo-500/50 dark:border-indigo-400 shadow-xs'
+                  : 'bg-transparent text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700/80 hover:text-slate-900 dark:hover:text-slate-100 hover:border-slate-400 dark:hover:border-slate-500 hover:bg-slate-200/50 dark:hover:bg-slate-800/60'
                   }`}
               >
-                <LayoutList size={18} />
+                <LayoutList size={18} strokeWidth={2.2} />
               </button>
             </div>
 
@@ -585,14 +587,14 @@ export default function SuperAdminJobsPage() {
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); handleEditJob(job); }}
-                      className="p-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white rounded-xl border border-indigo-100 cursor-pointer transition-all shadow-xs"
+                      className="p-2 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-600 dark:hover:text-white rounded-xl border border-indigo-200 dark:border-indigo-500/40 cursor-pointer transition-all shadow-xs"
                       title="Edit Job Details"
                     >
                       <Pencil size={14} />
                     </button>
                     <button
                       onClick={(e) => confirmDeleteJob(job, e)}
-                      className="p-2 bg-rose-50 text-rose-500 hover:bg-rose-600 hover:text-white rounded-xl border border-rose-100 cursor-pointer transition-all shadow-xs"
+                      className="p-2 bg-rose-50 dark:bg-rose-950/40 text-rose-500 dark:text-rose-400 hover:bg-rose-600 hover:text-white dark:hover:bg-rose-600 dark:hover:text-white rounded-xl border border-rose-200 dark:border-rose-500/40 cursor-pointer transition-all shadow-xs"
                       title="Delete Job Opening"
                     >
                       <Trash2 size={14} />

@@ -247,7 +247,7 @@ export default function AdminLayout({
 
   return (
     <SidebarProvider>
-    <div className="h-screen text-slate-900 dark:text-slate-100 flex font-sans overflow-hidden relative bg-slate-50 dark:bg-slate-950">
+    <div className="h-screen text-slate-900 dark:text-slate-100 flex font-sans w-full overflow-hidden relative bg-slate-50 dark:bg-slate-950">
       {/* Sidebar (Vertical Layout) */}
       {layoutConfig?.layout_type !== "navbar" && (
         <Sidebar
@@ -287,31 +287,26 @@ export default function AdminLayout({
                     return (
                       <SidebarMenuItem key={item.id}>
                         {isLocked ? (
-                          <SidebarMenuButton
+                          <div
                             className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium opacity-50 cursor-not-allowed text-slate-500 dark:text-slate-500 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
-                            tooltip={item.label + ' (Locked)'}
                             onClick={() => Swal.fire({ title: 'Feature Locked', text: `Please contact your administrator to upgrade your plan to access ${item.label}.`, icon: 'info', confirmButtonColor: '#6366f1', confirmButtonText: 'Okay' })}
                           >
                             {item.icon ? <item.icon size={18} className="shrink-0" /> : <span className="h-1.5 w-1.5 rounded-full bg-current opacity-60 shrink-0" />}
                             <span className="truncate group-data-[collapsible=icon]:hidden flex items-center justify-between w-full">
                               {item.label} <i className="fas fa-lock text-[10px] ml-2 opacity-60"></i>
                             </span>
-                          </SidebarMenuButton>
+                          </div>
                         ) : (
-                          <SidebarMenuButton
-                            asChild
-                            isActive={isActive}
+                          <NavLink
+                            to={item.path}
                             className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 ${isActive
                               ? '!bg-indigo-600 !text-white font-semibold shadow-md shadow-indigo-500/20'
                               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white'
                             }`}
-                            tooltip={item.label}
                           >
-                            <NavLink to={item.path}>
-                              {item.icon ? <item.icon size={18} className={`shrink-0 ${isActive ? '!text-white' : ''}`} /> : <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-white' : 'bg-current opacity-60'} shrink-0`} />}
-                              <span className={`truncate group-data-[collapsible=icon]:hidden ${isActive ? '!text-white font-semibold' : ''}`}>{item.label}</span>
-                            </NavLink>
-                          </SidebarMenuButton>
+                            {item.icon ? <item.icon size={18} className={`shrink-0 ${isActive ? '!text-white' : ''}`} /> : <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-white' : 'bg-current opacity-60'} shrink-0`} />}
+                            <span className={`truncate group-data-[collapsible=icon]:hidden ${isActive ? '!text-white font-semibold' : ''}`}>{item.label}</span>
+                          </NavLink>
                         )}
                       </SidebarMenuItem>
                     )
@@ -341,7 +336,7 @@ export default function AdminLayout({
       )}
 
       {/* Main Content Wrapper */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen relative z-10">
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative z-10">
         {/* Top Header Section */}
         <div className="sticky top-0 z-30 flex flex-col bg-white/70 dark:bg-slate-900/80 backdrop-blur-xl shadow-sm shrink-0 border-b border-slate-200/60 dark:border-slate-800">
 

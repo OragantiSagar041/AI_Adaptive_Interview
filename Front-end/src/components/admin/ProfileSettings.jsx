@@ -197,7 +197,7 @@ export default function ProfileSettings() {
       <div className="bg-card rounded-[20px] p-6 shadow-sm border border-border dark:border-slate-700/90 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-foreground">My Profile</h2>
-          <p className="text-sm text-muted-foreground mt-1">View and update your Administrator credentials and security preferences.</p>
+          <p className="text-sm text-muted-foreground mt-1">View and update your credentials and security preferences.</p>
         </div>
         <button
           onClick={handleRefresh}
@@ -219,7 +219,7 @@ export default function ProfileSettings() {
                   <RefreshCw className="animate-spin text-muted-foreground w-8 h-8" />
                 ) : (
                   <img
-                    src={adminUser?.profile_image || adminUser?.avatar || "https://ui-avatars.com/api/?name=Admin&background=random"}
+                    src={adminUser?.profile_image || adminUser?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(adminUser?.name || adminUser?.username || 'Recruiter')}&background=random`}
                     alt="Avatar"
                     className="w-full h-full rounded-full object-cover"
                   />
@@ -244,9 +244,9 @@ export default function ProfileSettings() {
               className="hidden" 
             />
             
-            <h3 className="mt-4 text-xl font-bold text-foreground">{adminUser?.name || adminUser?.username || 'admin'}</h3>
+            <h3 className="mt-4 text-xl font-bold text-foreground">{adminUser?.name || adminUser?.username || 'Recruiter'}</h3>
             <div className="mt-2 px-4 py-1 bg-indigo-100 dark:bg-indigo-950/80 text-indigo-800 dark:text-indigo-200 text-xs font-black rounded-full uppercase tracking-widest border border-indigo-300 dark:border-indigo-500/60">
-              {(role === 'super_admin' || role === 'superadmin') ? 'SUPER ADMIN' : role || 'ADMIN'}
+              {(role === 'super_admin' || role === 'superadmin') ? 'SUPER ADMIN' : (role === 'recruiter' || role === 'admin') ? 'RECRUITER' : role?.toUpperCase() || 'RECRUITER'}
             </div>
 
             <div className="w-full border-t border-border dark:border-slate-700 border-dashed my-6"></div>
@@ -259,7 +259,7 @@ export default function ProfileSettings() {
               <div className="flex items-center gap-3 text-sm text-muted-foreground">
                 <Shield size={16} className="text-muted-foreground shrink-0" />
                 <span>Access: <strong className="text-foreground font-semibold">
-                  {role === 'master' ? 'Master Level' : (role === 'super_admin' || role === 'superadmin') ? 'Super Admin Level' : 'Admin Level'}
+                  {role === 'master' ? 'Master Level' : (role === 'super_admin' || role === 'superadmin') ? 'Super Admin Level' : (role === 'recruiter' || role === 'admin') ? 'Recruiter Level' : `${role} Level`}
                 </strong></span>
               </div>
               <div className="flex items-center gap-3 text-sm text-muted-foreground">
@@ -274,7 +274,7 @@ export default function ProfileSettings() {
             <h4 className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-4">Account Details</h4>
             <div className="bg-secondary/70 rounded-2xl p-4 text-center border border-border dark:border-slate-700">
               <div className="text-[11px] text-muted-foreground font-bold uppercase tracking-wider mb-1">Role / Access Level</div>
-              <div className="text-sm font-bold text-foreground capitalize">{role || 'Admin'}</div>
+              <div className="text-sm font-bold text-foreground capitalize">{(role === 'admin' || role === 'recruiter') ? 'Recruiter' : role || 'Recruiter'}</div>
             </div>
           </div >
         </div >
@@ -365,7 +365,7 @@ export default function ProfileSettings() {
                     name="old_password"
                     value={pwdData.old_password}
                     onChange={handlePwdChange}
-                    placeholder="Enter current administrator password"
+                    placeholder="Enter current password"
                     className="w-full pl-10 pr-4 py-2.5 bg-background border border-border dark:border-slate-700 rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                   />
                 </div>

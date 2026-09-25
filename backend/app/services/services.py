@@ -2911,7 +2911,7 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
     from dotenv import load_dotenv
 
     env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
-    load_dotenv(env_path, override=True)
+    load_dotenv(env_path, override=False)
     brevo_api_key = (os.getenv("BREVO_API_KEY") or "").strip()
     sender_name = (os.getenv("BREVO_SENDER_NAME") or "Hire IQ Recruiting").strip()
     sender_email = (os.getenv("BREVO_SENDER_EMAIL") or "no-reply@hireiq.co.in").strip()
@@ -2920,7 +2920,7 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
         print("Warning: BREVO_API_KEY not found in environment")
         return False
 
-    full_link = link_url if link_url.startswith("http") else f"{os.getenv('FRONTEND_URL', 'https://ai-adaptive-interview.vercel.app')}{link_url}"
+    full_link = link_url if link_url.startswith("http") else f"{os.getenv('FRONTEND_URL', 'https://hireiq.co.in')}{link_url}"
 
     html_content = custom_html.strip() if custom_html and custom_html.strip() else build_default_interview_email_html(
         candidate_name=candidate_name,

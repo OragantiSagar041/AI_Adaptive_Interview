@@ -122,6 +122,14 @@ async def lifespan(app: FastAPI):
     startup_event_cloudinary()
     await startup_event_db_and_email()
     await voice_routes.start_realtime_services()
+
+    # Automatically recover and score any past delayed answers in the background
+    try:
+        import threading
+        from app.tasks import requeue_delayed_answer_scoring
+        threading.Thread(target=requeue_delayed_answer_scoring, daemon=True).start()
+    except Exception as _e:
+        print(f"Warning: Failed to launch answer scoring recovery thread: {_e}")
     try:
         yield
     finally:
