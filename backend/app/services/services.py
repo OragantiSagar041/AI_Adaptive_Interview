@@ -2911,7 +2911,7 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
     from dotenv import load_dotenv
 
     env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
-    load_dotenv(env_path, override=True)
+    load_dotenv(env_path, override=False)
     brevo_api_key = (os.getenv("BREVO_API_KEY") or "").strip()
     sender_name = (os.getenv("BREVO_SENDER_NAME") or "Hire IQ Recruiting").strip()
     sender_email = (os.getenv("BREVO_SENDER_EMAIL") or "no-reply@hireiq.co.in").strip()
