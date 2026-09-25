@@ -77,20 +77,36 @@ def requeue_delayed_answer_scoring():
                 answer_version=answer_version,
             )
             recovered += 1
-        except Exception:
-            answers_collection.update_one(
-                {
-                    "_id": answer["_id"],
-                    "scoring_status": "pending",
-                    "answer_version": answer_version,
-                },
-                {"$set": {"scoring_status": "queue_failed"}},
-            )
-            logger.exception(
-                "Failed to requeue delayed scoring for interview=%s question=%s",
-                interview_id,
-                question_id,
-            )
+        except Exception as delay_err:
+            try:
+                # Direct synchronous fallback when Celery/Redis is down
+                score_answer_task(
+                    None,
+                    interview_id=interview_id,
+                    question_id=question_id,
+                    question_text=answer.get("question_text", ""),
+                    answer_text=answer.get("answer_text", ""),
+                    context=context,
+                    time_spent_seconds=int(answer.get("time_spent_seconds") or 0),
+                    time_limit_seconds=int(answer.get("time_limit_seconds") or 120),
+                    language=interview.get("language") or "English",
+                    answer_version=answer_version,
+                )
+                recovered += 1
+            except Exception:
+                answers_collection.update_one(
+                    {
+                        "_id": answer["_id"],
+                        "scoring_status": "pending",
+                        "answer_version": answer_version,
+                    },
+                    {"$set": {"scoring_status": "queue_failed"}},
+                )
+                logger.exception(
+                    "Failed to requeue delayed scoring for interview=%s question=%s",
+                    interview_id,
+                    question_id,
+                )
     return {"requeued": recovered}
 
 @celery_app.task(bind=True, name="app.tasks.score_answer_task", max_retries=3)

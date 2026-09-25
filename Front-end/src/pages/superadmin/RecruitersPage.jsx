@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { 
@@ -20,6 +20,21 @@ export default function RecruitersPage() {
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [openDropdownId, setOpenDropdownId] = useState(null);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setOpenDropdownId(null);
+      }
+    }
+    if (openDropdownId) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [openDropdownId]);
   
   // Modals state
   const [editingRecruiter, setEditingRecruiter] = useState(null);
@@ -523,12 +538,10 @@ export default function RecruitersPage() {
                       </div>
                       
                       {openDropdownId === recruiter.id && (
-                        <>
-                          <div 
-                            className="fixed inset-0 z-10" 
-                            onClick={() => setOpenDropdownId(null)}
-                          ></div>
-                          <div className="absolute right-6 top-12 w-48 bg-white dark:bg-slate-800/60 rounded-xl shadow-lg border border-slate-100 dark:border-slate-800 py-1.5 z-20 animate-in fade-in slide-in-from-top-2 duration-150 text-left">
+                        <div 
+                          ref={dropdownRef}
+                          className="absolute right-6 top-12 w-48 bg-white dark:bg-slate-800/60 rounded-xl shadow-lg border border-slate-100 dark:border-slate-800 py-1.5 z-20 animate-in fade-in slide-in-from-top-2 duration-150 text-left"
+                        >
                             <button 
                               onClick={() => { setEditingRecruiter(recruiter); setOpenDropdownId(null); }}
                               className="w-full px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700 hover:text-indigo-600 flex items-center gap-2.5 transition-colors font-medium"
@@ -555,7 +568,6 @@ export default function RecruitersPage() {
                               <Trash2 className="w-4 h-4" /> {recruiter.status === 'Active' ? 'Deactivate Account' : 'Activate Account'}
                             </button>
                           </div>
-                        </>
                       )}
                     </td>
                   </tr>

@@ -262,26 +262,33 @@ async def get_dashboard_aggregated_data(
 
             # 1. Get owned call IDs from local DB
             company_id_str = str(current_admin.get("company_id") or "")
-            db_query = {"company_id": company_id_str}
-            if current_admin.get("role") == "admin":
-                db_query["admin_id"] = str(current_admin.get("admin_id") or "")
+            allowed_ids = _get_authorized_creator_ids(current_admin)
+            
+            db_query = {}
+            sess_query = {"omni_call_id": {"$exists": True, "$ne": None}}
+            if current_admin.get("role") != "master":
+                if company_id_str:
+                    db_query["$or"] = [
+                        {"company_id": company_id_str},
+                        {"admin_id": {"$in": allowed_ids}}
+                    ]
+                    sess_query["$or"] = [
+                        {"company_id": company_id_str},
+                        {"created_by": {"$in": allowed_ids}}
+                    ]
+                else:
+                    db_query["admin_id"] = {"$in": allowed_ids}
+                    sess_query["created_by"] = {"$in": allowed_ids}
 
             company_log_docs = list(omni_call_logs_collection.find(db_query, {"call_id": 1}))
             owned_call_ids = {str(doc["call_id"]) for doc in company_log_docs if doc.get("call_id")}
 
-            session_docs = list(interview_sessions_collection.find(db_query, {"omni_call_id": 1}))
+            session_docs = list(interview_sessions_collection.find(sess_query, {"omni_call_id": 1, "ai_call_id": 1}))
             for doc in session_docs:
                 if doc.get("omni_call_id"):
                     owned_call_ids.add(str(doc["omni_call_id"]))
-
-            # 2. Get all admin names/usernames for this company to match against user_name from the Omni API
-            company_admins = list(admins_collection.find({"company_id": company_id_str}, {"name": 1, "username": 1}))
-            company_admin_identifiers = set()
-            for a in company_admins:
-                if a.get("name"):
-                    company_admin_identifiers.add(a["name"].strip().lower())
-                if a.get("username"):
-                    company_admin_identifiers.add(a["username"].strip().lower())
+                if doc.get("ai_call_id"):
+                    owned_call_ids.add(str(doc["ai_call_id"]))
 
             # Fetch from Omni API
             omni_page = 1
@@ -304,10 +311,9 @@ async def get_dashboard_aggregated_data(
 
                 for call in omni_page_calls:
                     cid = str(call.get("id") or call.get("call_id") or "")
-                    u_name = str(call.get("user_name") or "").strip().lower()
                     
-                    # Match by database record OR by API user_name matching a company admin
-                    if cid in owned_call_ids or u_name in company_admin_identifiers:
+                    # Strictly match by tenant owned call IDs (or allow all if master)
+                    if cid in owned_call_ids or current_admin.get("role") == "master":
                         omni_calls.append(call)
 
                 total_omni = omni_data.get("total_records") or 0
