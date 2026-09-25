@@ -34,6 +34,15 @@ candidates_collection = db["candidates"]
 interviews_collection = db["interviews"]
 answers_collection = db["answers"]
 admins_collection = db["admins"]
+
+# Ensure each Firebase account can be linked to only one admin.
+# sparse=True allows existing admins without firebase_uid.
+admins_collection.create_index(
+    [("firebase_uid", 1)],
+    unique=True,
+    sparse=True,
+)
+
 interview_sessions_collection = db["interview_sessions"]
 plans_collection = db["plans"]
 companies_collection = db["companies"]

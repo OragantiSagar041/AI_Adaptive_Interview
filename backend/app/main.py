@@ -18,6 +18,8 @@ import time
 import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
+import firebase_admin
+from firebase_admin import auth
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
@@ -68,6 +70,9 @@ from app.db.mongo_db import (
     security_policies_collection,
     crash_logs_collection,
 )
+
+if not firebase_admin._apps:
+    firebase_admin.initialize_app()
 
 # ---------------------------------------------------------------------------
 # Redis singleton — created ONCE at module load, reused by every request.

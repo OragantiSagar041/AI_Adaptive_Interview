@@ -11,6 +11,8 @@ import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
 import axios from 'axios'
 import useSEO from '../hooks/useSEO'
+import { auth } from '../firebase'
+import { signInWithEmailAndPassword } from 'firebase/auth'
 
 const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
@@ -392,76 +394,251 @@ export default function LoginPage() {
 
 
 
-  const handleLogin = async (e) => {
-    e.preventDefault()
-    if (!username || !password) { setLoginError('Please enter both username and password.'); return }
-    setLoginLoading(true); setLoginError('')
-    try {
-      let data = null
-      let finalRole = null
+ const handleLogin = async (e) => {
+  e.preventDefault()
 
-      // ── Single Unified Login ────────────────────────────────────
-      const response = await axios.post(API_BASE_URL + '/admin/login', { username, password }, { timeout: 10000 })
-      data = response.data
-      
-      if (data.status === 'expired' || data.status === 'blocked') {
-        setLoginError(data.message || 'Subscription expired.')
-        setLoginLoading(false)
-        return
-      }
-      
-      const role = data.role || 'tenant'
-      if (role === 'super_admin' || role === 'superadmin') finalRole = 'superadmin'
-      else if (role === 'tenant' || role === 'admin') finalRole = 'admin'
-      else finalRole = role
-      
-      // Handle 2FA for both master and admin
-      if (data.status === '2fa_required') {
-        setTempAdminId(data.admin_id || data.master_id)
-        setShow2FA(true)
-        setLoginLoading(false)
-        return
-      }
-
-      // ── Step 3: Persist credentials ───────────────────────────────────────
-      const adminId = data.admin_id || data.master_id
-      const adminEmail = data.email || ''
-      const adminName = data.username || username
-      const plan = data.subscription_plan || 'Free Trial'
-      const planKey = data.subscription_plan_key || 'trial'
-      const planCapabilities = data.plan_capabilities || {}
-
-      if (data.token) {
-        sessionStorage.setItem('adminToken', data.token)
-        sessionStorage.setItem('masterToken', data.token)
-        dispatch(setCredentials({ role: finalRole, token: data.token, adminUser: data }))
-      }
-
-      sessionStorage.setItem('adminId', adminId)
-      sessionStorage.setItem('adminEmail', adminEmail)
-      sessionStorage.setItem('adminName', adminName)
-      sessionStorage.setItem('adminRole', finalRole)
-      sessionStorage.setItem('adminUser', JSON.stringify(data))
-      sessionStorage.setItem('subscriptionPlan', plan)
-      sessionStorage.setItem('subscriptionPlanKey', planKey)
-      sessionStorage.setItem('planCapabilities', JSON.stringify(planCapabilities))
-      sessionStorage.setItem('subscriptionExpiry', data.subscription_expiry || '')
-      sessionStorage.setItem('subscriptionCredits', data.credits ?? '')
-      sessionStorage.setItem('subscriptionWarningMessage', data.subscription_warning_message || '')
-      sessionStorage.setItem('adminCompany', data.company_name || '')
-
-      // ── Step 4: Navigate to the correct dashboard ─────────────────────────
-      if (finalRole === 'superadmin') navigate('/superadmin/new-dashboard')
-      else if (finalRole === 'admin') navigate('/admin/dashboard')
-      else if (finalRole === 'master') navigate('/master/dashboard')
-      else {
-        setLoginError('Unrecognised account role. Please contact support.')
-      }
-    } catch (error) {
-      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) setLoginError('Request timed out.')
-      else setLoginError(error.response?.data?.detail || error.response?.data?.message || 'Cannot connect to server.')
-    } finally { setLoginLoading(false) }
+  if (!username || !password) {
+    setLoginError('Please enter both username and password.')
+    return
   }
+
+  setLoginLoading(true)
+  setLoginError('')
+
+  try {
+    let data = null
+    let finalRole = null
+
+    // ── Firebase Login ─────────────────────────────────────────
+
+    const identifier = username.trim()
+
+    // 1. Resolve normal username/email to internal Firebase login email
+    const identifierResponse = await axios.post(
+      API_BASE_URL + '/admin/firebase-login-identifier',
+      {
+        identifier,
+      },
+      {
+        timeout: 10000,
+      }
+    )
+
+    const firebaseEmail = identifierResponse.data.firebase_email
+
+    if (!firebaseEmail) {
+      throw new Error('Unable to resolve Firebase login account.')
+    }
+
+    // 2. Authenticate with Firebase using the existing password
+    const firebaseCredential = await signInWithEmailAndPassword(
+      auth,
+      firebaseEmail,
+      password
+    )
+
+    // 3. Get Firebase ID token
+    const idToken = await firebaseCredential.user.getIdToken(true)
+
+    // 4. Send verified Firebase identity to backend
+    const response = await axios.post(
+  API_BASE_URL + '/admin/firebase-auth',
+  {},
+  {
+    timeout: 10000,
+    headers: {
+      Authorization: `Bearer ${idToken}`,
+    },
+  }
+)
+
+    data = response.data
+
+    // ── Handle 2FA ─────────────────────────────────────────────
+
+    if (data.status === '2fa_required') {
+      setTempAdminId(data.admin_id || data.master_id)
+      setShow2FA(true)
+      setLoginLoading(false)
+      return
+    }
+
+    // ── Resolve account role ───────────────────────────────────
+
+    const rawRole = String(data.role || 'tenant')
+      .trim()
+      .toLowerCase()
+
+    if (rawRole === 'super_admin' || rawRole === 'superadmin') {
+      finalRole = 'superadmin'
+    } else if (rawRole === 'tenant' || rawRole === 'admin') {
+      finalRole = 'admin'
+    } else if (rawRole === 'master') {
+      finalRole = 'master'
+    } else {
+      console.error(
+        'Unexpected role returned by backend:',
+        data.role
+      )
+
+      setLoginError(
+        `Unrecognised account role: ${data.role || 'missing'}`
+      )
+
+      setLoginLoading(false)
+      return
+    }
+
+    // ── Persist credentials ────────────────────────────────────
+
+    const adminId = data.admin_id || data.master_id
+    const adminEmail = data.email || ''
+    const adminName = data.username || username
+
+    const plan = data.subscription_plan || 'Free Trial'
+    const planKey = data.subscription_plan_key || 'trial'
+    const planCapabilities = data.plan_capabilities || {}
+
+    if (data.token) {
+      sessionStorage.setItem('adminToken', data.token)
+      sessionStorage.setItem('masterToken', data.token)
+
+      dispatch(
+        setCredentials({
+          role: finalRole,
+          token: data.token,
+          adminUser: data,
+        })
+      )
+    }
+
+    sessionStorage.setItem('adminId', adminId)
+    sessionStorage.setItem('adminEmail', adminEmail)
+    sessionStorage.setItem('adminName', adminName)
+    sessionStorage.setItem('adminRole', finalRole)
+    sessionStorage.setItem('adminUser', JSON.stringify(data))
+
+    sessionStorage.setItem('subscriptionPlan', plan)
+    sessionStorage.setItem('subscriptionPlanKey', planKey)
+    sessionStorage.setItem(
+      'planCapabilities',
+      JSON.stringify(planCapabilities)
+    )
+
+    sessionStorage.setItem(
+      'subscriptionExpiry',
+      data.subscription_expiry || ''
+    )
+
+    sessionStorage.setItem(
+      'subscriptionCredits',
+      data.credits ?? ''
+    )
+
+    sessionStorage.setItem(
+      'subscriptionWarningMessage',
+      data.subscription_warning_message || ''
+    )
+
+    sessionStorage.setItem(
+      'adminCompany',
+      data.company_name || ''
+    )
+
+    // ── Navigate to dashboard ──────────────────────────────────
+
+    if (finalRole === 'superadmin') {
+      navigate('/superadmin/new-dashboard')
+    } else if (finalRole === 'admin') {
+      navigate('/admin/dashboard')
+    } else if (finalRole === 'master') {
+      navigate('/master/dashboard')
+    } else {
+      setLoginError(
+        'Unrecognised account role. Please contact support.'
+      )
+    }
+
+  } catch (error) {
+
+    console.error('LOGIN ERROR:', error)
+
+    // ── Firebase errors ────────────────────────────────────────
+
+    const firebaseErrorCode = error?.code || ''
+
+    if (
+      firebaseErrorCode === 'auth/invalid-credential' ||
+      firebaseErrorCode === 'auth/wrong-password'
+    ) {
+      setLoginError('Incorrect password. Please try again.')
+
+    } else if (
+      firebaseErrorCode === 'auth/user-not-found'
+    ) {
+      setLoginError('Invalid username or email.')
+
+    } else if (
+      firebaseErrorCode === 'auth/too-many-requests'
+    ) {
+      setLoginError(
+        'Too many login attempts. Please try again later.'
+      )
+
+    } else if (
+      firebaseErrorCode === 'auth/user-disabled'
+    ) {
+      setLoginError(
+        'Your account has been disabled. Please contact support.'
+      )
+
+    // ── Request timeout ────────────────────────────────────────
+
+    } else if (
+      error?.code === 'ECONNABORTED' ||
+      error?.message?.includes('timeout')
+    ) {
+      setLoginError('Request timed out.')
+
+    // ── FastAPI validation errors ──────────────────────────────
+
+    } else if (
+      Array.isArray(error?.response?.data?.detail)
+    ) {
+      const details = error.response.data.detail
+
+      setLoginError(
+        details
+          .map(item => item?.msg || 'Invalid request')
+          .join(', ')
+      )
+
+    // ── FastAPI string error ───────────────────────────────────
+
+    } else if (
+      typeof error?.response?.data?.detail === 'string'
+    ) {
+      setLoginError(error.response.data.detail)
+
+    // ── Generic backend message ────────────────────────────────
+
+    } else if (
+      typeof error?.response?.data?.message === 'string'
+    ) {
+      setLoginError(error.response.data.message)
+
+    // ── Generic Firebase / JavaScript error ────────────────────
+
+    } else {
+      setLoginError(
+        error?.message?.replace(/^Firebase:\s*/i, '') ||
+        'Login failed. Please try again.'
+      )
+    }
+
+    setLoginLoading(false)
+  }
+}
 
   const handleVerify2FA = async (e) => {
     e.preventDefault()
@@ -469,12 +646,41 @@ export default function LoginPage() {
     setLoading2FA(true); setError2FA('')
     
     try {
-      const response = await axios.post(API_BASE_URL + '/admin/verify-2fa', { admin_id: tempAdminId, otp: otp2FA }, { timeout: 10000 })
+      const user = auth.currentUser
+
+if (!user) {
+  throw new Error('Firebase session expired. Please log in again.')
+}
+
+const idToken = await user.getIdToken(true)
+
+const response = await axios.post(
+  API_BASE_URL + '/admin/verify-2fa',
+  { admin_id: tempAdminId, otp: otp2FA },
+  {
+    timeout: 10000,
+    headers: {
+      Authorization: `Bearer ${idToken}`,
+    },
+  }
+)
       const data = response.data
       
-      let finalRole = data.role || 'tenant'
-      if (finalRole === 'super_admin' || finalRole === 'superadmin') finalRole = 'superadmin'
-      else if (finalRole === 'tenant' || finalRole === 'admin') finalRole = 'admin'
+     const rawRole = String(data.role || 'tenant').trim().toLowerCase()
+     
+     let finalRole
+     if (rawRole === 'super_admin' || rawRole === 'superadmin') {
+      finalRole = 'superadmin'
+      } else if (rawRole === 'tenant' || rawRole === 'admin') {
+        finalRole = 'admin'
+      } else if (rawRole === 'master') {
+        finalRole = 'master'
+      } else {
+      console.error('Unexpected role returned by backend:', data.role)
+      setError2FA(`Unrecognised account role: ${data.role || 'missing'}`)
+      setLoading2FA(false)
+      return
+    }
       
       // Persist credentials
       const adminId = data.admin_id || data.master_id || data._id
