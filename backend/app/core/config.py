@@ -16,7 +16,7 @@ from fastapi.security import HTTPBearer
 sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
 
-load_dotenv(override=True)
+load_dotenv(override=False)
 
 # ---------------------------------------------------------------------------
 # Third-party client setup
