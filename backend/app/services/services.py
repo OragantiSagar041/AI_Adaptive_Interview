@@ -2387,10 +2387,12 @@ def get_current_admin_details(credentials: HTTPAuthorizationCredentials = Depend
     try:
         payload = jwt.decode(credentials.credentials, JWT_SECRET_KEY, algorithms=[ALGORITHM])
         admin_id: str = payload.get("sub")
-        company_id: str = payload.get("company_id")
-        role: str = payload.get("role", "tenant")
-        if admin_id is None:
-            raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+        
+        if not admin_id:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid authentication credentials"
+            )
             
         from bson.errors import InvalidId
         try:
@@ -2416,11 +2418,11 @@ def get_current_admin_details(credentials: HTTPAuthorizationCredentials = Depend
         if admin_doc.get("login_enabled") == False:
             raise HTTPException(status_code=403, detail="Account is deactivated")
             
-        if not company_id:
-            company_id = str(admin_doc.get("company_id") or "")
-            
-        actual_role = admin_doc.get("role") or role
-        is_master = bool(admin_doc.get("is_master") or actual_role == "master" or role == "master")
+       # MongoDB is authoritative for tenant/company and role.
+        company_id = str(admin_doc.get("company_id") or "")
+        actual_role = admin_doc.get("role") or "tenant"
+
+        is_master = bool(admin_doc.get("is_master") or actual_role == "master")
         admin_name = admin_doc.get("name") or admin_doc.get("username") or ("master" if is_master else "Admin")
 
         return {

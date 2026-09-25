@@ -782,7 +782,7 @@ def get_superadmin_rejected(adminId: Optional[str] = None, pipeline: Optional[st
 
 @router.post("/api/superadmin/interview/create")
 @router.post("/superadmin/interview/create")
-def superadmin_interview_create(data: dict, background_tasks: BackgroundTasks, current_admin: dict = Depends(get_current_admin_details)):
+def superadmin_interview_create(data: dict, background_tasks: BackgroundTasks, request: Request, current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["super_admin", "master"]:
         raise HTTPException(status_code=403, detail="Super Admin access required")
     if "candidates" in data:
@@ -790,13 +790,13 @@ def superadmin_interview_create(data: dict, background_tasks: BackgroundTasks, c
             bulk_data = BulkCreateSession(**data)
         except Exception as e:
             raise HTTPException(status_code=422, detail=str(e))
-        return bulk_create_sessions(bulk_data, background_tasks, current_admin)
+        return bulk_create_sessions(bulk_data, background_tasks, request, current_admin)
     else:
         try:
             single_data = CreateSession(**data)
         except Exception as e:
             raise HTTPException(status_code=422, detail=str(e))
-        return create_session(single_data, current_admin)
+        return create_session(single_data, request, current_admin)
 @router.get("/api/superadmin/crash-logs")
 @router.get("/superadmin/crash-logs")
 def get_crash_logs(current_admin: dict = Depends(get_current_admin_details)):

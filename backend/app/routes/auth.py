@@ -41,6 +41,9 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.utils import simpleSplit
 from reportlab.pdfgen import canvas
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+import firebase_admin
+from firebase_admin import auth as firebase_auth_admin,credentials
+
 
 # ---------------------------------------------------------------------------
 # Internal / project
@@ -86,14 +89,21 @@ from app.core.routes_core import (
     RazorpayOrderRequest, MAIN_LOOP,
 )
 
+
 from app.routes.notifications import FirebaseAuthRequest
 
 load_dotenv()
+
+# Initialize Firebase Admin SDK once
+if not firebase_admin._apps:
+    cred = credentials.Certificate(
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
+    )
+    firebase_admin.initialize_app(cred)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
 # ─────────────────────────────────────────────────────────────────────────────
 # TOKEN REFRESH  —  silently extend a valid session without re-entering creds
 # ─────────────────────────────────────────────────────────────────────────────
@@ -119,174 +129,182 @@ def refresh_token(current_admin: dict = Depends(get_current_admin_details)):
     return {"token": new_token}
 
 @router.post("/admin/firebase-auth")
-def firebase_auth(data: FirebaseAuthRequest):
-    normalized_email = data.email.strip().lower()
+def firebase_auth(
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+):
+    # ---------------------------------------------------------
+    # 1. Verify the Firebase ID token
+    # ---------------------------------------------------------
+    try:
+        decoded_token = firebase_auth_admin.verify_id_token(
+            credentials.credentials,
+            check_revoked=True,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Firebase authentication failed: %s - %s",
+            type(exc).__name__,
+            str(exc),
+        )
+        raise HTTPException(
+        status_code=401,
+        detail="Invalid or expired Firebase authentication token",
+        )
+    # ---------------------------------------------------------
+    # 2. Get identity ONLY from the verified Firebase token
+    # ---------------------------------------------------------
+    firebase_uid = decoded_token.get("uid")
+    verified_email = (decoded_token.get("email") or "").strip().lower()
+    email_verified = decoded_token.get("email_verified", False)
     
-    # Try email match first, then username match
-    user = admins_collection.find_one({"email": normalized_email, "role": {"$ne": "master"}})
-    if not user:
-        user = admins_collection.find_one({"username": normalized_email, "role": {"$ne": "master"}})
-    if not user:
-        user = admins_collection.find_one({"email": normalized_email})
-    if not user:
-        user = admins_collection.find_one({"username": normalized_email})
-        
-    if not user:
-        # Register new admin with Free Trial
-        now = datetime.now(timezone.utc)
-        plan_def = get_plan_definition("Free Trial")
-        credits_to_grant = plan_def.get("credits_granted", 10)
-        expiry = now + timedelta(days=3650)
-        
-        new_admin = {
-            "username": normalized_email,
-            "email": normalized_email,
-            "name": data.name or normalized_email.split("@")[0],
-            "password": hash_password(str(uuid.uuid4())), # random password, they use firebase
-            "role": "super_admin",
-            "subscription_plan": "Free Trial",
-            "subscription_expiry": expiry.isoformat(),
-            "credits": credits_to_grant,
-            "created_at": now.isoformat()
-        }
-        new_admin["custom_id"] = get_next_sequence_value("recruiter", "RC")
-        result = admins_collection.insert_one(new_admin)
-        user = admins_collection.find_one({"_id": result.inserted_id})
-        
-    # Check login_enabled
-    if user.get("login_enabled") == False:
-        return {
-            "status": "blocked",
-            "message": "Your account login has been stopped by the administrator. Please contact support.",
-        }
-        
-    plan_context = get_admin_plan_context(user)
-    plan = plan_context["plan_label"]
-    expiry = user.get("subscription_expiry")
-            
-    # Do NOT block login if expired, because they need to be able to access the dashboard to buy more credits!
-    if plan_context["is_expired"]:
-        print(f"User {user['username']} logged in with an expired subscription (Credits: {plan_context.get('credits')})")
-        
-    return {
-        "status": "success",
-        "admin_id": str(user["_id"]),
-        "username": user["username"],
-        "email": user.get("email", ""),
-        "name": user.get("name", user.get("username", "")),
-        "role": user.get("role", "tenant"),
-        "subscription_plan": plan,
-        "subscription_plan_key": plan_context["plan_key"],
-        "subscription_expiry": expiry,
-        "subscription_days_remaining": plan_context["days_remaining"],
-        "subscription_warning": plan_context["warning"],
-        "subscription_warning_message": plan_context["warning_message"],
-        "plan_capabilities": plan_context["capabilities"],
-        "plan_features": plan_context["features"],
-        "layout_config": plan_context.get("layout_config"),
-    }
+    if not firebase_uid:
+        raise HTTPException(
+            status_code=401,
+            detail="Firebase token does not contain a valid user ID",
+        )
+    if not verified_email or email_verified is not True:
+        raise HTTPException(
+            status_code=401,
+            detail="Firebase account does not have a verified email",
+        )
+    # ---------------------------------------------------------
+    # 3. Find the corresponding MongoDB admin account
+    # ---------------------------------------------------------
+    user = admins_collection.find_one({
+        "firebase_uid": firebase_uid
+    })
 
-@router.post("/api/admin/login")
-@router.post("/admin/login")
-def admin_login(data: AdminLogin, request: Request):
-    x_forwarded_for = request.headers.get("x-forwarded-for")
-    client_ip = x_forwarded_for.split(",")[0].strip() if x_forwarded_for else (request.client.host if request.client else "unknown")
-    global_policies = security_policies_collection.find_one({"_id": "global_policies"}) or {}
-    
-    # 1. IP Restriction Check
-    if global_policies.get("restrict_ip"):
-        allowed_ips = global_policies.get("allowed_ips", [])
-        if client_ip not in allowed_ips and client_ip != "unknown":
-            security_logs_collection.insert_one({
-                "event_type": "FAILED_LOGIN",
-                "username": data.username,
-                "ip_address": client_ip,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "reason": "IP Restricted"
-            })
-            raise HTTPException(status_code=403, detail="Login from this IP address is restricted.")
-    # Try username match first, then email match (for self-registered users)
-    user = admins_collection.find_one({"username": data.username, "role": {"$ne": "master"}})
     if not user:
-        user = admins_collection.find_one({"email": data.username, "role": {"$ne": "master"}})
-    if not user:
-        # Fallback: check without role filter
-        user = admins_collection.find_one({"username": data.username})
-        if not user:
-            user = admins_collection.find_one({"email": data.username})
-        if not user:
-            security_logs_collection.insert_one({
-                "event_type": "FAILED_LOGIN",
-                "username": data.username,
-                "ip_address": client_ip,
-                "timestamp": datetime.now(timezone.utc).isoformat()
-            })
-            raise HTTPException(status_code=401, detail="Invalid username or password")
-            
-    if not verify_password(data.password, user["password"]):
-        security_logs_collection.insert_one({
-            "event_type": "FAILED_LOGIN",
-            "username": data.username,
-            "ip_address": client_ip,
-            "timestamp": datetime.now(timezone.utc).isoformat()
+        user = admins_collection.find_one({
+            "email": verified_email
         })
-        raise HTTPException(status_code=401, detail="Invalid username or password")
-    
-    # Check login_enabled
-    if user.get("login_enabled") == False:
+
+    if not user:
+        user = admins_collection.find_one({
+            "username": verified_email
+        })
+
+    # ---------------------------------------------------------
+    # 4. Link Firebase UID to an existing MongoDB account
+    # ---------------------------------------------------------
+    if user:
+        existing_firebase_uid = user.get("firebase_uid")
+
+        if existing_firebase_uid and existing_firebase_uid != firebase_uid:
+            raise HTTPException(
+                status_code=403,
+                detail="Firebase account is not authorized for this admin account",
+            )
+
+        if not existing_firebase_uid:
+            admins_collection.update_one(
+                {"_id": user["_id"]},
+                {
+                    "$set": {
+                        "firebase_uid": firebase_uid,
+                        "firebase_email": verified_email,
+                    }
+                },
+            )
+
+            user = admins_collection.find_one({
+                "_id": user["_id"]
+            })
+
+    # ---------------------------------------------------------
+    # 5. Reject Firebase users with no authorized MongoDB account
+    # ---------------------------------------------------------
+    if not user:
+        raise HTTPException(
+            status_code=403,
+            detail="No authorized admin account is associated with this Firebase account",
+        )
+
+    stored_firebase_uid = user.get("firebase_uid")
+
+    if stored_firebase_uid and stored_firebase_uid != firebase_uid:
+        raise HTTPException(
+            status_code=403,
+            detail="Firebase account does not match this admin account",
+        )
+
+    # ---------------------------------------------------------
+    # 6. Check whether application login is enabled
+    # ---------------------------------------------------------
+    if user.get("login_enabled") is False:
         return {
             "status": "blocked",
             "message": "Your account login has been stopped by the administrator. Please contact support.",
         }
-        
+
+    # ---------------------------------------------------------
+    # 7. Resolve subscription / plan information
+    # ---------------------------------------------------------
     plan_context = get_admin_plan_context(user)
-    plan = plan_context["plan_label"]
-    expiry = user.get("subscription_expiry")
-            
-    # Do NOT block login if expired, because they need to be able to access the dashboard to buy more credits!
-    if plan_context["is_expired"]:
-        print(f"User {user['username']} logged in with an expired subscription (Credits: {plan_context.get('credits')})")
-        
-    admins_collection.update_one({"_id": user["_id"]}, {"$set": {"last_ip": client_ip}})
-    
-    # 2. 2FA Check — Account-specific 2FA preference ONLY
-    user_2fa_enabled = bool(user.get("two_factor_enabled") or user.get("require_2fa") or user.get("is_2fa_enabled") or user.get("totp_enabled"))
+
+    # ---------------------------------------------------------
+    # 8. Handle 2FA if enabled
+    # ---------------------------------------------------------
+    user_2fa_enabled = bool(
+        user.get("two_factor_enabled")
+        or user.get("require_2fa")
+        or user.get("is_2fa_enabled")
+        or user.get("two_factor_auth")
+        or user.get("totp_enabled")
+    )
 
     if user_2fa_enabled:
         otp = str(random.randint(100000, 999999))
         expiry_time = datetime.now(timezone.utc) + timedelta(minutes=10)
-        admins_collection.update_one({"_id": user["_id"]}, {"$set": {"otp": otp, "otp_expiry": expiry_time}})
-        
-        # Send OTP email
-        from app.routes.admin_dashboard import send_otp_email # Re-using existing brevo sender
-        send_otp_email(user.get("email", user["username"]), user.get("name", user["username"]), otp)
-        
+
+        admins_collection.update_one(
+            {"_id": user["_id"]},
+            {
+                "$set": {
+                    "otp": otp,
+                    "otp_expiry": expiry_time,
+                }
+            },
+        )
+
+        from app.routes.admin_dashboard import send_otp_email
+
+        send_otp_email(
+            user.get("email", ""),
+            user.get("name", user.get("username", "")),
+            otp,
+        )
+
         return {
             "status": "2fa_required",
-            "admin_id": str(user["_id"])
+            "admin_id": str(user["_id"]),
         }
-        
-    # 3. Session Timeout
-    # strict_session_timeout defaults to False — only enabled if the superadmin explicitly turns it on.
-    # When ENABLED: 8 hours (enough for a full working day — the old 30min was auto-logging everyone out)
-    # When DISABLED (default): 7 days
-    # Master users NEVER get strict session timeout.
-    if user.get("role") == "master":
-        expires_delta = None
-    else:
-        expires_delta = timedelta(hours=8) if global_policies.get("strict_session_timeout", False) else None
 
-    access_token = create_access_token(data={"sub": str(user["_id"]), "role": user.get("role", "tenant"), "company_id": str(user.get("company_id", ""))}, expires_delta=expires_delta)
-    
-    # Log successful login event
-    security_logs_collection.insert_one({
-        "event_type": "SUCCESSFUL_LOGIN",
-        "username": user["username"],
-        "role": user.get("role", "tenant"),
-        "ip_address": client_ip,
-        "timestamp": datetime.now(timezone.utc).isoformat()
-    })
+    # ---------------------------------------------------------
+    # 9. Create the existing application JWT
+    # ---------------------------------------------------------
+    global_policies = security_policies_collection.find_one({
+        "_id": "global_policies"
+    }) or {}
 
+    expires_delta = (
+        timedelta(hours=8)
+        if global_policies.get("strict_session_timeout", False)
+        else None
+    )
+
+    access_token = create_access_token(
+        data={
+            "sub": str(user["_id"]),
+            "role": user.get("role", "tenant"),
+            "company_id": str(user.get("company_id", "")),
+        },
+        expires_delta=expires_delta,
+    )
+
+    # ---------------------------------------------------------
+    # 10. Return successful Firebase authentication result
+    # ---------------------------------------------------------
     return {
         "status": "success",
         "admin_id": str(user["_id"]),
@@ -295,9 +313,9 @@ def admin_login(data: AdminLogin, request: Request):
         "email": user.get("email", ""),
         "name": user.get("name", user.get("username", "")),
         "role": user.get("role", "tenant"),
-        "subscription_plan": plan,
+        "subscription_plan": plan_context["plan_label"],
         "subscription_plan_key": plan_context["plan_key"],
-        "subscription_expiry": expiry,
+        "subscription_expiry": user.get("subscription_expiry"),
         "subscription_days_remaining": plan_context["days_remaining"],
         "subscription_warning": plan_context["warning"],
         "subscription_warning_message": plan_context["warning_message"],
@@ -307,6 +325,7 @@ def admin_login(data: AdminLogin, request: Request):
         "credits": plan_context.get("credits", 0),
     }
 
+
 # --------------------------------------------------------------------------------
 # 2FA VERIFICATION API
 # --------------------------------------------------------------------------------
@@ -315,10 +334,161 @@ class Verify2FA(BaseModel):
     admin_id: str
     otp: str
 
+class FirebaseLoginIdentifier(BaseModel):
+    identifier: str
+
+
+@router.post("/admin/firebase-login-identifier")
+def firebase_login_identifier(data: FirebaseLoginIdentifier):
+    """
+    Resolve the user's normal username/email to the
+    internal Firebase login email.
+
+    The user's password is NOT handled here.
+    """
+
+    identifier = (data.identifier or "").strip()
+
+    if not identifier:
+        raise HTTPException(
+            status_code=400,
+            detail="Username or email is required.",
+        )
+
+    # ---------------------------------------------------------
+    # 1. Try username
+    # ---------------------------------------------------------
+    user = admins_collection.find_one({
+        "username": identifier
+    })
+    print("DEBUG IDENTIFIER:", repr(identifier))
+    print("DEBUG USER FOUND:", bool(user))
+
+    if user:
+        print("DEBUG USER EMAIL:", repr(user.get("email")))
+        print("DEBUG USERNAME:", repr(user.get("username")))
+        print("DEBUG FIREBASE UID:", repr(user.get("firebase_uid")))
+
+    # ---------------------------------------------------------
+    # 2. If username was not found, try email
+    # ---------------------------------------------------------
+    if not user:
+        email_matches = list(
+            admins_collection.find({
+                "email": identifier
+            }).limit(2)
+        )
+
+        # More than one MongoDB account uses this email.
+        if len(email_matches) > 1:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "This email is associated with multiple accounts. "
+                    "Please use your username."
+                ),
+            )
+
+        if len(email_matches) == 1:
+            user = email_matches[0]
+
+    # ---------------------------------------------------------
+    # 3. Generic failure if no account was found
+    # ---------------------------------------------------------
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid username or email.",
+        )
+
+    # ---------------------------------------------------------
+    # 4. Make sure this MongoDB account is linked to Firebase
+    # ---------------------------------------------------------
+    firebase_uid = user.get("firebase_uid")
+
+    if not firebase_uid:
+        raise HTTPException(
+            status_code=401,
+            detail="This account is not available for Firebase login.",
+        )
+
+    # ---------------------------------------------------------
+    # 5. Get the Firebase account
+    # ---------------------------------------------------------
+    try:
+        firebase_user = firebase_auth_admin.get_user(firebase_uid)
+
+    except Exception as exc:
+        logger.warning(
+            "Unable to resolve Firebase account for admin: %s - %s",
+            type(exc).__name__,
+            str(exc),
+        )
+
+        raise HTTPException(
+            status_code=401,
+            detail="Firebase account is not available.",
+        )
+
+    firebase_email = (firebase_user.email or "").strip().lower()
+
+    if not firebase_email:
+        raise HTTPException(
+            status_code=401,
+            detail="Firebase account does not have a login email.",
+        )
+
+    # ---------------------------------------------------------
+    # 6. Return only the Firebase login email
+    # ---------------------------------------------------------
+    return {
+        "firebase_email": firebase_email,
+    }
+
+
 @router.post("/admin/verify-2fa")
-def verify_2fa(data: Verify2FA, request: Request):
+def verify_2fa(
+    data: Verify2FA,
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+):
     x_forwarded_for = request.headers.get("x-forwarded-for")
     client_ip = x_forwarded_for.split(",")[0].strip() if x_forwarded_for else (request.client.host if request.client else "unknown")
+    # ------------------------------------------------------------
+    # 1. Verify Firebase ID token
+    # ------------------------------------------------------------
+    try:
+        decoded_token = firebase_auth_admin.verify_id_token(
+            credentials.credentials,
+            check_revoked=True,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Firebase 2FA authentication failed: %s - %s",
+            type(exc).__name__,
+            str(exc),
+        )
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired Firebase authentication token.",
+        )
+
+    firebase_uid = decoded_token.get("uid")
+
+    if not firebase_uid:
+        raise HTTPException(
+            status_code=401,
+            detail="Firebase token does not contain a valid user ID.",
+        )
+    
+    verified_email = (decoded_token.get("email") or "").strip().lower()
+    email_verified = bool(decoded_token.get("email_verified"))
+
+    if not verified_email or not email_verified:
+        raise HTTPException(
+            status_code=401,
+            detail="Firebase account does not have a verified email.",
+        )
     
     admin_id_clean = (data.admin_id or "").strip()
     provided_otp = str(data.otp or "").strip()
@@ -333,7 +503,24 @@ def verify_2fa(data: Verify2FA, request: Request):
         
     user = admins_collection.find_one({"_id": user_oid})
     if not user:
-        raise HTTPException(status_code=404, detail="Admin account not found.")
+        raise HTTPException(
+            status_code=404,
+            detail="Admin account not found.",
+        )
+
+    if user.get("login_enabled") is False:
+        raise HTTPException(
+            status_code=403,
+            detail="Your account login has been stopped by the administrator. Please contact support.",
+        )
+    
+    stored_firebase_uid = user.get("firebase_uid")
+
+    if not stored_firebase_uid or stored_firebase_uid != firebase_uid:
+        raise HTTPException(
+            status_code=403,
+            detail="Firebase account is not authorized for this admin account.",
+        )
         
     stored_otp = str(user.get("otp") or "").strip()
     if not stored_otp or stored_otp != provided_otp:

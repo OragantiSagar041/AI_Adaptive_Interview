@@ -1085,6 +1085,7 @@ def toggle_recruiter_status(admin_id: str, current_admin: dict = Depends(get_cur
         {"_id": obj_id},
         {"$set": {
             "is_active": new_status,
+            "login_enabled": new_status,
             "updated_at": datetime.now(timezone.utc).isoformat()
         }}
     )
