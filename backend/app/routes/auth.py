@@ -167,6 +167,163 @@ def firebase_auth(
             status_code=401,
             detail="Firebase account does not have a verified email",
         )
+    # ---------------------------------------------------------
+    # 3. Find the corresponding MongoDB admin account
+    # ---------------------------------------------------------
+    user = admins_collection.find_one({
+        "firebase_uid": firebase_uid
+    })
+
+    if not user:
+        user = admins_collection.find_one({
+            "email": verified_email
+        })
+
+    if not user:
+        user = admins_collection.find_one({
+            "username": verified_email
+        })
+
+    # ---------------------------------------------------------
+    # 4. Link Firebase UID to an existing MongoDB account
+    # ---------------------------------------------------------
+    if user:
+        existing_firebase_uid = user.get("firebase_uid")
+
+        if existing_firebase_uid and existing_firebase_uid != firebase_uid:
+            raise HTTPException(
+                status_code=403,
+                detail="Firebase account is not authorized for this admin account",
+            )
+
+        if not existing_firebase_uid:
+            admins_collection.update_one(
+                {"_id": user["_id"]},
+                {
+                    "$set": {
+                        "firebase_uid": firebase_uid,
+                        "firebase_email": verified_email,
+                    }
+                },
+            )
+
+            user = admins_collection.find_one({
+                "_id": user["_id"]
+            })
+
+    # ---------------------------------------------------------
+    # 5. Reject Firebase users with no authorized MongoDB account
+    # ---------------------------------------------------------
+    if not user:
+        raise HTTPException(
+            status_code=403,
+            detail="No authorized admin account is associated with this Firebase account",
+        )
+
+    stored_firebase_uid = user.get("firebase_uid")
+
+    if stored_firebase_uid and stored_firebase_uid != firebase_uid:
+        raise HTTPException(
+            status_code=403,
+            detail="Firebase account does not match this admin account",
+        )
+
+    # ---------------------------------------------------------
+    # 6. Check whether application login is enabled
+    # ---------------------------------------------------------
+    if user.get("login_enabled") is False:
+        return {
+            "status": "blocked",
+            "message": "Your account login has been stopped by the administrator. Please contact support.",
+        }
+
+    # ---------------------------------------------------------
+    # 7. Resolve subscription / plan information
+    # ---------------------------------------------------------
+    plan_context = get_admin_plan_context(user)
+
+    # ---------------------------------------------------------
+    # 8. Handle 2FA if enabled
+    # ---------------------------------------------------------
+    user_2fa_enabled = bool(
+        user.get("two_factor_enabled")
+        or user.get("require_2fa")
+        or user.get("is_2fa_enabled")
+        or user.get("two_factor_auth")
+        or user.get("totp_enabled")
+    )
+
+    if user_2fa_enabled:
+        otp = str(random.randint(100000, 999999))
+        expiry_time = datetime.now(timezone.utc) + timedelta(minutes=10)
+
+        admins_collection.update_one(
+            {"_id": user["_id"]},
+            {
+                "$set": {
+                    "otp": otp,
+                    "otp_expiry": expiry_time,
+                }
+            },
+        )
+
+        from app.routes.admin_dashboard import send_otp_email
+
+        send_otp_email(
+            user.get("email", ""),
+            user.get("name", user.get("username", "")),
+            otp,
+        )
+
+        return {
+            "status": "2fa_required",
+            "admin_id": str(user["_id"]),
+        }
+
+    # ---------------------------------------------------------
+    # 9. Create the existing application JWT
+    # ---------------------------------------------------------
+    global_policies = security_policies_collection.find_one({
+        "_id": "global_policies"
+    }) or {}
+
+    expires_delta = (
+        timedelta(hours=8)
+        if global_policies.get("strict_session_timeout", False)
+        else None
+    )
+
+    access_token = create_access_token(
+        data={
+            "sub": str(user["_id"]),
+            "role": user.get("role", "tenant"),
+            "company_id": str(user.get("company_id", "")),
+        },
+        expires_delta=expires_delta,
+    )
+
+    # ---------------------------------------------------------
+    # 10. Return successful Firebase authentication result
+    # ---------------------------------------------------------
+    return {
+        "status": "success",
+        "admin_id": str(user["_id"]),
+        "token": access_token,
+        "username": user["username"],
+        "email": user.get("email", ""),
+        "name": user.get("name", user.get("username", "")),
+        "role": user.get("role", "tenant"),
+        "subscription_plan": plan_context["plan_label"],
+        "subscription_plan_key": plan_context["plan_key"],
+        "subscription_expiry": user.get("subscription_expiry"),
+        "subscription_days_remaining": plan_context["days_remaining"],
+        "subscription_warning": plan_context["warning"],
+        "subscription_warning_message": plan_context["warning_message"],
+        "plan_capabilities": plan_context["capabilities"],
+        "plan_features": plan_context["features"],
+        "layout_config": plan_context.get("layout_config"),
+        "credits": plan_context.get("credits", 0),
+    }
 
 
 # --------------------------------------------------------------------------------
