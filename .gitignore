@@ -97,6 +97,8 @@ yarn-error.log*
 *cert.pem
 *secret*
 *password*
+*firebase*.json
+serviceAccountKey.json
 
 uploads/
 backend/uploads/

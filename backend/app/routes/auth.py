@@ -94,14 +94,26 @@ from app.routes.notifications import FirebaseAuthRequest
 
 load_dotenv()
 
-# Initialize Firebase Admin SDK once
-if not firebase_admin._apps:
-    cred = credentials.Certificate(
-        os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
-    )
-    firebase_admin.initialize_app(cred)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Initialize Firebase Admin SDK once
+if not firebase_admin._apps:
+    google_creds = os.getenv("GOOGLE_APPLICATION_CREDENTIALS") or "firebase_credentials.json"
+    if google_creds:
+        # Check direct path or path relative to backend root
+        resolved_path = google_creds if os.path.isabs(google_creds) else os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), google_creds)
+        if os.path.exists(resolved_path):
+            try:
+                cred = credentials.Certificate(resolved_path)
+                firebase_admin.initialize_app(cred)
+                logger.info(f"Firebase Admin SDK initialized with credentials from: {resolved_path}")
+            except Exception as e:
+                logger.error(f"Failed to initialize Firebase Admin SDK from {resolved_path}: {e}")
+        else:
+            logger.warning(f"GOOGLE_APPLICATION_CREDENTIALS file not found at: {resolved_path}")
+    else:
+        logger.warning("GOOGLE_APPLICATION_CREDENTIALS not set in environment. Firebase Admin SDK will not be available until configured.")
 
 router = APIRouter()
 # ─────────────────────────────────────────────────────────────────────────────
@@ -132,6 +144,11 @@ def refresh_token(current_admin: dict = Depends(get_current_admin_details)):
 def firebase_auth(
     credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
 ):
+    if not firebase_admin._apps:
+        raise HTTPException(
+            status_code=500,
+            detail="Firebase Admin SDK is not configured on the server. Please set GOOGLE_APPLICATION_CREDENTIALS in .env.",
+        )
     # ---------------------------------------------------------
     # 1. Verify the Firebase ID token
     # ---------------------------------------------------------
