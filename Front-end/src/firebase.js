@@ -2,12 +2,12 @@ import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  apiKey: "AIzaSyDfkcbnCmDoVOVobfFSnC3gRELi4JTNrEk",
+  authDomain: "ai-adaptive-interview.firebaseapp.com",
+  projectId: "ai-adaptive-interview",
+  storageBucket: "ai-adaptive-interview.firebasestorage.app",
+  messagingSenderId: "678423253196",
+  appId: "1:678423253196:web:e8f22803f3b012a06ff269",
 };
 
 const app = initializeApp(firebaseConfig);
