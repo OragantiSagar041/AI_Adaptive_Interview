@@ -71,8 +71,8 @@ from app.db.mongo_db import (
     crash_logs_collection,
 )
 
-if not firebase_admin._apps:
-    firebase_admin.initialize_app()
+from app.core.config import init_firebase_admin
+init_firebase_admin()
 
 # ---------------------------------------------------------------------------
 # Redis singleton — created ONCE at module load, reused by every request.

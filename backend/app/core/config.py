@@ -279,3 +279,68 @@ security = HTTPBearer()
 
 EMAIL_SCHEDULER_STARTED = False
 JOB_DESCRIPTION_PDF_THRESHOLD = 900
+
+# ---------------------------------------------------------------------------
+# Firebase Admin SDK initialization
+# ---------------------------------------------------------------------------
+import json as _json
+import logging as _logging
+import firebase_admin
+from firebase_admin import credentials
+
+_fb_logger = _logging.getLogger(__name__)
+
+def init_firebase_admin():
+    """
+    Initialize Firebase Admin SDK once.
+    Supports:
+    1. Raw JSON string in FIREBASE_CREDENTIALS_JSON or GOOGLE_APPLICATION_CREDENTIALS (e.g. from AWS Secrets Manager / ECS)
+    2. File path in GOOGLE_APPLICATION_CREDENTIALS or local firebase_credentials.json
+    3. Default Google Application Credentials fallback
+    """
+    if firebase_admin._apps:
+        return firebase_admin.get_app()
+
+    raw_env_val = os.environ.get("FIREBASE_CREDENTIALS_JSON") or os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") or ""
+    raw_env_val_stripped = raw_env_val.strip()
+
+    # Case 1: Environment variable contains raw JSON string (AWS Secrets Manager)
+    if raw_env_val_stripped.startswith("{") and raw_env_val_stripped.endswith("}"):
+        try:
+            cred_dict = _json.loads(raw_env_val_stripped)
+            cred = credentials.Certificate(cred_dict)
+            app = firebase_admin.initialize_app(cred)
+            _fb_logger.info("Firebase Admin SDK initialized successfully from JSON environment variable.")
+            return app
+        except Exception as e:
+            _fb_logger.error(f"Failed to initialize Firebase Admin SDK from JSON string: {e}")
+
+    # Case 2: File path (e.g. /app/firebase_credentials.json or relative)
+    google_creds_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") or "firebase_credentials.json"
+    if google_creds_path and not google_creds_path.strip().startswith("{"):
+        candidate_paths = [
+            google_creds_path if os.path.isabs(google_creds_path) else os.path.abspath(google_creds_path),
+            os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), google_creds_path),
+            os.path.join(os.getcwd(), google_creds_path),
+            os.path.join("/app", os.path.basename(google_creds_path)),
+        ]
+        for path in candidate_paths:
+            if os.path.exists(path):
+                try:
+                    cred = credentials.Certificate(path)
+                    app = firebase_admin.initialize_app(cred)
+                    _fb_logger.info(f"Firebase Admin SDK initialized successfully from file: {path}")
+                    return app
+                except Exception as e:
+                    _fb_logger.error(f"Failed to initialize Firebase Admin SDK from file {path}: {e}")
+                    break
+
+    # Case 3: Default application credentials fallback
+    try:
+        app = firebase_admin.initialize_app()
+        _fb_logger.info("Firebase Admin SDK initialized with default application credentials.")
+        return app
+    except Exception as e:
+        _fb_logger.warning(f"Could not initialize Firebase Admin SDK with default credentials: {e}")
+        return None
+
