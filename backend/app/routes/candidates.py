@@ -1523,19 +1523,25 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
 
             # Update job_applications_collection if app exists
             if app:
+                app_update = {
+                    "decision": data.decision,
+                    "last_action_by_name": admin_name,
+                    "last_action_by_role": admin_role,
+                    "last_action_by_id": admin_id,
+                    "last_action_status": data.decision,
+                    "last_action_at": now_iso,
+                    "decision_by_name": admin_name,
+                    "decision_by_role": admin_role,
+                    "decision_at": now_iso
+                }
+                if data.decision == "rejected":
+                    app_update["rejection_reason"] = data.rejection_reason or "Low Score / Did not meet criteria"
+                elif data.decision in ["pending", "reconsidered", None]:
+                    app_update["rejection_reason"] = None
+
                 job_applications_collection.update_one(
                     {"_id": app["_id"]},
-                    {"$set": {
-                        "decision": data.decision,
-                        "last_action_by_name": admin_name,
-                        "last_action_by_role": admin_role,
-                        "last_action_by_id": admin_id,
-                        "last_action_status": data.decision,
-                        "last_action_at": now_iso,
-                        "decision_by_name": admin_name,
-                        "decision_by_role": admin_role,
-                        "decision_at": now_iso
-                    }}
+                    {"$set": app_update}
                 )
 
             # Always update or upsert omni_call_logs_collection
@@ -1548,6 +1554,11 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
                 "decision_by_role": admin_role,
                 "decision_at": now_iso
             }
+            if data.decision == "rejected":
+                omni_update["rejection_reason"] = data.rejection_reason or "Low Score / Did not meet criteria"
+            elif data.decision in ["pending", "reconsidered", None]:
+                omni_update["rejection_reason"] = None
+
             if log and log.get("candidate_name"):
                 omni_update["candidate_name"] = log.get("candidate_name")
             if log and log.get("user_name"):
@@ -1567,14 +1578,20 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
 
             # Update interview_sessions_collection if present
             if session:
+                sess_update = {
+                    "decision": data.decision,
+                    "decision_by_name": admin_name,
+                    "decision_by_role": admin_role,
+                    "decision_at": now_iso
+                }
+                if data.decision == "rejected":
+                    sess_update["rejection_reason"] = data.rejection_reason or "Low Score / Did not meet criteria"
+                elif data.decision in ["pending", "reconsidered", None]:
+                    sess_update["rejection_reason"] = None
+
                 interview_sessions_collection.update_one(
                     {"_id": session["_id"]},
-                    {"$set": {
-                        "decision": data.decision,
-                        "decision_by_name": admin_name,
-                        "decision_by_role": admin_role,
-                        "decision_at": now_iso
-                    }}
+                    {"$set": sess_update}
                 )
 
             name = (app.get("name") if app else None) or (log.get("candidate_name") if log else None) or (session.get("candidate_name") if session else None) or "Candidate"
@@ -1584,10 +1601,12 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
             load_dotenv(override=False)
             email_sent = False
             email_reason = "No candidate email found"
-            if email:
+            if email and data.decision in ["selected", "rejected"]:
                 company_val = current_admin.get('company_name', 'HireIQ')
                 email_sent = send_decision_email(email, name, data.decision, jd, company_name=company_val)
                 email_reason = "Success" if email_sent else "Email service error (Brevo API failed)"
+            else:
+                email_reason = "No email required" if data.decision not in ["selected", "rejected"] else "No candidate email found"
 
             return {"status": "success", "decision": data.decision, "email_sent": email_sent, "email_reason": email_reason}
 
@@ -1610,31 +1629,37 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
         now_iso = datetime.now(timezone.utc).isoformat()
         
         # 2. Update DB
+        session_update = {
+            "decision": data.decision,
+            "decision_by_name": admin_name,
+            "decision_by_role": admin_role,
+            "decision_by_id": admin_id,
+            "decision_at": now_iso
+        }
+        if data.decision == "rejected":
+            session_update["rejection_reason"] = data.rejection_reason or "Low Score / Did not meet criteria"
+        elif data.decision in ["pending", "reconsidered", None]:
+            session_update["rejection_reason"] = None
+
         interview_sessions_collection.update_one(
             {"link_id": data.link_id},
-            {"$set": {
-                "decision": data.decision,
-                "decision_by_name": admin_name,
-                "decision_by_role": admin_role,
-                "decision_by_id": admin_id,
-                "decision_at": now_iso
-            }}
+            {"$set": session_update}
         )
         print(f" DB Updated for {data.link_id}")
         from app.routes.interview import sync_session_to_application
         sync_session_to_application(data.link_id)
         
-        # 3. Send Email
+        # 3. Send Email (only for selected or rejected)
         load_dotenv(override=False)
         email_sent = False
         email_reason = "No candidate email found"
-        if email:
+        if email and data.decision in ["selected", "rejected"]:
             company_val = current_admin.get('company_name', 'HireIQ')
             email_sent = send_decision_email(email, name, data.decision, jd, company_name=company_val)
             print(f" Email sent: {email_sent}")
             email_reason = "Success" if email_sent else "Email service error (Brevo API failed)"
         else:
-            print(" No email found for candidate, skipping notification.")
+            email_reason = "No email required" if data.decision not in ["selected", "rejected"] else "No email found for candidate, skipping notification."
         
         return {"status": "success", "decision": data.decision, "email_sent": email_sent, "email_reason": email_reason}
     except Exception as e:
@@ -2672,7 +2697,7 @@ Return this EXACT JSON (all score fields are integers 0-100, weighted_total is t
                 from groq import Groq
                 client = Groq(api_key=groq_key.strip())
                 response = client.chat.completions.create(
-                    model="llama3-8b-8192",
+                    model=os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"),
                     messages=[
                         {"role": "system", "content": "You are a precise ATS scoring engine. Return ONLY valid JSON. No markdown. Be extremely fast and concise."},
                         {"role": "user", "content": prompt}

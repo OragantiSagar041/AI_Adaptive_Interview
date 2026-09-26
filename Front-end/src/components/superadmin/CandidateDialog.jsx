@@ -10,7 +10,7 @@ import {
   Play, FileText, Sparkles, Star, Check, X, Calendar, Send,
   MessageSquare, Video, Scale, Loader2, AlertCircle, Monitor,
   Mic, ShieldAlert, Eye, ChevronRight, Code, UserCheck, User, ExternalLink, ArrowLeft,
-  Globe, ChevronDown
+  Globe, ChevronDown, RotateCcw
 } from "lucide-react"
 import { jsPDF } from 'jspdf'
 import { detectNonEnglishText, translateText, translateQAPairs } from '../../utils/translation'
@@ -745,15 +745,91 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
       return;
     }
 
+    const candidateName = candidate.candidate_name || candidate.name || 'this candidate';
+
+    // ── Reject confirmation & reason prompt ──
+    if (newDecision === 'rejected') {
+      const result = await Swal.fire({
+        title: 'Reject Candidate?',
+        html: `<p style="font-size: 14px; color: #64748b; margin-bottom: 12px;">Are you sure you want to mark <strong>${candidateName}</strong> as rejected? An official notification email will be sent.</p>`,
+        input: 'textarea',
+        inputPlaceholder: 'Enter reason for rejection (optional)...',
+        inputAttributes: {
+          'aria-label': 'Enter rejection reason',
+          rows: 3
+        },
+        showCancelButton: true,
+        confirmButtonText: 'Confirm Reject',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#f43f5e',
+        cancelButtonColor: '#94a3b8',
+      });
+
+      if (!result.isConfirmed) return;
+
+      const rejection_reason = (result.value || '').trim();
+
+      try {
+        await dispatch(handleUpdateDecision({ linkId, decision: 'rejected', rejection_reason })).unwrap();
+        Swal.fire({
+          title: 'Marked as Rejected',
+          text: `${candidateName} has been marked as rejected.`,
+          icon: 'success',
+          confirmButtonColor: '#4f46e5'
+        });
+        if (onStatusUpdate) onStatusUpdate('rejected');
+        onOpenChange(false);
+        const basePath = window.location.pathname.startsWith('/superadmin') ? '/superadmin' : '/admin';
+        navigate(`${basePath}/rejected-candidates`);
+      } catch (err) {
+        Swal.fire('Error', 'Failed to update decision', 'error');
+      }
+      return;
+    }
+
+    // ── Reconsider / Undo rejection ──
+    if (newDecision === 'pending') {
+      const result = await Swal.fire({
+        title: 'Reconsider Candidate?',
+        text: `Do you want to restore ${candidateName} to the active review pool?`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, Restore Candidate',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#6366f1',
+        cancelButtonColor: '#94a3b8',
+      });
+
+      if (!result.isConfirmed) return;
+
+      try {
+        await dispatch(handleUpdateDecision({ linkId, decision: 'pending', rejection_reason: '' })).unwrap();
+        Swal.fire({
+          title: 'Candidate Restored',
+          text: `${candidateName} has been moved back to the active review pool.`,
+          icon: 'success',
+          confirmButtonColor: '#4f46e5'
+        });
+        if (onStatusUpdate) onStatusUpdate('pending');
+        onOpenChange(false);
+        const basePath = window.location.pathname.startsWith('/superadmin') ? '/superadmin' : '/admin';
+        navigate(`${basePath}/interviews`);
+      } catch (err) {
+        Swal.fire('Error', 'Failed to restore candidate', 'error');
+      }
+      return;
+    }
+
+    // ── Select / Shortlist ──
     try {
-      await dispatch(handleUpdateDecision({ linkId, decision: newDecision })).unwrap()
-      Swal.fire('Success', `Candidate marked as ${newDecision.toUpperCase()}`, 'success')
-      if (onStatusUpdate) onStatusUpdate(newDecision)
-      onOpenChange(false)
-      const basePath = window.location.pathname.startsWith('/superadmin') ? '/superadmin' : '/admin'
-      navigate(`${basePath}/${newDecision === 'selected' ? 'qualified-candidates' : 'rejected-candidates'}`)
+      await dispatch(handleUpdateDecision({ linkId, decision: newDecision })).unwrap();
+      Swal.fire('Success', `Candidate marked as ${newDecision.toUpperCase()}`, 'success');
+      if (onStatusUpdate) onStatusUpdate(newDecision);
+      onOpenChange(false);
+      const basePath = window.location.pathname.startsWith('/superadmin') ? '/superadmin' : '/admin';
+      navigate(`${basePath}/${newDecision === 'selected' ? 'qualified-candidates' : 'rejected-candidates'}`);
     } catch (err) {
-      Swal.fire('Error', 'Failed to update decision', 'error')
+      Swal.fire('Error', 'Failed to update decision', 'error');
     }
   }
 
@@ -1023,6 +1099,15 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                           {isQualified ? 'Ready for Technical Round / Hiring' : 'Does not meet required threshold'}
                         </span>
                       </div>
+                      {c?.decision === 'rejected' && c?.rejection_reason && (
+                        <div className="mb-3 p-3 bg-rose-500/10 dark:bg-rose-500/15 border border-rose-200 dark:border-rose-900/60 rounded-xl flex items-start gap-2.5">
+                          <AlertCircle className="h-4 w-4 text-rose-500 shrink-0 mt-0.5" />
+                          <div>
+                            <span className="text-xs font-bold text-rose-700 dark:text-rose-400">Recorded Rejection Reason:</span>
+                            <p className="text-xs text-rose-800 dark:text-rose-200 font-medium mt-0.5">{c.rejection_reason}</p>
+                          </div>
+                        </div>
+                      )}
                       {c.strengths_summary && (
                         <div className="mb-3">
                           <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Strengths</div>
@@ -1446,13 +1531,17 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
               <Eye size={16} /> View Profile
             </button>
             <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1" />
-            {c.decision !== 'rejected' && (
-              <button onClick={() => handleDecision('rejected')} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 dark:bg-rose-500/20 border border-rose-200 dark:border-rose-500/40 rounded-xl hover:bg-rose-500/20 dark:hover:bg-rose-500/30 transition-all shadow-xs">
+            {c?.decision === 'rejected' ? (
+              <button onClick={() => handleDecision('pending')} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 dark:bg-amber-500/20 border border-amber-200 dark:border-amber-500/40 rounded-xl hover:bg-amber-500/20 dark:hover:bg-amber-500/30 transition-all shadow-xs cursor-pointer">
+                <RotateCcw size={16} /> Reconsider / Undo
+              </button>
+            ) : (
+              <button onClick={() => handleDecision('rejected')} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 dark:bg-rose-500/20 border border-rose-200 dark:border-rose-500/40 rounded-xl hover:bg-rose-500/20 dark:hover:bg-rose-500/30 transition-all shadow-xs cursor-pointer">
                 <X size={16} strokeWidth={3} /> Reject
               </button>
             )}
-            {c.decision !== 'selected' && c.decision !== 'hired' && (
-              <button onClick={() => handleDecision('selected')} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/20 border border-emerald-200 dark:border-emerald-500/40 rounded-xl hover:bg-emerald-500/20 dark:hover:bg-emerald-500/30 transition-all shadow-xs">
+            {c?.decision !== 'selected' && c?.decision !== 'hired' && (
+              <button onClick={() => handleDecision('selected')} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/20 border border-emerald-200 dark:border-emerald-500/40 rounded-xl hover:bg-emerald-500/20 dark:hover:bg-emerald-500/30 transition-all shadow-xs cursor-pointer">
                 <Check size={16} strokeWidth={3} /> Select
               </button>
             )}

@@ -99,9 +99,8 @@ logger = logging.getLogger(__name__)
 
 # Initialize Firebase Admin SDK once
 if not firebase_admin._apps:
-    google_creds = os.getenv("GOOGLE_APPLICATION_CREDENTIALS") or "firebase_credentials.json"
+    google_creds = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") or "firebase_credentials.json"
     if google_creds:
-        # Check direct path or path relative to backend root
         resolved_path = google_creds if os.path.isabs(google_creds) else os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), google_creds)
         if os.path.exists(resolved_path):
             try:

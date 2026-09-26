@@ -105,8 +105,9 @@ class AnalyzeRequest(BaseModel):
 
 class DecisionRequest(BaseModel):
     link_id: str
-    decision: str # 'selected' or 'rejected'
+    decision: str # 'selected', 'rejected', or 'pending'
     admin_id: Optional[str] = None
+    rejection_reason: Optional[str] = None
 
 class RecordingUploadFailure(BaseModel):
     interview_id: str
