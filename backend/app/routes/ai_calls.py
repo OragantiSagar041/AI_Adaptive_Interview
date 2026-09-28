@@ -1604,6 +1604,7 @@ def check_ai_call_status(session_id: str, current_admin: dict = Depends(get_curr
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/api/calls/interested-candidates")
+@router.get("/calls/interested-candidates")
 def get_interested_candidates(
     current_admin: dict = Depends(get_current_admin_details),
     omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key")

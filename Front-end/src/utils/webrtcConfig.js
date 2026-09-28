@@ -1,5 +1,9 @@
+import { API_BASE_URL } from '../apiConfig'
+
 function getMeteredIceServers(username, credential) {
   return [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun.relay.metered.ca:80' },
     { urls: 'turn:global.relay.metered.ca:80', username, credential },
     { urls: 'turn:global.relay.metered.ca:80?transport=tcp', username, credential },
@@ -8,8 +12,11 @@ function getMeteredIceServers(username, credential) {
   ]
 }
 
-// Free public TURN servers as last-resort fallback
+// Robust fallback ICE servers with Google STUN + OpenRelay TURN
 const FREE_TURN_FALLBACK = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun.relay.metered.ca:80' },
   {
     urls: 'turn:openrelay.metered.ca:80',
     username: 'openrelayproject',
@@ -25,9 +32,46 @@ const FREE_TURN_FALLBACK = [
     username: 'openrelayproject',
     credential: 'openrelayproject',
   },
+  {
+    urls: 'turns:openrelay.metered.ca:443?transport=tcp',
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
 ]
 
+let dynamicIceServers = null
+
+/**
+ * Optionally pre-fetch dynamic ICE servers from the backend.
+ * Falls back silently to FREE_TURN_FALLBACK if backend is unavailable.
+ */
+export async function initIceServers() {
+  if (dynamicIceServers) return dynamicIceServers
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/webrtc/ice-servers`)
+    if (res.ok) {
+      const data = await res.json()
+      if (Array.isArray(data.ice_servers) && data.ice_servers.length > 0) {
+        dynamicIceServers = data.ice_servers
+        return dynamicIceServers
+      }
+    }
+  } catch (_) {
+    // fallback silently to local config
+  }
+  return null
+}
+
+// Trigger background fetch once on client load
+if (typeof window !== 'undefined') {
+  initIceServers().catch(() => {})
+}
+
 export function getIceServers() {
+  if (dynamicIceServers && dynamicIceServers.length > 0) {
+    return [...dynamicIceServers, ...FREE_TURN_FALLBACK]
+  }
+
   const env = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : {}
 
   const meteredUsername = env.VITE_METERED_USERNAME || ''
@@ -41,11 +85,10 @@ export function getIceServers() {
     ]
   }
 
-  // Fallback to free public TURN servers only
+  // Fallback to robust STUN + public TURN servers
   return FREE_TURN_FALLBACK
 }
 
 export function hasTurnServer() {
   return true // We always have TURN configured now
 }
-

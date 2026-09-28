@@ -218,7 +218,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     isSubmittingRef,
     audioRmsRef,
     lipSyncStreakRef,
-    lipSyncCooldownRef
+    lipSyncCooldownRef,
+    isTTSPlayingRef,
+    isSpeechRecordingRef
   })
 
   useEffect(() => {
@@ -1237,7 +1239,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         }
         const rms = Math.sqrt(sumSquares / dataArray.length)
 
-        audioRmsRef.current = rms
+        // Smooth RMS so micro-silences between syllables do not cause audio activity to drop instantly
+        audioRmsRef.current = Math.max(rms, (audioRmsRef.current || 0) * 0.92)
 
         const now = Date.now()
 
@@ -1258,18 +1261,18 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         }
 
         // Background noise detection (only when AI is not speaking AND candidate is not actively talking)
-        const isCandidateSpeaking = (now - lastSpeechActivityRef.current < 3500)
+        const isCandidateSpeaking = (now - lastSpeechActivityRef.current < 1200)
 
-        if (!isTTSPlayingRef.current && !isCandidateSpeaking && rms > 0.14 && now > noiseCooldownRef.current) {
+        if (!isTTSPlayingRef.current && !isCandidateSpeaking && rms > 0.055 && now > noiseCooldownRef.current) {
           noiseFrameCountRef.current++
         } else {
-          noiseFrameCountRef.current = Math.max(0, noiseFrameCountRef.current - 2)
+          noiseFrameCountRef.current = Math.max(0, noiseFrameCountRef.current - 1)
         }
 
-        if (noiseFrameCountRef.current >= 35) {
+        if (noiseFrameCountRef.current >= 18) {
           noiseCooldownRef.current = now + 8000
           noiseFrameCountRef.current = 0
-          recordAlertMetric("noise_alert")
+          recordAlertMetric("noise_alert", "Continuous background noise detected")
           setNoiseAlertCount(prev => {
             const next = prev + 1
             noiseAlertCountRef.current = next
@@ -2171,7 +2174,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
     try {
       const queryParams = terminationReason ? `?reason=${encodeURIComponent(terminationReason)}` : ''
-      await api.post(`/complete-session/${sessionId}${queryParams}`)
+      await api.post(`/complete-session/${sessionId}${queryParams}`, {
+        total_tab_switches: behavioralStatsRef.current?.tabSwitches || 0,
+        total_face_alerts: behavioralStatsRef.current?.faceAlerts || 0,
+        total_noise_alerts: (behavioralStatsRef.current?.noiseAlerts || 0) + (noiseAlertCountRef?.current || 0)
+      })
       if (sessionId) {
         try { sessionStorage.setItem(`interview_done_${sessionId}`, '1') } catch (e) { }
       }

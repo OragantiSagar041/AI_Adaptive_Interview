@@ -29,7 +29,9 @@ export const useInterviewSecurity = ({
   isSubmittingRef,
   audioRmsRef,
   lipSyncStreakRef,
-  lipSyncCooldownRef
+  lipSyncCooldownRef,
+  isTTSPlayingRef,
+  isSpeechRecordingRef
 }) => {
   // Proctoring/Recording states
   const [proctoringAlert, setProctoringAlert] = useState('')
@@ -311,28 +313,75 @@ export const useInterviewSecurity = ({
     }
   })
 
+  const recentMouthScoresRef = useRef([])
+
   // Track lip sync anomaly
   useEffect(() => {
-    if (!audioRmsRef) return
-    const isAudioActive = audioRmsRef.current > 0.18
-    const mismatch = proctoring.checkLipSync(proctoring.jawOpenScore, isAudioActive)
-    const now = Date.now()
+    if (!audioRmsRef || !isDisclaimerAccepted || showAllSet || loading || isSubmittingRef?.current) return
 
-    if (mismatch && now > (lipSyncCooldownRef?.current || 0)) {
-      if (lipSyncStreakRef) lipSyncStreakRef.current += 1
-    } else if (!mismatch) {
-      if (lipSyncStreakRef) lipSyncStreakRef.current = Math.max(0, lipSyncStreakRef.current - 1)
+    // Suppress lip-sync checks while AI question is being read out (TTS active) or speech recording is off
+    if (isTTSPlayingRef?.current || (isSpeechRecordingRef && !isSpeechRecordingRef.current)) {
+      if (lipSyncStreakRef) lipSyncStreakRef.current = 0
+      recentMouthScoresRef.current = []
+      return
     }
 
+    // Only monitor lip sync when a single candidate face is clearly visible
+    if (!proctoring.faceVisible || (proctoring.faceCount !== undefined && proctoring.faceCount !== 1)) {
+      if (lipSyncStreakRef) lipSyncStreakRef.current = 0
+      recentMouthScoresRef.current = []
+      return
+    }
+
+    const currentJaw = Number(proctoring.jawOpenScore || 0)
+    recentMouthScoresRef.current.push(currentJaw)
+    if (recentMouthScoresRef.current.length > 6) recentMouthScoresRef.current.shift()
+
+    const maxRecentMouth = Math.max(...recentMouthScoresRef.current, 0)
+    const isAudioActive = (audioRmsRef.current || 0) > 0.04
+
+    // If candidate's mouth is opening (currentJaw >= 0.035) or recently opened (maxRecentMouth >= 0.035),
+    // they are speaking and moving their lips naturally -> RESET streak to 0 immediately!
+    if (currentJaw >= 0.035 || maxRecentMouth >= 0.035 || !isAudioActive) {
+      if (lipSyncStreakRef) lipSyncStreakRef.current = 0
+      return
+    }
+
+    // Anomaly: Audio is actively detected while candidate's mouth is completely closed (< 0.03) and has NOT moved
+    const now = Date.now()
+    if (now > (lipSyncCooldownRef?.current || 0)) {
+      if (lipSyncStreakRef) lipSyncStreakRef.current += 1
+    }
+
+    // Require 5 consecutive frames (~3.5s) of continuous third-party voice with completely closed lips
     if (lipSyncStreakRef?.current >= 5) {
       if (lipSyncCooldownRef) lipSyncCooldownRef.current = now + 8000
       if (lipSyncStreakRef) lipSyncStreakRef.current = 0
-      recordAlertMetric('lip_sync')
-      setSecurityMessage('Audio detected without matching lip movement')
+      recentMouthScoresRef.current = []
+      const alertText = 'Audio detected without matching lip movement'
+      recordAlertMetric('lip_sync', alertText)
+      setSecurityMessage(alertText)
+      setProctoringAlert(alertText)
       if (securityMessageTimeoutRef.current) clearTimeout(securityMessageTimeoutRef.current)
-      securityMessageTimeoutRef.current = setTimeout(() => setSecurityMessage(''), 3000)
+      securityMessageTimeoutRef.current = setTimeout(() => setSecurityMessage(''), 4000)
+      if (proctoringAlertTimeoutRef.current) clearTimeout(proctoringAlertTimeoutRef.current)
+      proctoringAlertTimeoutRef.current = setTimeout(() => setProctoringAlert(''), 4000)
     }
-  }, [proctoring.jawOpenScore, audioRmsRef, lipSyncStreakRef, lipSyncCooldownRef, proctoring])
+  }, [
+    proctoring.jawOpenScore,
+    proctoring.faceVisible,
+    proctoring.faceCount,
+    audioRmsRef,
+    lipSyncStreakRef,
+    lipSyncCooldownRef,
+    isDisclaimerAccepted,
+    showAllSet,
+    loading,
+    isSubmittingRef,
+    isTTSPlayingRef,
+    isSpeechRecordingRef,
+    proctoring
+  ])
 
   useExamSecurity({
     enabled: isDisclaimerAccepted && !showAllSet && !isSubmittingRef?.current,

@@ -94,14 +94,26 @@ from app.routes.notifications import FirebaseAuthRequest
 
 load_dotenv()
 
-# Initialize Firebase Admin SDK once
-if not firebase_admin._apps:
-    cred = credentials.Certificate(
-        os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
-    )
-    firebase_admin.initialize_app(cred)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Initialize Firebase Admin SDK once
+if not firebase_admin._apps:
+    google_creds = os.getenv("GOOGLE_APPLICATION_CREDENTIALS") or "firebase_credentials.json"
+    if google_creds:
+        # Check direct path or path relative to backend root
+        resolved_path = google_creds if os.path.isabs(google_creds) else os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), google_creds)
+        if os.path.exists(resolved_path):
+            try:
+                cred = credentials.Certificate(resolved_path)
+                firebase_admin.initialize_app(cred)
+                logger.info(f"Firebase Admin SDK initialized with credentials from: {resolved_path}")
+            except Exception as e:
+                logger.error(f"Failed to initialize Firebase Admin SDK from {resolved_path}: {e}")
+        else:
+            logger.warning(f"GOOGLE_APPLICATION_CREDENTIALS file not found at: {resolved_path}")
+    else:
+        logger.warning("GOOGLE_APPLICATION_CREDENTIALS not set in environment. Firebase Admin SDK will not be available until configured.")
 
 router = APIRouter()
 # ─────────────────────────────────────────────────────────────────────────────
@@ -132,6 +144,11 @@ def refresh_token(current_admin: dict = Depends(get_current_admin_details)):
 def firebase_auth(
     credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
 ):
+    if not firebase_admin._apps:
+        raise HTTPException(
+            status_code=500,
+            detail="Firebase Admin SDK is not configured on the server. Please set GOOGLE_APPLICATION_CREDENTIALS in .env.",
+        )
     # ---------------------------------------------------------
     # 1. Verify the Firebase ID token
     # ---------------------------------------------------------
@@ -419,16 +436,32 @@ def firebase_login_identifier(data: FirebaseLoginIdentifier):
         firebase_user = firebase_auth_admin.get_user(firebase_uid)
 
     except Exception as exc:
-        logger.warning(
-            "Unable to resolve Firebase account for admin: %s - %s",
-            type(exc).__name__,
-            str(exc),
-        )
+        # Fallback: try finding the account in Firebase Auth by email in case UID is out of sync
+        user_email = (user.get("email") or "").strip().lower()
+        firebase_user = None
+        if user_email:
+            try:
+                firebase_user = firebase_auth_admin.get_user_by_email(user_email)
+                # Auto-heal: update MongoDB with the real Firebase UID
+                admins_collection.update_one(
+                    {"_id": user["_id"]},
+                    {"$set": {"firebase_uid": firebase_user.uid, "firebase_email": firebase_user.email}}
+                )
+                logger.info(f"Auto-resynced firebase_uid for admin {user_email} to {firebase_user.uid}")
+            except Exception as email_exc:
+                logger.warning(f"Unable to resolve Firebase account by email {user_email}: {email_exc}")
 
-        raise HTTPException(
-            status_code=401,
-            detail="Firebase account is not available.",
-        )
+        if not firebase_user:
+            logger.warning(
+                "Unable to resolve Firebase account for admin: %s - %s",
+                type(exc).__name__,
+                str(exc),
+            )
+
+            raise HTTPException(
+                status_code=401,
+                detail="Firebase account is not available.",
+            )
 
     firebase_email = (firebase_user.email or "").strip().lower()
 

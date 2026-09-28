@@ -451,6 +451,11 @@ def get_admin_rejected(pipeline: Optional[str] = "all", current_admin: dict = De
             "avg_score": score,
             "created_at": app.get("applied_at") or app.get("updated_at") or datetime.now(timezone.utc).isoformat(),
             "decision": "rejected",
+            "rejection_reason": app.get("rejection_reason"),
+            "rejected_by": app.get("rejected_by") or app.get("decision_by_name") or app.get("last_action_by_name"),
+            "decision_by_name": app.get("decision_by_name") or app.get("rejected_by") or app.get("last_action_by_name"),
+            "rejected_at": app.get("rejected_at") or app.get("decision_at") or app.get("last_action_at") or app.get("updated_at"),
+            "decision_at": app.get("decision_at") or app.get("rejected_at") or app.get("last_action_at"),
             "status": "completed",
             "application_id": app_id,
             "is_deactivated": False
@@ -772,6 +777,11 @@ def get_superadmin_rejected(adminId: Optional[str] = None, pipeline: Optional[st
             "avg_score": score,
             "created_at": app.get("applied_at") or app.get("updated_at") or datetime.now(timezone.utc).isoformat(),
             "decision": "rejected",
+            "rejection_reason": app.get("rejection_reason"),
+            "rejected_by": app.get("rejected_by") or app.get("decision_by_name") or app.get("last_action_by_name"),
+            "decision_by_name": app.get("decision_by_name") or app.get("rejected_by") or app.get("last_action_by_name"),
+            "rejected_at": app.get("rejected_at") or app.get("decision_at") or app.get("last_action_at") or app.get("updated_at"),
+            "decision_at": app.get("decision_at") or app.get("rejected_at") or app.get("last_action_at"),
             "status": "completed",
             "application_id": app_id,
             "is_deactivated": False

@@ -854,7 +854,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                         </div>
                       </div>
                       {recordingUrl ? (
-                        <video controls className="w-full rounded-lg border border-slate-200 bg-black max-h-48" src={recordingUrl}>
+                        <video controls className="w-full aspect-video object-contain rounded-lg border border-slate-200 bg-black max-h-48" src={recordingUrl}>
                           Your browser does not support video.
                         </video>
                       ) : (
@@ -874,7 +874,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                         </div>
                       </div>
                       {screenRecordingUrl ? (
-                        <video controls className="w-full rounded-lg border border-slate-200 bg-black max-h-48" src={screenRecordingUrl}>
+                        <video controls className="w-full aspect-video object-contain rounded-lg border border-slate-200 bg-black max-h-48" src={screenRecordingUrl}>
                           Your browser does not support video.
                         </video>
                       ) : (
