@@ -171,7 +171,7 @@ def score_answer_task(
                     if session_doc:
                         link_id = session_doc.get("link_id")
                         if link_id:
-                            from app.routes import sync_session_to_application
+                            from app.routes.interview import sync_session_to_application
                             sync_session_to_application(link_id)
         except Exception as lang_err:
             logger.warning(f"Language detection background update failed: {lang_err}")
@@ -305,7 +305,7 @@ def score_answer_task(
                         "round2_score": round(round2_s, 1)
                     }}
                 )
-                from app.routes import sync_session_to_application
+                from app.routes.interview import sync_session_to_application
                 sync_session_to_application(session.get("link_id"))
                 
                 # If session is completed, check if all answers are now scored

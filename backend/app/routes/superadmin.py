@@ -357,6 +357,10 @@ def get_admin_qualified(pipeline: Optional[str] = "all", current_admin: dict = D
         s["status"] = sync_session_status(s, now)
         s["id"] = str(s["_id"])
         s["_id"] = str(s["_id"])
+        if not s.get("admin_name"):
+            s["admin_name"] = s.get("decision_by_name") or s.get("last_action_by_name")
+        if not s.get("talent_pool_status"):
+            s["talent_pool_status"] = "archived"
         merged_list.append(s)
         
     for app in apps:
@@ -383,7 +387,12 @@ def get_admin_qualified(pipeline: Optional[str] = "all", current_admin: dict = D
             "decision": "selected",
             "status": "completed",
             "application_id": app_id,
-            "is_deactivated": False
+            "is_deactivated": False,
+            "admin_name": app.get("decision_by_name") or app.get("last_action_by_name"),
+            "rejection_reason": app.get("rejection_reason"),
+            "created_by": app.get("admin_id"),
+            "decision_at": app.get("decision_at"),
+            "talent_pool_status": app.get("talent_pool_status", "archived")
         }
         merged_list.append(mock_session)
         
@@ -427,6 +436,10 @@ def get_admin_rejected(pipeline: Optional[str] = "all", current_admin: dict = De
         s["status"] = sync_session_status(s, now)
         s["id"] = str(s["_id"])
         s["_id"] = str(s["_id"])
+        if not s.get("admin_name"):
+            s["admin_name"] = s.get("decision_by_name") or s.get("last_action_by_name")
+        if not s.get("talent_pool_status"):
+            s["talent_pool_status"] = "archived"
         merged_list.append(s)
         
     for app in apps:
@@ -454,7 +467,12 @@ def get_admin_rejected(pipeline: Optional[str] = "all", current_admin: dict = De
             "talent_pool_status": app.get("talent_pool_status"),
             "status": "completed",
             "application_id": app_id,
-            "is_deactivated": False
+            "is_deactivated": False,
+            "admin_name": app.get("decision_by_name") or app.get("last_action_by_name"),
+            "rejection_reason": app.get("rejection_reason"),
+            "created_by": app.get("admin_id"),
+            "decision_at": app.get("decision_at"),
+            "talent_pool_status": app.get("talent_pool_status", "archived")
         }
         merged_list.append(mock_session)
         
@@ -666,6 +684,10 @@ def get_superadmin_qualified(adminId: Optional[str] = None, pipeline: Optional[s
         s["status"] = sync_session_status(s, now)
         s["id"] = str(s["_id"])
         s["_id"] = str(s["_id"])
+        if not s.get("admin_name"):
+            s["admin_name"] = s.get("decision_by_name") or s.get("last_action_by_name")
+        if not s.get("talent_pool_status"):
+            s["talent_pool_status"] = "archived"
         merged_list.append(s)
         
     for app in apps:
@@ -692,7 +714,12 @@ def get_superadmin_qualified(adminId: Optional[str] = None, pipeline: Optional[s
             "decision": "selected",
             "status": "completed",
             "application_id": app_id,
-            "is_deactivated": False
+            "is_deactivated": False,
+            "admin_name": app.get("decision_by_name") or app.get("last_action_by_name"),
+            "rejection_reason": app.get("rejection_reason"),
+            "created_by": app.get("admin_id"),
+            "decision_at": app.get("decision_at"),
+            "talent_pool_status": app.get("talent_pool_status", "archived")
         }
         merged_list.append(mock_session)
         
@@ -749,6 +776,10 @@ def get_superadmin_rejected(adminId: Optional[str] = None, pipeline: Optional[st
         s["status"] = sync_session_status(s, now)
         s["id"] = str(s["_id"])
         s["_id"] = str(s["_id"])
+        if not s.get("admin_name"):
+            s["admin_name"] = s.get("decision_by_name") or s.get("last_action_by_name")
+        if not s.get("talent_pool_status"):
+            s["talent_pool_status"] = "archived"
         merged_list.append(s)
         
     for app in apps:
@@ -776,7 +807,12 @@ def get_superadmin_rejected(adminId: Optional[str] = None, pipeline: Optional[st
             "talent_pool_status": app.get("talent_pool_status"),
             "status": "completed",
             "application_id": app_id,
-            "is_deactivated": False
+            "is_deactivated": False,
+            "admin_name": app.get("decision_by_name") or app.get("last_action_by_name"),
+            "rejection_reason": app.get("rejection_reason"),
+            "created_by": app.get("admin_id"),
+            "decision_at": app.get("decision_at"),
+            "talent_pool_status": app.get("talent_pool_status", "archived")
         }
         merged_list.append(mock_session)
         

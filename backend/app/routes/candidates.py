@@ -495,6 +495,11 @@ def create_session(data: CreateSession, current_admin: dict = Depends(get_curren
 
 
 # ── Bulk Session Models ────────────────────────────────────────────────────────
+
+class TalentPoolRequest(BaseModel):
+    link_id: str
+    status: str
+
 class BulkCandidate(BaseModel):
     candidate_name: str
     candidate_email: str
@@ -2855,3 +2860,42 @@ Return this EXACT JSON (all score fields are integers 0-100, weighted_total is t
 
 class CandidateFeedbackRequest(BaseModel):
     feedback_text: str
+
+@router.post("/admin/update-talent-pool")
+def update_talent_pool(data: TalentPoolRequest, current_admin: dict = Depends(require_role("admin", "super_admin"))):
+    admin_name = current_admin.get("name") or current_admin.get("username") or "Admin"
+    now_iso = datetime.now(timezone.utc).isoformat()
+    
+    raw_id = data.link_id.replace("ai_call_", "") if data.link_id.startswith("ai_call_") else data.link_id
+    omni_call_id = raw_id.replace("omni_", "").strip()
+
+    # 1. Search job_applications_collection
+    app = None
+    from bson import ObjectId
+    try:
+        app = job_applications_collection.find_one({"$or": [{"omni_call_id": omni_call_id}, {"_id": ObjectId(raw_id)}]})
+    except Exception:
+        app = job_applications_collection.find_one({"omni_call_id": omni_call_id})
+
+    if app:
+        job_applications_collection.update_one(
+            {"_id": app["_id"]},
+            {"$set": {"talent_pool_status": data.status, "talent_pool_updated_at": now_iso}}
+        )
+
+    # 2. Search interview_sessions_collection
+    session = None
+    if len(raw_id) == 24:
+        try:
+            session = interview_sessions_collection.find_one({"_id": ObjectId(raw_id)})
+        except Exception:
+            pass
+    if not session:
+        session = interview_sessions_collection.find_one({"link_id": raw_id})
+    if session:
+        interview_sessions_collection.update_one(
+            {"_id": session["_id"]},
+            {"$set": {"talent_pool_status": data.status, "talent_pool_updated_at": now_iso}}
+        )
+
+    return {"status": "success", "talent_pool_status": data.status}

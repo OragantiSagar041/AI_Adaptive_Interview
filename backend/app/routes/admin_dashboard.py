@@ -372,7 +372,8 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
             "admin_notes": app.get("admin_notes", ""),
             "alerts": [],
             "answers": answers,
-            "started_at": app.get("applied_at") or app.get("updated_at") or app.get("created_at")
+            "started_at": app.get("applied_at") or app.get("updated_at") or app.get("created_at"),
+            "talent_pool_status": app.get("talent_pool_status", "archived")
         }
         return response_payload
 
@@ -900,7 +901,8 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
         "alerts": session_data.get("violations", session_data.get("alerts", [])),
         "answers": results,
         "candidate_feedback": session_data.get("candidate_feedback", ""),
-        "ats_score": session_data.get("ats_score")
+        "ats_score": session_data.get("ats_score"),
+        "talent_pool_status": session_data.get("talent_pool_status", "archived")
     }
     
     # Include full question list so admin can see which questions were skipped

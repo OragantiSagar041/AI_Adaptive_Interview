@@ -139,6 +139,7 @@ def firebase_auth(
         decoded_token = firebase_auth_admin.verify_id_token(
             credentials.credentials,
             check_revoked=True,
+            clock_skew_seconds=10,
         )
     except Exception as exc:
         logger.warning(
@@ -461,6 +462,7 @@ def verify_2fa(
         decoded_token = firebase_auth_admin.verify_id_token(
             credentials.credentials,
             check_revoked=True,
+            clock_skew_seconds=10,
         )
     except Exception as exc:
         logger.warning(

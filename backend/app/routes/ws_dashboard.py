@@ -154,6 +154,13 @@ async def get_dashboard_aggregated_data(
             "company_id": 1,
             "created_by": 1,
             "talent_pool_status": 1,
+            "rejection_reason": 1,
+            "decision_at": 1,
+            "rejected_at": 1,
+            "decision_by_name": 1,
+            "rejected_by": 1,
+            "last_action_by_name": 1,
+            "admin_name": 1,
         }
         
         def _load_dashboard_candidates():
