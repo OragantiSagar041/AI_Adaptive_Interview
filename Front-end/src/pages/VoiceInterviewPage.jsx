@@ -31,6 +31,7 @@ import { useScreenshotProtection } from '../hooks/useScreenshotProtection'
 import { useExamSecurity } from '../hooks/useExamSecurity'
 import { useExitConfirmation } from '../hooks/useExitConfirmation'
 import DeviceCheckModal from '../components/DeviceCheckModal'
+import ProctoringAlerts from '../components/interview/ProctoringAlerts'
 
 import { VOICE_TRANSLATIONS } from '../utils/voiceTranslations'
 import { normalizeInterviewQuestions, unwrapInterviewPayload } from './interview/interviewPayload'
@@ -243,6 +244,12 @@ export default function VoiceInterviewPage() {
   const [transcript, setTranscript] = useState('')
   const [securityAlert, setSecurityAlert] = useState('')
   const securityAlertTimerRef = useRef(null)
+  const [proctoringAlert, setProctoringAlert] = useState('')
+  const proctoringAlertTimerRef = useRef(null)
+  const [showNoiseBanner, setShowNoiseBanner] = useState(false)
+  const showNoiseBannerTimerRef = useRef(null)
+  const [securityMessage, setSecurityMessage] = useState('')
+  const securityMessageTimerRef = useRef(null)
   const [interimText, setInterimText] = useState('')
   const hasSpokenThisSessionRef = useRef(false)
   const [countdown, setCountdown] = useState(0)
@@ -256,6 +263,7 @@ export default function VoiceInterviewPage() {
   const [askedFollowUpsCount, setAskedFollowUpsCount] = useState(_savedSession?.askedFollowUpsCount || 0)
   const askedFollowUpsCountRef = useRef(_savedSession?.askedFollowUpsCount || 0)
   const [warningsCount, setWarningsCount] = useState(0)
+  const warningsCountRef = useRef(0)
   const [proctoringState, setProctoringState] = useState({
     modelsReady: false,
     faceVisible: null,
@@ -341,6 +349,9 @@ export default function VoiceInterviewPage() {
   const isTransitioningRef = useRef(false)
   const isTTSPlayingRef = useRef(false)
   const transitionToNextRoundRef = useRef(null)
+  const voiceNoiseFrameCountRef = useRef(0)
+  const voiceNoiseCooldownRef = useRef(0)
+  const lastCandidateVoiceTimeRef = useRef(0)
 
   // ── Browser online/offline detection ────────────────────────────
   const [isOnline, setIsOnline] = useState(() => navigator.onLine)
@@ -367,30 +378,6 @@ export default function VoiceInterviewPage() {
       }
     }
   }, [])
-
-  const candidateVideoElement = (
-    <video
-      ref={attachVideo}
-      playsInline
-      muted
-      autoPlay
-      style={{
-        position: 'fixed',
-        bottom: '16px',
-        left: '16px',
-        width: '96px',
-        height: '72px',
-        objectFit: 'cover',
-        borderRadius: '10px',
-        border: '2px solid rgba(99,102,241,0.4)',
-        zIndex: 50,
-        opacity: 1,
-        pointerEvents: 'none',
-        boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
-        transform: 'scaleX(-1)', // mirror effect
-      }}
-    />
-  )
 
   // Ensure stream stays attached across round transitions
   useEffect(() => {
@@ -1616,12 +1603,30 @@ export default function VoiceInterviewPage() {
               lastSpeechTime = now
               hasSpokenInChunk = true
               hasSpokenThisSessionRef.current = true
+              lastCandidateVoiceTimeRef.current = now
+              lastSilenceReset = now
               clearTimeout(silenceTimerRef.current)
               silenceTimerRef.current = setTimeout(() => {
                 if (isListeningRef.current) {
                   finishListening().then(fullAns => onFinish?.(fullAns))
                 }
               }, 8000)
+            } else if (rms > CHUNK_SEND_RMS_THRESHOLD) {
+              lastCandidateVoiceTimeRef.current = now
+            }
+
+            // Background noise detection (only when AI is not speaking and candidate hasn't spoken in >1200ms)
+            const isCandidateTalking = (now - lastCandidateVoiceTimeRef.current < 1200)
+            if (!isTTSPlayingRef?.current && !isCandidateTalking && rms > 0.055 && now > voiceNoiseCooldownRef.current) {
+              voiceNoiseFrameCountRef.current++
+            } else {
+              voiceNoiseFrameCountRef.current = Math.max(0, voiceNoiseFrameCountRef.current - 1)
+            }
+
+            if (voiceNoiseFrameCountRef.current >= 18) {
+              voiceNoiseCooldownRef.current = now + 8000
+              voiceNoiseFrameCountRef.current = 0
+              logProctoringAlert('noise_alert', 'Continuous background noise detected')
             }
 
             const silenceDuration = now - lastSpeechTime
@@ -2389,7 +2394,6 @@ export default function VoiceInterviewPage() {
 
   // ── Proctoring: ESC + Tab + Screenshare ──────────────────────────────────
   // Helper to log proctoring events to backend
-  const warningsCountRef = useRef(0)
   const logProctoringAlert = useCallback((alertType, details = '') => {
     const alertMessages = {
       'multi_person': '👀 Multiple faces detected in frame!',
@@ -2403,10 +2407,44 @@ export default function VoiceInterviewPage() {
       'clipboard_attempt': '📋 Copying or pasting is not allowed.',
       'print_attempt': '🖨️ Printing is not allowed.',
       'devtools_open': '🔧 Developer tools are not allowed during the interview.',
-      'window_blur': '⚠️ Switching applications is not allowed.',
-      'multi_monitor': '🖥️ Multiple monitors detected — please use a single display.',
+      'window_blur': 'Switching applications is not allowed.',
+      'multi_monitor': 'Multiple monitors detected — please use a single display.',
+      'lip_sync': 'Audio detected without matching lip movement',
+      'noise_alert': 'Continuous background noise detected.',
+      'background_noise': 'Continuous background noise detected.',
     }
-    const displayMsg = alertMessages[alertType] || `⚠️ Proctoring alert: ${alertType}`
+    const displayMsg = alertMessages[alertType] || details || `Proctoring alert: ${alertType}`
+
+    const isFaceAlert = ['multi_person', 'no_face', 'phone', 'eye_contact', 'lip_sync'].includes(alertType)
+    const isNoiseAlert = alertType === 'background_noise' || alertType === 'noise_alert'
+
+    if (isFaceAlert) {
+      integrityMetricsRef.current.faceAlerts += 1
+      const text = alertType === 'lip_sync' ? 'Audio detected without matching lip movement' : (details || alertMessages[alertType] || 'Face alert')
+      clearTimeout(proctoringAlertTimerRef.current)
+      setProctoringAlert(text)
+      proctoringAlertTimerRef.current = setTimeout(() => setProctoringAlert(''), 4000)
+    } else if (isNoiseAlert) {
+      integrityMetricsRef.current.noiseAlerts += 1
+      clearTimeout(showNoiseBannerTimerRef.current)
+      setShowNoiseBanner(true)
+      showNoiseBannerTimerRef.current = setTimeout(() => setShowNoiseBanner(false), 4000)
+    } else if (alertType === 'tab_switch') {
+      integrityMetricsRef.current.tabSwitches += 1
+      clearTimeout(securityMessageTimerRef.current)
+      setSecurityMessage('Tab switch detected!')
+      securityMessageTimerRef.current = setTimeout(() => setSecurityMessage(''), 4000)
+    } else if (alertType === 'fullscreen_exit') {
+      integrityMetricsRef.current.fullscreenExits += 1
+      clearTimeout(securityMessageTimerRef.current)
+      setSecurityMessage('Fullscreen mode exited!')
+      securityMessageTimerRef.current = setTimeout(() => setSecurityMessage(''), 4000)
+    } else {
+      clearTimeout(securityMessageTimerRef.current)
+      setSecurityMessage(details || displayMsg)
+      securityMessageTimerRef.current = setTimeout(() => setSecurityMessage(''), 4000)
+    }
+
     clearTimeout(securityAlertTimerRef.current)
     setSecurityAlert(displayMsg)
     securityAlertTimerRef.current = setTimeout(() => setSecurityAlert(''), 4500)
@@ -2633,6 +2671,120 @@ export default function VoiceInterviewPage() {
     },
   })
 
+  // ── Lip-sync anomaly detection ──
+  const candidateAudioRmsRef = useRef(0)
+  const lipSyncStreakRef = useRef(0)
+  const lipSyncCooldownRef = useRef(0)
+  const recentMouthScoresRef = useRef([])
+
+  // ── Continuous live microphone audio analyzer for lip-sync & noise detection ──
+  useEffect(() => {
+    if (round === 'done' || round === 'pre_checks' || round === 'submitting') return
+    const stream = cameraStreamRef.current
+    if (!stream) return
+    const audioTracks = stream.getAudioTracks().filter(t => t.readyState === 'live')
+    if (audioTracks.length === 0) return
+
+    let actx = null
+    let rafId = null
+    let isCancelled = false
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext
+      actx = new AudioCtx()
+      const source = actx.createMediaStreamSource(new MediaStream(audioTracks))
+      const analyser = actx.createAnalyser()
+      analyser.fftSize = 512
+      source.connect(analyser)
+      const buf = new Float32Array(analyser.fftSize)
+
+      const tick = () => {
+        if (isCancelled) return
+        analyser.getFloatTimeDomainData(buf)
+        let sumSq = 0
+        for (let i = 0; i < buf.length; i++) sumSq += buf[i] * buf[i]
+        const rms = Math.sqrt(sumSq / buf.length)
+
+        // Envelope peak-hold decay
+        candidateAudioRmsRef.current = Math.max(rms, (candidateAudioRmsRef.current || 0) * 0.92)
+
+        // Dispatch for visualizer
+        window.dispatchEvent(new CustomEvent('candidate_audio_rms', { detail: rms }))
+
+        rafId = requestAnimationFrame(tick)
+      }
+      tick()
+    } catch (e) {
+      console.warn('Continuous mic audio analyzer error:', e)
+    }
+
+    return () => {
+      isCancelled = true
+      if (rafId) cancelAnimationFrame(rafId)
+      try { actx?.close() } catch (_) {}
+    }
+  }, [round])
+
+  useEffect(() => {
+    const handleRms = (e) => {
+      const val = e.detail || 0
+      candidateAudioRmsRef.current = Math.max(val, (candidateAudioRmsRef.current || 0) * 0.92)
+    }
+    window.addEventListener('candidate_audio_rms', handleRms)
+    return () => window.removeEventListener('candidate_audio_rms', handleRms)
+  }, [])
+
+  useEffect(() => {
+    if (round === 'done' || round === 'pre_checks' || round === 'intro' || round === 'submitting') return
+    // Suppress when AI is speaking (TTS active)
+    if (isTTSPlayingRef?.current) {
+      if (lipSyncStreakRef) lipSyncStreakRef.current = 0
+      recentMouthScoresRef.current = []
+      return
+    }
+
+    // Only monitor lip sync when a single candidate face is clearly visible
+    if (!proctoring.faceVisible || (proctoring.faceCount !== undefined && proctoring.faceCount !== 1)) {
+      if (lipSyncStreakRef) lipSyncStreakRef.current = 0
+      recentMouthScoresRef.current = []
+      return
+    }
+
+    const currentJaw = Number(proctoring.jawOpenScore || 0)
+    recentMouthScoresRef.current.push(currentJaw)
+    if (recentMouthScoresRef.current.length > 6) recentMouthScoresRef.current.shift()
+
+    const maxRecentMouth = Math.max(...recentMouthScoresRef.current, 0)
+    const isAudioActive = (candidateAudioRmsRef.current || 0) > 0.04
+
+    // If candidate's mouth is opening (currentJaw >= 0.035) or recently opened (maxRecentMouth >= 0.035),
+    // they are speaking and moving their lips naturally -> RESET streak to 0 immediately!
+    if (currentJaw >= 0.035 || maxRecentMouth >= 0.035 || !isAudioActive) {
+      if (lipSyncStreakRef) lipSyncStreakRef.current = 0
+      return
+    }
+
+    // Anomaly: Audio is actively detected while candidate's mouth is completely closed (< 0.035) and has NOT moved
+    const now = Date.now()
+    if (now > (lipSyncCooldownRef.current || 0)) {
+      lipSyncStreakRef.current += 1
+    }
+
+    // Require 5 consecutive frames (~3.5s) of continuous third-party voice with completely closed lips
+    if (lipSyncStreakRef.current >= 5) {
+      lipSyncCooldownRef.current = now + 8000
+      lipSyncStreakRef.current = 0
+      recentMouthScoresRef.current = []
+      logProctoringAlert('lip_sync', 'Audio detected without matching lip movement')
+    }
+  }, [
+    proctoring.jawOpenScore,
+    proctoring.faceVisible,
+    proctoring.faceCount,
+    round,
+    proctoring,
+    logProctoringAlert
+  ])
+
   const heartbeatStateRef = useRef(null)
   useEffect(() => {
     heartbeatStateRef.current = {
@@ -2742,6 +2894,71 @@ export default function VoiceInterviewPage() {
   // RENDER — delegate to sub-components for coding/case study
   // ─────────────────────────────────────────────────────────────────────────────
 
+  const candidateVideoElement = (
+    <>
+      <ProctoringAlerts
+        faceAlertCount={warningsCountRef.current || warningsCount}
+        noiseAlertCount={integrityMetricsRef.current.noiseAlerts}
+        showNoiseBanner={showNoiseBanner}
+        securityMessage={securityMessage}
+        proctoringAlert={proctoringAlert}
+        modelsFailed={proctoring?.modelsFailed}
+      />
+      <div
+        style={{
+          position: 'fixed',
+          bottom: '16px',
+          left: '16px',
+          width: '128px',
+          height: '96px',
+          borderRadius: '12px',
+          overflow: 'hidden',
+          border: proctoringAlert ? '2px solid #ef4444' : '2px solid rgba(99,102,241,0.5)',
+          zIndex: 50,
+          boxShadow: proctoringAlert ? '0 0 20px rgba(239,68,68,0.6)' : '0 4px 16px rgba(0,0,0,0.5)',
+          background: '#000',
+          transition: 'all 0.3s ease',
+        }}
+      >
+        <video
+          ref={attachVideo}
+          playsInline
+          muted
+          autoPlay
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            pointerEvents: 'none',
+            transform: 'scaleX(-1)', // mirror effect
+          }}
+        />
+        {/* Live indicator */}
+        <div style={{ position: 'absolute', bottom: '4px', left: '4px', background: '#ef4444', color: '#fff', fontSize: '9px', fontWeight: 'bold', padding: '1px 6px', borderRadius: '999px', display: 'flex', alignItems: 'center', gap: '3px', pointerEvents: 'none' }}>
+          <span style={{ width: '5px', height: '5px', background: '#fff', borderRadius: '50%', display: 'inline-block' }} /> LIVE
+        </div>
+        {/* Face alert count badge */}
+        {(warningsCountRef.current > 0 || warningsCount > 0) && (
+          <div style={{ position: 'absolute', top: '4px', left: '4px', background: 'rgba(220,38,38,0.9)', color: '#fff', fontSize: '9px', fontWeight: 'bold', padding: '1px 6px', borderRadius: '999px', pointerEvents: 'none' }}>
+            👁️ {warningsCountRef.current || warningsCount}/20
+          </div>
+        )}
+        {/* Alert Overlay matching standard interview */}
+        {proctoringAlert && (
+          <div style={{
+            position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.85)',
+            color: '#ef4444', display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center', padding: '6px',
+            textAlign: 'center', zIndex: 10, pointerEvents: 'none',
+          }}>
+            <span style={{ fontSize: '18px', marginBottom: '2px' }}>⚠️</span>
+            <div style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1.2 }}>{proctoringAlert}</div>
+          </div>
+        )}
+      </div>
+    </>
+  )
+
   if (round === 'coding' && codingQuestion) {
     return (
       <>
@@ -2768,25 +2985,6 @@ export default function VoiceInterviewPage() {
           </React.Suspense>
         </ErrorBoundary>
         {candidateVideoElement}
-        {securityAlert && createPortal(
-          <div role="alert" style={{
-            position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)',
-            zIndex: 99999, display: 'flex', alignItems: 'center', gap: 10,
-            padding: '10px 18px', borderRadius: 999, fontSize: 13, fontWeight: 500,
-            whiteSpace: 'nowrap', pointerEvents: 'none',
-            background: 'rgba(22,10,10,0.88)', backdropFilter: 'blur(14px)',
-            border: '1px solid rgba(239,68,68,0.35)', color: '#fca5a5',
-            boxShadow: '0 4px 24px rgba(0,0,0,0.25)',
-            animation: 'alertSlideDown 0.25s cubic-bezier(0.34,1.56,0.64,1) forwards',
-          }}>
-            <span style={{ display:'flex', alignItems:'center', justifyContent:'center', width:22, height:22, borderRadius:'50%', background:'rgba(239,68,68,0.2)', color:'#ef4444', flexShrink:0 }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            </span>
-            <span style={{ fontWeight:700, fontSize:12, textTransform:'uppercase', letterSpacing:'0.05em', opacity:0.75, marginRight:2 }}>Security</span>
-            {securityAlert}
-          </div>,
-          document.body
-        )}
       </>
     )
   }
@@ -3355,26 +3553,7 @@ export default function VoiceInterviewPage() {
         </div>
       )}
 
-      {/* Security Alert Pill */}
-      {securityAlert && createPortal(
-        <div role="alert" style={{
-          position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)',
-          zIndex: 99999, display: 'flex', alignItems: 'center', gap: 10,
-          padding: '10px 18px', borderRadius: 999, fontSize: 13, fontWeight: 500,
-          whiteSpace: 'nowrap', pointerEvents: 'none',
-          background: 'rgba(22,10,10,0.88)', backdropFilter: 'blur(14px)',
-          border: '1px solid rgba(239,68,68,0.35)', color: '#fca5a5',
-          boxShadow: '0 4px 24px rgba(0,0,0,0.25)',
-          animation: 'alertSlideDown 0.25s cubic-bezier(0.34,1.56,0.64,1) forwards',
-        }}>
-          <span style={{ display:'flex', alignItems:'center', justifyContent:'center', width:22, height:22, borderRadius:'50%', background:'rgba(239,68,68,0.2)', color:'#ef4444', flexShrink:0 }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          </span>
-          <span style={{ fontWeight:700, fontSize:12, textTransform:'uppercase', letterSpacing:'0.05em', opacity:0.75, marginRight:2 }}>Security</span>
-          {securityAlert}
-        </div>,
-        document.body
-      )}
+
 
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-4 border-b border-white/6 bg-[#0a0f1e]/90 backdrop-blur sticky top-0 z-40">

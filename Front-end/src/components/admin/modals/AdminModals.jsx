@@ -407,6 +407,8 @@ export function CandidateScorecardModal({
                       <i className="fas fa-mobile-alt text-rose-600 mt-0.5"></i>
                     ) : alert.type === 'eye_contact' ? (
                       <i className="fas fa-eye text-amber-500 mt-0.5"></i>
+                    ) : alert.type === 'lip_sync' ? (
+                      <i className="fas fa-comment-slash text-amber-600 mt-0.5"></i>
                     ) : alert.type === 'warning' ? (
                       <i className="fas fa-exclamation-circle text-amber-500 mt-0.5"></i>
                     ) : alert.type === 'error' ? (

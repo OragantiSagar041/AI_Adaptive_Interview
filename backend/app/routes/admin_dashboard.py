@@ -484,13 +484,23 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
     # Calculate integrity totals from the violations array, as it accurately tracks all events
     # even if the interview terminates before any questions are answered.
     violations = session_data.get("violations", [])
+    session_integrity = session_data.get("integrity") or {}
+
     total_tab_switches = sum(1 for v in violations if v.get("type") == "tab_switch")
-    total_face_alerts = sum(1 for v in violations if v.get("type") not in ("tab_switch", "noise_alert"))
-    total_noise_alerts = sum(1 for v in violations if v.get("type") == "noise_alert")
-    
+    total_face_alerts = sum(1 for v in violations if v.get("type") not in ("tab_switch", "noise_alert", "background_noise", "noise"))
+    total_noise_alerts = sum(1 for v in violations if v.get("type") in ("noise_alert", "background_noise", "noise"))
+
+    if total_tab_switches == 0 and session_integrity.get("total_tab_switches"):
+        total_tab_switches = session_integrity.get("total_tab_switches")
+    if total_face_alerts == 0 and session_integrity.get("total_face_alerts"):
+        total_face_alerts = session_integrity.get("total_face_alerts")
+    if total_noise_alerts == 0 and session_integrity.get("total_noise_alerts"):
+        total_noise_alerts = session_integrity.get("total_noise_alerts")
+
     total_time = 0
-    # Note: if all per-question time_spent_seconds are 0 (old records pre-fix),
-    # we fall back to session-level timestamps below after the answers loop.
+    ans_tab_sw = 0
+    ans_face_al = 0
+    ans_noise_al = 0
 
     if actual_interview_id:
         rows = answers_collection.find({"interview_id": actual_interview_id}).sort("question_id", 1)
@@ -498,10 +508,9 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
             tab_sw = row.get("tab_switches") or 0
             face_al = row.get("face_alerts") or 0
             noise_al = row.get("noise_alerts") or 0
-            # We no longer sum these from answers since we pull directly from the violations array
-            # total_tab_switches += tab_sw
-            # total_face_alerts += face_al
-            # total_noise_alerts += noise_al
+            ans_tab_sw += tab_sw
+            ans_face_al += face_al
+            ans_noise_al += noise_al
             total_time += (row.get("time_spent_seconds") or 0)
             results.append({
                 "question_id": row.get("question_id"),
@@ -523,6 +532,13 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
                 "face_alerts": face_al,
                 "noise_alerts": noise_al
             })
+
+    if total_tab_switches == 0 and ans_tab_sw > 0:
+        total_tab_switches = ans_tab_sw
+    if total_face_alerts == 0 and ans_face_al > 0:
+        total_face_alerts = ans_face_al
+    if total_noise_alerts == 0 and ans_noise_al > 0:
+        total_noise_alerts = ans_noise_al
 
     # ── Timestamp-based fallback for older sessions where time_spent_seconds was not stored ──
     # If total_time is still 0 after reading all answers, calculate from session timestamps.

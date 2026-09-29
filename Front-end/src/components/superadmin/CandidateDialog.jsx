@@ -990,8 +990,6 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                           {isQualified ? 'Ready for Technical Round / Hiring' : 'Does not meet required threshold'}
                         </span>
                       </div>
-<<<<<<< HEAD
-=======
                         {/* TALENT POOL INJECTION */}
                         {c?.decision === 'rejected' && (
                           <div className="mb-4 p-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 rounded-xl">
@@ -1051,7 +1049,6 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                           </div>
                         </div>
                       )}
->>>>>>> 499552a (Talent pool changes)
                       {c.strengths_summary && (
                         <div className="mb-3">
                           <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Strengths</div>

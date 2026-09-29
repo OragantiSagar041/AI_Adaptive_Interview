@@ -54,19 +54,21 @@ export const handleDeleteSession = createAsyncThunk(
 
 export const handleUpdateDecision = createAsyncThunk(
   'interview/updateDecision',
-  async ({ linkId, decision, talent_pool_status }, { getState, dispatch, rejectWithValue }) => {
+  async ({ linkId, decision, talent_pool_status, rejection_reason }, { getState, dispatch, rejectWithValue }) => {
     try {
       const { API_BASE_URL, token } = getState().auth
       const payload = { link_id: linkId, decision }
-      if (talent_pool_status) {
+      if (talent_pool_status !== undefined && talent_pool_status !== null && talent_pool_status !== '') {
         payload.talent_pool_status = talent_pool_status
+      }
+      if (rejection_reason !== undefined && rejection_reason !== null) {
+        payload.rejection_reason = rejection_reason
       }
       await axios.post(`${API_BASE_URL}/admin/update-decision`, payload, {
         headers: { Authorization: `Bearer ${token}` }
       })
-      alert(`Candidate marked as ${decision.toUpperCase()} successfully.`)
       dispatch(loadDashboardData())
-      return { linkId, decision }
+      return { linkId, decision, rejection_reason }
     } catch (err) {
       const errorMsg = err.response?.data?.detail || err.response?.data?.message || err.message || 'Failed to update decision'
       return rejectWithValue(typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : errorMsg)
@@ -140,6 +142,11 @@ const interviewSlice = createSlice({
       .addCase(handleUpdateDecision.fulfilled, (state, action) => {
         if (state.selectedCandidate && (state.selectedCandidate.link_id === action.payload.linkId || state.selectedCandidate.id === action.payload.linkId)) {
           state.selectedCandidate.decision = action.payload.decision
+          if (action.payload.decision === 'rejected') {
+            state.selectedCandidate.rejection_reason = action.payload.rejection_reason
+          } else {
+            state.selectedCandidate.rejection_reason = null
+          }
         }
       })
       .addCase(createSuperAdminInterview.pending, (state) => {

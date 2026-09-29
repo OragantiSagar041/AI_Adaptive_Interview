@@ -69,9 +69,14 @@ export default function RejectedCandidatesPage() {
       if (jobFilter !== "all" && jobApplied !== jobFilter) return false
       
       if (dateFilter) {
-        if (!c.created_at) return false
-        const candidateDate = new Date(c.created_at).toISOString().split('T')[0]
-        if (candidateDate !== dateFilter) return false
+        const rejectionDateRaw = c.rejected_at || c.decision_at || c.last_action_at || c.updated_at || c.created_at
+        if (!rejectionDateRaw) return false
+        try {
+          const candidateDate = new Date(rejectionDateRaw).toISOString().split('T')[0]
+          if (candidateDate !== dateFilter) return false
+        } catch {
+          return false
+        }
       }
 
       if (talentPoolFilter !== 'all') {
@@ -278,7 +283,7 @@ export default function RejectedCandidatesPage() {
                 <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Status</th>
                 <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">AI Recommendation</th>
                 <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Rejection Reason</th>
-                
+                <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Rejected By</th>
                 <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Date & Time</th>
                 <th className="py-4 px-5 text-xs font-bold text-slate-400 uppercase tracking-wider text-right">Actions</th>
               </tr>
@@ -286,6 +291,26 @@ export default function RejectedCandidatesPage() {
             <tbody className="divide-y divide-slate-100/80">
               {filtered.map((c) => {
                 const scoreNum = Number(c.score ?? c.avg_score ?? 0)
+
+                // 1. Resolve rejector dynamically from rejection event data
+                const rejectorName = (c.rejected_by && typeof c.rejected_by === 'string' && c.rejected_by.trim() && c.rejected_by.length !== 24)
+                  ? c.rejected_by.trim()
+                  : (c.decision_by_name && typeof c.decision_by_name === 'string' && c.decision_by_name.trim() && c.decision_by_name.length !== 24)
+                    ? c.decision_by_name.trim()
+                    : (c.last_action_by_name && typeof c.last_action_by_name === 'string' && c.last_action_by_name.trim() && c.last_action_by_name.length !== 24)
+                      ? c.last_action_by_name.trim()
+                      : (c.admin_name || "Admin")
+
+                // 2. Resolve rejection reason dynamically without hardcoded fallback
+                const rawReason = (c.rejection_reason && typeof c.rejection_reason === 'string') ? c.rejection_reason.trim() : ''
+                const rejectionReasonText = (rawReason && rawReason !== 'Low Score / Did not meet criteria')
+                  ? rawReason
+                  : 'Not specified'
+
+                // 3. Resolve exact rejection date & time
+                const rejectionDateRaw = c.rejected_at || c.decision_at || c.last_action_at || c.updated_at || c.created_at
+                const rejectionDate = rejectionDateRaw ? new Date(rejectionDateRaw) : null
+                const isValidDate = rejectionDate && !isNaN(rejectionDate.getTime())
                                 
                 return (
                   <tr key={c.id || c.link_id || c.email} onClick={() => setSelectedCandidate(c)} className="hover:bg-rose-50/30 transition-colors group whitespace-nowrap cursor-pointer">
@@ -325,13 +350,13 @@ export default function RejectedCandidatesPage() {
                         Not Recommended
                       </span>
                     </td>
-                    <td className="px-5 py-4 text-sm text-slate-600 dark:text-slate-400">{c.rejection_reason || "Low Score / Did not meet criteria"}</td>
-                    
+                    <td className="px-5 py-4 text-sm text-slate-600 dark:text-slate-400 font-medium">{rejectionReasonText}</td>
+                    <td className="px-5 py-4 text-sm font-medium text-slate-600 dark:text-slate-300">{rejectorName}</td>
                     <td className="px-5 py-4 text-sm font-medium text-slate-500 dark:text-slate-400">
-                      {c.created_at ? (
+                      {isValidDate ? (
                         <div className="flex flex-col">
-                          <span className="text-slate-700 dark:text-slate-200 font-semibold">{new Date(c.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                          <span className="text-[11px] text-slate-400 mt-0.5">{new Date(c.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span className="text-slate-700 dark:text-slate-200 font-semibold">{rejectionDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                          <span className="text-[11px] text-slate-400 mt-0.5">{rejectionDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</span>
                         </div>
                       ) : "N/A"}
                     </td>

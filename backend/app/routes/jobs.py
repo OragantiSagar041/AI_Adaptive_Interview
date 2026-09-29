@@ -98,6 +98,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.post("/api/jobs")
+@router.post("/jobs")
 def create_job(job: JobCreate, current_admin: dict = Depends(get_current_admin_details)):
     job_dict = job.dict()
     job_dict["custom_id"] = get_next_sequence_value("job", "JOB")
@@ -130,6 +131,7 @@ def create_job(job: JobCreate, current_admin: dict = Depends(get_current_admin_d
     return {"status": "success", "job": job_dict}
 
 @router.get("/api/jobs")
+@router.get("/jobs")
 def get_admin_jobs(page: int = 1, limit: int = 20, current_admin: dict = Depends(get_current_admin_details)):
     # Validate and clamp pagination parameters
     if page < 1:
@@ -164,6 +166,7 @@ def get_admin_jobs(page: int = 1, limit: int = 20, current_admin: dict = Depends
     }
 
 @router.put("/api/jobs/{job_id}")
+@router.put("/jobs/{job_id}")
 def update_job(job_id: str, job_update: JobCreate, current_admin: dict = Depends(get_current_admin_details)):
     job = jobs_collection.find_one({"job_id": job_id})
     if not job:
@@ -193,6 +196,7 @@ def update_job(job_id: str, job_update: JobCreate, current_admin: dict = Depends
     return {"status": "success", "message": "Job updated"}
 
 @router.delete("/api/jobs/{job_id}")
+@router.delete("/jobs/{job_id}")
 def delete_job(job_id: str, current_admin: dict = Depends(get_current_admin_details)):
     job = jobs_collection.find_one({"job_id": job_id})
     if not job:
@@ -214,6 +218,7 @@ def delete_job(job_id: str, current_admin: dict = Depends(get_current_admin_deta
     return {"status": "success", "message": "Job deleted"}
 
 @router.get("/api/public/jobs/{job_id}")
+@router.get("/public/jobs/{job_id}")
 def get_public_job(job_id: str):
     job = jobs_collection.find_one({"job_id": job_id})
     if not job:
@@ -308,6 +313,7 @@ def get_uploaded_cover_letter_file(filename: str):
 
 
 @router.post("/api/public/jobs/{job_id}/apply")
+@router.post("/public/jobs/{job_id}/apply")
 async def apply_for_job(
     job_id: str,
     request: Request,

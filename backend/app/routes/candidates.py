@@ -500,62 +500,6 @@ class TalentPoolRequest(BaseModel):
     link_id: str
     status: str
 
-class BulkCandidate(BaseModel):
-    candidate_name: str
-    candidate_email: str
-    resume_text: str = ""
-    record_video: bool = True  # Task 5: Per-candidate video toggle
-    experience: str = ""
-    location: str = ""
-    current_ctc: str = ""
-    expected_ctc: str = ""
-    current_company: str = ""
-    notice_period: str = ""
-    candidate_phone: Optional[str] = ""
-
-    @validator('candidate_name')
-    def name_must_not_be_numeric(cls, v):
-        if v.strip().isdigit():
-            raise ValueError("Candidate Name cannot be purely numeric")
-        return v
-
-class BulkCreateSession(BaseModel):
-    candidates: List[BulkCandidate]
-    job_description: str
-    admin_id: str
-    interview_duration: int = 30
-    record_video: bool = True  # Global default
-    interview_format: str = "Standard"  # "Standard" or "Voice"
-    interview_type: str = "Technical"
-    industry_type: str = "General"
-    language: str = "English"
-    case_study_count: int = 3
-    custom_email_html: str = ""  # Task 1: Optional admin-edited email
-    jd_file_url: Optional[str] = None
-    scheduled_start: str = ""  # Task 4
-    scheduled_end: str = ""    # Task 4
-    hr_screening: HRScreening = HRScreening()  # HR screening preferences
-    custom_questions: Union[str, List[str]] = ""
-    ai_instructions: Union[str, List[str]] = ""
-    voice_clone: bool = False
-    custom_voice_id: str = ""
-
-    @validator('scheduled_end')
-    def validate_dates(cls, v, values):
-        start = values.get('scheduled_start')
-        if start and v:
-            try:
-                # Basic ISO format validation check (will be parsed fully in logic)
-                start_dt = datetime.datetime.fromisoformat(start.replace("Z", "+00:00"))
-                end_dt = datetime.datetime.fromisoformat(v.replace("Z", "+00:00"))
-                if start_dt >= end_dt:
-                    raise ValueError("scheduled_end must be after scheduled_start")
-            except ValueError as e:
-                if "scheduled_end must be after" in str(e):
-                    raise e
-                # Ignore strict ISO parse errors here to allow legacy fallback formats
-        return v
-
 @router.post("/admin/bulk-create-sessions")
 def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTasks, current_admin: dict = Depends(get_current_admin_details)):
     from bson import ObjectId
@@ -1413,15 +1357,6 @@ def log_violation(
         return {"status": "error", "message": str(e)}
 
 
-class ProctoringViolationRequest(BaseModel):
-    interview_id: Optional[str] = ""
-    link_id: Optional[str] = ""
-    candidate_id: Optional[str] = ""
-    violation_type: str
-    details: Optional[str] = ""
-    timestamp: Optional[str] = ""
-
-
 @router.post("/proctoring/violation")
 def log_proctoring_violation(
     data: ProctoringViolationRequest,
@@ -1527,8 +1462,11 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
                         app = job_applications_collection.find_one({"application_id": linked_app_id})
 
             # Update job_applications_collection if app exists
+            user_reason = (data.rejection_reason or "").strip()
+            rejection_reason_val = user_reason if user_reason else None
+
             if app:
-                update_fields = {
+                app_update = {
                     "decision": data.decision,
                     "last_action_by_name": admin_name,
                     "last_action_by_role": admin_role,
@@ -1537,14 +1475,25 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
                     "last_action_at": now_iso,
                     "decision_by_name": admin_name,
                     "decision_by_role": admin_role,
+                    "decision_by_id": admin_id,
                     "decision_at": now_iso
                 }
                 if data.talent_pool_status is not None:
-                    update_fields["talent_pool_status"] = data.talent_pool_status
+                    app_update["talent_pool_status"] = data.talent_pool_status
+                if data.decision == "rejected":
+                    app_update["rejection_reason"] = rejection_reason_val
+                    app_update["rejected_by"] = admin_name
+                    app_update["rejected_by_id"] = admin_id
+                    app_update["rejected_at"] = now_iso
+                elif data.decision in ["pending", "reconsidered", None]:
+                    app_update["rejection_reason"] = None
+                    app_update["rejected_by"] = None
+                    app_update["rejected_by_id"] = None
+                    app_update["rejected_at"] = None
 
                 job_applications_collection.update_one(
                     {"_id": app["_id"]},
-                    {"$set": update_fields}
+                    {"$set": app_update}
                 )
 
             # Always update or upsert omni_call_logs_collection
@@ -1559,6 +1508,16 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
             }
             if data.talent_pool_status is not None:
                 omni_update["talent_pool_status"] = data.talent_pool_status
+            if data.decision == "rejected":
+                omni_update["rejection_reason"] = rejection_reason_val
+                omni_update["rejected_by"] = admin_name
+                omni_update["rejected_by_id"] = admin_id
+                omni_update["rejected_at"] = now_iso
+            elif data.decision in ["pending", "reconsidered", None]:
+                omni_update["rejection_reason"] = None
+                omni_update["rejected_by"] = None
+                omni_update["rejected_by_id"] = None
+                omni_update["rejected_at"] = None
             if log and log.get("candidate_name"):
                 omni_update["candidate_name"] = log.get("candidate_name")
             if log and log.get("user_name"):
@@ -1582,10 +1541,21 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
                     "decision": data.decision,
                     "decision_by_name": admin_name,
                     "decision_by_role": admin_role,
+                    "decision_by_id": admin_id,
                     "decision_at": now_iso
                 }
                 if data.talent_pool_status is not None:
                     sess_update["talent_pool_status"] = data.talent_pool_status
+                if data.decision == "rejected":
+                    sess_update["rejection_reason"] = rejection_reason_val
+                    sess_update["rejected_by"] = admin_name
+                    sess_update["rejected_by_id"] = admin_id
+                    sess_update["rejected_at"] = now_iso
+                elif data.decision in ["pending", "reconsidered", None]:
+                    sess_update["rejection_reason"] = None
+                    sess_update["rejected_by"] = None
+                    sess_update["rejected_by_id"] = None
+                    sess_update["rejected_at"] = None
                 interview_sessions_collection.update_one(
                     {"_id": session["_id"]},
                     {"$set": sess_update}
@@ -1598,10 +1568,12 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
             load_dotenv(override=False)
             email_sent = False
             email_reason = "No candidate email found"
-            if email:
+            if email and data.decision in ["selected", "rejected"]:
                 company_val = current_admin.get('company_name', 'HireIQ')
                 email_sent = send_decision_email(email, name, data.decision, jd, company_name=company_val)
                 email_reason = "Success" if email_sent else "Email service error (Brevo API failed)"
+            else:
+                email_reason = "No email required" if data.decision not in ["selected", "rejected"] else "No candidate email found"
 
             return {"status": "success", "decision": data.decision, "email_sent": email_sent, "email_reason": email_reason}
 
@@ -1623,8 +1595,11 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
         admin_id = current_admin.get("admin_id")
         now_iso = datetime.now(timezone.utc).isoformat()
         
+        user_reason = (data.rejection_reason or "").strip()
+        rejection_reason_val = user_reason if user_reason else None
+
         # 2. Update DB
-        sess_update = {
+        session_update = {
             "decision": data.decision,
             "decision_by_name": admin_name,
             "decision_by_role": admin_role,
@@ -1632,27 +1607,39 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
             "decision_at": now_iso
         }
         if data.talent_pool_status is not None:
-            sess_update["talent_pool_status"] = data.talent_pool_status
+            session_update["talent_pool_status"] = data.talent_pool_status
+        if data.decision == "rejected":
+            session_update["rejection_reason"] = rejection_reason_val
+            session_update["rejected_by"] = admin_name
+            session_update["rejected_by_id"] = admin_id
+            session_update["rejected_by_role"] = admin_role
+            session_update["rejected_at"] = now_iso
+        elif data.decision in ["pending", "reconsidered", None]:
+            session_update["rejection_reason"] = None
+            session_update["rejected_by"] = None
+            session_update["rejected_by_id"] = None
+            session_update["rejected_by_role"] = None
+            session_update["rejected_at"] = None
 
         interview_sessions_collection.update_one(
             {"link_id": data.link_id},
-            {"$set": sess_update}
+            {"$set": session_update}
         )
         print(f" DB Updated for {data.link_id}")
         from app.routes.interview import sync_session_to_application
         sync_session_to_application(data.link_id)
         
-        # 3. Send Email
+        # 3. Send Email (only for selected or rejected)
         load_dotenv(override=False)
         email_sent = False
         email_reason = "No candidate email found"
-        if email:
+        if email and data.decision in ["selected", "rejected"]:
             company_val = current_admin.get('company_name', 'HireIQ')
             email_sent = send_decision_email(email, name, data.decision, jd, company_name=company_val)
             print(f" Email sent: {email_sent}")
             email_reason = "Success" if email_sent else "Email service error (Brevo API failed)"
         else:
-            print(" No email found for candidate, skipping notification.")
+            email_reason = "No email required" if data.decision not in ["selected", "rejected"] else "No email found for candidate, skipping notification."
         
         return {"status": "success", "decision": data.decision, "email_sent": email_sent, "email_reason": email_reason}
     except Exception as e:
@@ -1766,16 +1753,6 @@ def send_decision_email(email: str, name: str, decision: str, jd: str, company_n
     except Exception as email_err:
         print(f" Email sending error: {email_err}")
         return False
-
-class CopilotMessage(BaseModel):
-    role: str
-    content: str
-
-class CopilotRequest(BaseModel):
-    message: str
-    history: list[CopilotMessage] = []
-    admin_id: Optional[str] = None
-    session_id: Optional[str] = None
 
 @router.post("/admin/copilot")
 def admin_copilot_chat(request: CopilotRequest, raw_request: Request, current_admin: dict = Depends(get_current_admin_details)):
@@ -2281,10 +2258,6 @@ def delete_admin_copilot_session(session_id: str, current_admin: dict = Depends(
     copilot_sessions_collection.delete_one({"session_id": session_id, "admin_id": admin_id})
     return {"status": "success", "message": "Session deleted"}
 
-class CopilotExecuteRequest(BaseModel):
-    action: str
-    data: dict
-
 @router.post("/admin/copilot/execute")
 def admin_copilot_execute(request: CopilotExecuteRequest, current_admin: dict = Depends(get_current_admin_details)):
     from datetime import datetime, timezone, timedelta
@@ -2625,10 +2598,6 @@ def admin_copilot_execute(request: CopilotExecuteRequest, current_admin: dict = 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-class ATSRequest(BaseModel):
-    resume_text: str
-    jd_text: str
-
 @router.post("/admin/ats-score")
 def calculate_ats_score(
     request: ATSRequest,
@@ -2690,7 +2659,7 @@ Return this EXACT JSON (all score fields are integers 0-100, weighted_total is t
                 from groq import Groq
                 client = Groq(api_key=groq_key.strip())
                 response = client.chat.completions.create(
-                    model="llama3-8b-8192",
+                    model=os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"),
                     messages=[
                         {"role": "system", "content": "You are a precise ATS scoring engine. Return ONLY valid JSON. No markdown. Be extremely fast and concise."},
                         {"role": "user", "content": prompt}
@@ -2857,9 +2826,6 @@ Return this EXACT JSON (all score fields are integers 0-100, weighted_total is t
         print(f" ATS Score endpoint error: {e}")
 
         raise HTTPException(status_code=500, detail=str(e))
-
-class CandidateFeedbackRequest(BaseModel):
-    feedback_text: str
 
 @router.post("/admin/update-talent-pool")
 def update_talent_pool(data: TalentPoolRequest, current_admin: dict = Depends(require_role("admin", "super_admin"))):
