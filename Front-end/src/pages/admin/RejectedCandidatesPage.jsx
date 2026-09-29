@@ -130,24 +130,7 @@ export default function RejectedCandidatesPage() {
     return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
   }).length
 
-  const talentPoolCount = rejectedCandidates.filter(c => c.talent_pool_status === 'talent_pool').length;
-  const futureRoleCount = rejectedCandidates.filter(c => c.talent_pool_status === 'future_role').length;
-  const reconsiderCountCards = rejectedCandidates.filter(c => c.talent_pool_status === 'reconsideration').length;
-  const archivedCount = rejectedCandidates.filter(c => !c.talent_pool_status || c.talent_pool_status === 'archived').length;
 
-  // Technical rejection: failed on technical/skills score (avg_score < 50) but communication was acceptable
-  const technicalRejectionCount = rejectedCandidates.filter(c => {
-    const avg = Number(c.avg_score ?? c.score ?? 0);
-    const comm = Number(c.communication_score ?? 50);
-    return avg < 50 && comm >= 50;
-  }).length;
-
-  // Communication rejection: had decent technical ability but failed on communication
-  const communicationRejectionCount = rejectedCandidates.filter(c => {
-    const avg = Number(c.avg_score ?? c.score ?? 0);
-    const comm = Number(c.communication_score ?? 50);
-    return comm < 50 && avg >= 50;
-  }).length;
 
   return (
     <div className="flex flex-col gap-6 min-h-screen bg-background p-6 pb-12">
