@@ -108,146 +108,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const noiseAlertCountRef = useRef(0)
   const isSubmittingRef = useRef(false)
   const isNextingRef = useRef(false)
-  const behavioralStatsRef = useRef({ wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0, noiseAlerts: 0 })
-  const globalFaceAlertsRef = useRef(0)
-  const audioRmsRef = useRef(0)
-  const lipSyncStreakRef = useRef(0)
-  const lipSyncCooldownRef = useRef(0)
 
-  // References for forward-delegation to hooks
-  const handleSubmitInterviewRef = useRef(null)
-  const securityRef = useRef(null)
-  const startOrRestartSpeechRecognitionRef = useRef(null)
-  const startBackgroundNoiseMonitorRef = useRef(null)
-  const speakAIQuestionRef = useRef(null)
 
-  // Speech & Transcription states and refs needed by hooks
-  const [transcriptionText, setTranscriptionText] = useState('')
-  const [interimTranscriptText, setInterimTranscriptText] = useState('')
-  const isSpeechRecordingRef = useRef(false)
-  const isTTSPlayingRef = useRef(false)
-  const candidateNameRef = useRef('Candidate')
-  const interviewLanguageRef = useRef('English')
-
-  // ── Media & Recording Hook ──
-  const media = useInterviewMedia({
-    sessionDetailRef,
-    interviewIdRef,
-    isSpeechRecordingRef,
-    isTTSPlayingRef,
-    candidateNameRef,
-    interviewLanguageRef,
-    handleScreenShareStop: () => securityRef.current?.handleScreenShareStop(),
-    formatCandidateName,
-    setTranscriptionText,
-    startOrRestartSpeechRecognition: () => startOrRestartSpeechRecognitionRef.current?.(),
-    startBackgroundNoiseMonitor: (s) => startBackgroundNoiseMonitorRef.current?.(s),
-    speakAIQuestion: (q) => speakAIQuestionRef.current?.(q),
-    setIsDisclaimerAccepted,
-    setIsMediaReady,
-    _sessionKey,
-    questions,
-    enableFullscreen: () => securityRef.current?.enableFullscreen(),
-    langMap
-  })
-
-  const {
-    audioMixerCtxRef,
-    audioMixerDestRef,
-    videoPreviewRef,
-    mediaStreamRef,
-    screenStreamRef,
-    cameraRecorderRef,
-    screenRecorderRef,
-    cameraChunksRef,
-    screenChunksRef,
-    recordedMimeTypeRef,
-    visualizerCanvasRef,
-    visualizerActiveRef,
-    visualizerAudioCtxRef,
-    whisperMediaRecorderRef,
-    whisperAudioChunksRef,
-    whisperPauseTimeoutRef,
-    whisperFinalizedTranscriptRef,
-    segmentRecorderRef,
-    segmentChunksRef,
-    segmentHasSpeechRef,
-    segmentPeakRmsRef,
-    segmentStartTimeRef,
-    segmentCuttingRef,
-    segmentTranscribeChainRef,
-    liveInterimGhostRef,
-    transcribeInFlightRef,
-    visualizeAudio,
-    startSegmentedWhisperCapture,
-    beginNewSegment,
-    markSegmentHasSpeech,
-    cutCurrentSegment,
-    transcribeSegment,
-    mergeSegmentChunks,
-    flushWhisperTranscription,
-    promptScreenShare,
-    setupMedia,
-    restartScreenShare,
-    stopRecorderAsync
-  } = media
-
-  // ── Proctoring & Security Hook ──
-  const security = useInterviewSecurity({
-    sessionId,
-    interviewIdRef,
-    sessionDetailRef,
-    videoPreviewRef,
-    mediaStreamRef,
-    screenStreamRef,
-    isDisclaimerAccepted,
-    showAllSet,
-    loading,
-    currentQuestion,
-    currentQuestionIndex,
-    questions,
-    isRoundTwo,
-    interviewType,
-    monitoringToken,
-    behavioralStatsRef,
-    globalFaceAlertsRef,
-    noiseAlertCountRef,
-    handleSubmitInterview: (term, reason) => handleSubmitInterviewRef.current?.(term, reason),
-    isSubmittingRef,
-    audioRmsRef,
-    lipSyncStreakRef,
-    lipSyncCooldownRef,
-    isTTSPlayingRef,
-    isSpeechRecordingRef
-  })
-
-  useEffect(() => {
-    securityRef.current = security
-  }, [security])
-
-  const {
-    proctoringAlert,
-    setProctoringAlert,
-    securityMessage,
-    setSecurityMessage,
-    faceAlertCount,
-    setFaceAlertCount,
-    noiseAlertCount,
-    setNoiseAlertCount,
-    showNoiseBanner,
-    setShowNoiseBanner,
-    fullscreenWarning,
-    setFullscreenWarning,
-    screenShareWarning,
-    setScreenShareWarning,
-    screenShareViolations,
-    setScreenShareViolations,
-    enableFullscreen,
-    recordAlertMetric,
-    proctoring,
-    modelsFailed,
-    handleScreenShareStop
-  } = security
 
   // Upload states
   const [uploadPercentage, setUploadPercentage] = useState(0)
@@ -459,6 +321,10 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const globalTabSwitchesRef = useRef(0)
   const globalFaceAlertsRef = useRef(0)
   const [faceAlertCount, setFaceAlertCount] = useState(0)
+  const [screenShareViolations, setScreenShareViolations] = useState(0)
+  const [screenShareWarning, setScreenShareWarning] = useState(false)
+  const [fullscreenWarning, setFullscreenWarning] = useState(false)
+  const [showNoiseBanner, setShowNoiseBanner] = useState(false)
   const handleNextQuestionRef = useRef(null)
   // TTS cache: Map<cacheKey, blobUrl> — avoids re-fetching identical questions.
   // Capped at 20 entries (FIFO) to prevent unbounded memory growth.

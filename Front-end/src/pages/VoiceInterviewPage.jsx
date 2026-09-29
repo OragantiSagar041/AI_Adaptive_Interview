@@ -2449,19 +2449,8 @@ export default function VoiceInterviewPage() {
     setSecurityAlert(displayMsg)
     securityAlertTimerRef.current = setTimeout(() => setSecurityAlert(''), 4500)
 
-      const isFaceAlert = ['multi_person', 'no_face', 'phone', 'eye_contact'].includes(alertType)
-      if (isFaceAlert) {
-        integrityMetricsRef.current.faceAlerts += 1
-      } else if (alertType === 'tab_switch') {
-        integrityMetricsRef.current.tabSwitches += 1
-      } else if (alertType === 'fullscreen_exit') {
-        integrityMetricsRef.current.fullscreenExits += 1
-      } else if (alertType === 'background_noise') {
-        integrityMetricsRef.current.noiseAlerts += 1
-      }
-  
-      setWarningsCount(p => {
-        const newCount = isFaceAlert ? p + 1 : p
+    setWarningsCount(p => {
+      const newCount = isFaceAlert ? p + 1 : p
         warningsCountRef.current = newCount
         setProctoringState(prev => ({ ...prev, lastAlertType: alertType }))
 
