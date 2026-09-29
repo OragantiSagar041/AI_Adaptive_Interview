@@ -1333,6 +1333,19 @@ async def start_session_interview(link_id: str = Form(...)):
                 "pre_generated_questions": json.dumps(questions)  # cache for instant reload
             }}
         )
+
+        # Publish Redis Pub/Sub event for candidate joined
+        try:
+            from app.db.redis_manager import broadcast_interview_event
+            broadcast_interview_event(
+                event_type="candidate_joined",
+                session_id=link_id,
+                company_id=row.get("company_id"),
+                created_by=row.get("created_by"),
+                extra={"candidate_name": candidate_name, "interview_title": row.get("interview_title") or row.get("job_title")}
+            )
+        except Exception as _ev_err:
+            logger.warning(f"Failed to publish candidate_joined event: {_ev_err}")
     except Exception as db_e:
         logger.exception("Failed to persist interview session start")
         raise HTTPException(status_code=500, detail="Unable to start the interview session") from db_e

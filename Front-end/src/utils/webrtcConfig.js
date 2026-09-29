@@ -51,8 +51,9 @@ export async function initIceServers() {
     const res = await fetch(`${API_BASE_URL}/api/webrtc/ice-servers`)
     if (res.ok) {
       const data = await res.json()
-      if (Array.isArray(data.ice_servers) && data.ice_servers.length > 0) {
-        dynamicIceServers = data.ice_servers
+      const serverList = Array.isArray(data) ? data : data?.ice_servers
+      if (Array.isArray(serverList) && serverList.length > 0) {
+        dynamicIceServers = serverList
         return dynamicIceServers
       }
     }

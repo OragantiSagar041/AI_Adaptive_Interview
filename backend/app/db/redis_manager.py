@@ -3,6 +3,7 @@ import json
 import asyncio
 import logging
 import time
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from fastapi import WebSocket
 from app.services.live_monitoring_security import admin_can_receive_dashboard_event
@@ -114,7 +115,7 @@ class RedisConnectionManager:
                                             await ws.send_json(data)
                                         except Exception as e:
                                             logger.error(f"Error sending to local admin/spectator: {e}")
-                    elif channel == "dashboard:updates":
+                    elif channel in ("dashboard:updates", "interview:events"):
                         await self.broadcast_dashboard(data)
         except asyncio.CancelledError:
             pass
@@ -415,6 +416,69 @@ class RedisConnectionManager:
                 except Exception:
                     pass
 
+    async def publish_interview_event(
+        self,
+        event_type: str,
+        session_id: str,
+        company_id: Optional[str] = None,
+        created_by: Optional[str] = None,
+        extra: Optional[Dict[str, Any]] = None,
+    ):
+        """Publish an interview event to Redis Pub/Sub channels 'interview:events' and 'dashboard:updates'."""
+        payload = {
+            "type": event_type,
+            "session_id": str(session_id),
+            "link_id": str(session_id),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        if company_id:
+            payload["company_id"] = str(company_id)
+        if created_by:
+            payload["created_by"] = str(created_by)
+        if extra:
+            payload.update(extra)
+
+        await self.connect_redis()
+        if self.redis:
+            try:
+                data_str = json.dumps(payload)
+                await self.redis.publish("interview:events", data_str)
+                await self.redis.publish("dashboard:updates", data_str)
+                return
+            except Exception as e:
+                logger.warning(f"Redis publish failed: {e}. Falling back to in-memory broadcast.")
+                self.redis = None
+                self.pubsub = None
+                self._redis_failed = True
+
+        # In-memory fallback
+        await self.broadcast_dashboard(payload)
+
 
 manager = RedisConnectionManager()
+
+
+def broadcast_interview_event(
+    event_type: str,
+    session_id: str,
+    company_id: Optional[str] = None,
+    created_by: Optional[str] = None,
+    extra: Optional[Dict[str, Any]] = None,
+):
+    """Sync-safe helper to publish interview events from any sync or async context."""
+    coro = manager.publish_interview_event(
+        event_type=event_type,
+        session_id=session_id,
+        company_id=company_id,
+        created_by=created_by,
+        extra=extra,
+    )
+    try:
+        loop = asyncio.get_running_loop()
+        if loop.is_running():
+            asyncio.create_task(coro)
+        else:
+            loop.run_until_complete(coro)
+    except RuntimeError:
+        asyncio.run(coro)
 

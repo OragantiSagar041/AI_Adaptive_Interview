@@ -115,6 +115,12 @@ async def lifespan(app: FastAPI):
         interview_sessions_collection.create_index([("company_id", ASCENDING), ("created_at", DESCENDING)])
         interview_sessions_collection.create_index([("company_id", ASCENDING), ("created_by", ASCENDING), ("status", ASCENDING)])
         interview_sessions_collection.create_index([("company_id", ASCENDING), ("created_by", ASCENDING), ("created_at", DESCENDING)])
+        interview_sessions_collection.create_index([("company_id", ASCENDING), ("is_deactivated", ASCENDING), ("created_at", DESCENDING)])
+        interview_sessions_collection.create_index([("company_id", ASCENDING), ("created_by", ASCENDING), ("is_deactivated", ASCENDING), ("created_at", DESCENDING)])
+        interview_sessions_collection.create_index([("omni_call_id", ASCENDING)])
+        interview_sessions_collection.create_index([("candidate_name", ASCENDING), ("company_id", ASCENDING)])
+        interview_sessions_collection.create_index([("company_id", ASCENDING), ("decision", ASCENDING), ("created_at", DESCENDING)])
+        interview_sessions_collection.create_index([("company_id", ASCENDING), ("created_by", ASCENDING), ("decision", ASCENDING), ("created_at", DESCENDING)])
         interview_sessions_collection.create_index([("link_id", ASCENDING)], unique=True)
         # Security indexes for fast queries
         security_logs_collection.create_index([("timestamp", DESCENDING)])

@@ -108,7 +108,9 @@ def broadcast_profile_update(admin_id: str, company_id: str, credits: int = None
         
     async def _send():
         if manager.redis:
-            await manager.redis.publish("dashboard:updates", json.dumps(payload))
+            payload_str = json.dumps(payload)
+            await manager.redis.publish("dashboard:updates", payload_str)
+            await manager.redis.publish("interview:events", payload_str)
         else:
             await manager.broadcast_dashboard(payload)
             
