@@ -721,6 +721,17 @@ def save_answer(
         "created_at": datetime.now(timezone.utc).isoformat()
     })
 
+    # Publish Redis Pub/Sub event for answer submitted
+    try:
+        from app.db.redis_manager import broadcast_interview_event
+        broadcast_interview_event(
+            event_type="answer_submitted",
+            session_id=interview_id,
+            extra={"question_id": question_id}
+        )
+    except Exception as _ev_e:
+        pass
+
     # ── STEP 3: Fire AI scoring in a Celery background task ──────────────────
     from app import tasks
     tasks.score_answer_task.delay(

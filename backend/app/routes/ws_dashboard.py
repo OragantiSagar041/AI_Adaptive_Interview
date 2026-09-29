@@ -61,7 +61,7 @@ from app.ai import omni_dimension_client
 from app.services.live_monitoring_security import (
     MONITORING_SCOPE, admin_can_access_session,
     create_monitoring_token, decode_monitoring_token,
-    validate_snapshot_dataurl,
+    validate_snapshot_dataurl, admin_can_receive_dashboard_event,
 )
 from app.services.candidate_auth import require_active_candidate
 from pymongo import ReturnDocument
@@ -105,13 +105,77 @@ async def dashboard_websocket(websocket: WebSocket, token: Optional[str] = None)
     except HTTPException:
         await websocket.close(code=1008)
         return
-    await manager.connect_dashboard(websocket, auth_context)
+
+    await websocket.accept()
+
+    # Track in local manager for local dev / in-memory broadcast fallback
+    manager.dashboard_connections.append({"websocket": websocket, **auth_context})
+
+    # Dedicated Redis PubSub connection for this dashboard websocket
+    await manager.connect_redis()
+    pubsub = None
+    if manager.redis:
+        try:
+            pubsub = manager.redis.pubsub()
+            await pubsub.subscribe("interview:events", "dashboard:updates")
+        except Exception as e:
+            logger.warning(f"Redis pubsub subscribe failed: {e}. Using in-memory fallback.")
+            pubsub = None
+
+    async def _redis_listener():
+        if not pubsub:
+            return
+        try:
+            async for message in pubsub.listen():
+                if message.get("type") == "message":
+                    raw_data = message.get("data")
+                    if raw_data:
+                        try:
+                            data = json.loads(raw_data) if isinstance(raw_data, str) else raw_data
+                            # Multi-tenant isolation: check admin permission
+                            if admin_can_receive_dashboard_event(auth_context, data):
+                                text_msg = raw_data if isinstance(raw_data, str) else json.dumps(raw_data)
+                                await websocket.send_text(text_msg)
+                        except Exception as send_err:
+                            logger.error(f"Error forwarding Redis pubsub message to dashboard: {send_err}")
+                            break
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.warning(f"Redis pubsub listener error: {e}")
+
+    async def _client_listener():
+        try:
+            while True:
+                await websocket.receive_text()
+        except (WebSocketDisconnect, asyncio.CancelledError):
+            pass
+        except Exception:
+            pass
+
+    client_task = asyncio.create_task(_client_listener())
+    redis_task = asyncio.create_task(_redis_listener()) if pubsub else None
+
     try:
-        while True:
-            # Keep connection alive
-            await websocket.receive_text()
-    except WebSocketDisconnect:
+        wait_tasks = [client_task]
+        if redis_task:
+            wait_tasks.append(redis_task)
+        done, pending = await asyncio.wait(wait_tasks, return_when=asyncio.FIRST_COMPLETED)
+        for t in pending:
+            t.cancel()
+    except Exception as e:
+        logger.warning(f"Dashboard WS session ended: {e}")
+    finally:
+        client_task.cancel()
+        if redis_task:
+            redis_task.cancel()
         manager.disconnect_dashboard(websocket)
+        if pubsub:
+            try:
+                await pubsub.unsubscribe("interview:events", "dashboard:updates")
+                await pubsub.close()
+            except Exception:
+                pass
 
 @router.get("/dashboard")
 async def get_dashboard_aggregated_data(
@@ -123,9 +187,7 @@ async def get_dashboard_aggregated_data(
         from app.db.redis_manager import manager
         import json
         
-        stats_data = await get_dashboard_stats(admin_id=admin_id, current_admin=current_admin)
-        
-        # Restore candidate query since the frontend still expects candidates in this payload
+        # Define queries and parallelize independent database operations
         c_query_filter = {
             "is_deactivated": {"$ne": True}
         }
@@ -171,31 +233,42 @@ async def get_dashboard_aggregated_data(
                 cursor = cursor.limit(1000) # Prevent MongoDB NetworkTimeout by setting a generous upper bound
             return list(cursor)
 
-        candidates_cursor = await asyncio.to_thread(_load_dashboard_candidates)
+        jobs_query = {}
+        if current_admin.get("role") != "master":
+            jobs_query["company_id"] = current_admin.get("company_id")
+        if current_admin.get("role") == "admin":
+            jobs_query["admin_id"] = current_admin["admin_id"]
+        elif current_admin.get("role") in ["super_admin", "superadmin"]:
+            jobs_query["admin_id"] = {"$in": _get_authorized_creator_ids(current_admin)}
+
+        def _load_jobs():
+            if summary_only:
+                return []
+            return list(jobs_collection.find(jobs_query, {"job_id": 1}))
+
+        def _load_admins():
+            return list(admins_collection.find(
+                {"company_id": current_admin.get("company_id")},
+                {"name": 1, "username": 1, "role": 1}
+            ))
+
+        # Parallelize independent database queries to cut latency by >50%
+        stats_data, candidates_cursor, jobs, admins_in_company = await asyncio.gather(
+            get_dashboard_stats(admin_id=admin_id, current_admin=current_admin),
+            asyncio.to_thread(_load_dashboard_candidates),
+            asyncio.to_thread(_load_jobs),
+            asyncio.to_thread(_load_admins)
+        )
         
         # Get AI Calling interested candidates
         apps = []
-        try:
-            jobs_query = {}
-            if current_admin.get("role") != "master":
-                jobs_query["company_id"] = current_admin.get("company_id")
-            if current_admin.get("role") == "admin":
-                jobs_query["admin_id"] = current_admin["admin_id"]
-            elif current_admin.get("role") in ["super_admin", "superadmin"]:
-                jobs_query["admin_id"] = {"$in": _get_authorized_creator_ids(current_admin)}
-            jobs = [] if summary_only else await asyncio.to_thread(lambda: list(jobs_collection.find(jobs_query)))
-            job_ids = [j.get("job_id") for j in jobs if j.get("job_id")]
+        job_ids = [j.get("job_id") for j in jobs if j.get("job_id")]
+        if job_ids and not summary_only:
+            try:
+                apps = await asyncio.to_thread(lambda: list(job_applications_collection.find({"job_id": {"$in": job_ids}})))
+            except Exception as e:
+                logger.warning(f"Error fetching AI Calling candidates: {e}")
             
-            app_query = {
-                "job_id": {"$in": job_ids}
-            }
-            if job_ids:
-                apps = await asyncio.to_thread(lambda: list(job_applications_collection.find(app_query)))
-        except Exception as e:
-            print(f"Error fetching AI Calling candidates: {e}")
-            
-        # Pre-fetch admins for ID generation
-        admins_in_company = list(admins_collection.find({"company_id": current_admin.get("company_id")}, {"name": 1, "username": 1, "role": 1}))
         admin_map = {str(a["_id"]): a for a in admins_in_company}
         super_admin = next((a for a in admins_in_company if a.get("role") == "super_admin"), None)
         sa_prefix = (super_admin.get("name") or super_admin.get("username") or "SA")[:2].upper() if super_admin else "SA"
@@ -260,168 +333,237 @@ async def get_dashboard_aggregated_data(
             }
             candidates_list.append(mock_session)
             
-        # ── Fetch AI calling logs from Omni Dimension API ────────────────────
-        # The Omni API key is SHARED across all companies on this platform.
-        # We restrict calls admin-wise: they must either be in our local DB or the
-        # user_name of the call must match one of this company's admins' names/usernames.
-        omni_calls = []
+        # ── Fetch AI calling logs from Omni Dimension API safely with Redis Caching ──
+        omni_mock_sessions = []
+        omni_stats = {"total_calls": 0, "status": "ok"}
+        
+        company_id_str = str(current_admin.get("company_id") or current_admin.get("admin_id") or "master")
+        omni_cache_key = f"omni:dashboard:sessions:{company_id_str}:{'summary' if summary_only else 'full'}"
+        CACHE_TTL = 60  # seconds
+
+        # 1. Check Redis cache first (avoids calling OmniDimension on every page load)
+        cached_omni_data = None
         try:
-            from app.ai.omni_dimension_client import get_omni_client
-            omni_client = get_omni_client()
+            if manager.redis:
+                raw_cached = await manager.redis.get(omni_cache_key)
+                if raw_cached:
+                    cached_omni_data = json.loads(raw_cached)
+            if cached_omni_data is None:
+                from app.ai.omni_dimension_client import _get_omni_cache
+                c = _get_omni_cache()
+                if c:
+                    raw_cached = c.get(omni_cache_key)
+                    if raw_cached:
+                        cached_omni_data = json.loads(raw_cached)
+        except Exception as cache_read_err:
+            logger.debug(f"[dashboard] Omni cache read error: {cache_read_err}")
+            cached_omni_data = None
 
-            # 1. Get owned call IDs from local DB
-            company_id_str = str(current_admin.get("company_id") or "")
-            allowed_ids = _get_authorized_creator_ids(current_admin)
-            
-            db_query = {}
-            sess_query = {"omni_call_id": {"$exists": True, "$ne": None}}
-            if current_admin.get("role") != "master":
-                if company_id_str:
-                    db_query["$or"] = [
-                        {"company_id": company_id_str},
-                        {"admin_id": {"$in": allowed_ids}}
-                    ]
-                    sess_query["$or"] = [
-                        {"company_id": company_id_str},
-                        {"created_by": {"$in": allowed_ids}}
-                    ]
-                else:
-                    db_query["admin_id"] = {"$in": allowed_ids}
-                    sess_query["created_by"] = {"$in": allowed_ids}
-
-            company_log_docs = list(omni_call_logs_collection.find(db_query, {"call_id": 1}))
-            owned_call_ids = {str(doc["call_id"]) for doc in company_log_docs if doc.get("call_id")}
-
-            session_docs = list(interview_sessions_collection.find(sess_query, {"omni_call_id": 1, "ai_call_id": 1}))
-            for doc in session_docs:
-                if doc.get("omni_call_id"):
-                    owned_call_ids.add(str(doc["omni_call_id"]))
-                if doc.get("ai_call_id"):
-                    owned_call_ids.add(str(doc["ai_call_id"]))
-
-            # Fetch from Omni API
-            omni_page = 1
-            omni_page_size = 100
-            omni_max_pages = 5 if summary_only else 20
-
-            while omni_page <= omni_max_pages:
-                omni_res  = omni_client.call.get_call_logs(page=omni_page, page_size=omni_page_size)
-                omni_data = omni_res.get("json", omni_res) if isinstance(omni_res, dict) else {}
-                omni_page_calls = (
-                    omni_data.get("call_log_data")
-                    or omni_data.get("calls")
-                    or omni_data.get("call_logs")
-                    or omni_data.get("data")
-                    or omni_data.get("results")
-                    or []
-                )
-                if not isinstance(omni_page_calls, list) or not omni_page_calls:
-                    break
-
-                for call in omni_page_calls:
-                    cid = str(call.get("id") or call.get("call_id") or "")
-                    
-                    # Strictly match by tenant owned call IDs (or allow all if master)
-                    if cid in owned_call_ids or current_admin.get("role") == "master":
-                        omni_calls.append(call)
-
-                total_omni = omni_data.get("total_records") or 0
-                if len(omni_calls) >= total_omni or len(omni_page_calls) < omni_page_size:
-                    break
-                omni_page += 1
-
-            # Cap to 8 for summary_only (dashboard widget)
-            if summary_only:
-                omni_calls = omni_calls[:8]
-
-        except Exception as omni_err:
-            print(f"[dashboard omni fetch] {omni_err}")
-            omni_calls = []
-
-
-
-        # Pre-fetch candidate sessions for enrichment
-        all_omni_call_ids = [str(o.get("id") or o.get("call_id") or "") for o in omni_calls]
-        matching_sessions = list(interview_sessions_collection.find({"omni_call_id": {"$in": all_omni_call_ids}}))
-        session_map = {str(s["omni_call_id"]): s for s in matching_sessions if s.get("omni_call_id")}
-
-        # Name fallback map
-        api_names = [o.get("candidate_name") for o in omni_calls if o.get("candidate_name")]
-        name_sessions = list(interview_sessions_collection.find({"candidate_name": {"$in": api_names}, "company_id": current_admin.get("company_id")}))
-        name_map = {s["candidate_name"].lower(): s for s in sorted(name_sessions, key=lambda x: x.get("created_at", ""), reverse=True) if s.get("candidate_name")}
-
-        for o_call in omni_calls:
-            call_id = str(o_call.get("id") or o_call.get("call_id") or o_call.get("_id") or "")
-
-            # Resolve candidate name from extracted_variables.full_name first
-            extracted = o_call.get("extracted_variables") or {}
-            if isinstance(extracted, str):
-                try:
-                    import json as _json
-                    extracted = _json.loads(extracted)
-                except Exception:
-                    extracted = {}
-            c_name = (
-                extracted.get("full_name")
-                or o_call.get("candidate_name")
-                or o_call.get("user_name")
-                or o_call.get("to_number")
-                or "CA"
-            )
-
-            # 1. Custom ID Generation
-            creator_id = o_call.get("admin_id")
-            creator   = admin_map.get(str(creator_id)) if creator_id else None
-            su_prefix = (creator.get("name") or creator.get("username") or "AD")[:2].upper() if creator else sa_prefix
-            ca_prefix = c_name[:2].upper()
-            cand_id   = f"{sa_prefix}{su_prefix}{ca_prefix}{call_id[-4:] if len(call_id) >= 4 else call_id}"
-
-            # 2. Map Details from session if available
-            matched_session = session_map.get(call_id) or name_map.get(c_name.lower())
-            cand_email = matched_session.get("candidate_email") or matched_session.get("email") if matched_session else o_call.get("phone_number", "")
-            cand_phone = matched_session.get("candidate_phone") or matched_session.get("phone") if matched_session else o_call.get("to_number", "")
-            int_title  = matched_session.get("job_title") or matched_session.get("interview_title") if matched_session else extracted.get("current_role") or ""
-
-            raw_score = o_call.get("cqs_score")
+        if cached_omni_data is not None and isinstance(cached_omni_data, list):
+            omni_mock_sessions = cached_omni_data
+            omni_stats = {"total_calls": len(omni_mock_sessions), "status": "cached"}
+            candidates_list.extend(omni_mock_sessions)
+        else:
+            # 2. Cache miss: Fetch from OmniDimension with strict 3.0s timeout
             try:
-                score = float(raw_score) if raw_score else 0.0
-            except (ValueError, TypeError):
-                score = 0.0
+                def _fetch_raw_omni_logs():
+                    try:
+                        from app.ai.omni_dimension_client import get_omni_client
+                        omni_client = get_omni_client()
+                    except Exception as client_init_err:
+                        logger.warning(f"[dashboard] OmniDimension client not configured or failed to init: {client_init_err}")
+                        return []
 
-            # Map status
-            raw_status  = o_call.get("call_status") or o_call.get("status") or "initiated"
-            status_remap = {"initiated": "pending", "completed": "completed", "failed": "expired", "no-answer": "expired"}
-            mapped_status = status_remap.get(raw_status, "pending")
+                    # Get owned call IDs from local DB
+                    allowed_ids = _get_authorized_creator_ids(current_admin)
+                    db_query = {}
+                    sess_query = {"omni_call_id": {"$exists": True, "$ne": None}}
+                    if current_admin.get("role") != "master":
+                        if current_admin.get("company_id"):
+                            db_query["$or"] = [
+                                {"company_id": str(current_admin.get("company_id"))},
+                                {"admin_id": {"$in": allowed_ids}}
+                            ]
+                            sess_query["$or"] = [
+                                {"company_id": str(current_admin.get("company_id"))},
+                                {"created_by": {"$in": allowed_ids}}
+                            ]
+                        else:
+                            db_query["admin_id"] = {"$in": allowed_ids}
+                            sess_query["created_by"] = {"$in": allowed_ids}
 
-            # Standardize date
-            raw_created = o_call.get("time_of_call") or o_call.get("created_at")
-            if raw_created and isinstance(raw_created, str) and "/" in raw_created:
+                    try:
+                        company_log_docs = list(omni_call_logs_collection.find(db_query, {"call_id": 1}))
+                        owned_call_ids = {str(doc["call_id"]) for doc in company_log_docs if doc.get("call_id")}
+
+                        session_docs = list(interview_sessions_collection.find(sess_query, {"omni_call_id": 1, "ai_call_id": 1}))
+                        for doc in session_docs:
+                            if doc.get("omni_call_id"):
+                                owned_call_ids.add(str(doc["omni_call_id"]))
+                            if doc.get("ai_call_id"):
+                                owned_call_ids.add(str(doc["ai_call_id"]))
+                    except Exception as db_err:
+                        logger.warning(f"[dashboard] Error retrieving owned call IDs from Mongo: {db_err}")
+                        owned_call_ids = set()
+
+                    raw_calls = []
+                    omni_page = 1
+                    omni_page_size = 100
+                    omni_max_pages = 2 if summary_only else 4
+
+                    try:
+                        while omni_page <= omni_max_pages:
+                            omni_res = omni_client.call.get_call_logs(page=omni_page, page_size=omni_page_size)
+                            omni_data = omni_res.get("json", omni_res) if isinstance(omni_res, dict) else {}
+                            omni_page_calls = (
+                                omni_data.get("call_log_data")
+                                or omni_data.get("calls")
+                                or omni_data.get("call_logs")
+                                or omni_data.get("data")
+                                or omni_data.get("results")
+                                or []
+                            )
+                            if not isinstance(omni_page_calls, list) or not omni_page_calls:
+                                break
+
+                            for call in omni_page_calls:
+                                cid = str(call.get("id") or call.get("call_id") or "")
+                                if cid in owned_call_ids or current_admin.get("role") == "master":
+                                    raw_calls.append(call)
+
+                            total_omni = omni_data.get("total_records") or 0
+                            if len(raw_calls) >= total_omni or len(omni_page_calls) < omni_page_size:
+                                break
+                            omni_page += 1
+
+                        if summary_only:
+                            raw_calls = raw_calls[:8]
+                    except Exception as fetch_err:
+                        logger.warning(f"[dashboard] OmniDimension get_call_logs failed: {fetch_err}")
+                        return []
+
+                    return raw_calls
+
+                # Strict 3.0s timeout to never block request threads
+                omni_calls = await asyncio.wait_for(asyncio.to_thread(_fetch_raw_omni_logs), timeout=3.0)
+                omni_stats["total_calls"] = len(omni_calls)
+
+                if omni_calls:
+                    all_omni_call_ids = [str(o.get("id") or o.get("call_id") or "") for o in omni_calls if isinstance(o, dict)]
+                    matching_sessions = list(interview_sessions_collection.find({"omni_call_id": {"$in": all_omni_call_ids}}))
+                    session_map = {str(s["omni_call_id"]): s for s in matching_sessions if s.get("omni_call_id")}
+
+                    api_names = [o.get("candidate_name") for o in omni_calls if isinstance(o, dict) and o.get("candidate_name")]
+                    name_sessions = list(interview_sessions_collection.find({
+                        "candidate_name": {"$in": api_names},
+                        "company_id": current_admin.get("company_id")
+                    }))
+                    name_map = {
+                        s["candidate_name"].lower(): s
+                        for s in sorted(name_sessions, key=lambda x: x.get("created_at", ""), reverse=True)
+                        if s.get("candidate_name")
+                    }
+
+                    for o_call in omni_calls:
+                        if not isinstance(o_call, dict):
+                            continue
+                        try:
+                            call_id = str(o_call.get("id") or o_call.get("call_id") or o_call.get("_id") or "")
+
+                            extracted = o_call.get("extracted_variables") or {}
+                            if isinstance(extracted, str):
+                                try:
+                                    import json as _json
+                                    extracted = _json.loads(extracted)
+                                except Exception:
+                                    extracted = {}
+                            c_name = (
+                                extracted.get("full_name")
+                                or o_call.get("candidate_name")
+                                or o_call.get("user_name")
+                                or o_call.get("to_number")
+                                or "CA"
+                            )
+
+                            creator_id = o_call.get("admin_id")
+                            creator = admin_map.get(str(creator_id)) if (creator_id and admin_map) else None
+                            su_prefix = (creator.get("name") or creator.get("username") or "AD")[:2].upper() if creator else sa_prefix
+                            ca_prefix = c_name[:2].upper()
+                            cand_id = f"{sa_prefix}{su_prefix}{ca_prefix}{call_id[-4:] if len(call_id) >= 4 else call_id}"
+
+                            matched_session = session_map.get(call_id) or name_map.get(c_name.lower())
+                            cand_email = matched_session.get("candidate_email") or matched_session.get("email") if matched_session else o_call.get("phone_number", "")
+                            cand_phone = matched_session.get("candidate_phone") or matched_session.get("phone") if matched_session else o_call.get("to_number", "")
+                            int_title = matched_session.get("job_title") or matched_session.get("interview_title") if matched_session else extracted.get("current_role") or ""
+
+                            raw_score = o_call.get("cqs_score")
+                            try:
+                                score = float(raw_score) if raw_score else 0.0
+                            except (ValueError, TypeError):
+                                score = 0.0
+
+                            raw_status = o_call.get("call_status") or o_call.get("status") or "initiated"
+                            status_remap = {"initiated": "pending", "completed": "completed", "failed": "expired", "no-answer": "expired"}
+                            mapped_status = status_remap.get(raw_status, "pending")
+
+                            raw_created = o_call.get("time_of_call") or o_call.get("created_at")
+                            if raw_created and isinstance(raw_created, str) and "/" in raw_created:
+                                try:
+                                    parsed_dt = datetime.strptime(raw_created, "%m/%d/%Y %H:%M:%S").replace(tzinfo=timezone.utc)
+                                    created_at_iso = parsed_dt.isoformat()
+                                except Exception:
+                                    created_at_iso = datetime.now(timezone.utc).isoformat()
+                            else:
+                                created_at_iso = raw_created if isinstance(raw_created, str) else datetime.now(timezone.utc).isoformat()
+
+                            mock_session = {
+                                "id": f"ai_call_omni_{call_id}",
+                                "_id": f"ai_call_omni_{call_id}",
+                                "link_id": f"ai_call_omni_{call_id}",
+                                "candidate_id": cand_id,
+                                "candidate_name": c_name if c_name not in ("CA", "Unknown") else "AI Calling Profile",
+                                "candidate_email": cand_email or "",
+                                "candidate_phone": cand_phone or "",
+                                "interview_title": int_title,
+                                "score": score,
+                                "avg_score": score,
+                                "created_at": created_at_iso,
+                                "created_by": creator_id,
+                                "decision": "selected" if score > 50 else "rejected",
+                                "status": mapped_status,
+                                "is_deactivated": False
+                            }
+                            omni_mock_sessions.append(mock_session)
+                        except Exception as item_err:
+                            logger.warning(f"[dashboard] Skipping malformed Omni call: {item_err}")
+                            continue
+
+                candidates_list.extend(omni_mock_sessions)
+
+                # Store in Redis cache for 60 seconds
                 try:
-                    parsed_dt = datetime.strptime(raw_created, "%m/%d/%Y %H:%M:%S").replace(tzinfo=timezone.utc)
-                    created_at_iso = parsed_dt.isoformat()
-                except Exception:
-                    created_at_iso = datetime.now(timezone.utc).isoformat()
-            else:
-                created_at_iso = raw_created if isinstance(raw_created, str) else datetime.now(timezone.utc).isoformat()
+                    if manager.redis:
+                        await manager.redis.setex(omni_cache_key, CACHE_TTL, json.dumps(omni_mock_sessions))
+                    else:
+                        from app.ai.omni_dimension_client import _get_omni_cache
+                        c = _get_omni_cache()
+                        if c:
+                            c.setex(omni_cache_key, CACHE_TTL, json.dumps(omni_mock_sessions))
+                except Exception as cache_write_err:
+                    logger.debug(f"[dashboard] Omni cache write error: {cache_write_err}")
 
-            mock_session = {
-                "id": f"ai_call_omni_{call_id}",
-                "_id": f"ai_call_omni_{call_id}",
-                "link_id": f"ai_call_omni_{call_id}",
-                "candidate_id": cand_id,
-                "candidate_name": c_name if c_name not in ("CA", "Unknown") else "AI Calling Profile",
-                "candidate_email": cand_email or "",
-                "candidate_phone": cand_phone or "",
-                "interview_title": int_title,
-                "score": score,
-                "avg_score": score,
-                "created_at": created_at_iso,
-                "created_by": creator_id,
-                "decision": "selected" if score > 50 else "rejected",
-                "status": mapped_status,
-                "is_deactivated": False
-            }
-            candidates_list.append(mock_session)
+            except asyncio.TimeoutError:
+                logger.warning("[dashboard] OmniDimension fetch timed out (3.0s limit) — caching empty result and returning local dashboard data")
+                omni_stats = {"total_calls": 0, "status": "timeout"}
+                # Cache empty list for 30s to prevent hammering a slow Omni API on every refresh
+                try:
+                    if manager.redis:
+                        await manager.redis.setex(omni_cache_key, 30, json.dumps([]))
+                except Exception:
+                    pass
+            except Exception as omni_err:
+                logger.warning(f"[dashboard] OmniDimension fetch failed: {omni_err} — returning empty stats")
+                omni_stats = {"total_calls": 0, "status": "unavailable", "error": str(omni_err)}
 
 
 
@@ -540,6 +682,7 @@ async def get_dashboard_aggregated_data(
         return {
             "dbStats": stats_data,
             "candidates": candidates_list,
+            "omni_stats": omni_stats,
             "liveSessions": live_sessions,
             "ongoingMonitoredCount": ongoing_monitored_count,
             "ongoingLiveCount": ongoing_live_count,
@@ -549,5 +692,19 @@ async def get_dashboard_aggregated_data(
             "creditRequests": credit_reqs
         }
     except Exception as e:
+        logger.error(f"[dashboard] Unexpected error in get_dashboard_aggregated_data: {e}", exc_info=True)
+        if "stats_data" in locals():
+            return {
+                "dbStats": stats_data,
+                "candidates": locals().get("candidates_list", []),
+                "omni_stats": locals().get("omni_stats", {}),
+                "liveSessions": locals().get("liveSessions", []),
+                "ongoingMonitoredCount": 0,
+                "ongoingLiveCount": 0,
+                "ongoingAlertCount": 0,
+                "ongoingSpeakingCount": 0,
+                "ongoingCodingCount": 0,
+                "creditRequests": []
+            }
         raise HTTPException(status_code=500, detail=str(e))
 

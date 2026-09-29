@@ -197,6 +197,19 @@ def complete_session(
                 
         interview_sessions_collection.update_one({"link_id": link_id}, {"$set": update_data})
         sync_session_to_application(link_id)
+
+        # Publish interview_completed event to Redis Pub/Sub
+        try:
+            from app.db.redis_manager import broadcast_interview_event
+            broadcast_interview_event(
+                event_type="interview_completed",
+                session_id=link_id,
+                company_id=session.get("company_id") if session else None,
+                created_by=session.get("created_by") if session else None,
+                extra={"candidate_name": session.get("candidate_name") if session else None}
+            )
+        except Exception as _ev_err:
+            logger.warning(f"Failed to publish interview_completed event: {_ev_err}")
         
         # Broadcast real-time completion to update credits and dashboard
         if session:
@@ -444,7 +457,9 @@ async def _store_live_snapshot(link_id: str, updates: Dict[str, Any], session: D
         "data": dashboard_data,
     }
     if manager.redis:
-        await manager.redis.publish("dashboard:updates", json.dumps(payload))
+        payload_str = json.dumps(payload)
+        await manager.redis.publish("dashboard:updates", payload_str)
+        await manager.redis.publish("interview:events", payload_str)
     else:
         await manager.broadcast_dashboard(payload)
     return merged
@@ -737,16 +752,16 @@ async def get_spectator_count(
     return {"link_id": link_id, "spectator_count": count}
 
 
-@router.get("/api/webrtc/ice-servers")
-@router.get("/webrtc/ice-servers")
-def get_webrtc_ice_servers():
-    """
-    Returns standard STUN and optionally TURN server configurations
-    from environment variables (TURN_SERVER_URL, TURN_USERNAME, TURN_CREDENTIAL).
-    """
+_METERED_ICE_CACHE: Dict[str, tuple[float, list]] = {}
+_METERED_CACHE_TTL = 600.0  # Cache for 10 minutes to prevent API rate limits & eliminate latency
+
+
+def _get_fallback_ice_servers() -> list:
+    """Standard STUN servers + any manual TURN servers configured in environment."""
     ice_servers = [
         {"urls": "stun:stun.l.google.com:19302"},
         {"urls": "stun:stun1.l.google.com:19302"},
+        {"urls": "stun:stun.relay.metered.ca:80"},
     ]
     turn_url = os.getenv("TURN_SERVER_URL", "").strip()
     turn_user = os.getenv("TURN_USERNAME", "").strip()
@@ -767,7 +782,59 @@ def get_webrtc_ice_servers():
             if turn_cred:
                 tcp_entry["credential"] = turn_cred
             ice_servers.append(tcp_entry)
+    return ice_servers
 
+
+async def get_metered_ice_servers() -> list:
+    """
+    Fetch dynamic STUN/TURN credentials from Metered API (e.g. hireiq.metered.live).
+    Caches credentials for 10 minutes and falls back gracefully to standard STUN.
+    """
+    metered_api_key = os.getenv("METERED_API_KEY", "").strip()
+    metered_domain = os.getenv("METERED_DOMAIN", "hireiq.metered.live").strip()
+
+    # If no Metered API key configured, use fallback STUN/TURN servers
+    if not metered_api_key:
+        return _get_fallback_ice_servers()
+
+    # Check in-memory cache
+    cache_key = f"{metered_domain}:{metered_api_key[:8]}"
+    cached = _METERED_ICE_CACHE.get(cache_key)
+    if cached and (time.monotonic() - cached[0]) < _METERED_CACHE_TTL:
+        return cached[1]
+
+    # Fetch fresh dynamic TURN/STUN credentials from Metered API
+    try:
+        import httpx
+        url = f"https://{metered_domain}/api/v1/turn/credentials?apiKey={metered_api_key}"
+        async with httpx.AsyncClient(timeout=4.0) as client:
+            resp = await client.get(url)
+            if resp.status_code == 200:
+                data = resp.json()
+                if isinstance(data, list) and len(data) > 0:
+                    _METERED_ICE_CACHE[cache_key] = (time.monotonic(), data)
+                    return data
+            logger.warning(f"Metered API returned status {resp.status_code}: {resp.text}")
+    except Exception as e:
+        logger.warning(f"Failed to fetch dynamic ICE servers from Metered: {e}")
+
+    # If previous cache exists (even expired), use it rather than bare STUN
+    if cached and cached[1]:
+        return cached[1]
+
+    return _get_fallback_ice_servers()
+
+
+@router.get("/api/webrtc/ice-servers")
+@router.get("/webrtc/ice-servers")
+async def get_webrtc_ice_servers(raw: bool = False):
+    """
+    Returns dynamic STUN and TURN server configurations.
+    Uses Metered.ca API when METERED_API_KEY is configured, or standard STUN fallback.
+    """
+    ice_servers = await get_metered_ice_servers()
+    if raw:
+        return ice_servers
     return {"status": "success", "ice_servers": ice_servers}
 
 

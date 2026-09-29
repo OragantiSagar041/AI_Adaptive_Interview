@@ -1557,11 +1557,11 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                       </div>
                     </div>
                     {recordingUrl ? (
-                      <video controls className="w-full rounded-lg border border-slate-200 bg-black" src={recordingUrl}>
+                      <video controls preload="none" className="w-full aspect-video object-contain rounded-lg border border-slate-200 bg-black" src={recordingUrl}>
                         Your browser does not support video.
                       </video>
                     ) : (
-                      <div className="h-32 flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
+                      <div className="w-full aspect-video flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
                         No camera recording available
                       </div>
                     )}
@@ -1576,11 +1576,11 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                       </div>
                     </div>
                     {screenRecordingUrl ? (
-                      <video controls className="w-full rounded-lg border border-slate-200 bg-black" src={screenRecordingUrl}>
+                      <video controls preload="none" className="w-full aspect-video object-contain rounded-lg border border-slate-200 bg-black" src={screenRecordingUrl}>
                         Your browser does not support video.
                       </video>
                     ) : (
-                      <div className="h-32 flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
+                      <div className="w-full aspect-video flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
                         No screen recording available
                       </div>
                     )}

@@ -211,7 +211,10 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
           </div>
         </div>
 
-        <div className="relative w-full aspect-video max-h-[38vh] bg-black rounded-3xl overflow-hidden mb-5 flex items-center justify-center">
+        <div 
+          className="relative w-full shrink-0 h-48 sm:h-52 bg-black rounded-xl overflow-hidden flex items-center justify-center border border-white/10"
+          style={{ backgroundColor: '#000000', maxHeight: '230px' }}
+        >
           {error ? (
             <div className="text-center p-6">
               <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-4">

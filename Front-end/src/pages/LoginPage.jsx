@@ -430,6 +430,10 @@ export default function LoginPage() {
       throw new Error('Unable to resolve Firebase login account.')
     }
 
+    if (!auth) {
+      throw new Error('Firebase authentication is not configured. Please set VITE_FIREBASE_API_KEY in Front-end/.env.')
+    }
+
     // 2. Authenticate with Firebase using the existing password
     const firebaseCredential = await signInWithEmailAndPassword(
       auth,

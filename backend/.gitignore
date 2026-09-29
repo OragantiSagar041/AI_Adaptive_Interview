@@ -1,0 +1,43 @@
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Firebase & Secret Keys (CRITICAL: Never commit to GitHub)
+*firebase*.json
+firebase_credentials.json
+serviceAccountKey*.json
+*.pem
+*.key
+*.cert
+
+# Python cache & virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+venv/
+.venv/
+env/
+ENV/
+
+# Uploads & temporary runtime files
+uploads/
+temp_uploads/
+*.webm
+*.mp4
+*.wav
+*.mp3
+*.log
+error_log.txt
+token_tracker.json
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store

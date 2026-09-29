@@ -8,7 +8,13 @@ import os
 
 router = APIRouter()
 
+@router.get("/api/platform/settings")
+@router.get("/platform/settings")
 @router.get("/settings")
+@router.get("/api/api/platform/settings")
+@router.get("/api/platform/settings/")
+@router.get("/platform/settings/")
+@router.get("/settings/")
 def get_platform_settings():
     settings = platform_settings_collection.find_one({"_id": "global_settings"})
     if not settings:
@@ -19,7 +25,13 @@ def get_platform_settings():
         "hireiq_logo_url": settings.get("hireiq_logo_url", "https://raw.githubusercontent.com/OragantiSagar041/AI_Adaptive_Interview/pavan/Front-end/public/hireiq_new_logo.png")
     }
 
+@router.post("/api/platform/upload-logo")
+@router.post("/platform/upload-logo")
 @router.post("/upload-logo")
+@router.post("/api/api/platform/upload-logo")
+@router.post("/api/platform/upload-logo/")
+@router.post("/platform/upload-logo/")
+@router.post("/upload-logo/")
 def upload_platform_logo(
     file: UploadFile = File(...),
     current_admin: dict = Depends(get_current_admin_details)
@@ -48,7 +60,13 @@ def upload_platform_logo(
         "hireiq_logo_url": secure_url
     }
 
+@router.get("/api/platform/features")
+@router.get("/platform/features")
 @router.get("/features")
+@router.get("/api/api/platform/features")
+@router.get("/api/platform/features/")
+@router.get("/platform/features/")
+@router.get("/features/")
 def get_active_features():
     registry_path = os.path.join(os.path.dirname(__file__), '..', '..', 'features_registry.json')
     try:

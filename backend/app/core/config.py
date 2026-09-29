@@ -35,17 +35,17 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+psycopg2://user:password@lo
 
 def get_omni_dimension_api_key() -> str:
     load_dotenv(override=True)
-    return (os.getenv("OMNI_DIMENSION_API_KEY") or "").strip()
+    return (os.getenv("OMNI_DIMENSION_API_KEY") or os.getenv("OMNIDIMENSION_API_KEY") or "").strip()
 
 
 def get_omni_voice_id() -> str:
     load_dotenv(override=True)
-    return (os.getenv("OMNI_DIMENSION_VOICE_ID") or "").strip()
+    return (os.getenv("OMNI_DIMENSION_VOICE_ID") or os.getenv("OMNIDIMENSION_VOICE_ID") or "").strip()
 
 
 def get_omni_agent_id() -> str:
     load_dotenv(override=True)
-    return (os.getenv("OMNI_DIMENSION_AGENT_ID") or "").strip()
+    return (os.getenv("OMNI_DIMENSION_AGENT_ID") or os.getenv("OMNIDIMENSION_AGENT_ID") or "").strip()
 
 # ---------------------------------------------------------------------------
 # Global feature flags / mutable state
@@ -294,17 +294,32 @@ def init_firebase_admin():
     """
     Initialize Firebase Admin SDK once.
     Supports:
-    1. Raw JSON string in FIREBASE_CREDENTIALS_JSON or GOOGLE_APPLICATION_CREDENTIALS (e.g. from AWS Secrets Manager / ECS)
-    2. File path in GOOGLE_APPLICATION_CREDENTIALS or local firebase_credentials.json
-    3. Default Google Application Credentials fallback
+    1. Environment variable with raw JSON string (FIREBASE_CREDENTIALS_JSON or GOOGLE_APPLICATION_CREDENTIALS)
+    2. Environment variable with Base64 encoded JSON string (FIREBASE_CREDENTIALS_BASE64)
+    3. Individual environment variables in .env (FIREBASE_PRIVATE_KEY, FIREBASE_CLIENT_EMAIL, FIREBASE_PROJECT_ID)
+    4. File path in GOOGLE_APPLICATION_CREDENTIALS or local firebase_credentials.json
+    5. Default Google Application Credentials fallback
     """
     if firebase_admin._apps:
         return firebase_admin.get_app()
 
+    # 1. Base64 encoded JSON string from .env
+    b64_val = os.environ.get("FIREBASE_CREDENTIALS_BASE64", "").strip()
+    if b64_val:
+        try:
+            import base64
+            decoded_json = base64.b64decode(b64_val).decode("utf-8").strip()
+            cred_dict = _json.loads(decoded_json)
+            cred = credentials.Certificate(cred_dict)
+            app = firebase_admin.initialize_app(cred)
+            _fb_logger.info("Firebase Admin SDK initialized successfully from Base64 .env variable.")
+            return app
+        except Exception as e:
+            _fb_logger.error(f"Failed to initialize Firebase Admin SDK from Base64 string: {e}")
+
+    # 2. Raw JSON string from .env or AWS Secrets Manager
     raw_env_val = os.environ.get("FIREBASE_CREDENTIALS_JSON") or os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") or ""
     raw_env_val_stripped = raw_env_val.strip()
-
-    # Case 1: Environment variable contains raw JSON string (AWS Secrets Manager)
     if raw_env_val_stripped.startswith("{") and raw_env_val_stripped.endswith("}"):
         try:
             cred_dict = _json.loads(raw_env_val_stripped)
@@ -315,7 +330,32 @@ def init_firebase_admin():
         except Exception as e:
             _fb_logger.error(f"Failed to initialize Firebase Admin SDK from JSON string: {e}")
 
-    # Case 2: File path (e.g. /app/firebase_credentials.json or relative)
+    # 3. Individual .env variables
+    priv_key = os.environ.get("FIREBASE_PRIVATE_KEY", "").strip()
+    client_email = os.environ.get("FIREBASE_CLIENT_EMAIL", "").strip()
+    if priv_key and client_email:
+        try:
+            formatted_key = priv_key.replace("\\n", "\n")
+            cred_dict = {
+                "type": "service_account",
+                "project_id": os.environ.get("FIREBASE_PROJECT_ID", "ai-adaptive-interview"),
+                "private_key_id": os.environ.get("FIREBASE_PRIVATE_KEY_ID", ""),
+                "private_key": formatted_key,
+                "client_email": client_email,
+                "client_id": os.environ.get("FIREBASE_CLIENT_ID", ""),
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+                "client_x509_cert_url": f"https://www.googleapis.com/robot/v1/metadata/x509/{client_email.replace('@', '%40')}",
+            }
+            cred = credentials.Certificate(cred_dict)
+            app = firebase_admin.initialize_app(cred)
+            _fb_logger.info("Firebase Admin SDK initialized successfully from individual .env fields.")
+            return app
+        except Exception as e:
+            _fb_logger.error(f"Failed to initialize Firebase Admin SDK from individual .env fields: {e}")
+
+    # 4. File path fallback (e.g. firebase_credentials.json or custom path)
     google_creds_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") or "firebase_credentials.json"
     if google_creds_path and not google_creds_path.strip().startswith("{"):
         candidate_paths = [
@@ -335,7 +375,7 @@ def init_firebase_admin():
                     _fb_logger.error(f"Failed to initialize Firebase Admin SDK from file {path}: {e}")
                     break
 
-    # Case 3: Default application credentials fallback
+    # 5. Default application credentials fallback
     try:
         app = firebase_admin.initialize_app()
         _fb_logger.info("Firebase Admin SDK initialized with default application credentials.")
