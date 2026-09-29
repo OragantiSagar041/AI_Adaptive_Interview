@@ -107,6 +107,7 @@ class DecisionRequest(BaseModel):
     link_id: str
     decision: str # 'selected', 'rejected', or 'pending'
     admin_id: Optional[str] = None
+    talent_pool_status: Optional[str] = None
     rejection_reason: Optional[str] = None
 
 class RecordingUploadFailure(BaseModel):

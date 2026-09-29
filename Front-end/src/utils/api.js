@@ -1,7 +1,6 @@
 import axios from "axios";
 import { API_BASE_URL } from "../apiConfig";
 import { clearCandidateSessionAuth, getCandidateSessionToken } from "./candidateAuth";
-import { auth } from "../firebase";
 
 // Create a single, consistent Axios instance
 const api = axios.create({

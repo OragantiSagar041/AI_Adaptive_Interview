@@ -540,9 +540,9 @@ body {
 }
 
 /* Light mode card borders */
-:root .border.rounded-xl,
-:root .border.rounded-2xl,
-:root .border.rounded-lg {
+:root .border.rounded-xl:not([class*="bg-"]):not([style*="background"]),
+:root .border.rounded-2xl:not([class*="bg-"]):not([style*="background"]),
+:root .border.rounded-lg:not([class*="bg-"]):not([style*="background"]) {
   border-color: var(--border);
   background-color: var(--card);
 }

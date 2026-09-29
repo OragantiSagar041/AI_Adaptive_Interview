@@ -687,7 +687,7 @@ export default function CreateInterviewBulkTab({
                         handleBulkConfigChange('interviewType', 'Normal')
                       }
                     }}
-                    options={['English', 'Hindi', 'Telugu', 'Tamil', 'Malayalam']}
+                    options={['English', 'Hindi', 'Telugu', 'Tamil', 'Malayalam', 'Kannada']}
                   />
 
                   <Input

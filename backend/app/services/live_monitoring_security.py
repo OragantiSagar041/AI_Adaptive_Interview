@@ -21,7 +21,9 @@ def create_monitoring_token(
     interview_id: str,
     duration_minutes: int,
 ) -> str:
-    ttl_minutes = max(30, min(int(duration_minutes or 30) + 30, 12 * 60))
+    # Use a generous 24-hour TTL to prevent mid-interview expiration.
+    # Security is maintained because active session status is checked dynamically in the DB.
+    ttl_minutes = 24 * 60
     return jwt.encode(
         {
             "scope": MONITORING_SCOPE,

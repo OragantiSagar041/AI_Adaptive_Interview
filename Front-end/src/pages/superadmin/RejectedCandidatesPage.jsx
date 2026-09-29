@@ -17,9 +17,12 @@ function scoreTone(score) {
   return "text-rose-600 font-bold"
 }
 
-function StatCard({ icon: Icon, label, value, accent }) {
+function StatCard({ icon: Icon, label, value, accent, onClick }) {
   return (
-    <div className="bg-card rounded-xl border border-border shadow-sm p-5 hover:shadow-md transition-shadow">
+    <div 
+      onClick={onClick}
+      className="bg-card rounded-xl border border-border shadow-sm p-5 hover:shadow-md transition-all cursor-pointer"
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{label}</p>
@@ -80,9 +83,11 @@ export default function RejectedCandidatesPage() {
   const [subAdmins, setSubAdmins] = useState([])
   const [pipelineFilter, setPipelineFilter] = useState('all')
 
+  const [talentPoolFilter, setTalentPoolFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [jobFilter, setJobFilter] = useState('all')
   const [dateFilter, setDateFilter] = useState('')
+  const [activePoolModal, setActivePoolModal] = useState(null)
 
   useEffect(() => {
     if (!token) return
@@ -125,6 +130,11 @@ export default function RejectedCandidatesPage() {
         }
       }
 
+      if (talentPoolFilter !== 'all') {
+        const tps = c.talent_pool_status || 'archived';
+        if (tps !== talentPoolFilter) return false;
+      }
+
       if (!q) return true
       return (
         (c.candidate_name || "").toLowerCase().includes(q) ||
@@ -132,7 +142,7 @@ export default function RejectedCandidatesPage() {
         (c.email || "").toLowerCase().includes(q)
       )
     })
-  }, [search, jobFilter, dateFilter, rejectedCandidates])
+  }, [search, jobFilter, dateFilter, rejectedCandidates, talentPoolFilter])
 
   const handleExportAction = () => {
     if (filtered.length === 0) {
@@ -147,14 +157,31 @@ export default function RejectedCandidatesPage() {
 
   // Calculate Stats
   const totalRejected = rejectedCandidates.length
+  const tpCount = rejectedCandidates.filter(c => c.talent_pool_status === 'talent_pool').length;
+  const eligibleCount = rejectedCandidates.filter(c => c.talent_pool_status === 'eligible').length;
+  const tpReconsiderCount = rejectedCandidates.filter(c => c.talent_pool_status === 'reconsider').length;
+  const archivedCount = rejectedCandidates.filter(c => !c.talent_pool_status || c.talent_pool_status === 'archived').length;
+  
   const avgScore = totalRejected > 0 ? (rejectedCandidates.reduce((acc, c) => acc + Number(c.score ?? c.avg_score ?? 0), 0) / totalRejected).toFixed(1) : 0
-  const reconsiderCount = rejectedCandidates.filter(c => Number(c.score ?? c.avg_score ?? 0) >= 50).length // mock metric
+  const reconsiderCount = tpReconsiderCount // Use actual reconsider bucket
+  const completedCount = rejectedCandidates.filter(c => c.status === 'completed' || c.status === 'Completed').length
+  const recruiterDecisionsCount = rejectedCandidates.filter(c => c.created_by !== 'System' && c.created_by !== 'system').length
+  const techRejectionsCount = rejectedCandidates.filter(c => {
+    const r = (c.rejection_reason || '').toLowerCase();
+    return r.includes('tech') || r.includes('skill') || r.includes('code') || r.includes('experience');
+  }).length
+  const commRejectionsCount = rejectedCandidates.filter(c => {
+    const r = (c.rejection_reason || '').toLowerCase();
+    return r.includes('comm') || r.includes('language') || r.includes('speak') || r.includes('english') || r.includes('clear');
+  }).length
   const thisMonthCount = rejectedCandidates.filter(c => {
     if (!c.created_at) return false;
     const date = new Date(c.created_at);
     const now = new Date();
     return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
   }).length
+
+
 
   return (
     <div className="flex flex-col gap-6 min-h-screen bg-background p-6 pb-12">
@@ -186,9 +213,9 @@ export default function RejectedCandidatesPage() {
 
       {/* Stats row 2 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard icon={ClipboardList} label="Recruiter Decisions" value={totalRejected} accent="bg-blue-500/15 dark:bg-blue-500/25 border border-blue-400/30 text-blue-600 dark:text-blue-400" />
-        <StatCard icon={AlertTriangle} label="Technical Rejections" value={Math.floor(totalRejected * 0.4)} accent="bg-orange-500/15 dark:bg-orange-500/25 border border-orange-400/30 text-orange-600 dark:text-orange-400" />
-        <StatCard icon={MessageSquare} label="Communication Rejections" value={Math.floor(totalRejected * 0.3)} accent="bg-sky-500/15 dark:bg-sky-500/25 border border-sky-400/30 text-sky-600 dark:text-sky-400" />
+        <StatCard icon={ClipboardList} label="Recruiter Decisions" value={recruiterDecisionsCount} accent="bg-blue-500/15 dark:bg-blue-500/25 border border-blue-400/30 text-blue-600 dark:text-blue-400" />
+        <StatCard icon={AlertTriangle} label="Technical Rejections" value={techRejectionsCount} accent="bg-orange-500/15 dark:bg-orange-500/25 border border-orange-400/30 text-orange-600 dark:text-orange-400" />
+        <StatCard icon={MessageSquare} label="Communication Rejections" value={commRejectionsCount} accent="bg-sky-500/15 dark:bg-sky-500/25 border border-sky-400/30 text-sky-600 dark:text-sky-400" />
         <StatCard icon={Calendar} label="This Month" value={thisMonthCount} accent="bg-violet-500/15 dark:bg-violet-500/25 border border-violet-400/30 text-violet-600 dark:text-violet-400" />
       </div>
 
@@ -437,14 +464,109 @@ export default function RejectedCandidatesPage() {
           <p className="text-sm text-slate-500 dark:text-slate-400 font-medium mt-1">Not every rejected candidate should be permanently discarded.</p>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard icon={Users} label="Talent Pool Candidates" value={Math.floor(totalRejected * 0.2)} accent="bg-emerald-500/15 dark:bg-emerald-500/25 border border-emerald-400/30 text-emerald-600 dark:text-emerald-400" />
-          <StatCard icon={RotateCcw} label="Eligible for Future Roles" value={Math.floor(totalRejected * 0.15)} accent="bg-sky-500/15 dark:bg-sky-500/25 border border-sky-400/30 text-sky-600 dark:text-sky-400" />
-          <StatCard icon={ArrowRightLeft} label="Reconsideration Requests" value={0} accent="bg-amber-500/15 dark:bg-amber-500/25 border border-amber-400/30 text-amber-600 dark:text-amber-400" />
-          <StatCard icon={FileText} label="Archived Candidates" value={totalRejected} accent="bg-purple-500/15 dark:bg-purple-500/25 border border-purple-400/30 text-purple-600 dark:text-purple-400" />
+          <StatCard 
+              icon={Users} 
+              label="Talent Pool Candidates" 
+              value={tpCount} 
+              accent="bg-emerald-500/15 dark:bg-emerald-500/25 border border-emerald-400/30 text-emerald-600 dark:text-emerald-400" 
+              onClick={() => setActivePoolModal('talent_pool')}
+            />
+          <StatCard 
+              icon={RotateCcw} 
+              label="Eligible for Future Roles" 
+              value={eligibleCount} 
+              accent="bg-sky-500/15 dark:bg-sky-500/25 border border-sky-400/30 text-sky-600 dark:text-sky-400" 
+              onClick={() => setActivePoolModal('eligible')}
+            />
+          <StatCard 
+              icon={ArrowRightLeft} 
+              label="Reconsideration Requests" 
+              value={tpReconsiderCount} 
+              accent="bg-amber-500/15 dark:bg-amber-500/25 border border-amber-400/30 text-amber-600 dark:text-amber-400" 
+              onClick={() => setActivePoolModal('reconsider')}
+            />
+          <StatCard 
+              icon={FileText} 
+              label="Archived Candidates" 
+              value={archivedCount} 
+              accent="bg-purple-500/15 dark:bg-purple-500/25 border border-purple-400/30 text-purple-600 dark:text-purple-400" 
+              onClick={() => setActivePoolModal('archived')}
+            />
         </div>
       
 </section>
 </FeatureLockOverlay>
+
+            {activePoolModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-card w-full max-w-3xl rounded-[1.25rem] shadow-2xl border border-border flex flex-col max-h-[85vh] overflow-hidden transform scale-100 transition-all">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-border bg-slate-50/50 dark:bg-slate-900/50">
+              <h2 className="text-lg font-bold flex items-center gap-3 text-foreground tracking-tight">
+                {activePoolModal === 'talent_pool' ? <div className="p-2 bg-emerald-100 dark:bg-emerald-500/20 rounded-xl shadow-sm"><Users className="text-emerald-600 dark:text-emerald-400" size={18}/></div> : 
+                 activePoolModal === 'eligible' ? <div className="p-2 bg-sky-100 dark:bg-sky-500/20 rounded-xl shadow-sm"><RotateCcw className="text-sky-600 dark:text-sky-400" size={18}/></div> : 
+                 activePoolModal === 'reconsider' ? <div className="p-2 bg-amber-100 dark:bg-amber-500/20 rounded-xl shadow-sm"><ArrowRightLeft className="text-amber-600 dark:text-amber-400" size={18}/></div> : 
+                 <div className="p-2 bg-purple-100 dark:bg-purple-500/20 rounded-xl shadow-sm"><FileText className="text-purple-600 dark:text-purple-400" size={18}/></div>}
+                {activePoolModal === 'talent_pool' ? 'Talent Pool Candidates' : 
+                 activePoolModal === 'eligible' ? 'Eligible for Future Roles' : 
+                 activePoolModal === 'reconsider' ? 'Reconsideration Requests' : 'Archived Candidates'}
+              </h2>
+              <button onClick={() => setActivePoolModal(null)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full transition-colors outline-none focus:ring-2 focus:ring-indigo-500/50">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="overflow-y-auto p-4 bg-slate-50/50 dark:bg-slate-900/20">
+              <div className="flex flex-col gap-3">
+                {rejectedCandidates.filter(c => (c.talent_pool_status || 'archived') === activePoolModal).map(c => {
+                  const initial = (c.candidate_name || "U").charAt(0).toUpperCase()
+                  return (
+                    <div key={c.id || c.link_id || c.email} className="group flex items-center justify-between p-4 bg-card border border-border/80 rounded-xl hover:border-indigo-400/50 hover:shadow-md hover:shadow-indigo-500/10 transition-all duration-200">
+                      <div className="flex items-center gap-4">
+                        <div className="h-11 w-11 rounded-full bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-500/20 dark:to-indigo-500/10 border border-indigo-200/50 dark:border-indigo-500/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-lg shadow-sm">
+                          {initial}
+                        </div>
+                        <div>
+                          <p className="font-bold text-[14px] text-foreground tracking-tight">{c.candidate_name || "Unknown Candidate"}</p>
+                          <p className="text-[12px] font-medium text-slate-500 dark:text-slate-400 mt-0.5">{c.email || c.candidate_email || "No email provided"}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="hidden sm:flex flex-col items-start gap-1.5 ml-4 flex-1">
+                        <span className="px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700 uppercase tracking-wider">
+                          {c.interview_title || c.job_applied || "General Application"}
+                        </span>
+                        <span className="text-[11px] font-semibold text-slate-400 flex items-center gap-1.5 ml-1">
+                          <Calendar size={12} className="opacity-70" />
+                          {c.created_at ? new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "--"}
+                        </span>
+                      </div>
+                      
+                      <div className="pl-4">
+                        <button 
+                          onClick={() => { setActivePoolModal(null); setSelectedCandidate(c); }}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-[0.5rem] text-[12px] font-bold text-slate-600 dark:text-slate-300 group-hover:border-indigo-400 group-hover:text-indigo-600 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-500/20 dark:group-hover:border-indigo-500/50 dark:group-hover:text-indigo-300 transition-all shadow-sm outline-none focus:ring-2 focus:ring-indigo-500/50"
+                        >
+                          <Eye size={15} strokeWidth={2.5} /> View Details
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+                
+                {rejectedCandidates.filter(c => (c.talent_pool_status || 'archived') === activePoolModal).length === 0 && (
+                  <div className="py-16 flex flex-col items-center justify-center text-center bg-card border border-border/80 rounded-xl border-dashed">
+                    <div className="h-14 w-14 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
+                      <Users className="text-slate-400" size={28} />
+                    </div>
+                    <p className="font-bold text-[15px] text-slate-700 dark:text-slate-200 tracking-tight">No candidates found</p>
+                    <p className="text-[13px] text-slate-500 mt-1 max-w-xs">There are currently no candidates assigned to this pool. Once added, they will appear here.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <CandidateDialog 
         candidate={selectedCandidate} 

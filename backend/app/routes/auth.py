@@ -98,6 +98,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Initialize Firebase Admin SDK once
+from app.core.config import init_firebase_admin
+init_firebase_admin()
 if not firebase_admin._apps:
     google_creds = os.getenv("GOOGLE_APPLICATION_CREDENTIALS") or "firebase_credentials.json"
     if google_creds:
@@ -156,6 +158,7 @@ def firebase_auth(
         decoded_token = firebase_auth_admin.verify_id_token(
             credentials.credentials,
             check_revoked=True,
+            clock_skew_seconds=10,
         )
     except Exception as exc:
         logger.warning(
@@ -494,6 +497,7 @@ def verify_2fa(
         decoded_token = firebase_auth_admin.verify_id_token(
             credentials.credentials,
             check_revoked=True,
+            clock_skew_seconds=10,
         )
     except Exception as exc:
         logger.warning(

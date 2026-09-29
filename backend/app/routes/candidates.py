@@ -509,61 +509,10 @@ def create_session(data: CreateSession, http_req: Request, current_admin: dict =
 
 
 # ── Bulk Session Models ────────────────────────────────────────────────────────
-class BulkCandidate(BaseModel):
-    candidate_name: str
-    candidate_email: str
-    resume_text: str = ""
-    record_video: bool = True  # Task 5: Per-candidate video toggle
-    experience: str = ""
-    location: str = ""
-    current_ctc: str = ""
-    expected_ctc: str = ""
-    current_company: str = ""
-    notice_period: str = ""
-    candidate_phone: Optional[str] = ""
 
-    @validator('candidate_name')
-    def name_must_not_be_numeric(cls, v):
-        if v.strip().isdigit():
-            raise ValueError("Candidate Name cannot be purely numeric")
-        return v
-
-class BulkCreateSession(BaseModel):
-    candidates: List[BulkCandidate]
-    job_description: str
-    admin_id: str
-    interview_duration: int = 30
-    record_video: bool = True  # Global default
-    interview_format: str = "Standard"  # "Standard" or "Voice"
-    interview_type: str = "Technical"
-    industry_type: str = "General"
-    language: str = "English"
-    case_study_count: int = 3
-    custom_email_html: str = ""  # Task 1: Optional admin-edited email
-    jd_file_url: Optional[str] = None
-    scheduled_start: str = ""  # Task 4
-    scheduled_end: str = ""    # Task 4
-    hr_screening: HRScreening = HRScreening()  # HR screening preferences
-    custom_questions: Union[str, List[str]] = ""
-    ai_instructions: Union[str, List[str]] = ""
-    voice_clone: bool = False
-    custom_voice_id: str = ""
-
-    @validator('scheduled_end')
-    def validate_dates(cls, v, values):
-        start = values.get('scheduled_start')
-        if start and v:
-            try:
-                # Basic ISO format validation check (will be parsed fully in logic)
-                start_dt = datetime.datetime.fromisoformat(start.replace("Z", "+00:00"))
-                end_dt = datetime.datetime.fromisoformat(v.replace("Z", "+00:00"))
-                if start_dt >= end_dt:
-                    raise ValueError("scheduled_end must be after scheduled_start")
-            except ValueError as e:
-                if "scheduled_end must be after" in str(e):
-                    raise e
-                # Ignore strict ISO parse errors here to allow legacy fallback formats
-        return v
+class TalentPoolRequest(BaseModel):
+    link_id: str
+    status: str
 
 @router.post("/admin/bulk-create-sessions")
 def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTasks, http_req: Request, current_admin: dict = Depends(get_current_admin_details)):
@@ -1423,15 +1372,6 @@ def log_violation(
         return {"status": "error", "message": str(e)}
 
 
-class ProctoringViolationRequest(BaseModel):
-    interview_id: Optional[str] = ""
-    link_id: Optional[str] = ""
-    candidate_id: Optional[str] = ""
-    violation_type: str
-    details: Optional[str] = ""
-    timestamp: Optional[str] = ""
-
-
 @router.post("/proctoring/violation")
 def log_proctoring_violation(
     data: ProctoringViolationRequest,
@@ -1553,6 +1493,8 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
                     "decision_by_id": admin_id,
                     "decision_at": now_iso
                 }
+                if data.talent_pool_status is not None:
+                    app_update["talent_pool_status"] = data.talent_pool_status
                 if data.decision == "rejected":
                     app_update["rejection_reason"] = rejection_reason_val
                     app_update["rejected_by"] = admin_name
@@ -1579,6 +1521,8 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
                 "decision_by_role": admin_role,
                 "decision_at": now_iso
             }
+            if data.talent_pool_status is not None:
+                omni_update["talent_pool_status"] = data.talent_pool_status
             if data.decision == "rejected":
                 omni_update["rejection_reason"] = rejection_reason_val
                 omni_update["rejected_by"] = admin_name
@@ -1589,7 +1533,6 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
                 omni_update["rejected_by"] = None
                 omni_update["rejected_by_id"] = None
                 omni_update["rejected_at"] = None
-
             if log and log.get("candidate_name"):
                 omni_update["candidate_name"] = log.get("candidate_name")
             if log and log.get("user_name"):
@@ -1616,6 +1559,8 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
                     "decision_by_id": admin_id,
                     "decision_at": now_iso
                 }
+                if data.talent_pool_status is not None:
+                    sess_update["talent_pool_status"] = data.talent_pool_status
                 if data.decision == "rejected":
                     sess_update["rejection_reason"] = rejection_reason_val
                     sess_update["rejected_by"] = admin_name
@@ -1626,7 +1571,6 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
                     sess_update["rejected_by"] = None
                     sess_update["rejected_by_id"] = None
                     sess_update["rejected_at"] = None
-
                 interview_sessions_collection.update_one(
                     {"_id": session["_id"]},
                     {"$set": sess_update}
@@ -1677,6 +1621,8 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
             "decision_by_id": admin_id,
             "decision_at": now_iso
         }
+        if data.talent_pool_status is not None:
+            session_update["talent_pool_status"] = data.talent_pool_status
         if data.decision == "rejected":
             session_update["rejection_reason"] = rejection_reason_val
             session_update["rejected_by"] = admin_name
@@ -1822,16 +1768,6 @@ def send_decision_email(email: str, name: str, decision: str, jd: str, company_n
     except Exception as email_err:
         print(f" Email sending error: {email_err}")
         return False
-
-class CopilotMessage(BaseModel):
-    role: str
-    content: str
-
-class CopilotRequest(BaseModel):
-    message: str
-    history: list[CopilotMessage] = []
-    admin_id: Optional[str] = None
-    session_id: Optional[str] = None
 
 @router.post("/admin/copilot")
 def admin_copilot_chat(request: CopilotRequest, raw_request: Request, current_admin: dict = Depends(get_current_admin_details)):
@@ -2337,11 +2273,6 @@ def delete_admin_copilot_session(session_id: str, current_admin: dict = Depends(
     copilot_sessions_collection.delete_one({"session_id": session_id, "admin_id": admin_id})
     return {"status": "success", "message": "Session deleted"}
 
-class CopilotExecuteRequest(BaseModel):
-    action: str
-    data: dict
-    session_id: Optional[str] = None
-
 @router.post("/admin/copilot/execute")
 def admin_copilot_execute(request: CopilotExecuteRequest, http_req: Request, current_admin: dict = Depends(get_current_admin_details)):
     from datetime import datetime, timezone, timedelta
@@ -2729,10 +2660,6 @@ def admin_copilot_execute(request: CopilotExecuteRequest, http_req: Request, cur
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-class ATSRequest(BaseModel):
-    resume_text: str
-    jd_text: str
-
 @router.post("/admin/ats-score")
 def calculate_ats_score(
     request: ATSRequest,
@@ -2962,5 +2889,41 @@ Return this EXACT JSON (all score fields are integers 0-100, weighted_total is t
 
         raise HTTPException(status_code=500, detail=str(e))
 
-class CandidateFeedbackRequest(BaseModel):
-    feedback_text: str
+@router.post("/admin/update-talent-pool")
+def update_talent_pool(data: TalentPoolRequest, current_admin: dict = Depends(require_role("admin", "super_admin"))):
+    admin_name = current_admin.get("name") or current_admin.get("username") or "Admin"
+    now_iso = datetime.now(timezone.utc).isoformat()
+    
+    raw_id = data.link_id.replace("ai_call_", "") if data.link_id.startswith("ai_call_") else data.link_id
+    omni_call_id = raw_id.replace("omni_", "").strip()
+
+    # 1. Search job_applications_collection
+    app = None
+    from bson import ObjectId
+    try:
+        app = job_applications_collection.find_one({"$or": [{"omni_call_id": omni_call_id}, {"_id": ObjectId(raw_id)}]})
+    except Exception:
+        app = job_applications_collection.find_one({"omni_call_id": omni_call_id})
+
+    if app:
+        job_applications_collection.update_one(
+            {"_id": app["_id"]},
+            {"$set": {"talent_pool_status": data.status, "talent_pool_updated_at": now_iso}}
+        )
+
+    # 2. Search interview_sessions_collection
+    session = None
+    if len(raw_id) == 24:
+        try:
+            session = interview_sessions_collection.find_one({"_id": ObjectId(raw_id)})
+        except Exception:
+            pass
+    if not session:
+        session = interview_sessions_collection.find_one({"link_id": raw_id})
+    if session:
+        interview_sessions_collection.update_one(
+            {"_id": session["_id"]},
+            {"$set": {"talent_pool_status": data.status, "talent_pool_updated_at": now_iso}}
+        )
+
+    return {"status": "success", "talent_pool_status": data.status}

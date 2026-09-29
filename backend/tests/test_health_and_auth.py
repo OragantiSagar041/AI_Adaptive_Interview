@@ -86,3 +86,21 @@ def test_manual_call_auth_required():
     )
     assert response.status_code in [401, 403]
 
+
+def test_coding_score_does_not_count_string_false_as_pass():
+    """Stringified booleans from runner output must not count as passed tests."""
+    from app.ai.score_rounds import calculate_coding_score
+
+    coding_round = {
+        "latest_run": {
+            "visible_results": [
+                {"passed": "False"},
+                {"passed": "False"},
+                {"passed": "False"},
+            ],
+            "hidden_summary": {"passed": 0, "total": 0},
+        }
+    }
+
+    assert calculate_coding_score(coding_round) == 0.0
+

@@ -739,7 +739,7 @@ export default function CreateInterviewSingleTab({
                         handleSingleChange('interviewType', 'Normal')
                       }
                     }}
-                    options={['English', 'Hindi', 'Telugu', 'Tamil', 'Malayalam']}
+                    options={['English', 'Hindi', 'Telugu', 'Tamil', 'Malayalam', 'Kannada']}
                   />
 
                   <Input

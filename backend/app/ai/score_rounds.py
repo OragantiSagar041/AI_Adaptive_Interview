@@ -17,6 +17,24 @@ from typing import Optional, Dict, Any
 from app.ai.ai_client import chat_completion, extract_json
 
 
+def _normalize_passed_flag(value: Any) -> bool:
+    """Accept bools and stringified booleans from runner/LLM output."""
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "y", "passed", "pass"}:
+            return True
+        if normalized in {"false", "0", "no", "n", "failed", "fail"}:
+            return False
+        return bool(normalized)
+    return bool(value)
+
+
 # ──────────────────────────────────────────────────────────
 # CODING ROUND SCORE
 # ──────────────────────────────────────────────────────────
@@ -47,13 +65,29 @@ def _compute_test_case_ratio(coding_round: Dict[str, Any]) -> float:
     visible = latest_run.get("visible_results", []) or []
     hidden  = latest_run.get("hidden_summary", {}) or {}
 
-    vis_pass  = sum(1 for r in visible if r.get("passed"))
+    vis_pass  = sum(1 for r in visible if _normalize_passed_flag(r.get("passed")))
     vis_total = len(visible)
 
-    hid_pass  = hidden.get("passed", 0)
-    hid_total = hidden.get("total", 0)
+    hidden_pass_raw = hidden.get("passed", 0)
+    hidden_total_raw = hidden.get("total", 0)
 
-    total_pass  = vis_pass  + hid_pass
+    if isinstance(hidden_pass_raw, str):
+        stripped = hidden_pass_raw.strip()
+        if stripped.lower() in {"true", "1", "yes", "y", "passed", "pass"}:
+            hid_pass = 1
+        elif stripped.lower() in {"false", "0", "no", "n", "failed", "fail"}:
+            hid_pass = 0
+        else:
+            try:
+                hid_pass = int(stripped)
+            except ValueError:
+                hid_pass = 1 if _normalize_passed_flag(hidden_pass_raw) else 0
+    else:
+        hid_pass = int(hidden_pass_raw or 0)
+
+    hid_total = int(hidden_total_raw or 0)
+
+    total_pass  = vis_pass + hid_pass
     total_tests = vis_total + hid_total
 
     if total_tests == 0:
