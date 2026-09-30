@@ -626,9 +626,8 @@ def create_tenant(data: TenantCreate, master_id: str = Depends(get_current_admin
     new_tenant["custom_id"] = get_next_sequence_value("recruiter", "RC")
     admins_collection.insert_one(new_tenant)
     
-    # Send credentials email to the new tenant
     brevo_key = os.getenv("BREVO_API_KEY")
-    sender_email = os.getenv("BREVO_SENDER_EMAIL", "support@hireiq.com")
+    sender_email = (os.getenv("BREVO_SENDER_EMAIL") or "").strip()
     if brevo_key:
         try:
             import requests
@@ -647,13 +646,17 @@ def create_tenant(data: TenantCreate, master_id: str = Depends(get_current_admin
                 <p>Best regards,<br>The Hire IQ Team</p>
             </body></html>
             """
-            requests.post("https://api.brevo.com/v3/smtp/email", json={
-                "sender": {"name": "Hire IQ", "email": sender_email},
+            sender_name = (os.getenv("BREVO_SENDER_NAME") or "Hire IQ").strip()
+            resp = requests.post("https://api.brevo.com/v3/smtp/email", json={
+                "sender": {"name": sender_name, "email": sender_email},
                 "to": [{"email": data.email, "name": data.company_name}],
                 "subject": f"Welcome to Hire IQ - Account Credentials for {data.company_name}",
                 "htmlContent": email_html
             }, headers={"api-key": brevo_key, "content-type": "application/json"}, timeout=5)
-            logger.info(f"Sent credentials email to {data.email}")
+            if resp.status_code >= 300:
+                logger.error(f"❌ [BREVO ERROR tenant credentials] {resp.status_code}: {resp.text}")
+            else:
+                logger.info(f"Sent credentials email to {data.email}")
         except Exception as email_err:
             logger.error(f'Error sending tenant credentials email: {email_err}')
 

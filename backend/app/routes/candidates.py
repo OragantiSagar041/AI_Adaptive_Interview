@@ -1661,11 +1661,12 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
 
 def send_decision_email(email: str, name: str, decision: str, jd: str, company_name: str = 'HireIQ'):
     import requests
-    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    from pathlib import Path
+    env_path = Path(__file__).resolve().parents[2] / ".env"
     load_dotenv(env_path, override=False)
     api_key = os.getenv("BREVO_API_KEY")
-    sender_name = "Hire IQ Recruiting"
-    sender_email = os.getenv("BREVO_SENDER_EMAIL")
+    sender_name = (os.getenv("BREVO_SENDER_NAME") or "Hire IQ Recruiting").strip()
+    sender_email = (os.getenv("BREVO_SENDER_EMAIL") or "").strip()
     
     if not api_key: return False
 
