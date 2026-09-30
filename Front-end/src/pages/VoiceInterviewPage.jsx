@@ -40,153 +40,23 @@ const MAX_RECORDING_BYTES_PER_STREAM = 128 * 1024 * 1024
 const RECORDING_OPTIONS = { videoBitsPerSecond: 450000, audioBitsPerSecond: 48000 }
 
 // ── Video Avatar Component ────────────────────────────────────────────────────
-function VideoAvatar({ status, size = 220 }) {
-  const videoRef = useRef(null)
-  const candidateGlowRef = useRef(null)
-  const isSpeaking = status === 'speaking'
+import { VideoAvatar, Bubble } from './VoiceAvatar'
+import {
+  PreChecksScreen,
+  VoiceCloneSetupScreen,
+  IntroScreen,
+  WaitingScreen
+} from './VoiceInterviewScreens'
 
-  useEffect(() => {
-    if (status !== 'listening') return
-    const handleRms = (e) => {
-      if (!candidateGlowRef.current) return
-      const rms = e.detail
-      // scale from 1.0 to 1.2 based on volume
-      const scale = 1 + Math.min(rms * 1.5, 0.2)
-      // opacity from 0.4 to 1.0
-      const opacity = 0.4 + Math.min(rms * 2, 0.6)
-      candidateGlowRef.current.style.transform = `scale(${scale})`
-      candidateGlowRef.current.style.opacity = opacity
-    }
-    window.addEventListener('candidate_audio_rms', handleRms)
-    return () => window.removeEventListener('candidate_audio_rms', handleRms)
-  }, [status])
-
-  useEffect(() => {
-    const video = videoRef.current
-    if (!video) return
-    // Always play the flowing animation
-    video.play().catch(() => { })
-  }, [])
-
-  const ringColor = status === 'speaking'
-    ? 'rgba(168,85,247,0.7)'
-    : status === 'listening'
-      ? 'rgba(16,185,129,0.6)'
-      : 'rgba(99,102,241,0.35)'
-
-  const glowColor = status === 'speaking'
-    ? '0 0 50px rgba(168,85,247,0.6), 0 0 100px rgba(168,85,247,0.25)'
-    : status === 'listening'
-      ? '0 0 40px rgba(16,185,129,0.5), 0 0 80px rgba(16,185,129,0.2)'
-      : '0 0 20px rgba(99,102,241,0.2)'
-
-  return (
-    <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
-      {/* Animated ring */}
-      {(status === 'speaking' || status === 'listening') && (
-        <div style={{
-          position: 'absolute', inset: -8,
-          borderRadius: '50%',
-          border: `2px solid ${ringColor}`,
-          animation: status === 'speaking' ? 'vidRingSpeak 1.4s ease-in-out infinite' : 'vidRingListen 2s ease-in-out infinite alternate',
-          pointerEvents: 'none',
-        }} />
-      )}
-      {/* Dynamic Voice Visualizer Ring (Only when listening) */}
-      {status === 'listening' && (
-        <div ref={candidateGlowRef} style={{
-          position: 'absolute', inset: -12,
-          borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(16,185,129,0.15) 0%, rgba(16,185,129,0) 70%)',
-          border: '2px solid rgba(16,185,129,0.6)',
-          boxShadow: '0 0 40px rgba(16,185,129,0.5)',
-          pointerEvents: 'none',
-          transition: 'transform 0.05s ease-out, opacity 0.05s ease-out',
-          opacity: 0.4,
-          transform: 'scale(1)',
-          zIndex: 10
-        }} />
-      )}
-      {/* Outer glow ring */}
-      {(status === 'speaking' || status === 'listening') && (
-        <div style={{
-          position: 'absolute', inset: -18,
-          borderRadius: '50%',
-          border: `1px solid ${ringColor.replace('0.7', '0.25').replace('0.6', '0.2')}`,
-          animation: status === 'speaking' ? 'vidRingSpeak 1.4s ease-in-out 0.4s infinite' : 'vidRingListen 2s ease-in-out 0.5s infinite alternate',
-          pointerEvents: 'none',
-        }} />
-      )}
-      {/* Video circle */}
-      <video
-        ref={videoRef}
-        src={aiVideoUrl}
-        loop
-        autoPlay
-        muted
-        playsInline
-        preload="auto"
-        style={{
-          width: size,
-          height: size,
-          objectFit: 'cover',
-          borderRadius: '50%',
-          boxShadow: glowColor,
-          border: `3px solid ${ringColor}`,
-          transition: 'box-shadow 0.5s ease, border-color 0.5s ease',
-          display: 'block',
-          background: '#0a0f1e',
-        }}
-      />
-      {/* Overlay label */}
-      {status === 'idle' && (
-        <div style={{
-          position: 'absolute', bottom: -4, left: '50%', transform: 'translateX(-50%)',
-          background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)',
-          borderRadius: 20, padding: '2px 10px', fontSize: 10, color: '#818cf8',
-          fontWeight: 700, letterSpacing: '0.1em', whiteSpace: 'nowrap',
-        }}>ZARA · READY</div>
-      )}
-    </div>
-  )
-}
-
-// ── Language map ─────────────────────────────────────────────────────────────
 const langMap = {
-  'Hindi': 'hi-IN', 'Telugu': 'te-IN', 'Tamil': 'ta-IN',
-  'Malayalam': 'ml-IN', 'Kannada': 'kn-IN', 'English': 'en-IN'
+  'Hindi': 'hi-IN',
+  'Telugu': 'te-IN',
+  'Tamil': 'ta-IN',
+  'Malayalam': 'ml-IN',
+  'Kannada': 'kn-IN',
+  'English': 'en-IN'
 }
 
-// Offline follow-ups removed; now utilizing the backend AI-generated follow-up pipeline.
-
-
-// ── Chat Bubble ───────────────────────────────────────────────────────────────
-function Bubble({ role, text, isNew }) {
-  const [visible, setVisible] = useState(false)
-  useEffect(() => { setTimeout(() => setVisible(true), 50) }, [])
-  return (
-    <div className={`flex gap-3 mb-4 transition-all duration-500 ${role === 'user' ? 'flex-row-reverse' : ''} ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`}>
-      {role === 'ai' ? (
-        <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 overflow-hidden border-2 border-indigo-500/40">
-          <video src={aiVideoUrl} autoPlay loop muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-        </div>
-      ) : (
-        <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-emerald-500/15 border-2 border-emerald-500/30">
-          <i className="fas fa-user text-sm text-emerald-400" />
-        </div>
-      )}
-      <div className={`max-w-[72%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${role === 'ai'
-        ? 'bg-indigo-500/10 border border-indigo-500/15 text-slate-200 rounded-tl-none'
-        : 'bg-emerald-500/10 border border-emerald-500/15 text-slate-200 rounded-tr-none'
-        }`}>
-        {role === 'ai' && <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest block mb-1">Zara</span>}
-        {text}
-      </div>
-    </div>
-  )
-}
-
-// ── Main Component ────────────────────────────────────────────────────────────
 export default function VoiceInterviewPage() {
   const { linkId } = useParams()
   const [recordingUploadSessionId] = useState(
@@ -299,6 +169,7 @@ export default function VoiceInterviewPage() {
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false)
   const [feedbackSuccess, setFeedbackSuccess] = useState(false)
   const activeAudioRef = useRef(null)
+  const ttsGenIdRef = useRef(0)
 
   // Camera recording
   const cameraRecorderRef = useRef(null)
@@ -755,6 +626,7 @@ export default function VoiceInterviewPage() {
 
   // ── TTS with female voice ──────────────────────────────────────────────────
   const stopAudio = useCallback(() => {
+    ttsGenIdRef.current += 1
     isTTSPlayingRef.current = false
     if (activeAudioRef.current) {
       activeAudioRef.current.onended = null
@@ -770,9 +642,16 @@ export default function VoiceInterviewPage() {
       currentAudioRef.current.src = ''
       currentAudioRef.current = null
     }
+    if (window.speechSynthesis) {
+      try {
+        window.speechSynthesis.cancel()
+      } catch (_) { }
+    }
+    setAiStatus('idle')
   }, [])
   const speak = useCallback(async (text, onEnd) => {
     stopAudio()  // cancel any previous audio first
+    const reqId = ttsGenIdRef.current
     isTTSPlayingRef.current = true
     try {
       setAiStatus('speaking')
@@ -791,11 +670,13 @@ export default function VoiceInterviewPage() {
       })
       if (!res.ok) throw new Error('TTS Failed')
       const blob = await res.blob()
+      if (ttsGenIdRef.current !== reqId) return
       const url = URL.createObjectURL(blob)
       const audio = new Audio(url)
       activeAudioRef.current = audio
       audio.onended = () => {
         setTimeout(() => {
+          if (ttsGenIdRef.current !== reqId) return
           isTTSPlayingRef.current = false
           currentAudioRef.current = null
           if (activeAudioRef.current === audio) {
@@ -808,6 +689,7 @@ export default function VoiceInterviewPage() {
       }
       audio.onerror = () => {
         setTimeout(() => {
+          if (ttsGenIdRef.current !== reqId) return
           isTTSPlayingRef.current = false
           currentAudioRef.current = null
           if (activeAudioRef.current === audio) {
@@ -818,12 +700,14 @@ export default function VoiceInterviewPage() {
         }, 100)
       }
       audio.play().catch(() => {
+        if (ttsGenIdRef.current !== reqId) return
         isTTSPlayingRef.current = false
         currentAudioRef.current = null
         setAiStatus('idle')
         onEnd?.()
       })
     } catch (e) {
+      if (ttsGenIdRef.current !== reqId) return
       isTTSPlayingRef.current = false
       setAiStatus('idle')
       onEnd?.()
@@ -2250,11 +2134,9 @@ export default function VoiceInterviewPage() {
   const transitionToNextRound = useCallback(async (isTimeout = false) => {
     if (submittingRef.current || isTransitioningRef.current) return
     isTransitioningRef.current = true
-    stopListening(); window.speechSynthesis?.cancel()
-    if (activeAudioRef.current) {
-      activeAudioRef.current.pause();
-      activeAudioRef.current = null;
-    }
+    stopAudio()
+    stopListening()
+    if (window.speechSynthesis) window.speechSynthesis.cancel()
 
     const type = interviewType
     const iid = interviewIdRef.current
@@ -2264,10 +2146,16 @@ export default function VoiceInterviewPage() {
       setLoading(true) // Immediately show loading state to candidate
       const t = VOICE_TRANSLATIONS[languageRef.current] || VOICE_TRANSLATIONS['English']
 
-      // Speak transition phrase and wait for it to finish in parallel with fetching
+      // Case Study Round: TTS is strictly turned OFF across all languages
       const speakPromise = new Promise(resolve => {
         addMsg('ai', t.verbalComplete)
-        speak(t.verbalComplete, resolve)
+        if (isNonTech) {
+          stopAudio()
+          if (window.speechSynthesis) window.speechSynthesis.cancel()
+          resolve()
+        } else {
+          speak(t.verbalComplete, resolve)
+        }
       })
 
       if (type === 'Technical') {
@@ -2283,12 +2171,15 @@ export default function VoiceInterviewPage() {
             id: 'coding_1', type: 'coding', text: task.description || task.title || 'Implement the required function',
             codingTask: task, codingTests: data.tests || []
           }
+          stopAudio()
+          if (window.speechSynthesis) window.speechSynthesis.cancel()
           setCodingQuestion(codingQ)
           isTransitioningRef.current = false  // allow future transitions/retries
           setRound('coding')
           setLoading(false)
         } catch (err) {
           console.error("Coding round start failed:", err)
+          stopAudio()
           isTransitioningRef.current = false  // allow retry
           setError('Failed to load coding round. Please retry.')
           setRound('error')
@@ -2307,14 +2198,17 @@ export default function VoiceInterviewPage() {
 
           const [_, data] = await Promise.all([speakPromise, fetchPromise])
           const cqs = (data.case_study_round?.questions || []).map((q, i) => ({
-            id: `cs_${i}`, type: 'case_study', text: q.text, caseStudyIndex: i
+            id: `cs_${i}`, type: 'case_study', text: q.text, scenario: q.scenario, questionText: q.question, caseStudyIndex: i
           }))
+          stopAudio()
+          if (window.speechSynthesis) window.speechSynthesis.cancel()
           setCaseStudyQuestions(cqs.length ? cqs : [{ id: 'cs_0', type: 'case_study', text: data.scenario || 'Present your business case.', caseStudyIndex: 0 }])
           isTransitioningRef.current = false  // allow future transitions/retries
           setRound('case_study')
           setLoading(false)
         } catch (err) {
           console.error('Case study start failed:', err)
+          stopAudio()
           isTransitioningRef.current = false  // allow retry
           setError('Failed to load case study. Please retry.')
           setRound('error')
@@ -2322,9 +2216,10 @@ export default function VoiceInterviewPage() {
         }
       }
     } else {
+      stopAudio()
       completeInterview(isTimeout)
     }
-  }, [interviewType, stopListening, aiSay, completeInterview])
+  }, [interviewType, stopListening, stopAudio, addMsg, speak, completeInterview])
 
   useEffect(() => {
     transitionToNextRoundRef.current = transitionToNextRound
@@ -2354,14 +2249,14 @@ export default function VoiceInterviewPage() {
     return () => clearInterval(t)
   }, [round, transitionToNextRound])
 
-  // ── Finish Early / Submit handler ─────────────────────────────────────────
+  // ── Finish Early handler ──────────────────────────────────────────────────
   const handleFinishEarly = useCallback(() => {
     Swal.fire({
-      title: 'Submit Interview?',
-      html: '<p style="color:#94a3b8;font-size:14px">Are you sure you want to end and submit the interview now? Your answers will be saved.</p>',
+      title: 'Finish Interview?',
+      html: '<p style="color:#94a3b8;font-size:14px">Are you sure you want to end the interview now? Your answers will be saved and submitted.</p>',
       icon: 'question',
       showCancelButton: true,
-      confirmButtonText: 'Yes, Submit',
+      confirmButtonText: 'Yes, Finish',
       cancelButtonText: 'Continue Interview',
       confirmButtonColor: '#ef4444',
       cancelButtonColor: '#6366f1',
@@ -2959,14 +2854,21 @@ export default function VoiceInterviewPage() {
                 voice_clone: voiceCloningEnabledRef.current ?? sessionDetail?.voice_clone,
                 custom_voice_id: voiceCloneIdRef.current || sessionDetail?.custom_voice_id
               }} language={language} wsRef={wsRef} onComplete={() => {
+                stopAudio()
+                if (window.speechSynthesis) window.speechSynthesis.cancel()
                 const type = interviewType
                 if (type === 'Non-Technical') {
                   // fetch case study after coding
                   candidateFetch(`${API_BASE_URL}/case-study/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ interview_id: interviewId }) })
                     .then(r => r.json()).then(data => {
                       const cqs = (data.case_study_round?.questions || []).map((q, i) => ({ id: `cs_${i}`, type: 'case_study', text: q.text || q.scenario || '', caseStudyIndex: i }))
+                      stopAudio()
+                      if (window.speechSynthesis) window.speechSynthesis.cancel()
                       setCaseStudyQuestions(cqs); setRound('case_study')
-                    }).catch(() => completeInterview())
+                    }).catch(() => {
+                      stopAudio()
+                      completeInterview()
+                    })
                 } else {
                   completeInterview()
                 }
@@ -3030,6 +2932,7 @@ export default function VoiceInterviewPage() {
   // ── Waiting screen: all questions answered, timer still running ───────────
   // Camera, mic, WebSocket, and proctoring remain fully active.
   // The countdown above continues ticking and triggers submission when it hits zero.
+  // ── Waiting screen: all questions answered, timer still running ───────────
   if (round === 'waiting') return (
     <div className="h-screen w-screen overflow-hidden bg-[#07091a] flex flex-col text-white" style={{ fontFamily: "'Inter',sans-serif" }}>
       {/* Security Alert Pill */}
@@ -3122,16 +3025,27 @@ export default function VoiceInterviewPage() {
           <span>The interview will submit automatically when the timer reaches zero.</span>
         </div>
 
-        {/* Disabled submit button — visible but not actionable, to signal intent is clear */}
-        <button
-          disabled
-          onClick={(e) => { e.preventDefault(); return; }}
-          className="px-8 py-3 rounded-2xl bg-slate-800 text-slate-600 border border-white/6 text-sm font-bold cursor-not-allowed flex items-center gap-2"
-          title="Submission is locked until the timer reaches zero"
-        >
-          <i className="fas fa-lock" />
-          Submit Locked — Timer Running
-        </button>
+        {/* Action Button: Proceed to Round 2 if available, otherwise display waiting state */}
+        {hasSecondRound ? (
+          <button
+            type="button"
+            onClick={() => { stopAudio(); transitionToNextRound(); }}
+            className="px-8 py-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-sm shadow-xl shadow-indigo-600/30 hover:scale-105 transition-all flex items-center gap-2.5 cursor-pointer"
+          >
+            <i className={`fas ${isTechRound ? 'fa-code' : 'fa-chart-pie'}`} />
+            <span>{isTechRound ? '🚀 Switch to Coding Round (Round 2) →' : '📊 Switch to Case Study (Round 2) →'}</span>
+          </button>
+        ) : (
+          <button
+            disabled
+            onClick={(e) => { e.preventDefault(); return; }}
+            className="px-8 py-3 rounded-2xl bg-slate-800 text-slate-600 border border-white/6 text-sm font-bold cursor-not-allowed flex items-center gap-2"
+            title="Submission is locked until the timer reaches zero"
+          >
+            <i className="fas fa-lock" />
+            Submit Locked — Timer Running
+          </button>
+        )}
       </div>
 
       {/* Hidden video for AI Proctoring — must stay visible for MediaPipe frame decoding */}
@@ -3238,287 +3152,37 @@ export default function VoiceInterviewPage() {
   )
 
   // ── Pre-Interview Checks Screen ───────────────────────────────────────────
+  // ── Pre-Interview Checks Screen ───────────────────────────────────────────
   if (round === 'pre_checks') return (
-    <div className="min-h-screen bg-[#0a0f1e] flex flex-col items-center justify-center text-white px-6" style={{ fontFamily: "'Inter',sans-serif" }}>
-      <div className="max-w-2xl w-full text-center space-y-8">
-        <div className="flex flex-col items-center gap-4 mb-6">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shadow-[0_0_40px_rgba(99,102,241,0.3)]">
-            <i className="fas fa-shield-alt text-3xl text-white" />
-          </div>
-          <h1 className="text-3xl font-black">Pre-Interview Checklist</h1>
-          <p className="text-slate-400">Before we begin, please review the rules and grant the required permissions.</p>
-        </div>
-
-        {/* Rules */}
-        <div className="grid gap-3 text-left bg-white dark:bg-[#0d1117] border border-slate-200 dark:border-white/10 rounded-2xl p-6 shadow-xl">
-          <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2 border-b border-slate-200 dark:border-white/10 pb-2">Interview Rules</h3>
-          {[
-            { i: 'fa-volume-mute', c: 'text-rose-600 dark:text-rose-400', bg: 'bg-rose-50 dark:bg-rose-500/10', t: 'Ensure you are in a quiet environment without background noise.' },
-            { i: 'fa-window-close', c: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-500/10', t: 'Do not close, refresh, or switch away from this tab.' },
-            { i: 'fa-user-check', c: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-500/10', t: 'Your microphone, camera, and screen will be recorded.' },
-          ].map((rule, idx) => (
-            <div key={idx} className="flex items-center gap-4">
-              <div className={`w-8 h-8 rounded-full ${rule.bg} flex items-center justify-center shrink-0`}>
-                <i className={`fas ${rule.i} ${rule.c}`} />
-              </div>
-              <span className="text-slate-800 dark:text-slate-200 text-sm font-semibold">{rule.t}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* Actions */}
-        <div className="space-y-4">
-          <button onClick={() => setShowDeviceCheck(true)}
-            className={`w-full py-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-3 ${permissionsGranted
-              ? '!bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-default'
-              : '!bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/20'
-              }`}>
-            <i className={`fas ${permissionsGranted ? 'fa-check-circle' : 'fa-lock-open'}`} />
-            {permissionsGranted ? 'Hardware Checked & Permissions Granted' : 'Test Hardware & Grant Permissions'}
-          </button>
-
-          <button
-            disabled={!permissionsGranted}
-            onClick={() => setRound('intro')}
-            className={`w-full py-4 rounded-xl font-bold text-lg transition-all flex items-center justify-center gap-3 ${permissionsGranted
-              ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-[0_4px_30px_rgba(16,185,129,0.4)] hover:shadow-[0_4px_50px_rgba(16,185,129,0.6)] hover:scale-[1.02]'
-              : 'bg-slate-800 text-slate-500 cursor-not-allowed'
-              }`}>
-            I Agree & Continue
-            <i className="fas fa-arrow-right" />
-          </button>
-        </div>
-      </div>
-
-      {showDeviceCheck && (
-        <DeviceCheckModal
-          onSuccess={() => {
-            if (document.documentElement.requestFullscreen) {
-              document.documentElement.requestFullscreen().catch(() => { })
-            }
-            navigator.mediaDevices.getUserMedia({ audio: true, video: true }).then(stream => {
-              cameraStreamRef.current = stream;
-              setPermissionsGranted(true);
-            }).catch(err => {
-              alert("Permissions are required to proceed: " + err.message);
-            });
-            setShowDeviceCheck(false);
-          }}
-          onCancel={() => setShowDeviceCheck(false)}
-        />
-      )}
-    </div>
+    <PreChecksScreen
+      permissionsGranted={permissionsGranted}
+      setPermissionsGranted={setPermissionsGranted}
+      showDeviceCheck={showDeviceCheck}
+      setShowDeviceCheck={setShowDeviceCheck}
+      cameraStreamRef={cameraStreamRef}
+      setRound={setRound}
+    />
   )
 
   // ── Voice Clone Setup Screen ──────────────────────────────────────────────
-  if (round === 'voice_clone_setup') {
-    const SAMPLE_SENTENCE = "The quick brown fox jumps over the lazy dog. Please record this sentence clearly so we can match your voice."
-
-    const startVcRecording = async () => {
-      setVcStep('recording')
-      setVcError('')
-      vcChunksRef.current = []
-      try {
-        let stream = cameraStreamRef.current
-        if (!stream || stream.getAudioTracks().length === 0) {
-          stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-        }
-        const mr = new MediaRecorder(stream, { mimeType: 'audio/webm' })
-        vcMediaRecorderRef.current = mr
-        mr.ondataavailable = (e) => { if (e.data.size > 0) vcChunksRef.current.push(e.data) }
-        mr.onstop = async () => {
-          if (stream !== cameraStreamRef.current) {
-            stream.getTracks().forEach(t => t.stop())
-          }
-          setVcStep('uploading')
-          try {
-            const blob = new Blob(vcChunksRef.current, { type: 'audio/webm' })
-            const fd = new FormData()
-            fd.append('audio', blob, 'voice_sample.webm')
-            fd.append('voice_name', `Candidate_${linkId}`)
-            const resp = await candidateFetch(`${API_BASE_URL}/voice-clone-instant`, { method: 'POST', body: fd })
-            const data = await resp.json()
-            if (!resp.ok) throw new Error(data.detail || 'Cloning failed')
-            setVoiceCloneId(data.voice_id)
-            voiceCloneIdRef.current = data.voice_id
-            setVcStep('done')
-          } catch (err) {
-            setVcError(err.message || 'Voice cloning failed. The interview will use the default AI voice.')
-            setVcStep('error')
-          }
-        }
-        mr.start()
-        // Auto-stop after 10 seconds
-        setTimeout(() => { if (mr.state === 'recording') mr.stop() }, 10000)
-      } catch (err) {
-        setVcError('Microphone access denied: ' + err.message)
-        setVcStep('error')
-      }
-    }
-
-    const stopVcRecording = () => {
-      if (vcMediaRecorderRef.current?.state === 'recording') {
-        vcMediaRecorderRef.current.stop()
-      }
-    }
-
-    return (
-      <div className="min-h-screen bg-[#0a0f1e] flex flex-col items-center justify-center text-white px-6" style={{ fontFamily: "'Inter',sans-serif" }}>
-        <style>{`
-          @keyframes vcPulse{0%,100%{box-shadow:0 0 0 0 rgba(139,92,246,.5)}70%{box-shadow:0 0 0 18px rgba(139,92,246,0)}}
-          @keyframes vcWave{0%,100%{transform:scaleY(.4)}50%{transform:scaleY(1)}}
-          .vc-bar{animation:vcWave 0.9s ease-in-out infinite;transform-origin:bottom;background:linear-gradient(to top,#7c3aed,#a78bfa);width:5px;border-radius:99px;height:32px;}
-        `}</style>
-        <div className="max-w-xl w-full text-center space-y-8">
-
-          {/* Header */}
-          <div className="flex flex-col items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-violet-600 to-indigo-500 flex items-center justify-center shadow-[0_0_40px_rgba(139,92,246,0.4)]">
-              <i className="fas fa-waveform-lines text-2xl text-white" />
-            </div>
-            <h1 className="text-3xl font-black">Voice Cloning Setup</h1>
-            <p className="text-slate-400 max-w-sm">Read the sentence below aloud. We'll clone your voice so the AI interviewer sounds just like you!</p>
-          </div>
-
-          {/* Sentence card */}
-          <div className="!bg-[#0d1117] border border-violet-500/30 rounded-2xl p-6 shadow-xl">
-            <p className="text-[0.7rem] font-bold uppercase tracking-widest text-violet-400 mb-3">Read this sentence clearly:</p>
-            <p className="text-white text-lg font-semibold leading-relaxed italic">"{SAMPLE_SENTENCE}"</p>
-          </div>
-
-          {/* Status indicator */}
-          {vcStep === 'recording' && (
-            <div className="flex flex-col items-center gap-4">
-              <div className="flex items-end gap-1 h-10">
-                {Array.from({ length: 9 }).map((_, i) => (
-                  <div key={i} className="vc-bar" style={{ animationDelay: `${i * 0.1}s` }} />
-                ))}
-              </div>
-              <p className="text-violet-300 text-sm font-semibold animate-pulse">🔴 Recording... speak the sentence now</p>
-              <button onClick={stopVcRecording} className="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 rounded-lg font-bold text-sm transition-colors">
-                <i className="fas fa-stop mr-2" />Stop Recording
-              </button>
-            </div>
-          )}
-
-          {vcStep === 'uploading' && (
-            <div className="flex flex-col items-center gap-3">
-              <div className="w-12 h-12 rounded-full border-4 border-violet-500/30 border-t-violet-500 animate-spin" />
-              <p className="text-violet-300 text-sm">Cloning your voice with ElevenLabs AI...</p>
-            </div>
-          )}
-
-          {vcStep === 'done' && (
-            <div className="!bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-5 text-emerald-300">
-              <i className="fas fa-check-circle text-3xl mb-2 block" />
-              <p className="font-bold">Voice Cloned Successfully!</p>
-              <p className="text-sm text-emerald-400/80 mt-1">The AI interviewer will now speak in your voice.</p>
-            </div>
-          )}
-
-          {(vcStep === 'error') && (
-            <div className="!bg-rose-500/10 border border-rose-500/30 rounded-2xl p-5 text-rose-300">
-              <i className="fas fa-exclamation-triangle text-2xl mb-2 block" />
-              <p className="text-sm">{vcError || 'An error occurred. Proceeding with default voice.'}</p>
-            </div>
-          )}
-
-          {/* Action buttons */}
-          <div className="space-y-3">
-            {vcStep === 'idle' && (
-              <button onClick={startVcRecording} className="w-full py-4 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-bold text-lg shadow-[0_4px_30px_rgba(139,92,246,0.4)] hover:shadow-[0_4px_50px_rgba(139,92,246,0.7)] hover:scale-[1.02] transition-all flex items-center justify-center gap-3">
-                <i className="fas fa-microphone" />Start Recording (max 10s)
-              </button>
-            )}
-            {(vcStep === 'done' || vcStep === 'error') && (
-              <button onClick={() => setRound('intro')} className="w-full py-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold text-lg shadow-[0_4px_30px_rgba(16,185,129,0.4)] hover:scale-[1.02] transition-all flex items-center justify-center gap-3">
-                Continue to Interview <i className="fas fa-arrow-right" />
-              </button>
-            )}
-            {vcStep === 'idle' && (
-              <button onClick={() => setRound('intro')} className="w-full py-3 rounded-xl !bg-white/5 border border-white/10 text-slate-400 hover:text-white text-sm font-medium transition-all">
-                Skip voice cloning — use default AI voice
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    )
-  }
+  if (round === 'voice_clone_setup') return (
+    <VoiceCloneSetupScreen
+      linkId={linkId}
+      cameraStreamRef={cameraStreamRef}
+      setRound={setRound}
+      setVoiceCloneId={setVoiceCloneId}
+      voiceCloneIdRef={voiceCloneIdRef}
+    />
+  )
 
   // ── Intro Screen ──────────────────────────────────────────────────────────
   if (round === 'intro') return (
-    <div className="min-h-screen h-screen bg-[#0a0f1e] flex flex-col items-center justify-between text-white px-6 py-6 sm:py-8 overflow-y-auto" style={{ fontFamily: "'Inter',sans-serif" }}>
-      <style>{`
-        @keyframes pulse-ring{0%,100%{transform:scale(1);opacity:.5}50%{transform:scale(1.12);opacity:1}}
-        @keyframes wave{0%{height:4px}100%{height:28px}}
-      `}</style>
-      <div className="max-w-xl w-full my-auto text-center space-y-4 sm:space-y-5">
-        <div className="flex items-center justify-center gap-3.5">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg">
-            <i className="fas fa-brain text-base text-white" />
-          </div>
-          <span className="text-xl font-black">HireIQ <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400 font-medium text-lg">Voice AI</span></span>
-        </div>
-
-        {/* Avatar */}
-        <div className="relative flex items-center justify-center h-44 sm:h-48 my-1">
-          <style>{`
-            @keyframes vidRingSpeak { 0%,100%{transform:scale(1);opacity:.8} 50%{transform:scale(1.08);opacity:1} }
-            @keyframes vidRingListen { 0%{transform:scale(1);opacity:.5} 100%{transform:scale(1.04);opacity:1} }
-          `}</style>
-          <VideoAvatar status="idle" size={170} />
-        </div>
-
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-black mb-2">Meet Zara, Your AI Interviewer</h1>
-          <p className="text-slate-400 text-xs sm:text-sm leading-relaxed max-w-lg mx-auto">
-            Hi, <span className="text-white font-semibold">{sessionDetail?.candidate_name}</span>! I'm Zara. We'll have a natural voice conversation across {
-              interviewType === 'Technical' ? '2 rounds — Verbal Q&A + Coding' :
-                interviewType === 'Non-Technical' ? '2 rounds — Verbal Q&A + Case Study' :
-                  '1 round of Verbal Q&A'
-            }. I'll ask follow-up questions to dig deeper into your answers.
-          </p>
-        </div>
-
-        {/* Round badges */}
-        <div className="flex flex-wrap gap-2 justify-center">
-          <div className="flex items-center gap-2 px-3.5 py-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-xs font-semibold text-indigo-300">
-            <i className="fas fa-comments text-indigo-400" /> Verbal Q&A ({questions.length} questions)
-          </div>
-          {interviewType === 'Technical' && (
-            <div className="flex items-center gap-2 px-3.5 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-full text-xs font-semibold text-amber-300">
-              <i className="fas fa-code text-amber-400" /> Live Coding
-            </div>
-          )}
-          {interviewType === 'Non-Technical' && (
-            <div className="flex items-center gap-2 px-3.5 py-1.5 bg-violet-500/10 border border-violet-500/20 rounded-full text-xs font-semibold text-violet-300">
-              <i className="fas fa-briefcase text-violet-400" /> Case Study
-            </div>
-          )}
-        </div>
-
-        {/* Tips */}
-        <div className="grid gap-2 text-xs text-left max-w-lg mx-auto">
-          {[
-            { i: 'fa-volume-up', c: 'text-indigo-400', t: 'I speak each question aloud — listen before answering' },
-            { i: 'fa-microphone', c: 'text-emerald-400', t: 'Just talk naturally — your mic captures everything' },
-            { i: 'fa-comment-dots', c: 'text-violet-400', t: 'I\'ll ask follow-up questions based on your answers' },
-            { i: 'fa-arrow-right', c: 'text-amber-400', t: 'After 3 seconds of silence, the interview auto-advances' },
-          ].map((tip, idx) => (
-            <div key={idx} className="flex items-center gap-3 rounded-xl px-4 py-2.5" style={{ backgroundColor: 'rgba(255, 255, 255, 0.04)', borderColor: 'rgba(255, 255, 255, 0.08)', borderWidth: 1 }}>
-              <i className={`fas ${tip.i} ${tip.c} w-4 text-center text-sm`} />
-              <span className="text-slate-300 font-medium">{tip.t}</span>
-            </div>
-          ))}
-        </div>
-
-        <button onClick={startInterview}
-          className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-bold text-base shadow-[0_4px_30px_rgba(99,102,241,0.5)] hover:shadow-[0_4px_50px_rgba(99,102,241,0.8)] hover:scale-[1.01] transition-all flex items-center justify-center gap-2.5 cursor-pointer mt-2">
-          <i className="fas fa-microphone-alt" /> Begin Interview with Zara
-        </button>
-      </div>
-    </div>
+    <IntroScreen
+      sessionDetail={sessionDetail}
+      interviewType={interviewType}
+      questions={questions}
+      startInterview={startInterview}
+    />
   )
 
   // ── Verbal Round ─────────────────────────────────────────────────────
@@ -3556,6 +3220,35 @@ export default function VoiceInterviewPage() {
           </span>
         </div>
         <div className="flex items-center gap-3">
+          {hasSecondRound && (
+            <button
+              type="button"
+              onClick={() => {
+                Swal.fire({
+                  title: isTechRound ? 'Switch to Coding Round?' : 'Switch to Case Study Round?',
+                  text: isTechRound 
+                    ? 'Are you ready to finish the verbal round and proceed to the Coding Challenge (Round 2)?' 
+                    : 'Are you ready to finish the verbal round and proceed to the Case Study (Round 2)?',
+                  icon: 'question',
+                  showCancelButton: true,
+                  confirmButtonColor: '#4f46e5',
+                  cancelButtonColor: '#334155',
+                  confirmButtonText: isTechRound ? 'Yes, Switch to Coding' : 'Yes, Switch to Case Study',
+                  background: '#161c2d',
+                  color: '#fff',
+                }).then((r) => {
+                  if (r.isConfirmed) {
+                    stopAudio()
+                    transitionToNextRound()
+                  }
+                })
+              }}
+              className="px-3.5 py-1.5 rounded-full text-xs font-bold text-white bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 shadow-md shadow-indigo-500/20 flex items-center gap-1.5 transition-all hover:scale-105 cursor-pointer"
+            >
+              <i className={`fas ${isTechRound ? 'fa-code' : 'fa-chart-pie'}`} />
+              <span>{isTechRound ? 'Switch to Coding Round →' : 'Switch to Case Study →'}</span>
+            </button>
+          )}
           <div className={`text-sm font-mono font-bold px-4 py-1.5 rounded-full border ${countdown < 300 ? 'border-rose-500/50 text-rose-400 bg-rose-500/10' : 'border-indigo-500/30 text-indigo-300 bg-indigo-500/10'}`}>
             <i className="fas fa-clock mr-2" />{fmt(countdown)}
           </div>
@@ -3670,12 +3363,55 @@ export default function VoiceInterviewPage() {
               <i className={`fas ${aiStatus === 'listening' ? 'fa-stop-circle' : 'fa-microphone'} text-base`} />
               {aiStatus === 'listening' ? 'Done Speaking' : 'Speak Answer'}
             </button>
+
+            {hasSecondRound && (
+              <button
+                type="button"
+                onClick={() => {
+                  stopAudio()
+                  Swal.fire({
+                    title: isTechRound ? 'Switch to Coding Round?' : 'Switch to Case Study Round?',
+                    text: isTechRound 
+                      ? 'Are you ready to finish the verbal round and proceed to the Coding Challenge (Round 2)?' 
+                      : 'Are you ready to finish the verbal round and proceed to the Case Study (Round 2)?',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#4f46e5',
+                    cancelButtonColor: '#334155',
+                    confirmButtonText: isTechRound ? 'Yes, Switch to Coding' : 'Yes, Switch to Case Study',
+                    background: '#161c2d',
+                    color: '#fff',
+                  }).then((r) => {
+                    if (r.isConfirmed) {
+                      stopAudio()
+                      transitionToNextRound()
+                    }
+                  })
+                }}
+                className="px-5 py-3.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-lg shadow-indigo-600/30 hover:-translate-y-0.5 cursor-pointer whitespace-nowrap"
+                title={isTechRound ? 'Switch to Coding Round' : 'Switch to Case Study'}
+              >
+                <i className={`fas ${isTechRound ? 'fa-code' : 'fa-chart-pie'}`} />
+                <span>{isTechRound ? 'Switch to Coding' : 'Switch to Case Study'}</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => {
+                stopAudio()
+                transitionToNextRound(false)
+              }}
+              className="px-6 py-3.5 rounded-2xl text-xs font-bold transition-all uppercase tracking-widest !bg-white/5 text-slate-400 border border-white/8 hover:bg-white/10"
+              title="Proceed to the next round"
+            >
+              Next Round
+            </button>
             <button
               onClick={handleFinishEarly}
-              className="px-6 py-3.5 rounded-2xl text-xs font-bold transition-all uppercase tracking-widest bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20"
-              title="Submit interview"
+              className="px-6 py-3.5 rounded-2xl text-xs font-bold transition-all uppercase tracking-widest !bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20"
+              title="End interview early"
             >
-              Submit
+              Finish Early
             </button>
           </div>
 

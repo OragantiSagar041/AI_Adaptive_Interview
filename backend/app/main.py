@@ -88,21 +88,20 @@ _last_rate_limit_cleanup = 0.0
 try:
     # socket_connect_timeout: max seconds to wait for TCP connection
     # socket_timeout: max seconds to wait for any command response (incl. PING)
-    _redis_client = _redis_module.Redis.from_url(
-        _REDIS_URL,
-        socket_connect_timeout=2,
-        socket_timeout=2,
-        protocol=2,
-    )
+    import ssl as _ssl
+    _redis_kwargs = {
+        "socket_connect_timeout": 2,
+        "socket_timeout": 2,
+        "protocol": 2,
+    }
+    if _REDIS_URL.startswith("rediss://"):
+        _redis_kwargs["ssl_cert_reqs"] = _ssl.CERT_NONE
+
+    _redis_client = _redis_module.Redis.from_url(_REDIS_URL, **_redis_kwargs)
     _redis_client.ping()  # verify Redis is reachable at startup
-except _redis_module.exceptions.RedisError:
-    # RedisError is the base class for ConnectionError, TimeoutError,
-    # AuthenticationError, etc. — any Redis failure falls back gracefully.
-    print("WARNING: Redis unavailable at startup — falling back to in-memory rate limiting.")
-    _redis_client = None
-except Exception:
-    # Catch any other unexpected error (e.g. DNS failure) without crashing startup.
-    print("WARNING: Redis init failed — falling back to in-memory rate limiting.")
+except Exception as _re_err:
+    # Catch any Redis error or timeout without crashing startup.
+    print(f"WARNING: Redis unavailable at startup ({_re_err}) — falling back to in-memory rate limiting.")
     _redis_client = None
 
 from app.core.routes_core import startup_event_cloudinary, startup_event_db_and_email

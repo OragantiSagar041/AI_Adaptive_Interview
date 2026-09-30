@@ -431,7 +431,7 @@ def send_email_task(
     # Import here to avoid circular imports at module load time
     from app.services.services import build_default_interview_email_html
 
-    BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
+    BREVO_API_KEY = (os.getenv("BREVO_API_KEY") or "").strip().strip('"').strip("'")
     if not BREVO_API_KEY:
         logger.warning("BREVO_API_KEY not set — skipping email send")
         return {"status": "skipped", "reason": "no_api_key"}
@@ -563,7 +563,7 @@ def send_recruiter_credentials_email_task(
 ):
     logger.info(f"Sending credentials email to {recruiter_email} (Attempt {self.request.retries + 1})")
 
-    BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
+    BREVO_API_KEY = (os.getenv("BREVO_API_KEY") or "").strip().strip('"').strip("'")
     if not BREVO_API_KEY:
         logger.warning("BREVO_API_KEY not set — skipping email send")
         return {"status": "skipped", "reason": "no_api_key"}

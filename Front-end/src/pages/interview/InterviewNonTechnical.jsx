@@ -7,6 +7,7 @@ import ProctoringAlerts from '../../components/interview/ProctoringAlerts'
 import { API_BASE_URL } from '../../apiConfig'
 import { candidateFetch } from '../../utils/candidateAuth'
 import api from '../../utils/api'
+import Swal from 'sweetalert2'
 import '../../Interview.css'
 import { motion } from 'framer-motion'
 import AccessDeniedScreen from '../../components/interview/AccessDeniedScreen'
@@ -23,11 +24,23 @@ export const InterviewNonTechnical = () => {
     setCurrentQuestionIndex,
     setCodingRoundLoading
   }) => {
-    setCodingRoundLoading(true)
+    setCodingRoundLoading?.(true)
+    Swal.fire({
+      title: 'Preparing Case Study Round...',
+      html: 'Generating real-world business scenarios. Just a moment...',
+      allowOutsideClick: false,
+      didOpen: () => { Swal.showLoading() },
+      background: '#0f172a',
+      color: '#fff'
+    })
     try {
-      const payload = await api.post(`/case-study/start`, { interview_id: interviewId }).then(r => r.data)
+      const payload = await api.post(`/case-study/start`, { interview_id: interviewId }, { timeout: 120000 }).then(r => r.data)
 
-      const caseStudyQuestions = payload.case_study_round?.questions || []
+      const caseStudyQuestions = payload.case_study_round?.questions || payload.questions || []
+
+      if (!caseStudyQuestions || caseStudyQuestions.length === 0) {
+        throw new Error("No case study questions received from server.")
+      }
 
       const formattedQs = caseStudyQuestions.map((q, idx) => {
         const text = `📁 CASE STUDY ROUND: ${q.skill_tested || 'Scenario'}\n\n${q.scenario}\n\nQuestion: ${q.question}`
@@ -45,18 +58,23 @@ export const InterviewNonTechnical = () => {
         }
       })
 
-      setQuestions(prev => [...prev, ...formattedQs])
+      setQuestions(prev => {
+        const nonCaseStudy = prev.filter(q => q.type !== 'case_study')
+        return [...nonCaseStudy, ...formattedQs]
+      })
       
-      const targetIndex = (savedIndex !== null && savedIndex >= verbalQuestionsLength && savedIndex < verbalQuestionsLength + formattedQs.length) 
+      const targetIndex = (typeof savedIndex === 'number' && savedIndex >= verbalQuestionsLength && savedIndex < verbalQuestionsLength + formattedQs.length) 
         ? savedIndex 
         : verbalQuestionsLength
       
       setCurrentQuestionIndex(targetIndex)
+      Swal.close()
     } catch (err) {
       console.error('Case study round start failed:', err)
+      Swal.close()
       throw err
     } finally {
-      setCodingRoundLoading(false)
+      setCodingRoundLoading?.(false)
     }
   }
 
@@ -122,11 +140,13 @@ export const InterviewNonTechnical = () => {
     enableFullscreen,
     restartScreenShare,
     speakAIQuestion,
+    isAiSpeaking,
     showVoiceCloneSetup,
     completeVoiceCloneSetup,
     handleStartRound2Click,
     proceedToRoundTwo,
     handleNextQuestion,
+    stopAudio,
     handleSubmitInterview,
     canSubmit,
     handleFinishEarly,
@@ -139,6 +159,12 @@ export const InterviewNonTechnical = () => {
     promptScreenShare,
     isOnline
   } = session
+
+  useEffect(() => {
+    return () => {
+      stopAudio?.()
+    }
+  }, [stopAudio])
 
   // ── Voice Cloning Setup State (UI only) ──────────────────────────────────
   const [vcStep, setVcStep] = useState('idle') // 'idle' | 'recording' | 'uploading' | 'done' | 'error'
@@ -516,7 +542,7 @@ export const InterviewNonTechnical = () => {
           </svg>
 
           <div className="ip-left flex flex-col gap-4 h-full overflow-y-auto pr-1 scrollbar-none">
-            {/* AI Analyzing Status Card */}
+            {/* AI Status Card */}
             <div className="bg-white/60 backdrop-blur-2xl border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-2xl p-5 flex items-center gap-4 transition-all duration-300 hover:shadow-lg hover:border-indigo-50">
               <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shrink-0 shadow-sm animate-pulse">
                 <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -525,14 +551,26 @@ export const InterviewNonTechnical = () => {
                 </svg>
               </div>
               <div className="flex-1">
-                <h4 className="m-0 text-sm font-bold text-slate-800">AI Analyzing</h4>
-                <p className="m-0 text-[11px] text-slate-500 font-medium">AI is Reading the Question...</p>
+                <h4 className="m-0 text-sm font-bold text-slate-800">
+                  {isRoundTwo || currentQuestion?.type === 'case_study' ? 'Case Study Analysis' : 'AI Interviewer'}
+                </h4>
+                <p className="m-0 text-[11px] text-slate-500 font-medium">
+                  {isRoundTwo || currentQuestion?.type === 'case_study'
+                    ? 'Silent prep & answer mode (TTS off)'
+                    : (isAiSpeaking ? 'AI is Reading the Question...' : 'Ready for your answer')}
+                </p>
               </div>
               <div className="flex items-end gap-0.5 h-6 shrink-0">
-                <span className="w-1 bg-emerald-500 rounded-full h-2 animate-[audioBar_0.8s_ease-in-out_infinite_alternate]"></span>
-                <span className="w-1 bg-emerald-500 rounded-full h-4 animate-[audioBar_0.8s_ease-in-out_infinite_alternate_0.15s]"></span>
-                <span className="w-1 bg-emerald-500 rounded-full h-3 animate-[audioBar_0.8s_ease-in-out_infinite_alternate_0.3s]"></span>
-                <span className="w-1 bg-emerald-500 rounded-full h-5 animate-[audioBar_0.8s_ease-in-out_infinite_alternate_0.1s]"></span>
+                {isAiSpeaking && !(isRoundTwo || currentQuestion?.type === 'case_study') ? (
+                  <>
+                    <span className="w-1 bg-emerald-500 rounded-full h-2 animate-[audioBar_0.8s_ease-in-out_infinite_alternate]"></span>
+                    <span className="w-1 bg-emerald-500 rounded-full h-4 animate-[audioBar_0.8s_ease-in-out_infinite_alternate_0.15s]"></span>
+                    <span className="w-1 bg-emerald-500 rounded-full h-3 animate-[audioBar_0.8s_ease-in-out_infinite_alternate_0.3s]"></span>
+                    <span className="w-1 bg-emerald-500 rounded-full h-5 animate-[audioBar_0.8s_ease-in-out_infinite_alternate_0.1s]"></span>
+                  </>
+                ) : (
+                  <span className="w-2 h-2 rounded-full bg-emerald-500/80"></span>
+                )}
               </div>
             </div>
 
@@ -717,11 +755,17 @@ export const InterviewNonTechnical = () => {
                       <div className="flex-1 flex flex-col gap-4">
                         <div className="bg-slate-50 p-5 rounded-[16px] border border-slate-200 shadow-sm">
                           <h4 className="font-bold text-slate-800 mb-3 text-[13px] uppercase tracking-wider flex items-center gap-2">
-                            <span className="text-lg">Q</span> Scenario Context
+                            <span className="text-lg">📋</span> Scenario Context
                           </h4>
-                          <ul className="list-disc pl-5 m-0 space-y-2 text-slate-600 text-[15px] leading-relaxed">
-                            {currentQuestion.scenario?.split(/(?<=[.?!])\s+/).map((sentence, i) => sentence.trim() ? <li key={i}>{sentence.trim()}</li> : null)}
-                          </ul>
+                          {currentQuestion?.scenario ? (
+                            <ul className="list-disc pl-5 m-0 space-y-2 text-slate-600 text-[15px] leading-relaxed">
+                              {currentQuestion.scenario.split(/(?<=[.?!])\s+/).filter(s => s && s.trim()).map((sentence, i) => (
+                                <li key={i}>{sentence.trim()}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-slate-600 text-[15px] leading-relaxed m-0 italic">No scenario context provided.</p>
+                          )}
                         </div>
                         <div className="bg-indigo-50/80 p-5 rounded-[16px] border border-indigo-100 shadow-sm">
                           <h4 className="font-bold text-indigo-800 mb-2 text-[13px] uppercase tracking-wider flex items-center gap-2">
@@ -735,15 +779,18 @@ export const InterviewNonTechnical = () => {
                     ) : (
                       <p className="flex-1 text-slate-800 text-base md:text-lg font-semibold leading-relaxed m-0">{currentQuestionText || 'Question is loading...'}</p>
                     )}
-                    <button 
-                      className="bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-indigo-600 border border-slate-200 hover:border-indigo-100 cursor-pointer p-2.5 rounded-full transition-all duration-200 shrink-0" 
-                      onClick={() => speakAIQuestion(currentQuestionText)}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M11 5L6 9H2v6h4l5 4V5z"></path>
-                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-                      </svg>
-                    </button>
+                    {!isRoundTwo && currentQuestion?.type !== 'case_study' && currentQuestion?.type !== 'coding' && (
+                      <button 
+                        className="bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-indigo-600 border border-slate-200 hover:border-indigo-100 cursor-pointer p-2.5 rounded-full transition-all duration-200 shrink-0" 
+                        onClick={() => speakAIQuestion(currentQuestionText)}
+                        title="Listen to question"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M11 5L6 9H2v6h4l5 4V5z"></path>
+                          <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                        </svg>
+                      </button>
+                    )}
                   </div>
                 </div>
 

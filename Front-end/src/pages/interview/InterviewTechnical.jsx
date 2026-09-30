@@ -1086,6 +1086,8 @@ export const InterviewTechnical = () => {
     handleStartRound2Click,
     proceedToRoundTwo,
     handleNextQuestion,
+    stopAudio,
+    isAiSpeaking,
     handleSubmitInterview,
     canSubmit,
     handleFinishEarly,
@@ -1095,6 +1097,12 @@ export const InterviewTechnical = () => {
     isSpeechRecordingRef,
     isOnline
   } = session
+
+  useEffect(() => {
+    return () => {
+      stopAudio?.()
+    }
+  }, [stopAudio])
 
   useEffect(() => {
     const remoteCount = session?.codingRoundData?.coding_round?.ai_feedback_count;
@@ -1517,7 +1525,10 @@ export const InterviewTechnical = () => {
 
               {!isRoundTwo && sessionDetail?.interview_type !== 'Normal' && (
                 <button
-                  onClick={handleStartRound2Click}
+                  onClick={() => {
+                    stopAudio?.()
+                    handleStartRound2Click()
+                  }}
                   className="w-full py-3 px-4 rounded-xl font-bold text-xs bg-indigo-600 hover:bg-indigo-500 text-white transition-all cursor-pointer border-none shadow-md flex items-center justify-center gap-2 hover:-translate-y-0.5"
                 >
                   🚀 Start Round 2 &rarr;
@@ -1677,15 +1688,18 @@ export const InterviewTechnical = () => {
                   <div className="flex gap-4 items-start">
                     <div className="w-1.5 bg-indigo-600 self-stretch rounded-full shrink-0 min-h-[60px]" />
                     <p className="flex-1 text-slate-800 text-base md:text-lg font-semibold leading-relaxed m-0">{currentQuestionText || 'Question is loading...'}</p>
-                    <button
-                      className="bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-indigo-600 border border-slate-200 hover:border-indigo-100 cursor-pointer p-2.5 rounded-full transition-all duration-200 shrink-0"
-                      onClick={() => speakAIQuestion(currentQuestionText)}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M11 5L6 9H2v6h4l5 4V5z"></path>
-                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-                      </svg>
-                    </button>
+                    {!isRoundTwo && currentQuestion?.type !== 'coding' && currentQuestion?.type !== 'case_study' && (
+                      <button
+                        className="bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-indigo-600 border border-slate-200 hover:border-indigo-100 cursor-pointer p-2.5 rounded-full transition-all duration-200 shrink-0"
+                        onClick={() => speakAIQuestion(currentQuestionText)}
+                        title="Listen to question"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M11 5L6 9H2v6h4l5 4V5z"></path>
+                          <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                        </svg>
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -1715,11 +1729,15 @@ export const InterviewTechnical = () => {
                 <div className="flex gap-3 justify-center items-center mt-2 shrink-0">
                   {currentQuestionIndex === questions.length - 1 ? (
                     !isRoundTwo && sessionDetail?.interview_type !== 'Normal' ? (
-                      <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-100 px-4 py-2.5 rounded-xl">
-                        <span className="text-xs font-semibold text-indigo-600">
-                          Round 1 complete. Click "Start Round 2" in the sidebar to proceed.
-                        </span>
-                      </div>
+                      <button
+                        onClick={() => {
+                          stopAudio?.()
+                          handleStartRound2Click()
+                        }}
+                        className="px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-600/30 hover:shadow-indigo-600/40 transition-all duration-200 cursor-pointer border-none flex items-center gap-2"
+                      >
+                        🚀 Switch to Coding Round (Round 2) &rarr;
+                      </button>
                     ) : (
                       <button
                         className="px-8 py-3.5 rounded-xl font-bold text-sm text-white transition-all duration-200 border-none bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/20 hover:shadow-red-500/30 cursor-pointer"
@@ -1732,7 +1750,10 @@ export const InterviewTechnical = () => {
                   ) : (
                     <button
                       className="px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30 transition-all duration-200 cursor-pointer border-none"
-                      onClick={handleNextQuestion}
+                      onClick={() => {
+                        stopAudio?.()
+                        handleNextQuestion()
+                      }}
                     >
                       Next &rarr;
                     </button>
@@ -1788,7 +1809,10 @@ export const InterviewTechnical = () => {
                 Cancel
               </button>
               <button
-                onClick={proceedToRoundTwo}
+                onClick={() => {
+                  stopAudio?.()
+                  proceedToRoundTwo()
+                }}
                 className="px-4 py-2 rounded-lg font-semibold text-sm text-white bg-blue-600 hover:bg-blue-700 transition-colors border-none cursor-pointer"
               >
                 Yes, Switch

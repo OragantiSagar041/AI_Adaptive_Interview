@@ -1555,9 +1555,9 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
     from pathlib import Path
     env_path = Path(__file__).resolve().parents[2] / ".env"
     load_dotenv(env_path, override=False)
-    api_key = os.getenv("BREVO_API_KEY")
-    sender_name = (os.getenv("BREVO_SENDER_NAME") or "Hire IQ Recruiting").strip()
-    sender_email_addr = (os.getenv("BREVO_SENDER_EMAIL") or "").strip()
+    api_key = (os.getenv("BREVO_API_KEY") or "").strip().strip('"').strip("'")
+    sender_name = (os.getenv("BREVO_SENDER_NAME") or "Hire IQ Recruiting").strip().strip('"').strip("'")
+    sender_email_addr = (os.getenv("BREVO_SENDER_EMAIL") or "").strip().strip('"').strip("'")
     if not api_key:
         return False
 
@@ -2207,9 +2207,9 @@ def send_otp_email(email: str, name: str, otp: str):
     from pathlib import Path
     env_path = Path(__file__).resolve().parents[2] / ".env"
     load_dotenv(env_path, override=False)
-    api_key = os.getenv("BREVO_API_KEY")
-    sender_name = (os.getenv("BREVO_SENDER_NAME") or "Hire IQ Recruiting").strip()
-    sender_email = (os.getenv("BREVO_SENDER_EMAIL") or "").strip()
+    api_key = (os.getenv("BREVO_API_KEY") or "").strip().strip('"').strip("'")
+    sender_name = (os.getenv("BREVO_SENDER_NAME") or "Hire IQ Recruiting").strip().strip('"').strip("'")
+    sender_email = (os.getenv("BREVO_SENDER_EMAIL") or "").strip().strip('"').strip("'")
     
     if not api_key: return False
 

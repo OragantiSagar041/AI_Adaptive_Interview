@@ -626,8 +626,8 @@ def create_tenant(data: TenantCreate, master_id: str = Depends(get_current_admin
     new_tenant["custom_id"] = get_next_sequence_value("recruiter", "RC")
     admins_collection.insert_one(new_tenant)
     
-    brevo_key = os.getenv("BREVO_API_KEY")
-    sender_email = (os.getenv("BREVO_SENDER_EMAIL") or "").strip()
+    brevo_key = (os.getenv("BREVO_API_KEY") or "").strip().strip('"').strip("'")
+    sender_email = (os.getenv("BREVO_SENDER_EMAIL") or "").strip().strip('"').strip("'")
     if brevo_key:
         try:
             import requests

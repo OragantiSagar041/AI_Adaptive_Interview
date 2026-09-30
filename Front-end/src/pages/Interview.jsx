@@ -63,7 +63,8 @@ export default function Interview() {
           navigate(`/interview/normal?session_id=${sessionId}`, { replace: true })
         }
       } catch (err) {
-        setError(err.message || "Unable to access this interview session.")
+        const errorMsg = err.response?.data?.detail || err.response?.data?.message || err.message || "Unable to access this interview session."
+        setError(errorMsg)
         setLoading(false)
       }
     }

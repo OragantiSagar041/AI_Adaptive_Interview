@@ -62,7 +62,7 @@ function CaseStudyVideoAvatar({ status, size = 200 }) {
         ref={videoRef}
         src={aiVideoUrl}
         loop
-        muted={false}
+        muted={true}
         playsInline
         preload="auto"
         style={{
@@ -296,129 +296,30 @@ export default function VoiceCaseStudy({
 
   // ── TTS / STT ──────────────────────────────────────────────────────────────
 
-  // Internal: plays one item from the queue
-  const _playNext = useCallback(async () => {
-    if (isSpeakingRef.current || speechQueueRef.current.length === 0) return
-    isSpeakingRef.current = true
-
-    const { text, onEnd, genId } = speechQueueRef.current.shift()
-
-    // If this item was superseded by a queue flush, skip it
-    if (genId !== speechGenIdRef.current - speechQueueRef.current.length - 1) {
-      // Use a simpler staleness check: if a newer flush happened the queue was cleared,
-      // so just proceed — the genId guard below inside onended handles the rest.
-    }
-
-    try {
-      setAiStatus('speaking')
-
-      // Stop any audio still playing from a previous item
-      if (playingAudioRef.current) {
-        playingAudioRef.current.onended = null
-        playingAudioRef.current.onerror = null
-        playingAudioRef.current.pause()
-        playingAudioRef.current = null
-      }
-
-      const useCustomVoice = !!(sessionDetail?.voice_clone || sessionDetail?.voice_cloning_enabled || sessionDetail?.custom_voice_id || sessionDetail?.cloned_voice_id)
-      const languageMap = {
-        Hindi: 'hi-IN', Telugu: 'te-IN', Tamil: 'ta-IN',
-        Malayalam: 'ml-IN', Kannada: 'kn-IN', English: 'en-US',
-      }
-      const ttsLang = languageMap[(sessionLang || sessionDetail?.language || 'English').toLowerCase().replace(/^\w/, c => c.toUpperCase())] || 'en-US'
-
-      const res = await candidateFetch(`${API_BASE_URL}/tts`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, voice: 'shimmer', language: ttsLang, use_custom_voice: useCustomVoice })
-      })
-
-      if (!res.ok) throw new Error('TTS Failed')
-      const blob = await res.blob()
-
-      // Check if a newer flush wiped the queue while we were fetching
-      if (genId !== speechGenIdRef.current) {
-        isSpeakingRef.current = false
-        _playNext()
-        return
-      }
-
-      if (blob.size === 0) {
-        // Browser SpeechSynthesis fallback
-        const utterance = new SpeechSynthesisUtterance(text)
-        utterance.lang = ttsLang
-        utterance.onend = () => {
-          if (genId !== speechGenIdRef.current) { isSpeakingRef.current = false; _playNext(); return }
-          setAiStatus('idle')
-          isSpeakingRef.current = false
-          onEnd?.()
-          _playNext()
-        }
-        speechSynthesis.speak(utterance)
-        setAiStatus('speaking')
-        return
-      }
-
-      const url = URL.createObjectURL(blob)
-      const audio = new Audio(url)
-      playingAudioRef.current = audio
-
-      audio.onended = () => {
-        if (playingAudioRef.current === audio) playingAudioRef.current = null
-        URL.revokeObjectURL(url)
-        // Discard callback if a newer flush happened while this was playing
-        if (genId !== speechGenIdRef.current) {
-          isSpeakingRef.current = false
-          _playNext()
-          return
-        }
-        setAiStatus('idle')
-        isSpeakingRef.current = false
-        onEnd?.()
-        _playNext()
-      }
-      audio.onerror = () => {
-        if (playingAudioRef.current === audio) playingAudioRef.current = null
-        isSpeakingRef.current = false
-        if (genId === speechGenIdRef.current) { setAiStatus('idle'); onEnd?.() }
-        _playNext()
-      }
-      audio.play().catch(e => {
-        console.error('Audio play error:', e)
-        if (playingAudioRef.current === audio) playingAudioRef.current = null
-        isSpeakingRef.current = false
-        if (genId === speechGenIdRef.current) { setAiStatus('idle'); onEnd?.() }
-        _playNext()
-      })
-    } catch (e) {
-      console.error('TTS error:', e)
-      isSpeakingRef.current = false
-      if (genId === speechGenIdRef.current) { setAiStatus('idle'); onEnd?.() }
-      _playNext()
-    }
-  }, [sessionLang, sessionDetail])
-
-  // Public speak(): push onto queue, flush queue
-  const speak = useCallback((text, onEnd) => {
-    const genId = speechGenIdRef.current
-    speechQueueRef.current.push({ text, onEnd, genId })
-    _playNext()
-  }, [_playNext])
-
-  // stopAllSpeech(): cancel current audio + flush queue — call before any new scene
+  // ── TTS: Completely disabled in Case Study Round across all languages ─────
   const stopAllSpeech = useCallback(() => {
-    speechGenIdRef.current += 1          // invalidate all pending onEnd callbacks
+    speechGenIdRef.current += 1          // invalidate all pending callbacks
     speechQueueRef.current = []          // flush queue
     isSpeakingRef.current = false
     if (playingAudioRef.current) {
       playingAudioRef.current.onended = null
       playingAudioRef.current.onerror = null
       playingAudioRef.current.pause()
+      playingAudioRef.current.src = ''
       playingAudioRef.current = null
     }
-    window.speechSynthesis?.cancel()
+    if (window.speechSynthesis) window.speechSynthesis.cancel()
     setAiStatus('idle')
   }, [])
+
+  // speak(): Silent callback executor. No TTS request is sent, no audio is played in any language.
+  const speak = useCallback((text, onEnd) => {
+    stopAllSpeech()
+    setAiStatus('idle')
+    if (onEnd) {
+      setTimeout(onEnd, 50)
+    }
+  }, [stopAllSpeech])
 
   const addMsg = useCallback((role, text) => setChatMessages(p => [...p, { role, text, ts: Date.now() }]), [])
 
@@ -564,10 +465,7 @@ export default function VoiceCaseStudy({
 
     if (isRepeat) {
       addMsg('user', answer)
-      const sc = scenarios[currentIdx]
-      const scenarioPrefix = currentIdx === 0 ? t.csScenarioPrefix : t.csScenarioNextPrefix
-      const scenarioText = `${scenarioPrefix}${sc.text}`
-      const prompt = currentIdx === 0 ? `${scenarioText}. ${t.csPromptFirst}` : `${scenarioText}. ${t.csPromptNext}`
+      const prompt = currentIdx === 0 ? t.csPromptFirst : t.csPromptNext
       stopAllSpeech()
       aiSay(prompt, () => startListening(ans => handleAnswer(ans, currentIdx)))
       return
@@ -644,11 +542,13 @@ export default function VoiceCaseStudy({
     const sc = scenarios[idx]
     if (!sc) { handleComplete(); return }
     const t = VOICE_TRANSLATIONS[sessionLang] || VOICE_TRANSLATIONS['English']
-    const scenarioPrefix = idx === 0 ? t.csScenarioPrefix : t.csScenarioNextPrefix
-    const scenarioText = `${prefix ? prefix + ' ' : ''}${scenarioPrefix}${sc.text}`
+
+    // The scenario text is presented in the Scenario Card UI.
+    // Voice AI does NOT read the scenario text aloud.
+    // Instead, speak only the guidance prompt so the candidate can read and respond.
     const prompt = idx === 0
-      ? `${scenarioText}. ${t.csPromptFirst}`
-      : `${scenarioText}. ${t.csPromptNext}`
+      ? (prefix ? `${prefix} ${t.csPromptFirst}` : t.csPromptFirst)
+      : (prefix ? `${prefix} ${t.csPromptNext}` : t.csPromptNext)
 
     // No outer setTimeout — speak() is queued; onEnd fires only after audio finishes
     aiSay(prompt, () => {
@@ -664,6 +564,7 @@ export default function VoiceCaseStudy({
   const hasStartedRef = useRef(false)
   
   useEffect(() => {
+    stopAllSpeech()
     if (hasStartedRef.current) return
     hasStartedRef.current = true
     
@@ -843,8 +744,9 @@ export default function VoiceCaseStudy({
                   {aiStatus === 'listening' ? 'Done Speaking' : 'Speak Your Answer'}
                 </button>
                 <button onClick={() => {
+                  stopListening()
+                  stopAllSpeech()
                   if (currentScenarioIdx < scenarios.length - 1) {
-                    stopListening()
                     handleAnswer('skip', currentScenarioIdx)
                   } else {
                     handleComplete()

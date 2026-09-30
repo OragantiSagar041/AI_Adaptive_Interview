@@ -129,8 +129,12 @@ def get_admin_voices(current_admin: dict = Depends(get_current_admin_details)):
     for key, value in sorted(os.environ.items()):
         if key.startswith("CARTESIA_VOICE_ID_") and value:
             val = str(value).strip()
+            if not val or val in seen_ids:
+                continue
             name_part = key.replace("CARTESIA_VOICE_ID_", "").replace("_", " ").title()
             real_name = _get_cartesia_name(val)
+            if cartesia_client and real_name is None:
+                continue
             display_name = f"{name_part} ({real_name})" if real_name else name_part
             voices.append({"name": display_name, "id": val})
             seen_ids.add(val)
@@ -139,8 +143,9 @@ def get_admin_voices(current_admin: dict = Depends(get_current_admin_details)):
     default_voice_id = str(os.getenv("CARTESIA_VOICE_ID") or "").strip()
     if default_voice_id and default_voice_id not in seen_ids:
         real_name = _get_cartesia_name(default_voice_id)
-        display_name = f"Default Voice ({real_name})" if real_name else "Default Voice"
-        voices.insert(0, {"name": display_name, "id": default_voice_id})
+        if not cartesia_client or real_name is not None:
+            display_name = f"Default Voice ({real_name})" if real_name else "Default Voice"
+            voices.insert(0, {"name": display_name, "id": default_voice_id})
             
     return {"status": "success", "voices": voices}
 
@@ -260,8 +265,12 @@ async def generate_tts(
     session_custom_voice = str(candidate_session.get("custom_voice_id") or "").strip()
     requested_voice_id = str(req.voice_id or "").strip()
 
-    # Security check: If a per-session clone exists and a different requested_voice_id is passed, reject.
-    if session_cloned_voice and requested_voice_id and not hmac.compare_digest(requested_voice_id, session_cloned_voice):
+    # Allowed voices: session clone, session custom voice, or any admin-configured voice from env
+    env_voices = {str(v).strip() for k, v in os.environ.items() if (k == "CARTESIA_VOICE_ID" or k.startswith("CARTESIA_VOICE_ID_")) and v}
+    allowed_voices = {v for v in [session_cloned_voice, session_custom_voice] if v} | env_voices
+
+    # Security check: If allowed_voices is configured and a different requested_voice_id is passed, reject.
+    if requested_voice_id and allowed_voices and requested_voice_id not in allowed_voices:
         raise HTTPException(status_code=403, detail="Voice ID does not belong to this interview session")
 
     # Priority: on-the-fly session clone > interview-configured custom voice > requested voice > global default Cartesia voice
@@ -272,7 +281,13 @@ async def generate_tts(
         or default_cartesia_voice
     )
 
-    is_voice_cloning_enabled = bool(req.use_custom_voice)
+    is_voice_cloning_enabled = bool(
+        req.use_custom_voice
+        or candidate_session.get("voice_clone")
+        or session_cloned_voice
+        or session_custom_voice
+        or requested_voice_id
+    )
 
     from fastapi.responses import StreamingResponse
     import io
@@ -349,8 +364,12 @@ async def generate_tts(
     # 2. Cartesia path — for ALL languages when keys are configured and voice cloning is enabled
     # ──────────────────────────────────────────────────────────────────────────
     
-    # Cartesia sonic-multilingual supported languages. Unsupported languages should skip straight to Edge TTS to avoid timeouts.
-    cartesia_supported = {"en", "fr", "de", "es", "pt", "zh", "ja", "hi", "it", "ko", "nl", "pl", "ru", "sv", "tr"}
+    # Cartesia sonic-3 multilingual supported languages (includes English, Telugu, Hindi, Tamil, etc.)
+    cartesia_supported = {
+        "en", "hi", "te", "ta", "kn", "ml", "bn", "mr", "gu", "pa",
+        "fr", "de", "es", "pt", "zh", "ja", "it", "ko", "nl", "pl",
+        "ru", "sv", "tr", "tl", "vi", "id", "th", "ar"
+    }
     
     if is_voice_cloning_enabled and cartesia_api_key and target_voice_id and (cartesia_lang in cartesia_supported):
         try:
@@ -361,8 +380,8 @@ async def generate_tts(
             def _call_cartesia(voice_id_to_use: str):
                 client = Cartesia(api_key=cartesia_api_key)
                 
-                # Use sonic-multilingual if not English
-                model = "sonic-multilingual" if cartesia_lang != "en" else "sonic-latest"
+                # Use sonic-3 (Cartesia's current multilingual model)
+                model = "sonic-3"
                 
                 result = client.tts.generate(
                     model_id=model,
@@ -375,7 +394,11 @@ async def generate_tts(
                         "sample_rate": 44100,
                     },
                 )
-                return result.read()
+                if hasattr(result, "read"):
+                    return result.read()
+                elif hasattr(result, "__iter__"):
+                    return b"".join(result)
+                return bytes(result)
 
             try:
                 audio_bytes = await asyncio.get_event_loop().run_in_executor(
