@@ -342,37 +342,61 @@ export function CandidateScorecardModal({
           </div>
 
           {/* Proctoring & Integrity */}
-          {candidateDetail?.integrity && (
-            <div className="flex flex-col gap-4 mt-2 avoid-break">
-              <h3 className="text-lg font-bold text-slate-900 tracking-tight border-b border-slate-100 pb-2 flex items-center gap-2">
-                <ShieldAlert className="text-rose-500 w-5 h-5" />
-                Proctoring & Integrity
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className={`border rounded-xl p-4 flex items-center justify-between ${candidateDetail.integrity.total_tab_switches > 0 ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'}`}>
-                  <div className="flex flex-col">
-                    <span className={`text-[0.68rem] font-bold uppercase tracking-wider ${candidateDetail.integrity.total_tab_switches > 0 ? 'text-rose-600' : 'text-emerald-700'}`}>Tab Switches</span>
-                    <span className="text-xs text-slate-500 mt-0.5">Times candidate left the interview window</span>
+          {candidateDetail?.integrity && (() => {
+            const violationsList = candidateDetail.violations || candidateDetail.alerts || []
+            const tabTypes = ['tab_switch', 'screen_casting', 'screen_share_detected', 'screen_recording', 'screenshare_stopped', 'multiple_displays', 'multi_monitor', 'fullscreen_exit', 'window_blur']
+            const noiseTypes = ['noise_alert', 'background_noise', 'noise']
+            
+            let tabSwitches = Number(candidateDetail.integrity.total_tab_switches || 0)
+            let faceAlerts = Number(candidateDetail.integrity.total_face_alerts || 0)
+            let noiseAlerts = Number(candidateDetail.integrity.total_noise_alerts || 0)
+            
+            if (violationsList.length > 0) {
+              const screenCount = violationsList.filter(v => tabTypes.includes(v.type || v.violation_type)).length
+              const noiseCount = violationsList.filter(v => noiseTypes.includes(v.type || v.violation_type)).length
+              const trueFaceCount = violationsList.filter(v => !tabTypes.includes(v.type || v.violation_type) && !noiseTypes.includes(v.type || v.violation_type)).length
+              
+              if (screenCount > 0) {
+                tabSwitches = Math.max(tabSwitches, screenCount)
+                faceAlerts = trueFaceCount
+              }
+              if (noiseCount > 0) {
+                noiseAlerts = Math.max(noiseAlerts, noiseCount)
+              }
+            }
+
+            return (
+              <div className="flex flex-col gap-4 mt-2 avoid-break">
+                <h3 className="text-lg font-bold text-slate-900 tracking-tight border-b border-slate-100 pb-2 flex items-center gap-2">
+                  <ShieldAlert className="text-rose-500 w-5 h-5" />
+                  Proctoring & Integrity
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className={`border rounded-xl p-4 flex items-center justify-between ${tabSwitches > 0 ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'}`}>
+                    <div className="flex flex-col">
+                      <span className={`text-[0.68rem] font-bold uppercase tracking-wider ${tabSwitches > 0 ? 'text-rose-600' : 'text-emerald-700'}`}>Tab Switches</span>
+                      <span className="text-xs text-slate-500 mt-0.5">Times candidate left the interview window or casted screen</span>
+                    </div>
+                    <span className={`text-3xl font-black ${tabSwitches > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{tabSwitches}</span>
                   </div>
-                  <span className={`text-3xl font-black ${candidateDetail.integrity.total_tab_switches > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{candidateDetail.integrity.total_tab_switches}</span>
-                </div>
-                <div className={`border rounded-xl p-4 flex items-center justify-between ${candidateDetail.integrity.total_face_alerts > 0 ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'}`}>
-                  <div className="flex flex-col">
-                    <span className={`text-[0.68rem] font-bold uppercase tracking-wider ${candidateDetail.integrity.total_face_alerts > 0 ? 'text-rose-600' : 'text-emerald-700'}`}>Face / Camera Alerts</span>
-                    <span className="text-xs text-slate-500 mt-0.5">Missing face, multiple faces, or devices</span>
+                  <div className={`border rounded-xl p-4 flex items-center justify-between ${faceAlerts > 0 ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'}`}>
+                    <div className="flex flex-col">
+                      <span className={`text-[0.68rem] font-bold uppercase tracking-wider ${faceAlerts > 0 ? 'text-rose-600' : 'text-emerald-700'}`}>Face / Camera Alerts</span>
+                      <span className="text-xs text-slate-500 mt-0.5">Missing face, multiple faces, or devices</span>
+                    </div>
+                    <span className={`text-3xl font-black ${faceAlerts > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{faceAlerts}</span>
                   </div>
-                  <span className={`text-3xl font-black ${candidateDetail.integrity.total_face_alerts > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{candidateDetail.integrity.total_face_alerts}</span>
-                </div>
-                <div className={`border rounded-xl p-4 flex items-center justify-between ${(candidateDetail.integrity.total_noise_alerts || 0) > 0 ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'}`}>
-                  <div className="flex flex-col">
-                    <span className={`text-[0.68rem] font-bold uppercase tracking-wider ${(candidateDetail.integrity.total_noise_alerts || 0) > 0 ? 'text-rose-600' : 'text-emerald-700'}`}>Background Noise</span>
-                    <span className="text-xs text-slate-500 mt-0.5">Heavy background noise detected</span>
+                  <div className={`border rounded-xl p-4 flex items-center justify-between ${noiseAlerts > 0 ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'}`}>
+                    <div className="flex flex-col">
+                      <span className={`text-[0.68rem] font-bold uppercase tracking-wider ${noiseAlerts > 0 ? 'text-rose-600' : 'text-emerald-700'}`}>Background Noise</span>
+                      <span className="text-xs text-slate-500 mt-0.5">Heavy background noise detected</span>
+                    </div>
+                    <span className={`text-3xl font-black ${noiseAlerts > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{noiseAlerts}</span>
                   </div>
-                  <span className={`text-3xl font-black ${(candidateDetail.integrity.total_noise_alerts || 0) > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{candidateDetail.integrity.total_noise_alerts || 0}</span>
                 </div>
               </div>
-            </div>
-          )}
+            )
+          })()}
 
           {/* Interview Termination Reason */}
           {candidateDetail?.completion_reason && candidateDetail.completion_reason !== "normal" && (

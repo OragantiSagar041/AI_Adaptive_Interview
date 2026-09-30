@@ -164,12 +164,18 @@ def complete_session(
             violations = session.get("violations", [])
             existing_integrity = session.get("integrity") or {}
             if violations:
+                tab_switch_types = {
+                    "tab_switch", "screen_casting", "screen_share_detected", 
+                    "screen_recording", "screenshare_stopped", "multiple_displays", 
+                    "multi_monitor", "fullscreen_exit", "window_blur"
+                }
+                noise_types = {"noise_alert", "background_noise", "noise"}
                 if update_data["integrity"]["total_tab_switches"] == 0:
-                    update_data["integrity"]["total_tab_switches"] = sum(1 for v in violations if v.get("type") == "tab_switch")
+                    update_data["integrity"]["total_tab_switches"] = sum(1 for v in violations if v.get("type") in tab_switch_types)
                 if update_data["integrity"]["total_face_alerts"] == 0:
-                    update_data["integrity"]["total_face_alerts"] = sum(1 for v in violations if v.get("type") not in ("tab_switch", "noise_alert", "background_noise", "noise"))
+                    update_data["integrity"]["total_face_alerts"] = sum(1 for v in violations if v.get("type") not in tab_switch_types and v.get("type") not in noise_types)
                 if update_data["integrity"]["total_noise_alerts"] == 0:
-                    update_data["integrity"]["total_noise_alerts"] = sum(1 for v in violations if v.get("type") in ("noise_alert", "background_noise", "noise"))
+                    update_data["integrity"]["total_noise_alerts"] = sum(1 for v in violations if v.get("type") in noise_types)
 
             if update_data["integrity"]["total_tab_switches"] == 0 and existing_integrity.get("total_tab_switches"):
                 update_data["integrity"]["total_tab_switches"] = existing_integrity.get("total_tab_switches")
@@ -757,24 +763,46 @@ _METERED_CACHE_TTL = 600.0  # Cache for 10 minutes to prevent API rate limits & 
 
 
 def _get_fallback_ice_servers() -> list:
-    """Standard STUN servers + any manual TURN servers configured in environment."""
+    """Standard STUN servers + any manual TURN servers configured in environment / Secrets Manager."""
     ice_servers = [
         {"urls": "stun:stun.l.google.com:19302"},
         {"urls": "stun:stun1.l.google.com:19302"},
-        {"urls": "stun:stun.relay.metered.ca:80"},
     ]
-    turn_url = os.getenv("TURN_SERVER_URL", "").strip()
-    turn_user = os.getenv("TURN_USERNAME", "").strip()
-    turn_cred = os.getenv("TURN_CREDENTIAL", "").strip()
+    turn_server = (
+        os.getenv("TURN_SERVER_URL")
+        or os.getenv("TURN_SERVER")
+        or os.getenv("TURN_URL")
+        or ""
+    ).strip().strip('"').strip("'")
 
-    if turn_url:
+    turn_user = (
+        os.getenv("TURN_USERNAME")
+        or os.getenv("TURN_USER")
+        or ""
+    ).strip().strip('"').strip("'")
+
+    turn_cred = (
+        os.getenv("TURN_CREDENTIAL")
+        or os.getenv("TURN_PASSWORD")
+        or os.getenv("TURN_CRED")
+        or ""
+    ).strip().strip('"').strip("'")
+
+    if turn_server:
+        turn_url = turn_server
+        if not turn_url.startswith("turn:") and not turn_url.startswith("turns:"):
+            turn_url = f"turn:{turn_url}"
+        if ":" not in turn_url.split("turn:")[-1] and ":" not in turn_url.split("turns:")[-1]:
+            turn_url = f"{turn_url}:3478"
+
         turn_entry = {"urls": turn_url}
         if turn_user:
             turn_entry["username"] = turn_user
         if turn_cred:
             turn_entry["credential"] = turn_cred
         ice_servers.append(turn_entry)
-        if "transport=tcp" not in turn_url and ("443" in turn_url or "80" in turn_url):
+
+        if "transport=tcp" not in turn_url and ("443" in turn_url or "80" in turn_url or "3478" in turn_url):
             delimiter = "&" if "?" in turn_url else "?"
             tcp_entry = {"urls": f"{turn_url}{delimiter}transport=tcp"}
             if turn_user:
@@ -782,13 +810,38 @@ def _get_fallback_ice_servers() -> list:
             if turn_cred:
                 tcp_entry["credential"] = turn_cred
             ice_servers.append(tcp_entry)
+    else:
+        # Default fallback STUN and free OpenRelay when no private TURN server configured
+        ice_servers.extend([
+            {"urls": "stun:stun.relay.metered.ca:80"},
+            {
+                "urls": "turn:openrelay.metered.ca:80",
+                "username": "openrelayproject",
+                "credential": "openrelayproject",
+            },
+            {
+                "urls": "turn:openrelay.metered.ca:443",
+                "username": "openrelayproject",
+                "credential": "openrelayproject",
+            },
+            {
+                "urls": "turn:openrelay.metered.ca:443?transport=tcp",
+                "username": "openrelayproject",
+                "credential": "openrelayproject",
+            },
+            {
+                "urls": "turns:openrelay.metered.ca:443?transport=tcp",
+                "username": "openrelayproject",
+                "credential": "openrelayproject",
+            },
+        ])
     return ice_servers
 
 
 async def get_metered_ice_servers() -> list:
     """
-    Fetch dynamic STUN/TURN credentials from Metered API (e.g. hireiq.metered.live).
-    Caches credentials for 10 minutes and falls back gracefully to standard STUN.
+    Fetch dynamic STUN/TURN credentials from Metered API (e.g. hireiq.metered.live),
+    or fall back gracefully to configured TURN_SERVER / standard STUN.
     """
     metered_api_key = os.getenv("METERED_API_KEY", "").strip()
     metered_domain = os.getenv("METERED_DOMAIN", "hireiq.metered.live").strip()
@@ -827,15 +880,21 @@ async def get_metered_ice_servers() -> list:
 
 @router.get("/api/webrtc/ice-servers")
 @router.get("/webrtc/ice-servers")
+@router.get("/api/webrtc/ice-servers/")
+@router.get("/webrtc/ice-servers/")
 async def get_webrtc_ice_servers(raw: bool = False):
     """
     Returns dynamic STUN and TURN server configurations.
-    Uses Metered.ca API when METERED_API_KEY is configured, or standard STUN fallback.
+    Uses TURN credentials from environment / Secrets Manager, or dynamic Metered API if configured.
     """
     ice_servers = await get_metered_ice_servers()
     if raw:
         return ice_servers
-    return {"status": "success", "ice_servers": ice_servers}
+    return {
+        "status": "success",
+        "iceServers": ice_servers,
+        "ice_servers": ice_servers,
+    }
 
 
 @router.websocket("/ws/webrtc/{role}/{link_id}")

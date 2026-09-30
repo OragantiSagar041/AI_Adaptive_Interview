@@ -313,50 +313,62 @@ def _call_huggingface(
 
 def _call_groq(
     messages: List[Dict[str, str]],
-    model: str = "llama-3.1-8b-instant",
+    model: Optional[str] = None,
     temperature: float = 0.1,
     timeout: int = 15,
     max_tokens: int = 1024,
 ) -> str:
-    """Call Groq API (completions)."""
+    """Call Groq API (completions) with active model and automatic fallback on decommissioned models."""
     url = "https://api.groq.com/openai/v1/chat/completions"
-    payload = {
-        "model": model,
-        "messages": messages,
-        "temperature": temperature,
-        "max_tokens": max_tokens,
-    }
+    active_model = model or os.getenv("GROQ_MODEL", "llama3-8b-8192")
+    fallback_models = ["llama3-8b-8192", "llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
     
     max_attempts = groq_key_manager.get_total_keys() or 1
     last_error_text = ""
     last_status = 500
 
-    for _ in range(max_attempts):
-        api_key = groq_key_manager.get_next_key()
-        if not api_key:
-            raise RuntimeError("No Groq API keys available")
-            
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
+    for current_model in [active_model] + [m for m in fallback_models if m != active_model]:
+        payload = {
+            "model": current_model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
         }
-        resp = http_requests.post(url, headers=headers, json=payload, timeout=timeout)
-        if resp.status_code == 200:
-            data = resp.json()
-            return data["choices"][0]["message"]["content"]
-        elif resp.status_code == 429:
-            last_status = resp.status_code
-            last_error_text = resp.text[:300]
-            continue # Try next key
-        elif resp.status_code == 401:
-            groq_key_manager.mark_invalid(api_key)
-            last_status = resp.status_code
-            last_error_text = resp.text[:300]
-            continue # Try next key
-        else:
-            raise RuntimeError(f"Groq error {resp.status_code}: {resp.text[:300]}")
-            
-    raise RuntimeError(f"Groq error {last_status} after exhausting all keys: {last_error_text}")
+        for _ in range(max_attempts):
+            api_key = groq_key_manager.get_next_key()
+            if not api_key:
+                raise RuntimeError("No Groq API keys available")
+                
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            }
+            try:
+                resp = http_requests.post(url, headers=headers, json=payload, timeout=timeout)
+            except Exception as conn_err:
+                last_error_text = str(conn_err)
+                continue
+
+            if resp.status_code == 200:
+                data = resp.json()
+                return data["choices"][0]["message"]["content"]
+            elif resp.status_code == 429:
+                last_status = resp.status_code
+                last_error_text = resp.text[:300]
+                continue # Try next key
+            elif resp.status_code == 401:
+                groq_key_manager.mark_invalid(api_key)
+                last_status = resp.status_code
+                last_error_text = resp.text[:300]
+                continue # Try next key
+            elif resp.status_code in (400, 404) and ("model" in resp.text.lower() or "decommissioned" in resp.text.lower()):
+                logger.warning(f"Groq model {current_model} unavailable ({resp.text[:120]}), trying fallback model...")
+                break # Try next fallback model
+            else:
+                last_status = resp.status_code
+                last_error_text = resp.text[:300]
+                
+    raise RuntimeError(f"Groq error {last_status} after exhausting models and keys: {last_error_text}")
 
 
 # ─── Custom Exception ────────────────────────────────────────────────────────

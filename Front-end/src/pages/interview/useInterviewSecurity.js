@@ -80,25 +80,34 @@ export const useInterviewSecurity = ({
   }
 
   const handleScreenShareStop = () => {
+    if (behavioralStatsRef?.current) behavioralStatsRef.current.tabSwitches += 1
     setScreenShareViolations(prev => {
       const next = prev + 1
-      if (next >= 4) {
+      if (next >= 3) {
         setScreenShareWarning(false)
+        if (typeof document !== 'undefined') {
+          const banner = document.getElementById('proctoring-cast-warning-banner')
+          if (banner) banner.remove()
+        }
         Swal.fire({
           title: 'Interview Terminated',
-          text: 'Screen sharing was stopped 4 times. Your responses have been saved.',
+          text: 'Screen sharing was stopped 3 times. Your responses have been saved.',
           icon: 'error',
           background: '#161c2d',
           color: '#fff',
+          width: '460px',
+          confirmButtonText: 'Close Interview',
+          allowOutsideClick: false,
+          allowEscapeKey: false,
           customClass: {
-            popup: 'border border-white/8 rounded-2xl shadow-2xl',
+            popup: 'border border-white/10 rounded-2xl shadow-2xl z-[99999]',
             title: 'text-xl font-bold text-white',
             htmlContainer: 'text-slate-300 text-sm',
-            confirmButton: 'bg-primary hover:bg-primary-hover text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none'
+            confirmButton: 'bg-red-500 hover:bg-red-600 text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none'
           },
           buttonsStyling: false
         })
-        if (handleSubmitInterview) handleSubmitInterview(true)
+        if (handleSubmitInterview) handleSubmitInterview(true, 'Terminated: Screen Sharing Stopped 3 Times')
       } else {
         setScreenShareWarning(true)
       }
@@ -108,10 +117,11 @@ export const useInterviewSecurity = ({
 
   const lastAlertTimeRef = useRef({})
 
-  const recordAlertMetric = async (type, details = '') => {
+  const recordAlertMetric = async (type, details = '', strikeNumber = null) => {
+    const isScreenCastType = type === 'screen_casting' || type === 'screen_share_detected' || type === 'screen_recording' || type === 'multiple_displays' || type === 'screenshare_stopped'
     const now = Date.now()
-    if (lastAlertTimeRef.current[type] && (now - lastAlertTimeRef.current[type] < 5000)) {
-      return false // Throttle same alert type to once every 5 seconds
+    if (!isScreenCastType && lastAlertTimeRef.current[type] && (now - lastAlertTimeRef.current[type] < 5000)) {
+      return false // Throttle non-screen alert types to once every 5 seconds
     }
     lastAlertTimeRef.current[type] = now
 
@@ -148,11 +158,12 @@ export const useInterviewSecurity = ({
           icon: 'error',
           background: '#161c2d',
           color: '#fff',
+          width: '460px',
           confirmButtonText: 'Close Interview',
           allowOutsideClick: false,
           allowEscapeKey: false,
           customClass: {
-            popup: 'border border-white/8 rounded-2xl shadow-2xl z-[99999]',
+            popup: 'border border-white/10 rounded-2xl shadow-2xl z-[99999]',
             title: 'text-xl font-bold text-white',
             htmlContainer: 'text-slate-300 text-sm',
             confirmButton: 'bg-red-500 hover:bg-red-600 text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none'
@@ -163,14 +174,54 @@ export const useInterviewSecurity = ({
         })
       }
     } else if (type === 'tab_switch') {
-      // Handled elsewhere
+      if (behavioralStatsRef?.current) behavioralStatsRef.current.tabSwitches += 1
+    } else if (
+      type === 'screen_casting' ||
+      type === 'screen_share_detected' ||
+      type === 'screen_recording' ||
+      type === 'screenshare_stopped'
+    ) {
+      if (behavioralStatsRef?.current) behavioralStatsRef.current.tabSwitches += 1
+      setScreenShareViolations(prev => {
+        const next = typeof strikeNumber === 'number' ? strikeNumber : (prev + 1)
+        if (next >= 3) {
+          setScreenShareWarning(false)
+          if (typeof document !== 'undefined') {
+            const banner = document.getElementById('proctoring-cast-warning-banner')
+            if (banner) banner.remove()
+          }
+          Swal.fire({
+            title: 'Interview Terminated',
+            text: details || `Screen casting, mirroring, or remote screen sharing is strictly prohibited during the interview.`,
+            icon: 'error',
+            background: '#161c2d',
+            color: '#fff',
+            width: '460px',
+            confirmButtonText: 'Close Interview',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            customClass: {
+              popup: 'border border-white/10 rounded-2xl shadow-2xl z-[99999]',
+              title: 'text-xl font-bold text-white',
+              htmlContainer: 'text-slate-300 text-sm',
+              confirmButton: 'bg-red-500 hover:bg-red-600 text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none'
+            },
+            buttonsStyling: false
+          }).then(() => {
+            if (handleSubmitInterview) handleSubmitInterview(true, `Terminated: Active Screen Casting/Sharing (${details || type})`)
+          })
+        }
+        return next
+      })
     } else if (
       type === 'window_blur' ||
       type === 'devtools_open' ||
       type === 'multi_monitor' ||
+      type === 'multiple_displays' ||
       type === 'clipboard_attempt' ||
       type === 'print_attempt' ||
-      type === 'save_attempt'
+      type === 'save_attempt' ||
+      type === 'lip_sync'
     ) {
       // Advisory-only types
     } else {
@@ -182,7 +233,7 @@ export const useInterviewSecurity = ({
       if (count >= 20) {
         Swal.fire({
           title: 'Interview Terminated',
-          text: 'Your interview was automatically submitted after reaching the maximum limit of 20 face-detection alerts.',
+          text: `Your interview has been automatically submitted because you exceeded the maximum allowed face alerts (20). Last alert reason: ${type}`,
           icon: 'error',
           background: '#161c2d',
           color: '#fff',
@@ -206,15 +257,43 @@ export const useInterviewSecurity = ({
 
   const proctoring = useProctoring({
     videoRef: videoPreviewRef,
+    sessionId: sessionId || interviewIdRef.current,
     enabled: isDisclaimerAccepted && !showAllSet && !loading,
     maxAlerts: 999,
     onViolation: async (v) => {
-      const recorded = await recordAlertMetric(v.type)
+      const recorded = await recordAlertMetric(v.type, v.message, v.count)
       if (!recorded) return
 
       setProctoringAlert(v.message)
       if (proctoringAlertTimeoutRef.current) clearTimeout(proctoringAlertTimeoutRef.current)
       proctoringAlertTimeoutRef.current = setTimeout(() => setProctoringAlert(''), 3000)
+    },
+    onTerminate: (v) => {
+      setScreenShareWarning(false)
+      if (typeof document !== 'undefined') {
+        const banner = document.getElementById('proctoring-cast-warning-banner')
+        if (banner) banner.remove()
+      }
+      Swal.fire({
+        title: 'Interview Terminated',
+        text: v?.message || 'Screen casting, mirroring, or remote screen sharing is strictly prohibited during the interview.',
+        icon: 'error',
+        background: '#161c2d',
+        color: '#fff',
+        width: '460px',
+        confirmButtonText: 'Close Interview',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        customClass: {
+          popup: 'border border-white/10 rounded-2xl shadow-2xl z-[99999]',
+          title: 'text-xl font-bold text-white',
+          htmlContainer: 'text-slate-300 text-sm',
+          confirmButton: 'bg-red-500 hover:bg-red-600 text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none'
+        },
+        buttonsStyling: false
+      }).then(() => {
+        if (handleSubmitInterview) handleSubmitInterview(true, `Terminated: Screen Casting / Mirroring (${v?.message || '3 Strikes'})`)
+      })
     }
   })
 
@@ -241,6 +320,8 @@ export const useInterviewSecurity = ({
       phoneDetected: proctoring.phoneDetected,
       eyeContactLost: proctoring.eyeContactLost,
       lastAlertType: proctoring.lastAlertType,
+      screenCastingDetected: proctoring.screenCastingDetected,
+      multipleDisplaysDetected: proctoring.multipleDisplaysDetected,
     },
   }
 
@@ -313,14 +394,12 @@ export const useInterviewSecurity = ({
     }
   })
 
-  const recentMouthScoresRef = useRef([])
-
-  // Track lip sync anomaly
+  // Track lip sync anomaly (Calibrated: requires sustained loud voice while mouth has zero variance and is sealed shut)
   useEffect(() => {
     if (!audioRmsRef || !isDisclaimerAccepted || showAllSet || loading || isSubmittingRef?.current) return
 
-    // Suppress lip-sync checks while AI question is being read out (TTS active) or speech recording is off
-    if (isTTSPlayingRef?.current || (isSpeechRecordingRef && !isSpeechRecordingRef.current)) {
+    // Suppress lip-sync checks while AI question is being read out (TTS active) to prevent AI speaker audio bleed
+    if (isTTSPlayingRef?.current) {
       if (lipSyncStreakRef) lipSyncStreakRef.current = 0
       recentMouthScoresRef.current = []
       return
@@ -335,35 +414,36 @@ export const useInterviewSecurity = ({
 
     const currentJaw = Number(proctoring.jawOpenScore || 0)
     recentMouthScoresRef.current.push(currentJaw)
-    if (recentMouthScoresRef.current.length > 6) recentMouthScoresRef.current.shift()
+    if (recentMouthScoresRef.current.length > 25) recentMouthScoresRef.current.shift()
 
     const maxRecentMouth = Math.max(...recentMouthScoresRef.current, 0)
-    const isAudioActive = (audioRmsRef.current || 0) > 0.04
+    const minRecentMouth = Math.min(...recentMouthScoresRef.current, 1)
+    const mouthVariance = maxRecentMouth - minRecentMouth
 
-    // If candidate's mouth is opening (currentJaw >= 0.035) or recently opened (maxRecentMouth >= 0.035),
-    // they are speaking and moving their lips naturally -> RESET streak to 0 immediately!
-    if (currentJaw >= 0.035 || maxRecentMouth >= 0.035 || !isAudioActive) {
+    // Voice threshold: ambient room noise is < 0.08; genuine loud speaking voice is >= 0.12
+    const isAudioActive = (audioRmsRef.current || 0) > 0.12
+
+    // If candidate's mouth is opening (currentJaw >= 0.010 or maxRecentMouth >= 0.012),
+    // or actively moving/varying (mouthVariance >= 0.004), or audio is silent -> RESET streak immediately!
+    if (currentJaw >= 0.010 || maxRecentMouth >= 0.012 || mouthVariance >= 0.004 || !isAudioActive) {
       if (lipSyncStreakRef) lipSyncStreakRef.current = 0
       return
     }
 
-    // Anomaly: Audio is actively detected while candidate's mouth is completely closed (< 0.03) and has NOT moved
+    // Genuine Anomaly: Loud sustained voice in room while candidate's mouth is completely motionless & sealed shut
     const now = Date.now()
     if (now > (lipSyncCooldownRef?.current || 0)) {
       if (lipSyncStreakRef) lipSyncStreakRef.current += 1
     }
 
-    // Require 5 consecutive frames (~3.5s) of continuous third-party voice with completely closed lips
-    if (lipSyncStreakRef?.current >= 5) {
-      if (lipSyncCooldownRef) lipSyncCooldownRef.current = now + 8000
+    // Require at least 22 consecutive frames (~8-9 seconds) of continuous third-party voice with completely motionless closed lips
+    if (lipSyncStreakRef?.current >= 22) {
+      if (lipSyncCooldownRef) lipSyncCooldownRef.current = now + 15000
       if (lipSyncStreakRef) lipSyncStreakRef.current = 0
       recentMouthScoresRef.current = []
       const alertText = 'Audio detected without matching lip movement'
-      recordAlertMetric('lip_sync', alertText)
-      setSecurityMessage(alertText)
+      // Log proctoring alert ONLY to proctoringAlert (NOT securityMessage to prevent double pills)
       setProctoringAlert(alertText)
-      if (securityMessageTimeoutRef.current) clearTimeout(securityMessageTimeoutRef.current)
-      securityMessageTimeoutRef.current = setTimeout(() => setSecurityMessage(''), 4000)
       if (proctoringAlertTimeoutRef.current) clearTimeout(proctoringAlertTimeoutRef.current)
       proctoringAlertTimeoutRef.current = setTimeout(() => setProctoringAlert(''), 4000)
     }
@@ -379,8 +459,7 @@ export const useInterviewSecurity = ({
     loading,
     isSubmittingRef,
     isTTSPlayingRef,
-    isSpeechRecordingRef,
-    proctoring
+    isSpeechRecordingRef
   ])
 
   useExamSecurity({

@@ -102,6 +102,14 @@ _LOCAL_FUNNEL_CACHE: Dict[str, tuple[float, Dict[str, Any]]] = {}
 _LOCAL_ANALYTICS_CACHE: Dict[str, tuple[float, Dict[str, Any]]] = {}
 _LOCAL_CACHE_TTL = 30.0
 
+@router.get("/api/superadmin/recruiters/stats")
+@router.get("/superadmin/recruiters/stats")
+@router.get("/api/superadmin/recruiters/stats/")
+@router.get("/superadmin/recruiters/stats/")
+def superadmin_recruiters_stats(current_admin: dict = Depends(get_current_admin_details)):
+    from app.routes.notes_superadmin2 import get_superadmin_recruiter_stats
+    return get_superadmin_recruiter_stats(current_admin)
+
 @router.get("/api/superadmin/live-sessions")
 @router.get("/superadmin/live-sessions")
 async def superadmin_live_sessions(

@@ -163,6 +163,9 @@ def get_superadmin_org_stats(current_admin: dict = Depends(get_current_admin_det
     }
 
 @router.get("/api/superadmin/recruiters/stats")
+@router.get("/superadmin/recruiters/stats")
+@router.get("/api/superadmin/recruiters/stats/")
+@router.get("/superadmin/recruiters/stats/")
 def get_superadmin_recruiter_stats(current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["master", "super_admin", "superadmin"]:
         raise HTTPException(status_code=403, detail="Not authorized")

@@ -36,6 +36,13 @@ const formatPhoneNumber = (phone) => {
   return phone.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
 };
 
+const parseSkills = (skills) => {
+  if (!skills) return [];
+  if (Array.isArray(skills)) return skills.map(s => String(s).trim()).filter(Boolean);
+  if (typeof skills === 'string') return skills.split(',').map(s => s.trim()).filter(Boolean);
+  return [String(skills).trim()].filter(Boolean);
+};
+
 export default function SuperAdminJobsPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -221,10 +228,14 @@ export default function SuperAdminJobsPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        setJobs(data.jobs || []);
+        const rawJobs = Array.isArray(data) ? data : (data.jobs || data.data || []);
+        setJobs(rawJobs);
         if (data.pagination) {
           setTotalPages(data.pagination.total_pages || 1);
-          setTotalJobs(data.pagination.total_jobs ?? 0);
+          setTotalJobs(data.pagination.total_jobs ?? rawJobs.length);
+        } else {
+          setTotalPages(1);
+          setTotalJobs(rawJobs.length);
         }
       } else {
         console.error('Failed to fetch jobs:', res.status);
@@ -629,14 +640,14 @@ export default function SuperAdminJobsPage() {
 
                 {/* Skills */}
                 <div className="flex flex-wrap gap-1.5">
-                  {job.skills.split(',').slice(0, 3).map((skill, i) => (
+                  {parseSkills(job.skills).slice(0, 3).map((skill, i) => (
                     <span key={i} className="px-2.5 py-1 bg-indigo-50 text-indigo-700 text-[0.68rem] font-bold rounded-lg border border-indigo-100/60">
-                      {skill.trim()}
+                      {skill}
                     </span>
                   ))}
-                  {job.skills.split(',').length > 3 && (
+                  {parseSkills(job.skills).length > 3 && (
                     <span className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 text-[0.68rem] font-bold rounded-lg">
-                      +{job.skills.split(',').length - 3}
+                      +{parseSkills(job.skills).length - 3}
                     </span>
                   )}
                 </div>
@@ -733,11 +744,11 @@ export default function SuperAdminJobsPage() {
                     </td>
                     <td className="p-4">
                       <div className="flex flex-wrap gap-1">
-                        {job.skills.split(',').slice(0, 2).map((s, i) => (
-                          <span key={i} className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[0.65rem] font-bold rounded-md border border-indigo-100/60">{s.trim()}</span>
+                        {parseSkills(job.skills).slice(0, 2).map((s, i) => (
+                          <span key={i} className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[0.65rem] font-bold rounded-md border border-indigo-100/60">{s}</span>
                         ))}
-                        {job.skills.split(',').length > 2 && (
-                          <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 text-[0.65rem] font-bold rounded-md">+{job.skills.split(',').length - 2}</span>
+                        {parseSkills(job.skills).length > 2 && (
+                          <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 text-[0.65rem] font-bold rounded-md">+{parseSkills(job.skills).length - 2}</span>
                         )}
                       </div>
                     </td>

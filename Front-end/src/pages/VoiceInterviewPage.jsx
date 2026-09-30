@@ -614,7 +614,7 @@ export default function VoiceInterviewPage() {
         setCandidateSessionAuth(candidateToken, linkId, sd.interview_id || '')
         setLoading(false)
         clearTimeout(loadingTimeout)
-      } catch (e) { 
+      } catch (e) {
         if (!hasTimedOut) setError(e.message)
         setLoading(false)
         clearTimeout(loadingTimeout)
@@ -1161,7 +1161,7 @@ export default function VoiceInterviewPage() {
 
         if (data && data.transcript && data.transcript.trim()) {
           const freshWhisper = data.transcript.trim()
-          
+
           const isHallucination = /^(transcribe verbatim\.?|thank you(?:\s+for\s+(?:watching|listening))?\.?|amara\.org\.?|subtitles by\s.*)$/i.test(freshWhisper)
           if (isHallucination) {
             console.debug(`[STT HALLUCINATION GATE] Ignored: "${freshWhisper}"`)
@@ -1267,7 +1267,7 @@ export default function VoiceInterviewPage() {
     }
 
     if (whisperRecorderRef.current && whisperRecorderRef.current.state !== 'inactive') {
-      try { whisperRecorderRef.current.stop() } catch (_) {}
+      try { whisperRecorderRef.current.stop() } catch (_) { }
     }
     whisperRecorderRef.current = null
 
@@ -1391,7 +1391,7 @@ export default function VoiceInterviewPage() {
       } catch (_) { }
     }
     if (!preserveTranscript && whisperRecorderRef.current && whisperRecorderRef.current.state !== 'inactive') {
-      try { whisperRecorderRef.current.stop() } catch (_) {}
+      try { whisperRecorderRef.current.stop() } catch (_) { }
       whisperRecorderRef.current = null
     }
 
@@ -1460,12 +1460,12 @@ export default function VoiceInterviewPage() {
           src.connect(analyser)
           const buf = new Float32Array(analyser.fftSize)
           let rafId = 0
-          
+
           // VAD Configuration Constants
           const VAD_SPEECH_THRESHOLD = 0.015 // Threshold for speech vs silence
           const VAD_SILENCE_MS = 1200        // Flush after 1.2s of continuous silence
           const VAD_MAX_CHUNK_MS = 14000     // Force flush at 14s to prevent giant chunks
-          
+
           let chunkStartTime = Date.now()
           let lastSpeechTime = Date.now()
           let hasSpokenInChunk = false
@@ -1514,7 +1514,7 @@ export default function VoiceInterviewPage() {
             }
 
             const silenceDuration = now - lastSpeechTime
-            const shouldFlush = 
+            const shouldFlush =
               (hasSpokenInChunk && silenceDuration > VAD_SILENCE_MS) ||
               (chunkDuration > VAD_MAX_CHUNK_MS) ||
               (!hasSpokenInChunk && chunkDuration > 5000)
@@ -1919,7 +1919,7 @@ export default function VoiceInterviewPage() {
                     ...existing,
                     askedFollowUpsCount: nextFupCount
                   }))
-                } catch (_) {}
+                } catch (_) { }
               }
 
               // Create the follow-up question object
@@ -1943,7 +1943,7 @@ export default function VoiceInterviewPage() {
               const t = VOICE_TRANSLATIONS[languageRef.current] || VOICE_TRANSLATIONS['English']
               const acks = t.acks
               const ack = acks[Math.floor(Math.random() * acks.length)]
-              
+
               aiSay(`${ack} ${newQ.text}`, () => startListening(ans => handleAnswer(ans, qIdx + 1, 1)))
               return
             }
@@ -2099,7 +2099,7 @@ export default function VoiceInterviewPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ interview_id: iid, link_id: linkId }),
-      }).catch(() => {})
+      }).catch(() => { })
       await Swal.fire({
         title: 'Interview Saved',
         text: 'Your answers were submitted, but the recording upload was interrupted. The interview team has been notified.',
@@ -2314,12 +2314,18 @@ export default function VoiceInterviewPage() {
     }
     const displayMsg = alertMessages[alertType] || details || `Proctoring alert: ${alertType}`
 
-    const isFaceAlert = ['multi_person', 'no_face', 'phone', 'eye_contact', 'lip_sync'].includes(alertType)
+    const isFaceAlert = ['multi_person', 'no_face', 'phone', 'eye_contact'].includes(alertType)
+    const isLipSyncAlert = alertType === 'lip_sync'
     const isNoiseAlert = alertType === 'background_noise' || alertType === 'noise_alert'
 
     if (isFaceAlert) {
       integrityMetricsRef.current.faceAlerts += 1
-      const text = alertType === 'lip_sync' ? 'Audio detected without matching lip movement' : (details || alertMessages[alertType] || 'Face alert')
+      const text = details || alertMessages[alertType] || 'Face alert'
+      clearTimeout(proctoringAlertTimerRef.current)
+      setProctoringAlert(text)
+      proctoringAlertTimerRef.current = setTimeout(() => setProctoringAlert(''), 4000)
+    } else if (isLipSyncAlert) {
+      const text = 'Audio detected without matching lip movement'
       clearTimeout(proctoringAlertTimerRef.current)
       setProctoringAlert(text)
       proctoringAlertTimerRef.current = setTimeout(() => setProctoringAlert(''), 4000)
@@ -2350,8 +2356,8 @@ export default function VoiceInterviewPage() {
 
     setWarningsCount(p => {
       const newCount = isFaceAlert ? p + 1 : p
-        warningsCountRef.current = newCount
-        setProctoringState(prev => ({ ...prev, lastAlertType: alertType }))
+      warningsCountRef.current = newCount
+      setProctoringState(prev => ({ ...prev, lastAlertType: alertType }))
 
       const ts = new Date().toISOString()
 
@@ -2400,25 +2406,28 @@ export default function VoiceInterviewPage() {
   const handleScreenShareViolation = useCallback(() => {
     screenShareViolationsRef.current += 1
     const count = screenShareViolationsRef.current
+    integrityMetricsRef.current.tabSwitches += 1
     logProctoringAlert('screenshare_stopped', `Violation #${count}`)
 
     if (count >= 3) {
       Swal.fire({
         icon: 'error',
-        title: '🚫 Interview Terminated',
+        title: 'Interview Terminated',
         html: `<p>You stopped screen sharing <strong>${count} times</strong>. This interview has been automatically terminated and the incident has been reported.</p>`,
         confirmButtonColor: '#ef4444',
-        confirmButtonText: 'OK',
+        confirmButtonText: 'Close Interview',
+        width: '460px',
         allowOutsideClick: false,
         allowEscapeKey: false,
       }).then(() => completeInterview({ isTimeout: true, reason: 'Terminated due to screen sharing violations.' }))
     } else {
       Swal.fire({
         icon: 'warning',
-        title: '⚠️ Screen Sharing Stopped',
+        title: 'Screen Sharing Stopped',
         html: `<p>Please restart screen sharing to continue.<br/><span style="color:#ef4444;font-weight:bold">Warning ${count}/3 — Interview will be terminated after 3 violations.</span></p>`,
-        confirmButtonColor: '#f59e0b',
+        confirmButtonColor: '#4f46e5',
         confirmButtonText: 'I Understand',
+        width: '460px',
         allowOutsideClick: false,
       })
     }
@@ -2439,7 +2448,7 @@ export default function VoiceInterviewPage() {
     const handleFocusLoss = (e) => {
       // Prevent double counting if both blur and visibilitychange fire closely
       if (isFocusLossModalOpen) return
-      
+
       const isHidden = e.type === 'visibilitychange' && document.hidden
       const isBlurred = e.type === 'blur'
 
@@ -2520,12 +2529,13 @@ export default function VoiceInterviewPage() {
   // Use Centralized AI Proctoring Hook
   const proctoring = useProctoring({
     videoRef: candidateVideoRef,
+    sessionId: interviewId,
     enabled: round !== 'done' && round !== 'pre_checks' && round !== 'intro' && round !== 'submitting',
     maxAlerts: 20,
     onViolation: (v) => {
       logProctoringAlert(v.type, v.message)
     },
-    onTerminate: () => completeInterview({ isTimeout: true, reason: 'Terminated due to multiple AI proctoring alerts (Face/Camera violations).' })
+    onTerminate: (v) => completeInterview({ isTimeout: true, reason: v?.message || 'Terminated due to multiple AI proctoring alerts (Face/Camera violations).' })
   })
 
   useEffect(() => {
@@ -2608,7 +2618,7 @@ export default function VoiceInterviewPage() {
     return () => {
       isCancelled = true
       if (rafId) cancelAnimationFrame(rafId)
-      try { actx?.close() } catch (_) {}
+      try { actx?.close() } catch (_) { }
     }
   }, [round])
 
@@ -2621,9 +2631,10 @@ export default function VoiceInterviewPage() {
     return () => window.removeEventListener('candidate_audio_rms', handleRms)
   }, [])
 
+  // Track lip sync anomaly (Calibrated: requires sustained loud voice while mouth has zero variance and is sealed shut)
   useEffect(() => {
     if (round === 'done' || round === 'pre_checks' || round === 'intro' || round === 'submitting') return
-    // Suppress when AI is speaking (TTS active)
+    // Suppress when AI is speaking (TTS active) to prevent AI speaker audio bleed
     if (isTTSPlayingRef?.current) {
       if (lipSyncStreakRef) lipSyncStreakRef.current = 0
       recentMouthScoresRef.current = []
@@ -2631,7 +2642,7 @@ export default function VoiceInterviewPage() {
     }
 
     // Only monitor lip sync when a single candidate face is clearly visible
-    if (!proctoring.faceVisible || (proctoring.faceCount !== undefined && proctoring.faceCount !== 1)) {
+    if (!proctoring?.faceVisible || (proctoring.faceCount !== undefined && proctoring.faceCount !== 1)) {
       if (lipSyncStreakRef) lipSyncStreakRef.current = 0
       recentMouthScoresRef.current = []
       return
@@ -2639,37 +2650,39 @@ export default function VoiceInterviewPage() {
 
     const currentJaw = Number(proctoring.jawOpenScore || 0)
     recentMouthScoresRef.current.push(currentJaw)
-    if (recentMouthScoresRef.current.length > 6) recentMouthScoresRef.current.shift()
+    if (recentMouthScoresRef.current.length > 25) recentMouthScoresRef.current.shift()
 
     const maxRecentMouth = Math.max(...recentMouthScoresRef.current, 0)
-    const isAudioActive = (candidateAudioRmsRef.current || 0) > 0.04
+    const minRecentMouth = Math.min(...recentMouthScoresRef.current, 1)
+    const mouthVariance = maxRecentMouth - minRecentMouth
 
-    // If candidate's mouth is opening (currentJaw >= 0.035) or recently opened (maxRecentMouth >= 0.035),
-    // they are speaking and moving their lips naturally -> RESET streak to 0 immediately!
-    if (currentJaw >= 0.035 || maxRecentMouth >= 0.035 || !isAudioActive) {
+    // Voice threshold: ambient room noise is < 0.08; genuine loud speaking voice is >= 0.12
+    const isAudioActive = (candidateAudioRmsRef.current || 0) > 0.12
+
+    // If candidate's mouth is opening or actively moving/varying, or audio is silent -> RESET streak immediately!
+    if (currentJaw >= 0.010 || maxRecentMouth >= 0.012 || mouthVariance >= 0.004 || !isAudioActive) {
       if (lipSyncStreakRef) lipSyncStreakRef.current = 0
       return
     }
 
-    // Anomaly: Audio is actively detected while candidate's mouth is completely closed (< 0.035) and has NOT moved
+    // Anomaly: Loud sustained voice detected while candidate's mouth has zero movement and is sealed shut
     const now = Date.now()
     if (now > (lipSyncCooldownRef.current || 0)) {
       lipSyncStreakRef.current += 1
     }
 
-    // Require 5 consecutive frames (~3.5s) of continuous third-party voice with completely closed lips
-    if (lipSyncStreakRef.current >= 5) {
-      lipSyncCooldownRef.current = now + 8000
+    // Require at least 22 consecutive frames (~8-9s) of continuous third-party voice with completely motionless closed lips
+    if (lipSyncStreakRef.current >= 22) {
+      lipSyncCooldownRef.current = now + 15000
       lipSyncStreakRef.current = 0
       recentMouthScoresRef.current = []
       logProctoringAlert('lip_sync', 'Audio detected without matching lip movement')
     }
   }, [
-    proctoring.jawOpenScore,
-    proctoring.faceVisible,
-    proctoring.faceCount,
+    proctoring?.jawOpenScore,
+    proctoring?.faceVisible,
+    proctoring?.faceCount,
     round,
-    proctoring,
     logProctoringAlert
   ])
 
@@ -2956,10 +2969,10 @@ export default function VoiceInterviewPage() {
           boxShadow: '0 4px 24px rgba(0,0,0,0.25)',
           animation: 'alertSlideDown 0.25s cubic-bezier(0.34,1.56,0.64,1) forwards',
         }}>
-          <span style={{ display:'flex', alignItems:'center', justifyContent:'center', width:22, height:22, borderRadius:'50%', background:'rgba(239,68,68,0.2)', color:'#ef4444', flexShrink:0 }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: '50%', background: 'rgba(239,68,68,0.2)', color: '#ef4444', flexShrink: 0 }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
           </span>
-          <span style={{ fontWeight:700, fontSize:12, textTransform:'uppercase', letterSpacing:'0.05em', opacity:0.75, marginRight:2 }}>Security</span>
+          <span style={{ fontWeight: 700, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.75, marginRight: 2 }}>Security</span>
           {securityAlert}
         </div>,
         document.body
@@ -3090,9 +3103,9 @@ export default function VoiceInterviewPage() {
           <button
             id="exit-interview-btn"
             onClick={() => {
-                window.close();
-                setTimeout(() => { window.location.href = 'https://www.google.com'; }, 300);
-              }}
+              window.close();
+              setTimeout(() => { window.location.href = 'https://www.google.com'; }, 300);
+            }}
             className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold text-lg shadow-[0_4px_30px_rgba(16,185,129,0.4)] hover:shadow-[0_4px_50px_rgba(16,185,129,0.6)] hover:scale-[1.02] transition-all flex items-center justify-center gap-3"
           >
             <i className="fas fa-sign-out-alt" />
@@ -3147,9 +3160,9 @@ export default function VoiceInterviewPage() {
           <button
             id="exit-interview-btn-post-feedback"
             onClick={() => {
-                window.close();
-                setTimeout(() => { window.location.href = 'https://www.google.com'; }, 300);
-              }}
+              window.close();
+              setTimeout(() => { window.location.href = 'https://www.google.com'; }, 300);
+            }}
             className="px-8 py-3 rounded-2xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 font-bold text-sm transition-all flex items-center gap-2"
           >
             <i className="fas fa-sign-out-alt" />
@@ -3236,8 +3249,8 @@ export default function VoiceInterviewPage() {
               onClick={() => {
                 Swal.fire({
                   title: isTechRound ? 'Switch to Coding Round?' : 'Switch to Case Study Round?',
-                  text: isTechRound 
-                    ? 'Are you ready to finish the verbal round and proceed to the Coding Challenge (Round 2)?' 
+                  text: isTechRound
+                    ? 'Are you ready to finish the verbal round and proceed to the Coding Challenge (Round 2)?'
                     : 'Are you ready to finish the verbal round and proceed to the Case Study (Round 2)?',
                   icon: 'question',
                   showCancelButton: true,
@@ -3381,8 +3394,8 @@ export default function VoiceInterviewPage() {
                   stopAudio()
                   Swal.fire({
                     title: isTechRound ? 'Switch to Coding Round?' : 'Switch to Case Study Round?',
-                    text: isTechRound 
-                      ? 'Are you ready to finish the verbal round and proceed to the Coding Challenge (Round 2)?' 
+                    text: isTechRound
+                      ? 'Are you ready to finish the verbal round and proceed to the Coding Challenge (Round 2)?'
                       : 'Are you ready to finish the verbal round and proceed to the Case Study (Round 2)?',
                     icon: 'question',
                     showCancelButton: true,

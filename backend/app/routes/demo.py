@@ -108,8 +108,8 @@ def create_demo_request(req: DemoRequestCreate):
         result = demo_requests_collection.insert_one(new_request)
 
         # Send email notification to master
-        brevo_key = os.getenv("BREVO_API_KEY")
-        sender_email = (os.getenv("BREVO_SENDER_EMAIL") or "").strip()
+        brevo_key = (os.getenv("BREVO_API_KEY") or "").strip().strip('"').strip("'")
+        sender_email = (os.getenv("BREVO_SENDER_EMAIL") or "").strip().strip('"').strip("'")
         master_email = (os.getenv("MASTER_EMAIL") or sender_email).strip()
         if brevo_key:
             try:
@@ -241,9 +241,9 @@ def send_demo_request_email(
     
     import dotenv
     dotenv.load_dotenv(override=True)
-    brevo_key = os.getenv("BREVO_API_KEY")
-    sender_email = (os.getenv("BREVO_SENDER_EMAIL") or "").strip()
-    sender_name = (os.getenv("BREVO_SENDER_NAME") or "Hire IQ").strip()
+    brevo_key = (os.getenv("BREVO_API_KEY") or "").strip().strip('"').strip("'")
+    sender_email = (os.getenv("BREVO_SENDER_EMAIL") or "").strip().strip('"').strip("'")
+    sender_name = (os.getenv("BREVO_SENDER_NAME") or "Hire IQ").strip().strip('"').strip("'")
     
     email_sent = False
     error_detail = None
@@ -323,8 +323,8 @@ def create_contact_request(req: ContactRequestCreate):
         result = contact_requests_collection.insert_one(new_request)
 
         # Send email notification to master
-        brevo_key = os.getenv("BREVO_API_KEY")
-        sender_email = (os.getenv("BREVO_SENDER_EMAIL") or "").strip()
+        brevo_key = (os.getenv("BREVO_API_KEY") or "").strip().strip('"').strip("'")
+        sender_email = (os.getenv("BREVO_SENDER_EMAIL") or "").strip().strip('"').strip("'")
         master_email = (os.getenv("MASTER_EMAIL") or sender_email).strip()
         if brevo_key:
             try:
@@ -453,9 +453,9 @@ def send_contact_request_email(
     
     import dotenv
     dotenv.load_dotenv(override=True)
-    brevo_key = os.getenv("BREVO_API_KEY")
-    sender_email = (os.getenv("BREVO_SENDER_EMAIL") or "").strip()
-    sender_name = (os.getenv("BREVO_SENDER_NAME") or "Hire IQ").strip()
+    brevo_key = (os.getenv("BREVO_API_KEY") or "").strip().strip('"').strip("'")
+    sender_email = (os.getenv("BREVO_SENDER_EMAIL") or "").strip().strip('"').strip("'")
+    sender_name = (os.getenv("BREVO_SENDER_NAME") or "Hire IQ").strip().strip('"').strip("'")
     
     email_sent = False
     error_detail = None

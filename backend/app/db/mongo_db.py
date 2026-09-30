@@ -126,9 +126,12 @@ async def init_db_indexes():
     safe_create_index(pending_signups_collection, "expires_at", expireAfterSeconds=0)
     safe_create_index(admins_collection, "stripe_session_id", unique=True, sparse=True)
     
-    # New Latency Reduction Indexes for Job Portal & Dashboards
+    # Latency Reduction Indexes for Job Portal, Dashboards, and Candidate Details
     safe_create_index(jobs_collection, "company_id")
     safe_create_index(jobs_collection, "admin_id")
     safe_create_index(job_applications_collection, "job_id")
+    safe_create_index(job_applications_collection, [("job_id", 1), ("created_at", -1)])
     safe_create_index(job_applications_collection, "omni_call_id")
+    safe_create_index(answers_collection, [("interview_id", 1), ("created_at", -1)])
+    safe_create_index(interview_sessions_collection, [("company_id", 1), ("created_by", 1), ("created_at", -1)])
     print("MongoDB connected and initialized.")
