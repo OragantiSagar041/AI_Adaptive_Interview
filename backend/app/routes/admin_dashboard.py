@@ -486,9 +486,16 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
     violations = session_data.get("violations", [])
     session_integrity = session_data.get("integrity") or {}
 
-    total_tab_switches = sum(1 for v in violations if v.get("type") == "tab_switch")
-    total_face_alerts = sum(1 for v in violations if v.get("type") not in ("tab_switch", "noise_alert", "background_noise", "noise"))
-    total_noise_alerts = sum(1 for v in violations if v.get("type") in ("noise_alert", "background_noise", "noise"))
+    tab_switch_types = {
+        "tab_switch", "screen_casting", "screen_share_detected", 
+        "screen_recording", "screenshare_stopped", "multiple_displays", 
+        "multi_monitor", "fullscreen_exit", "window_blur"
+    }
+    noise_types = {"noise_alert", "background_noise", "noise"}
+
+    total_tab_switches = sum(1 for v in violations if v.get("type") in tab_switch_types)
+    total_face_alerts = sum(1 for v in violations if v.get("type") not in tab_switch_types and v.get("type") not in noise_types)
+    total_noise_alerts = sum(1 for v in violations if v.get("type") in noise_types)
 
     if total_tab_switches == 0 and session_integrity.get("total_tab_switches"):
         total_tab_switches = session_integrity.get("total_tab_switches")
@@ -503,7 +510,27 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
     ans_noise_al = 0
 
     if actual_interview_id:
-        rows = answers_collection.find({"interview_id": actual_interview_id}).sort("question_id", 1)
+        ans_projection = {
+            "question_id": 1,
+            "question_text": 1,
+            "answer_text": 1,
+            "ai_score": 1,
+            "content_score": 1,
+            "relevance_score": 1,
+            "time_score": 1,
+            "time_spent_seconds": 1,
+            "time_limit_seconds": 1,
+            "ai_feedback": 1,
+            "corrected_answer": 1,
+            "wpm": 1,
+            "pause_count": 1,
+            "filler_count": 1,
+            "keyword_match_pct": 1,
+            "tab_switches": 1,
+            "face_alerts": 1,
+            "noise_alerts": 1,
+        }
+        rows = answers_collection.find({"interview_id": actual_interview_id}, ans_projection).sort("question_id", 1)
         for row in rows:
             tab_sw = row.get("tab_switches") or 0
             face_al = row.get("face_alerts") or 0

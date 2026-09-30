@@ -94,6 +94,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+_LOCAL_DASH_AGG_CACHE: Dict[str, tuple[float, Dict[str, Any]]] = {}
+_LOCAL_DASH_AGG_CACHE_TTL = 5.0
+
+
 @router.websocket("/ws/dashboard")
 async def dashboard_websocket(websocket: WebSocket, token: Optional[str] = None):
     from app.db.redis_manager import manager
@@ -185,8 +189,22 @@ async def get_dashboard_aggregated_data(
 ):
     try:
         from app.db.redis_manager import manager
-        import json
-        
+        import json, time
+
+        # Fast cache check (5-second TTL drastically speeds up tab switching)
+        cache_key = f"dash_agg:{current_admin.get('company_id')}:{current_admin.get('admin_id')}:{admin_id or 'none'}:{summary_only}"
+        if manager.redis:
+            try:
+                cached = await manager.redis.get(cache_key)
+                if cached:
+                    return json.loads(cached)
+            except Exception:
+                pass
+        else:
+            cached = _LOCAL_DASH_AGG_CACHE.get(cache_key)
+            if cached and (time.monotonic() - cached[0] < _LOCAL_DASH_AGG_CACHE_TTL):
+                return cached[1]
+
         # Define queries and parallelize independent database operations
         c_query_filter = {
             "is_deactivated": {"$ne": True}
@@ -265,7 +283,10 @@ async def get_dashboard_aggregated_data(
         job_ids = [j.get("job_id") for j in jobs if j.get("job_id")]
         if job_ids and not summary_only:
             try:
-                apps = await asyncio.to_thread(lambda: list(job_applications_collection.find({"job_id": {"$in": job_ids}})))
+                apps = await asyncio.to_thread(lambda: list(job_applications_collection.find(
+                    {"job_id": {"$in": job_ids}},
+                    {"_id": 1, "job_id": 1, "name": 1, "email": 1, "score": 1, "phone": 1, "status": 1, "created_at": 1}
+                )))
             except Exception as e:
                 logger.warning(f"Error fetching AI Calling candidates: {e}")
             
@@ -679,7 +700,7 @@ async def get_dashboard_aggregated_data(
                 r["_id"] = str(r["_id"])
                 credit_reqs.append(r)
                 
-        return {
+        res_payload = {
             "dbStats": stats_data,
             "candidates": candidates_list,
             "omni_stats": omni_stats,
@@ -691,6 +712,17 @@ async def get_dashboard_aggregated_data(
             "ongoingCodingCount": ongoing_coding_count,
             "creditRequests": credit_reqs
         }
+
+        # Cache response for 5 seconds to eliminate lag on page navigation
+        if manager.redis:
+            try:
+                await manager.redis.set(cache_key, json.dumps(res_payload), ex=5)
+            except Exception:
+                pass
+        else:
+            _LOCAL_DASH_AGG_CACHE[cache_key] = (time.monotonic(), res_payload)
+
+        return res_payload
     except Exception as e:
         logger.error(f"[dashboard] Unexpected error in get_dashboard_aggregated_data: {e}", exc_info=True)
         if "stats_data" in locals():

@@ -114,12 +114,15 @@ export default function ProctoringAlerts({
   const FACE_TOP    = 16
   const GAP         = 52 // px between stacked pills
 
+  // Deduplicate: If securityMessage is identical to proctoringAlert or both are present, show only one clean alert
+  const hasDistinctSecurityMessage = Boolean(securityMessage && securityMessage !== proctoringAlert && !proctoringAlert)
+
   // Build the stack of active banners top-down
   const stack = []
-  if (modelsFailed)          stack.push('models')
-  if (proctoringAlert)       stack.push('face')
-  if (showNoiseBanner)       stack.push('noise')
-  if (securityMessage)       stack.push('security')
+  if (modelsFailed)                stack.push('models')
+  if (proctoringAlert)             stack.push('face')
+  if (showNoiseBanner)             stack.push('noise')
+  if (hasDistinctSecurityMessage)  stack.push('security')
 
   return createPortal(
     <>
@@ -167,8 +170,8 @@ export default function ProctoringAlerts({
         </div>
       )}
 
-      {/* ── Security / Screenshot Alert Pill ─────────── */}
-      {securityMessage && (
+      {/* ── Security / Screenshot Alert Pill (Only rendered if distinct) ─────────── */}
+      {hasDistinctSecurityMessage && (
         <div
           className="proctoring-alert-pill alert-red"
           style={{

@@ -1143,19 +1143,43 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                     </div>
                   </section>
                   {/* Integrity */}
-                  {c.integrity && (
-                    <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
-                      <h3 className="text-sm font-black text-slate-800 mb-4 flex items-center gap-2">
-                        <ShieldAlert className="h-4 w-4 text-amber-500" /> Interview Integrity
-                      </h3>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <StatCard label="Tab Switches" value={c.integrity.total_tab_switches} />
-                        <StatCard label="Face Alerts" value={c.integrity.total_face_alerts} />
-                        <StatCard label="Noise Alerts" value={c.integrity.total_noise_alerts} />
-                        <StatCard label="Total Duration" value={`${c.integrity.total_time_minutes} min`} />
-                      </div>
-                    </section>
-                  )}
+                  {c.integrity && (() => {
+                    const violationsList = c.violations || c.alerts || []
+                    const tabTypes = ['tab_switch', 'screen_casting', 'screen_share_detected', 'screen_recording', 'screenshare_stopped', 'multiple_displays', 'multi_monitor', 'fullscreen_exit', 'window_blur']
+                    const noiseTypes = ['noise_alert', 'background_noise', 'noise']
+                    
+                    let tabSwitches = Number(c.integrity.total_tab_switches || 0)
+                    let faceAlerts = Number(c.integrity.total_face_alerts || 0)
+                    let noiseAlerts = Number(c.integrity.total_noise_alerts || 0)
+                    
+                    if (violationsList.length > 0) {
+                      const screenCount = violationsList.filter(v => tabTypes.includes(v.type || v.violation_type)).length
+                      const noiseCount = violationsList.filter(v => noiseTypes.includes(v.type || v.violation_type)).length
+                      const trueFaceCount = violationsList.filter(v => !tabTypes.includes(v.type || v.violation_type) && !noiseTypes.includes(v.type || v.violation_type)).length
+                      
+                      if (screenCount > 0) {
+                        tabSwitches = Math.max(tabSwitches, screenCount)
+                        faceAlerts = trueFaceCount
+                      }
+                      if (noiseCount > 0) {
+                        noiseAlerts = Math.max(noiseAlerts, noiseCount)
+                      }
+                    }
+
+                    return (
+                      <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
+                        <h3 className="text-sm font-black text-slate-800 mb-4 flex items-center gap-2">
+                          <ShieldAlert className="h-4 w-4 text-amber-500" /> Interview Integrity
+                        </h3>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <StatCard label="Tab Switches" value={tabSwitches} />
+                          <StatCard label="Face Alerts" value={faceAlerts} />
+                          <StatCard label="Noise Alerts" value={noiseAlerts} />
+                          <StatCard label="Total Duration" value={`${c.integrity.total_time_minutes} min`} />
+                        </div>
+                      </section>
+                    )
+                  })()}
                 </div>
               )}
 

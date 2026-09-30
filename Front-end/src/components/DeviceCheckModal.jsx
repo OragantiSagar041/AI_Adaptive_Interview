@@ -22,11 +22,21 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
 
   const proctoring = useProctoring({
     videoRef,
-    enabled: isReady && !error
+    enabled: isReady && !error,
+    isPreCheck: true,
   });
+
+  const isScreenCastDetected = Boolean(
+    proctoring.screenCastingDetected ||
+    proctoring.screenShareActive ||
+    proctoring.screenRecordingActive ||
+    proctoring.multipleDisplaysDetected
+  );
+  const hasScreenShareVerified = !isScreenCastDetected;
 
   const hasFaceVerified = proctoring.faceVisible && proctoring.faceCount === 1 && !proctoring.multiFace;
   const hasEnvironmentVerified = env.isIsolated;
+  const canProceed = isReady && !error && hasAudioVerified && hasFaceVerified && hasEnvironmentVerified && hasScreenShareVerified && !env.hasMultipleTabs;
 
   useEffect(() => {
     let active = true;
@@ -73,7 +83,7 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
 
           const unlockAudio = () => {
             if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-              audioContextRef.current.resume().catch(() => {});
+              audioContextRef.current.resume().catch(() => { });
             }
             window.removeEventListener('click', unlockAudio);
             window.removeEventListener('keydown', unlockAudio);
@@ -104,7 +114,7 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
           // NEW: self-heal — if the context ever drops back to suspended
           // (tab backgrounded, OS interruption, etc.) keep trying to resume it.
           if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-            audioContextRef.current.resume().catch(() => {});
+            audioContextRef.current.resume().catch(() => { });
           }
 
           analyserRef.current.getByteTimeDomainData(dataArrayRef.current);
@@ -152,7 +162,7 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
       active = false;
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       if (sourceRef.current) {
-        try { sourceRef.current.disconnect(); } catch (_) {}
+        try { sourceRef.current.disconnect(); } catch (_) { }
         sourceRef.current = null;
       }
       if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
@@ -165,7 +175,10 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
   }, []);
 
   const handleProceed = () => {
-    // Strict zero-tolerance guard at the exact moment of proceeding
+    // Strict zero-tolerance guard at the exact moment of proceeding: no screen casting/mirroring allowed
+    if (isScreenCastDetected) {
+      return;
+    }
     if (proctoring.multiFace) {
       return;
     }
@@ -191,15 +204,15 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
 
   const handleCancel = () => {
     if (document.fullscreenElement) {
-      try { document.exitFullscreen(); } catch (_) {}
+      try { document.exitFullscreen(); } catch (_) { }
     }
     onCancel();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0a0f1e]/90 backdrop-blur-sm p-4 overflow-y-auto">
-      <div 
-        className="bg-[#161c2d] border rounded-2xl shadow-2xl max-w-2xl w-full p-6 sm:p-8 text-white relative overflow-y-auto max-h-[94vh] my-auto flex flex-col justify-between"
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0a0f1e]/90 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto">
+      <div
+        className="bg-[#161c2d] border rounded-2xl shadow-2xl max-w-xl sm:max-w-2xl w-full p-4 sm:p-5 text-white relative overflow-y-auto max-h-[96vh] my-auto flex flex-col gap-2.5"
         style={{ backgroundColor: '#161c2d', borderColor: 'rgba(255,255,255,0.1)', color: '#ffffff' }}
       >
         <div className="mb-4 text-center">
@@ -211,7 +224,7 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
           </div>
         </div>
 
-        <div 
+        <div
           className="relative w-full shrink-0 h-48 sm:h-52 bg-black rounded-xl overflow-hidden flex items-center justify-center border border-white/10"
           style={{ backgroundColor: '#000000', maxHeight: '230px' }}
         >
@@ -305,10 +318,16 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
           </p>
 
           {!hasEnvironmentVerified ? (
-            <div className="bg-[#0f172a] rounded-xl p-3.5 border border-white/5">
+            <div
+              className="rounded-lg p-2.5 border"
+              style={{ backgroundColor: '#0f172a', borderColor: 'rgba(255, 255, 255, 0.1)', color: '#ffffff' }}
+            >
               {env.hasMultipleTabs && (
-                <div className="p-3.5 mb-3 bg-red-500/15 border border-red-500/40 rounded-xl text-xs text-red-200 flex items-start gap-2.5 shadow-lg shadow-red-500/10">
-                  <i className="fas fa-window-restore text-red-400 text-sm mt-0.5 flex-shrink-0 animate-bounce"></i>
+                <div
+                  className="p-2 mb-2 rounded-lg text-[11px] flex items-start gap-2 shadow-lg"
+                  style={{ backgroundColor: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.4)', color: '#fecaca' }}
+                >
+                  <i className="fas fa-window-restore text-red-400 text-xs mt-0.5 flex-shrink-0 animate-bounce"></i>
                   <div className="flex-1">
                     <p className="font-bold text-red-100 text-sm">Background Chrome Tabs Detected!</p>
                     <p className="mt-1 text-slate-200">
@@ -341,13 +360,12 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
                   type="button"
                   onClick={env.startIsolationTest}
                   disabled={env.isTesting || env.hasMultipleTabs}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shrink-0 ${
-                    env.isTesting
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 shrink-0 ${env.isTesting
                       ? 'bg-indigo-600/50 text-indigo-200 cursor-wait'
                       : env.hasMultipleTabs
                         ? 'bg-red-500/20 text-red-300 cursor-not-allowed border border-red-500/30'
-                        : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/20 hover:-translate-y-0.5 cursor-pointer'
-                  }`}
+                        : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/30 hover:-translate-y-0.5 cursor-pointer'
+                    }`}
                 >
                   {env.isTesting ? (
                     <>
@@ -369,7 +387,10 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
               </div>
 
               {env.failureReason && !env.isTesting && !env.hasMultipleTabs && (
-                <div className="mt-3 p-2.5 bg-red-500/10 border border-red-500/30 rounded-lg text-xs text-red-300 flex items-center justify-between">
+                <div
+                  className="mt-2 p-1.5 rounded-md text-[11px] flex items-center justify-between"
+                  style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#fca5a5' }}
+                >
                   <span>⚠️ {env.failureReason}</span>
                   <button
                     type="button"
@@ -382,14 +403,67 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
               )}
             </div>
           ) : (
-            <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-xs text-emerald-300 flex items-center gap-2">
-              <i className="fas fa-check-circle text-emerald-400"></i>
-              <span>Fullscreen focus verified. All external tabs, apps, and notifications are isolated.</span>
+            <div
+              className="p-2 rounded-lg text-xs flex items-center gap-2 border"
+              style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', borderColor: 'rgba(16, 185, 129, 0.25)', color: '#34d399' }}
+            >
+              <i className="fas fa-check-circle text-emerald-400 text-xs"></i>
+              <span><strong className="text-white font-semibold">Fullscreen focus verified.</strong> All external tabs and apps isolated.</span>
             </div>
           )}
         </div>
 
-        <div className="flex gap-4 pt-1">
+        {/* Screen Sharing & Display Security Check */}
+        <div className="bg-[#1e293b] rounded-xl p-2.5 sm:p-3">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+              <i className="fas fa-desktop text-indigo-400 text-xs"></i> Screen Sharing & Display Security
+            </span>
+            {hasScreenShareVerified ? (
+              <span className="text-[11px] font-bold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded">
+                No Screen Share Active ✓
+              </span>
+            ) : (
+              <span className="text-[11px] font-bold text-red-400 bg-red-500/20 border border-red-500/40 px-2 py-0.5 rounded animate-pulse">
+                ⚠️ Screen Sharing Detected!
+              </span>
+            )}
+          </div>
+
+          {isScreenCastDetected ? (
+            <div
+              className="rounded-lg p-2.5 border"
+              style={{ backgroundColor: 'rgba(239, 68, 68, 0.12)', borderColor: 'rgba(239, 68, 68, 0.35)', color: '#fecaca' }}
+            >
+              <div className="flex items-start gap-2">
+                <i className="fas fa-ban text-red-400 text-xs mt-0.5 flex-shrink-0 animate-bounce"></i>
+                <div className="flex-1 text-[11px]">
+                  <p className="font-bold text-red-100 text-xs">
+                    Screen Mirroring / Secondary Display Detected
+                  </p>
+                  <p className="mt-0.5 text-slate-200 leading-snug">
+                    {proctoring.detectedPlatforms && proctoring.detectedPlatforms.length > 0
+                      ? `Active tool: ${proctoring.detectedPlatforms.join(', ')}. `
+                      : ''}
+                    {proctoring.multipleDisplaysDetected
+                      ? `Multiple displays detected (${proctoring.displayCount} connected screens). `
+                      : ''}
+                    Screen casting, mirroring (e.g. SpaceDesk, AnyDesk, TeamViewer), or secondary monitors cannot be used during the interview.
+                  </p>
+                  <p className="mt-1.5 text-red-300 font-semibold">
+                    👉 Action Required: Disconnect screen sharing software and secondary monitors. This check verifies automatically once closed.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-[11px] text-slate-400 leading-tight">
+              Single monitor verified. No screen mirroring, casting, or remote display software detected.
+            </p>
+          )}
+        </div>
+
+        <div className="flex gap-3 pt-0.5">
           <button
             onClick={handleCancel}
             className="flex-1 py-3 rounded-2xl font-bold text-sm bg-[#1e293b] hover:bg-[#334155] text-white transition-all cursor-pointer"
@@ -398,26 +472,27 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
           </button>
           <button
             onClick={handleProceed}
-            disabled={!isReady || !!error || !hasAudioVerified || !hasFaceVerified || !hasEnvironmentVerified || env.hasMultipleTabs}
-            className={`flex-1 py-3 rounded-2xl font-bold text-sm transition-all shadow-lg ${
-              isReady && !error && hasAudioVerified && hasFaceVerified && hasEnvironmentVerified && !env.hasMultipleTabs
+            disabled={!canProceed}
+            className={`flex-1 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all shadow-md ${canProceed
                 ? 'bg-primary hover:bg-primary-hover text-white shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5 cursor-pointer'
                 : 'bg-[#1e293b] text-slate-500 cursor-not-allowed shadow-none'
-            }`}
+              }`}
           >
-            {isReady && !error && (!hasAudioVerified || !hasFaceVerified || !hasEnvironmentVerified || env.hasMultipleTabs)
+            {isReady && !error && !canProceed
               ? (
-                  env.hasMultipleTabs
+                isScreenCastDetected
+                  ? `Stop Screen Sharing (${proctoring.detectedPlatforms?.[0] || 'SpaceDesk/AnyDesk'}) to Continue`
+                  : env.hasMultipleTabs
                     ? 'Close Other Tabs to Continue'
-                  : proctoring.multiFace
-                    ? 'Multiple Faces Detected (Only 1 Allowed)'
-                  : !hasFaceVerified
-                    ? 'Face Verification Required'
-                  : !hasAudioVerified
-                    ? 'Speak to Verify Microphone'
-                  : !hasEnvironmentVerified
-                    ? (env.isTesting ? `Testing Environment (${env.countdown}s)...` : 'Verify Environment to Continue')
-                    : 'Awaiting Checks...'
+                    : proctoring.multiFace
+                      ? 'Multiple Faces Detected (Only 1 Allowed)'
+                      : !hasFaceVerified
+                        ? 'Face Verification Required'
+                        : !hasAudioVerified
+                          ? 'Speak to Verify Microphone'
+                          : !hasEnvironmentVerified
+                            ? (env.isTesting ? `Testing Environment (${env.countdown}s)...` : 'Verify Environment to Continue')
+                            : 'Awaiting Checks...'
               )
               : 'Proceed to Interview'}
           </button>

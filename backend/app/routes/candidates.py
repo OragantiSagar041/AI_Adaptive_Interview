@@ -1384,9 +1384,25 @@ def log_violation(
     _require_candidate_session(credentials, interview_id=interview_id)
     print(f" VIOLATION detected for session {interview_id}: {violation.type} (#{violation.count}) at {violation.timestamp}")
     try:
+        inc_dict = {"violation_count": 1}
+        tab_switch_types = {
+            "tab_switch", "screen_casting", "screen_share_detected", 
+            "screen_recording", "screenshare_stopped", "multiple_displays", 
+            "multi_monitor", "fullscreen_exit", "window_blur"
+        }
+        if violation.type in tab_switch_types:
+            inc_dict["integrity.total_tab_switches"] = 1
+        elif violation.type in ("noise_alert", "background_noise", "noise"):
+            inc_dict["integrity.total_noise_alerts"] = 1
+        else:
+            inc_dict["integrity.total_face_alerts"] = 1
+
         interview_sessions_collection.update_one(
             {"interview_id": interview_id},
-            {"$push": {"violations": violation.dict()}}
+            {
+                "$push": {"violations": violation.dict()},
+                "$inc": inc_dict
+            }
         )
         return {"status": "success"}
     except Exception as e:
@@ -1429,11 +1445,24 @@ def log_proctoring_violation(
         else:
             return {"status": "error", "message": "interview_id or link_id required"}
 
+        inc_dict = {"violation_count": 1}
+        tab_switch_types = {
+            "tab_switch", "screen_casting", "screen_share_detected", 
+            "screen_recording", "screenshare_stopped", "multiple_displays", 
+            "multi_monitor", "fullscreen_exit", "window_blur"
+        }
+        if data.violation_type in tab_switch_types:
+            inc_dict["integrity.total_tab_switches"] = 1
+        elif data.violation_type in ("noise_alert", "background_noise", "noise"):
+            inc_dict["integrity.total_noise_alerts"] = 1
+        else:
+            inc_dict["integrity.total_face_alerts"] = 1
+
         result = interview_sessions_collection.find_one_and_update(
             query,
             {
                 "$push": {"violations": violation_doc},
-                "$inc":  {"violation_count": 1},
+                "$inc":  inc_dict,
             },
             return_document=True,   # return updated document
             projection={"violation_count": 1, "_id": 0},
@@ -2744,7 +2773,7 @@ Return this EXACT JSON (all score fields are integers 0-100, weighted_total is t
                 from groq import Groq
                 client = Groq(api_key=groq_key.strip())
                 response = client.chat.completions.create(
-                    model=os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"),
+                    model=os.getenv("GROQ_MODEL", "llama3-8b-8192"),
                     messages=[
                         {"role": "system", "content": "You are a precise ATS scoring engine. Return ONLY valid JSON. No markdown. Be extremely fast and concise."},
                         {"role": "user", "content": prompt}
