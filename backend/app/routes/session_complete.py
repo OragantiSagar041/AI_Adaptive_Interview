@@ -772,6 +772,8 @@ def _get_fallback_ice_servers() -> list:
         os.getenv("TURN_SERVER_URL")
         or os.getenv("TURN_SERVER")
         or os.getenv("TURN_URL")
+        or os.getenv("TURN_HOST")
+        or os.getenv("COTURN_URL")
         or ""
     ).strip().strip('"').strip("'")
 
@@ -785,8 +787,22 @@ def _get_fallback_ice_servers() -> list:
         os.getenv("TURN_CREDENTIAL")
         or os.getenv("TURN_PASSWORD")
         or os.getenv("TURN_CRED")
+        or os.getenv("TURN_SECRET")
         or ""
     ).strip().strip('"').strip("'")
+
+    # Support JSON secret objects from AWS Secrets Manager
+    turn_json_raw = os.getenv("TURN_CONFIG") or os.getenv("TURN_CREDENTIALS") or ""
+    if turn_json_raw.strip().startswith("{"):
+        try:
+            import json as _py_json
+            parsed_cfg = _py_json.loads(turn_json_raw)
+            if isinstance(parsed_cfg, dict):
+                turn_server = turn_server or parsed_cfg.get("urls") or parsed_cfg.get("url") or parsed_cfg.get("TURN_SERVER_URL") or parsed_cfg.get("TURN_SERVER") or parsed_cfg.get("server") or ""
+                turn_user = turn_user or parsed_cfg.get("username") or parsed_cfg.get("user") or parsed_cfg.get("TURN_USERNAME") or ""
+                turn_cred = turn_cred or parsed_cfg.get("credential") or parsed_cfg.get("password") or parsed_cfg.get("TURN_CREDENTIAL") or parsed_cfg.get("TURN_PASSWORD") or ""
+        except Exception:
+            pass
 
     if turn_server:
         turn_url = turn_server
@@ -888,6 +904,8 @@ async def get_webrtc_ice_servers(raw: bool = False):
     Uses TURN credentials from environment / Secrets Manager, or dynamic Metered API if configured.
     """
     ice_servers = await get_metered_ice_servers()
+    has_turn = any("turn:" in s.get("urls", "") or "turns:" in s.get("urls", "") for s in ice_servers)
+    logger.info(f"[/api/webrtc/ice-servers] Served {len(ice_servers)} ICE servers (TURN active: {has_turn})")
     if raw:
         return ice_servers
     return {

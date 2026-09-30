@@ -334,7 +334,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
     closePc()
 
     try {
-      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
+      const pc = new RTCPeerConnection({ iceServers: getIceServers() })
       pcRef.current = pc
       iceCandidateQueue.current = []
       const nextOfferAttempt = ++offerAttemptsRef.current
