@@ -843,7 +843,8 @@ def get_session_by_link(link_id: str):
             "language": row.get("language", "English"),
             "interview_type": row.get("interview_type", "Technical"),
             "voice_clone": row.get("voice_clone", False),
-            "custom_voice_id": row.get("custom_voice_id", "")
+            "custom_voice_id": row.get("custom_voice_id", ""),
+            "cloned_voice_id": row.get("cloned_voice_id", "")
         }
     else:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -1210,6 +1211,10 @@ async def start_session_interview(link_id: str = Form(...)):
                 "interview_type": interview_type,
                 "interview_format": row.get("interview_format", "Standard"),
                 "record_video": row.get("record_video", True),
+                "language": row.get("language", "English"),
+                "voice_clone": row.get("voice_clone", False),
+                "custom_voice_id": row.get("custom_voice_id", ""),
+                "cloned_voice_id": row.get("cloned_voice_id", ""),
                 "all_verbal_answered": all_verbal_answered,
                 "started_at": row.get("started_at"),
                 "monitoring_token": _create_candidate_monitoring_token(
@@ -1360,6 +1365,10 @@ async def start_session_interview(link_id: str = Form(...)):
         "interview_format": row.get("interview_format", "Standard"),
         "interview_type": interview_type,
         "record_video": row.get("record_video", True),
+        "language": row.get("language", "English"),
+        "voice_clone": row.get("voice_clone", False),
+        "custom_voice_id": row.get("custom_voice_id", ""),
+        "cloned_voice_id": row.get("cloned_voice_id", ""),
         "started_at": datetime.now(timezone.utc).isoformat(),
         "monitoring_token": _create_candidate_monitoring_token(
             link_id, interview_id, interview_duration
@@ -1676,11 +1685,12 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
 
 def send_decision_email(email: str, name: str, decision: str, jd: str, company_name: str = 'HireIQ'):
     import requests
-    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    from pathlib import Path
+    env_path = Path(__file__).resolve().parents[2] / ".env"
     load_dotenv(env_path, override=False)
     api_key = os.getenv("BREVO_API_KEY")
-    sender_name = "Hire IQ Recruiting"
-    sender_email = os.getenv("BREVO_SENDER_EMAIL")
+    sender_name = (os.getenv("BREVO_SENDER_NAME") or "Hire IQ Recruiting").strip()
+    sender_email = (os.getenv("BREVO_SENDER_EMAIL") or "").strip()
     
     if not api_key: return False
 

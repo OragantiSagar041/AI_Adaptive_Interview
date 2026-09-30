@@ -169,6 +169,7 @@ export default function VoiceInterviewPage() {
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false)
   const [feedbackSuccess, setFeedbackSuccess] = useState(false)
   const activeAudioRef = useRef(null)
+  const ttsGenIdRef = useRef(0)
 
   // Camera recording
   const cameraRecorderRef = useRef(null)
@@ -625,6 +626,7 @@ export default function VoiceInterviewPage() {
 
   // ── TTS with female voice ──────────────────────────────────────────────────
   const stopAudio = useCallback(() => {
+    ttsGenIdRef.current += 1
     isTTSPlayingRef.current = false
     if (activeAudioRef.current) {
       activeAudioRef.current.onended = null
@@ -640,9 +642,16 @@ export default function VoiceInterviewPage() {
       currentAudioRef.current.src = ''
       currentAudioRef.current = null
     }
+    if (window.speechSynthesis) {
+      try {
+        window.speechSynthesis.cancel()
+      } catch (_) { }
+    }
+    setAiStatus('idle')
   }, [])
   const speak = useCallback(async (text, onEnd) => {
     stopAudio()  // cancel any previous audio first
+    const reqId = ttsGenIdRef.current
     isTTSPlayingRef.current = true
     try {
       setAiStatus('speaking')
@@ -661,11 +670,13 @@ export default function VoiceInterviewPage() {
       })
       if (!res.ok) throw new Error('TTS Failed')
       const blob = await res.blob()
+      if (ttsGenIdRef.current !== reqId) return
       const url = URL.createObjectURL(blob)
       const audio = new Audio(url)
       activeAudioRef.current = audio
       audio.onended = () => {
         setTimeout(() => {
+          if (ttsGenIdRef.current !== reqId) return
           isTTSPlayingRef.current = false
           currentAudioRef.current = null
           if (activeAudioRef.current === audio) {
@@ -678,6 +689,7 @@ export default function VoiceInterviewPage() {
       }
       audio.onerror = () => {
         setTimeout(() => {
+          if (ttsGenIdRef.current !== reqId) return
           isTTSPlayingRef.current = false
           currentAudioRef.current = null
           if (activeAudioRef.current === audio) {
@@ -688,12 +700,14 @@ export default function VoiceInterviewPage() {
         }, 100)
       }
       audio.play().catch(() => {
+        if (ttsGenIdRef.current !== reqId) return
         isTTSPlayingRef.current = false
         currentAudioRef.current = null
         setAiStatus('idle')
         onEnd?.()
       })
     } catch (e) {
+      if (ttsGenIdRef.current !== reqId) return
       isTTSPlayingRef.current = false
       setAiStatus('idle')
       onEnd?.()
@@ -2120,11 +2134,9 @@ export default function VoiceInterviewPage() {
   const transitionToNextRound = useCallback(async (isTimeout = false) => {
     if (submittingRef.current || isTransitioningRef.current) return
     isTransitioningRef.current = true
-    stopListening(); window.speechSynthesis?.cancel()
-    if (activeAudioRef.current) {
-      activeAudioRef.current.pause();
-      activeAudioRef.current = null;
-    }
+    stopAudio()
+    stopListening()
+    if (window.speechSynthesis) window.speechSynthesis.cancel()
 
     const type = interviewType || sessionDetailRef.current?.interview_type || 'Technical'
     const itypeLower = String(type).trim().toLowerCase()
@@ -2138,10 +2150,16 @@ export default function VoiceInterviewPage() {
       setLoading(true) // Immediately show loading state to candidate
       const t = VOICE_TRANSLATIONS[languageRef.current] || VOICE_TRANSLATIONS['English']
 
-      // Speak transition phrase and wait for it to finish in parallel with fetching
+      // Case Study Round: TTS is strictly turned OFF across all languages
       const speakPromise = new Promise(resolve => {
         addMsg('ai', t.verbalComplete)
-        speak(t.verbalComplete, resolve)
+        if (isNonTech) {
+          stopAudio()
+          if (window.speechSynthesis) window.speechSynthesis.cancel()
+          resolve()
+        } else {
+          speak(t.verbalComplete, resolve)
+        }
       })
 
       if (isTech) {
@@ -2157,12 +2175,15 @@ export default function VoiceInterviewPage() {
             id: 'coding_1', type: 'coding', text: task.description || task.title || 'Implement the required function',
             codingTask: task, codingTests: data.tests || []
           }
+          stopAudio()
+          if (window.speechSynthesis) window.speechSynthesis.cancel()
           setCodingQuestion(codingQ)
           isTransitioningRef.current = false  // allow future transitions/retries
           setRound('coding')
           setLoading(false)
         } catch (err) {
           console.error("Coding round start failed:", err)
+          stopAudio()
           isTransitioningRef.current = false  // allow retry
           setError('Failed to load coding round. Please retry.')
           setRound('error')
@@ -2181,14 +2202,17 @@ export default function VoiceInterviewPage() {
 
           const [_, data] = await Promise.all([speakPromise, fetchPromise])
           const cqs = (data.case_study_round?.questions || []).map((q, i) => ({
-            id: `cs_${i}`, type: 'case_study', text: q.text, caseStudyIndex: i
+            id: `cs_${i}`, type: 'case_study', text: q.text, scenario: q.scenario, questionText: q.question, caseStudyIndex: i
           }))
+          stopAudio()
+          if (window.speechSynthesis) window.speechSynthesis.cancel()
           setCaseStudyQuestions(cqs.length ? cqs : [{ id: 'cs_0', type: 'case_study', text: data.scenario || 'Present your business case.', caseStudyIndex: 0 }])
           isTransitioningRef.current = false  // allow future transitions/retries
           setRound('case_study')
           setLoading(false)
         } catch (err) {
           console.error('Case study start failed:', err)
+          stopAudio()
           isTransitioningRef.current = false  // allow retry
           setError('Failed to load case study. Please retry.')
           setRound('error')
@@ -2196,9 +2220,10 @@ export default function VoiceInterviewPage() {
         }
       }
     } else {
+      stopAudio()
       completeInterview(isTimeout)
     }
-  }, [interviewType, stopListening, aiSay, completeInterview])
+  }, [interviewType, stopListening, stopAudio, addMsg, speak, completeInterview])
 
   useEffect(() => {
     transitionToNextRoundRef.current = transitionToNextRound
@@ -2838,14 +2863,21 @@ export default function VoiceInterviewPage() {
                 voice_clone: voiceCloningEnabledRef.current ?? sessionDetail?.voice_clone,
                 custom_voice_id: voiceCloneIdRef.current || sessionDetail?.custom_voice_id
               }} language={language} wsRef={wsRef} onComplete={() => {
+                stopAudio()
+                if (window.speechSynthesis) window.speechSynthesis.cancel()
                 const type = interviewType
                 if (type === 'Non-Technical') {
                   // fetch case study after coding
                   candidateFetch(`${API_BASE_URL}/case-study/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ interview_id: interviewId }) })
                     .then(r => r.json()).then(data => {
                       const cqs = (data.case_study_round?.questions || []).map((q, i) => ({ id: `cs_${i}`, type: 'case_study', text: q.text || q.scenario || '', caseStudyIndex: i }))
+                      stopAudio()
+                      if (window.speechSynthesis) window.speechSynthesis.cancel()
                       setCaseStudyQuestions(cqs); setRound('case_study')
-                    }).catch(() => completeInterview())
+                    }).catch(() => {
+                      stopAudio()
+                      completeInterview()
+                    })
                 } else {
                   completeInterview()
                 }
@@ -3006,7 +3038,7 @@ export default function VoiceInterviewPage() {
         {hasSecondRound ? (
           <button
             type="button"
-            onClick={() => transitionToNextRound()}
+            onClick={() => { stopAudio(); transitionToNextRound(); }}
             className="px-8 py-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-sm shadow-xl shadow-indigo-600/30 hover:scale-105 transition-all flex items-center gap-2.5 cursor-pointer"
           >
             <i className={`fas ${isTechRound ? 'fa-code' : 'fa-chart-pie'}`} />
@@ -3215,7 +3247,10 @@ export default function VoiceInterviewPage() {
                   background: '#161c2d',
                   color: '#fff',
                 }).then((r) => {
-                  if (r.isConfirmed) transitionToNextRound()
+                  if (r.isConfirmed) {
+                    stopAudio()
+                    transitionToNextRound()
+                  }
                 })
               }}
               className="px-3.5 py-1.5 rounded-full text-xs font-bold text-white bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 shadow-md shadow-indigo-500/20 flex items-center gap-1.5 transition-all hover:scale-105 cursor-pointer"
@@ -3343,6 +3378,7 @@ export default function VoiceInterviewPage() {
               <button
                 type="button"
                 onClick={() => {
+                  stopAudio()
                   Swal.fire({
                     title: isTechRound ? 'Switch to Coding Round?' : 'Switch to Case Study Round?',
                     text: isTechRound 
@@ -3356,7 +3392,10 @@ export default function VoiceInterviewPage() {
                     background: '#161c2d',
                     color: '#fff',
                   }).then((r) => {
-                    if (r.isConfirmed) transitionToNextRound()
+                    if (r.isConfirmed) {
+                      stopAudio()
+                      transitionToNextRound()
+                    }
                   })
                 }}
                 className="px-5 py-3.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-lg shadow-indigo-600/30 hover:-translate-y-0.5 cursor-pointer whitespace-nowrap"
@@ -3368,7 +3407,10 @@ export default function VoiceInterviewPage() {
             )}
 
             <button
-              onClick={() => transitionToNextRound(false)}
+              onClick={() => {
+                stopAudio()
+                transitionToNextRound(false)
+              }}
               className="px-6 py-3.5 rounded-2xl text-xs font-bold transition-all uppercase tracking-widest !bg-white/5 text-slate-400 border border-white/8 hover:bg-white/10"
               title="Proceed to the next round"
             >

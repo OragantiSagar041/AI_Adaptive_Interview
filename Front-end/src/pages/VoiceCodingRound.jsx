@@ -282,8 +282,26 @@ export default function VoiceCodingRound({
   const audioChunksRef = useRef([])
   const currentTxRef = useRef('')
   const submittingRef = useRef(false)
-  const lastRunResultRef = useRef(null)  // stores latest run result for chat context
   const activeAudioRef = useRef(null)    // prevents overlapping audio
+
+  // Cancel any lingering audio or speech synthesis from previous rounds on mount/unmount
+  useEffect(() => {
+    if (window.speechSynthesis) {
+      try { window.speechSynthesis.cancel() } catch (_) { }
+    }
+    return () => {
+      if (window.speechSynthesis) {
+        try { window.speechSynthesis.cancel() } catch (_) { }
+      }
+      if (activeAudioRef.current) {
+        try {
+          activeAudioRef.current.pause()
+          activeAudioRef.current.src = ''
+        } catch (_) { }
+        activeAudioRef.current = null
+      }
+    }
+  }, [])
 
   // Unload Tracking + Exit Confirmation Dialog
   useExitConfirmation({
@@ -323,83 +341,19 @@ export default function VoiceCodingRound({
 
   const fmt = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 
-  // ── TTS ────────────────────────────────────────────────────────────────
+  // ── TTS: Suppressed in Round 2 (Technical Coding) ────────────────────────
   const speak = useCallback(async (text, onEnd) => {
-    try {
-      if (activeAudioRef.current) {
+    if (activeAudioRef.current) {
+      try {
         activeAudioRef.current.pause()
-        activeAudioRef.current = null
-      }
-      setAiStatus('speaking')
-      setOrbLabel('Zara speaking…')
-      const useCustomVoice = !!(sessionDetail?.voice_clone || sessionDetail?.voice_cloning_enabled || sessionDetail?.custom_voice_id || sessionDetail?.cloned_voice_id);
-      const languageMap = {
-        Hindi: 'hi-IN',
-        Telugu: 'te-IN',
-        Tamil: 'ta-IN',
-        Malayalam: 'ml-IN',
-        Kannada: 'kn-IN',
-        English: 'en-US',
-      };
-      const ttsLang = languageMap[(sessionLang || sessionDetail?.language || 'English').toLowerCase().replace(/^\w/, c => c.toUpperCase())] || 'en-US';
-      const res = await candidateFetch(`${API_BASE_URL}/tts`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          text, 
-          voice: 'shimmer',
-          language: ttsLang,
-          use_custom_voice: useCustomVoice,
-        })
-      })
-      if (!res.ok) throw new Error('TTS Failed')
-      const blob = await res.blob()
-      if (blob.size === 0) {
-        // Fallback to browser SpeechSynthesis if no audio returned
-        const utterance = new SpeechSynthesisUtterance(text)
-        utterance.lang = ttsLang
-        utterance.onend = () => {
-          setAiStatus('idle')
-          setOrbLabel('Zara is watching')
-          onEnd?.()
-        }
-        speechSynthesis.speak(utterance)
-        setAiStatus('speaking')
-        setOrbLabel('Zara speaking…')
-        return
-      }
-      const url = URL.createObjectURL(blob)
-      const audio = new Audio(url)
-      activeAudioRef.current = audio
-      audio.onended = () => {
-        setAiStatus('idle')
-        setOrbLabel('Zara is watching')
-        URL.revokeObjectURL(url)
-        activeAudioRef.current = null
-        onEnd?.()
-      }
-      audio.onerror = () => { 
-        setAiStatus('idle')
-        setOrbLabel('Zara is watching')
-        activeAudioRef.current = null
-        onEnd?.() 
-      }
-      audio.play().catch(() => {
-          // Fallback to speech synthesis if audio playback fails
-          const utterance = new SpeechSynthesisUtterance(text);
-          utterance.lang = ttsLang;
-          utterance.onend = () => {
-            setAiStatus('idle');
-            setOrbLabel('Zara is watching');
-            onEnd?.();
-          };
-          speechSynthesis.speak(utterance);
-        });
-    } catch (e) {
-      setAiStatus('idle')
-      setOrbLabel('Zara is watching')
-      onEnd?.()
+        activeAudioRef.current.currentTime = 0
+      } catch (_) { }
+      activeAudioRef.current = null
     }
+    if (window.speechSynthesis) window.speechSynthesis.cancel()
+    setAiStatus('idle')
+    setOrbLabel('Zara is watching')
+    onEnd?.()
   }, [])
 
   const aiSay = useCallback((text, onEnd) => {

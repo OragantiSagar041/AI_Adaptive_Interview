@@ -45,12 +45,16 @@ class RedisConnectionManager:
         self._redis_failed = False
         self._redis_last_attempt = now
         try:
-            temp_redis = redis.from_url(
-                REDIS_URL,
-                decode_responses=True,
-                socket_connect_timeout=3,  # fail fast instead of hanging
-                protocol=2,
-            )
+            import ssl as _ssl
+            redis_kwargs = {
+                "decode_responses": True,
+                "socket_connect_timeout": 3,  # fail fast instead of hanging
+                "protocol": 2,
+            }
+            if REDIS_URL.startswith("rediss://"):
+                redis_kwargs["ssl_cert_reqs"] = _ssl.CERT_NONE
+
+            temp_redis = redis.from_url(REDIS_URL, **redis_kwargs)
             await temp_redis.ping()
             self.redis = temp_redis
             self.pubsub = self.redis.pubsub()

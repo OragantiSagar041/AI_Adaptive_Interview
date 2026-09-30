@@ -109,8 +109,9 @@ def create_demo_request(req: DemoRequestCreate):
 
         # Send email notification to master
         brevo_key = os.getenv("BREVO_API_KEY")
-        master_email = os.getenv("MASTER_EMAIL", os.getenv("BREVO_SENDER_EMAIL", "support@hireiq.com"))
-        if brevo_key and master_email:
+        sender_email = (os.getenv("BREVO_SENDER_EMAIL") or "").strip()
+        master_email = (os.getenv("MASTER_EMAIL") or sender_email).strip()
+        if brevo_key:
             try:
                 import requests
                 email_html = f"""
@@ -123,12 +124,15 @@ def create_demo_request(req: DemoRequestCreate):
                     <p><b>Message:</b><br>{req.help_text}</p>
                 </body></html>
                 """
-                requests.post("https://api.brevo.com/v3/smtp/email", json={
-                    "sender": {"name": "Hire IQ Alerts", "email": master_email},
+                sender_name = (os.getenv("BREVO_SENDER_NAME") or "Hire IQ Alerts").strip()
+                resp = requests.post("https://api.brevo.com/v3/smtp/email", json={
+                    "sender": {"name": sender_name, "email": sender_email},
                     "to": [{"email": master_email, "name": "Hire IQ Admin"}],
                     "subject": f"New Demo Request from {req.company_name}",
                     "htmlContent": email_html
                 }, headers={"api-key": brevo_key, "content-type": "application/json"}, timeout=5)
+                if resp.status_code >= 300:
+                    print(f"❌ [BREVO ERROR demo request] {resp.status_code}: {resp.text}")
             except Exception as email_err:
                 print(f'Error sending demo request email: {email_err}')
 
@@ -238,7 +242,7 @@ def send_demo_request_email(
     import dotenv
     dotenv.load_dotenv(override=True)
     brevo_key = os.getenv("BREVO_API_KEY")
-    sender_email = os.getenv("BREVO_SENDER_EMAIL", os.getenv("MASTER_EMAIL", "support@hireiq.com"))
+    sender_email = (os.getenv("BREVO_SENDER_EMAIL") or "").strip()
     sender_name = (os.getenv("BREVO_SENDER_NAME") or "Hire IQ").strip()
     
     email_sent = False
@@ -320,8 +324,9 @@ def create_contact_request(req: ContactRequestCreate):
 
         # Send email notification to master
         brevo_key = os.getenv("BREVO_API_KEY")
-        master_email = os.getenv("MASTER_EMAIL", os.getenv("BREVO_SENDER_EMAIL", "support@hireiq.com"))
-        if brevo_key and master_email:
+        sender_email = (os.getenv("BREVO_SENDER_EMAIL") or "").strip()
+        master_email = (os.getenv("MASTER_EMAIL") or sender_email).strip()
+        if brevo_key:
             try:
                 email_html = f"""
                 <html><body style="font-family: Arial, sans-serif; padding: 20px;">
@@ -332,12 +337,15 @@ def create_contact_request(req: ContactRequestCreate):
                     <p><b>Message:</b><br>{req.message}</p>
                 </body></html>
                 """
-                requests.post("https://api.brevo.com/v3/smtp/email", json={
-                    "sender": {"name": "Hire IQ Alerts", "email": master_email},
+                sender_name = (os.getenv("BREVO_SENDER_NAME") or "Hire IQ Alerts").strip()
+                resp = requests.post("https://api.brevo.com/v3/smtp/email", json={
+                    "sender": {"name": sender_name, "email": sender_email},
                     "to": [{"email": master_email, "name": "Hire IQ Admin"}],
                     "subject": f"New Contact Inquiry from {req.company_name} ({req.first_name})",
                     "htmlContent": email_html
                 }, headers={"api-key": brevo_key, "content-type": "application/json"}, timeout=5)
+                if resp.status_code >= 300:
+                    logger.error(f"❌ [BREVO ERROR contact request] {resp.status_code}: {resp.text}")
             except Exception as email_err:
                 logger.error(f'Error sending contact request email: {email_err}')
 
@@ -446,7 +454,7 @@ def send_contact_request_email(
     import dotenv
     dotenv.load_dotenv(override=True)
     brevo_key = os.getenv("BREVO_API_KEY")
-    sender_email = os.getenv("BREVO_SENDER_EMAIL", os.getenv("MASTER_EMAIL", "support@hireiq.com"))
+    sender_email = (os.getenv("BREVO_SENDER_EMAIL") or "").strip()
     sender_name = (os.getenv("BREVO_SENDER_NAME") or "Hire IQ").strip()
     
     email_sent = False

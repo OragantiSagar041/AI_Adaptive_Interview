@@ -250,6 +250,7 @@ export const InterviewNormal = () => {
     handleStartRound2Click,
     proceedToRoundTwo,
     handleNextQuestion,
+    stopAudio,
     handleSubmitInterview,
     canSubmit,
     handleFinishEarly,
@@ -262,6 +263,12 @@ export const InterviewNormal = () => {
     promptScreenShare,
     isOnline
   } = session
+
+  useEffect(() => {
+    return () => {
+      stopAudio?.()
+    }
+  }, [stopAudio])
 
   // ── Voice Cloning Setup State (UI only) ──────────────────────────────────
   // State moved into the module-level VoiceCloneSetup component above.
@@ -690,15 +697,18 @@ export const InterviewNormal = () => {
                   <div className="flex gap-4 items-start">
                     <div className="w-1.5 bg-indigo-600 self-stretch rounded-full shrink-0 min-h-[60px]" />
                     <p className="flex-1 text-slate-800 text-base md:text-lg font-semibold leading-relaxed m-0">{currentQuestionText || 'Question is loading...'}</p>
-                    <button 
-                      className="bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-indigo-600 border border-slate-200 hover:border-indigo-100 cursor-pointer p-2.5 rounded-full transition-all duration-200 shrink-0" 
-                      onClick={() => speakAIQuestion(currentQuestionText)}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M11 5L6 9H2v6h4l5 4V5z"></path>
-                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-                      </svg>
-                    </button>
+                    {!isRoundTwo && currentQuestion?.type !== 'case_study' && currentQuestion?.type !== 'coding' && (
+                      <button 
+                        className="bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-indigo-600 border border-slate-200 hover:border-indigo-100 cursor-pointer p-2.5 rounded-full transition-all duration-200 shrink-0" 
+                        onClick={() => speakAIQuestion(currentQuestionText)}
+                        title="Listen to question"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M11 5L6 9H2v6h4l5 4V5z"></path>
+                          <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                        </svg>
+                      </button>
+                    )}
                   </div>
                 </div>
 

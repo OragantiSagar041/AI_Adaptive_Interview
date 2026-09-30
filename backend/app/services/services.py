@@ -2872,28 +2872,33 @@ def queue_or_send_interview_email(session_doc: Dict[str, Any], link_url: str, sk
             "email_send_at": send_at.isoformat()
         }
 
-    # Celery: Push email sending to background
-    from app import tasks  # local import to avoid circular imports
+    # Check if Celery worker is explicitly enabled; otherwise use reliable native background thread
+    use_celery = os.getenv("USE_CELERY", "false").lower() in ("true", "1", "yes")
     email_sent = False
-    try:
-        tasks.send_email_task.delay(
-            candidate_email=session_doc.get("candidate_email", ""),
-            candidate_name=session_doc.get("candidate_name", ""),
-            link_url=link_url,
-            duration=session_doc.get("interview_duration", 30),
-            job_description=session_doc.get("job_description", ""),
-            custom_html=session_doc.get("custom_email_html", ""),
-            scheduled_start=session_doc.get("scheduled_start", ""),
-            scheduled_end=session_doc.get("scheduled_end", ""),
-            jd_file_url=session_doc.get("jd_file_url"),
-            company_name=company_name
-        )
-        email_sent = True
-    except Exception as e:
-        print(f"Warning: Failed to queue email task (Redis down?), falling back to Thread: {e}")
+
+    if use_celery:
+        try:
+            from app import tasks  # local import to avoid circular imports
+            tasks.send_email_task.delay(
+                candidate_email=session_doc.get("candidate_email", ""),
+                candidate_name=session_doc.get("candidate_name", ""),
+                link_url=link_url,
+                duration=session_doc.get("interview_duration", 30),
+                job_description=session_doc.get("job_description", ""),
+                custom_html=session_doc.get("custom_email_html", ""),
+                scheduled_start=session_doc.get("scheduled_start", ""),
+                scheduled_end=session_doc.get("scheduled_end", ""),
+                jd_file_url=session_doc.get("jd_file_url"),
+                company_name=company_name
+            )
+            email_sent = True
+        except Exception as e:
+            print(f"Warning: Failed to queue email task to Celery, falling back to Thread: {e}")
+            use_celery = False
+
+    if not use_celery:
         try:
             import threading
-            from app.services.services import send_interview_email
             threading.Thread(target=send_interview_email, args=(
                 session_doc.get("candidate_email", ""),
                 session_doc.get("candidate_name", ""),
@@ -2905,10 +2910,10 @@ def queue_or_send_interview_email(session_doc: Dict[str, Any], link_url: str, sk
                 session_doc.get("scheduled_end", ""),
                 session_doc.get("jd_file_url"),
                 company_name
-            )).start()
+            ), daemon=True).start()
             email_sent = True
         except Exception as th_e:
-            print(f"Error falling back to Thread for email: {th_e}")
+            print(f"Error starting background thread for email: {th_e}")
 
     if not skip_db_update:
         interview_sessions_collection.update_one(
@@ -2930,14 +2935,18 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
     import requests
     from dotenv import load_dotenv
 
-    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    from pathlib import Path
+    env_path = Path(__file__).resolve().parents[2] / ".env"
     load_dotenv(env_path, override=False)
     brevo_api_key = (os.getenv("BREVO_API_KEY") or "").strip()
     sender_name = (os.getenv("BREVO_SENDER_NAME") or "Hire IQ Recruiting").strip()
-    sender_email = (os.getenv("BREVO_SENDER_EMAIL") or "no-reply@hireiq.co.in").strip()
+    sender_email = (os.getenv("BREVO_SENDER_EMAIL") or "").strip()
 
     if not brevo_api_key:
-        print("Warning: BREVO_API_KEY not found in environment")
+        print("Warning: BREVO_API_KEY not found in environment — email cannot be sent")
+        return False
+    if not sender_email:
+        print("Warning: BREVO_SENDER_EMAIL not found in environment — email cannot be sent")
         return False
 
     full_link = link_url if link_url.startswith("http") else f"{os.getenv('FRONTEND_URL', 'https://hireiq.co.in')}{link_url}"
@@ -3029,11 +3038,14 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
             },
             timeout=10
         )
-        response.raise_for_status()
-        print(f"Email successfully sent to {candidate_email}")
+        if response.status_code >= 300:
+            print(f"❌ [BREVO EMAIL ERROR] HTTP {response.status_code} for {candidate_email}: {response.text}")
+            return False
+
+        print(f"✅ Email successfully sent to {candidate_email} via Brevo")
         return True
     except Exception as e:
-        print(f"Failed to send email to {candidate_email}: {e}")
+        print(f"❌ Failed to send email to {candidate_email}: {e}")
         return False
 
 

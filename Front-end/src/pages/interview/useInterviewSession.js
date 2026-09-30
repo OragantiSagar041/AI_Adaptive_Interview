@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Swal from 'sweetalert2'
 import api from '../../utils/api'
@@ -104,6 +104,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const codingTask = currentQuestion?.codingTask || currentQuestion || {}
   const [isRoundTwo, setIsRoundTwo] = useState(false)
   const isRoundTwoRef = useRef(false)
+  const isStartingRoundTwoRef = useRef(false)
   const [isMediaReady, setIsMediaReady] = useState(false)
 
   // Tracking and control refs
@@ -126,6 +127,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   // Speech & Transcription states and refs needed by hooks
   const [transcriptionText, setTranscriptionText] = useState('')
   const [interimTranscriptText, setInterimTranscriptText] = useState('')
+  const [isAiSpeaking, setIsAiSpeaking] = useState(false)
   const isSpeechRecordingRef = useRef(false)
   const isTTSPlayingRef = useRef(false)
   const candidateNameRef = useRef('Candidate')
@@ -802,6 +804,13 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           setCandidateSessionAuth(startPayload.monitoring_token, sessionId, startPayload.interview_id)
         }
 
+        setSessionDetail(prev => ({ ...prev, ...startPayload }))
+        if (startPayload.custom_voice_id || startPayload.cloned_voice_id) {
+          const vId = startPayload.custom_voice_id || startPayload.cloned_voice_id
+          clonedVoiceIdRef.current = vId
+          setClonedVoiceId(vId)
+        }
+
         // ── Drain pending requests now that we are authenticated ──────
         try {
           const pendingKey = `complete_session_pending_${sessionId}`
@@ -1317,24 +1326,67 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current)
   }
 
+  const stopAudio = useCallback(() => {
+    speakRequestIdRef.current = Date.now() + Math.random()
+    if (currentAudioRef.current) {
+      try {
+        currentAudioRef.current.onended = null
+        currentAudioRef.current.onerror = null
+        currentAudioRef.current.pause()
+        currentAudioRef.current.src = ''
+      } catch (_) { }
+      currentAudioRef.current = null
+    }
+    if (window.speechSynthesis) {
+      try {
+        window.speechSynthesis.onvoiceschanged = null
+        window.speechSynthesis.cancel()
+      } catch (_) { }
+    }
+    isTTSPlayingRef.current = false
+    setIsAiSpeaking(false)
+  }, [])
+
   const speakAIQuestion = async (text) => {
+    // Immediately stop any ongoing audio/TTS
+    stopAudio()
+
+    // ── STRICT SUPPRESSION: Case Study Round or Coding Round MUST NEVER have TTS in any language ──
+    const qType = currentQuestion?.type || ''
+    const textStr = String(text || '').toLowerCase()
+    const itype = String(interviewType || sessionDetail?.interview_type || '').toLowerCase()
+    const isNonTech = itype.includes('non-tech') || itype.includes('non_tech') || itype.includes('case')
+
+    if (
+      isRoundTwoRef.current ||
+      isRoundTwo ||
+      isStartingRoundTwoRef.current ||
+      (isNonTech && (isRoundTwo || isRoundTwoRef.current)) ||
+      qType === 'coding' ||
+      qType === 'case_study' ||
+      currentQuestion?.caseStudyIndex !== undefined ||
+      textStr.includes('case study') ||
+      textStr.includes('case_study') ||
+      textStr.includes('scenario') ||
+      textStr.includes('📁') ||
+      textStr.includes('केस स्टडी') || // Hindi
+      textStr.includes('కేస్ స్టడీ') || // Telugu
+      textStr.includes('வழக்காய்வு') || // Tamil
+      textStr.includes('കേസ് സ്റ്റഡി') || // Malayalam
+      textStr.includes('ಕೇಸ್ ಸ್ಟಡಿ')    // Kannada
+    ) {
+      stopAudio()
+      return
+    }
+
     // The silence timer is started in audio.onended (after TTS finishes playing)
     // so the candidate gets exactly 10 seconds of silence before auto-advancing.
     // We do NOT set a timer here before TTS plays — that would give extra-long wait.
     if (silenceIntervalRef.current) clearInterval(silenceIntervalRef.current)
 
     // Generate a unique ID for this TTS request to handle rapid clicks
-    const reqId = Date.now()
+    const reqId = Date.now() + Math.random()
     speakRequestIdRef.current = reqId
-
-    // Stop any currently playing high-quality audio
-    if (currentAudioRef.current) {
-      try {
-        currentAudioRef.current.pause()
-        currentAudioRef.current.currentTime = 0
-      } catch (e) { }
-      currentAudioRef.current = null
-    }
 
     // ── PAUSE speech recognition so the AI's own voice is NOT transcribed ──
     isTTSPlayingRef.current = true
@@ -1388,17 +1440,17 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     // --- High-Quality TTS (Backend: Cartesia or Edge TTS) ---
     try {
       if (window.speechSynthesis) window.speechSynthesis.cancel()
+      const activeVoiceId = clonedVoiceIdRef.current || sessionDetail?.custom_voice_id || sessionDetail?.cloned_voice_id
       const bodyPayload = {
         text,
         voice: 'shimmer',
         language: sessionDetail?.language || 'English',
         use_custom_voice: !!(sessionDetail?.voice_clone || sessionDetail?.voice_cloning_enabled || sessionDetail?.custom_voice_id || clonedVoiceIdRef.current)
       }
-      const activeVoiceId = clonedVoiceIdRef.current || sessionDetail?.custom_voice_id || sessionDetail?.cloned_voice_id
       if (activeVoiceId) bodyPayload.voice_id = activeVoiceId
 
-      // Check TTS cache first — same question text + voice doesn't need a new network call.
-      const ttsCacheKey = `${text}::${clonedVoiceIdRef.current || 'default'}`
+      // Check TTS cache first — same question text + voice + language doesn't need a new network call.
+      const ttsCacheKey = `${text}::${activeVoiceId || 'default'}::${sessionDetail?.language || 'English'}`
       let url = ttsCacheRef.current.get(ttsCacheKey)
 
       if (!url) {
@@ -1419,11 +1471,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         ttsCacheRef.current.set(ttsCacheKey, url)
       }
 
-      // If user clicked 'Next' again while we were fetching, discard this stale audio!
-      if (speakRequestIdRef.current !== reqId) return
+      // If user clicked 'Next' or transitioned to Round 2 while we were fetching, discard this stale audio!
+      if (speakRequestIdRef.current !== reqId || isRoundTwoRef.current || isRoundTwo) return
 
       const audio = new Audio(url)
       currentAudioRef.current = audio
+      setIsAiSpeaking(true)
 
       // --- Web Audio Mixer Routing ---
       if (audioMixerCtxRef.current && audioMixerDestRef.current) {
@@ -1437,10 +1490,13 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       const handleAudioFinished = () => {
         if (audioEnded) return
         audioEnded = true
+        setIsAiSpeaking(false)
+        isTTSPlayingRef.current = false
         // Revoke object URL after playback to free browser memory.
         if (!ttsCacheRef.current.has(ttsCacheKey)) {
           URL.revokeObjectURL(url)
         }
+        if (speakRequestIdRef.current !== reqId || isRoundTwoRef.current || isRoundTwo) return
         // ── Clean transcript & restart speech recognition freshly for candidate response ──
         accumulatedTranscriptRef.current = ''
         currentSessionFinalRef.current = ''
@@ -1450,12 +1506,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         liveInterimGhostRef.current = ''
         segmentHasSpeechRef.current = false
         setTranscriptionText('')
-        isTTSPlayingRef.current = false
         // 500ms grace period — lets speaker echo/reverb tail die out before we
         // start listening again, so the AI's own voice doesn't get transcribed
         // as the candidate's answer.
         setTimeout(() => {
-          if (isTTSPlayingRef.current || speakRequestIdRef.current !== reqId) return
+          if (isTTSPlayingRef.current || speakRequestIdRef.current !== reqId || isRoundTwoRef.current || isRoundTwo) return
           // Re-enable the microphone track now that the echo tail has died
           if (mediaStreamRef.current) {
             mediaStreamRef.current.getAudioTracks().forEach(track => {
@@ -1483,8 +1538,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         }
       }, maxAudioMs)
 
-      // Double check reqId before playing just in case
-      if (speakRequestIdRef.current === reqId) {
+      // Double check reqId and round 2 state before playing
+      if (speakRequestIdRef.current === reqId && !isRoundTwoRef.current && !isRoundTwo) {
         audio.play().catch((playErr) => {
           console.warn("Audio autoplay blocked or failed, resuming recognition immediately:", playErr)
           handleAudioFinished()
@@ -1500,6 +1555,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     // so the interview never gets permanently stuck.
     if (!window.speechSynthesis) {
       isTTSPlayingRef.current = false
+      setIsAiSpeaking(false)
       isSpeechRecordingRef.current = true
       if (mediaStreamRef.current) {
         mediaStreamRef.current.getAudioTracks().forEach(track => { track.enabled = true })
@@ -1512,8 +1568,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       return
     }
 
-    // If a new request came in, abort browser fallback setup
-    if (speakRequestIdRef.current !== reqId) return
+    // If a new request came in or round 2 is active, abort browser fallback setup
+    if (speakRequestIdRef.current !== reqId || isRoundTwoRef.current || isRoundTwo) return
 
     window.speechSynthesis.cancel()
     const utterance = new SpeechSynthesisUtterance(text)
@@ -1523,6 +1579,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     utterance.lang = targetLang
 
     const setVoiceAndSpeak = () => {
+      if (speakRequestIdRef.current !== reqId || isRoundTwoRef.current || isRoundTwo) return
       let voices = window.speechSynthesis.getVoices()
       let preferredVoice = voices.find(v =>
         v.lang.startsWith(targetLangPrefix) &&
@@ -1537,11 +1594,13 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         if (utteranceEnded) return
         utteranceEnded = true
         isTTSPlayingRef.current = false
+        setIsAiSpeaking(false)
+        if (speakRequestIdRef.current !== reqId || isRoundTwoRef.current || isRoundTwo) return
         // 500ms grace period — lets speaker echo/reverb tail die out before we
         // start listening again, so the AI's own voice doesn't get transcribed
         // as the candidate's answer.
         setTimeout(() => {
-          if (isTTSPlayingRef.current || speakRequestIdRef.current !== reqId) return
+          if (isTTSPlayingRef.current || speakRequestIdRef.current !== reqId || isRoundTwoRef.current || isRoundTwo) return
           // Re-enable the microphone track now that the echo tail has died
           if (mediaStreamRef.current) {
             mediaStreamRef.current.getAudioTracks().forEach(track => {
@@ -1572,6 +1631,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         }
       }, maxUtteranceMs)
 
+      setIsAiSpeaking(true)
       window.speechSynthesis.speak(utterance)
     }
 
@@ -1587,18 +1647,23 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
 
   const startNextRound = async () => {
-    if (isRoundTwoRef.current) return
+    if (isRoundTwoRef.current || isStartingRoundTwoRef.current) return
+    isStartingRoundTwoRef.current = true
+    stopAudio()
+
     if (silenceTimeoutRef.current) {
       clearTimeout(silenceTimeoutRef.current)
       silenceTimeoutRef.current = null
     }
     if (!startRoundTwo) {
+      isStartingRoundTwoRef.current = false
       handleSubmitInterview()
       return
     }
     try {
       await startRoundTwo({
         verbalQuestionsLength: questions.length,
+        savedIndex: _savedSession?.currentQuestionIndex,
         interviewId: interviewId || sessionDetail?.interview_id || sessionId,
         setQuestions,
         setCurrentQuestionIndex,
@@ -1610,13 +1675,16 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
       setIsRoundTwo(true)
       isRoundTwoRef.current = true
+      isStartingRoundTwoRef.current = false
 
       if (totalDuration > 0) {
         setGlobalCountdown(totalDuration / 2)
       }
     } catch (err) {
       console.error("Failed to start round 2:", err)
-      isRoundTwoRef.current = false  // allow retry if user tries again
+      isStartingRoundTwoRef.current = false
+      isRoundTwoRef.current = false
+      setIsRoundTwo(false)
       Swal.fire({
         icon: 'error',
         title: 'Failed to start Round 2',
@@ -1629,6 +1697,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   }
 
   const handleStartRound2Click = () => {
+    stopAudio()
     if (currentQuestionIndex < questions.length - 1) {
       setShowRound2Confirm(true)
     } else {
@@ -1637,6 +1706,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   }
 
   const proceedToRoundTwo = async () => {
+    stopAudio()
     stopSilenceTimer()
     setShowRound2Confirm(false)
 
@@ -1728,17 +1798,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     isNextingRef.current = true
     try {
       // Immediately stop any playing question TTS audio so Next works instantly without waiting for playback
-      if (currentAudioRef.current) {
-        try {
-          currentAudioRef.current.pause()
-          currentAudioRef.current.currentTime = 0
-        } catch (_) { }
-        currentAudioRef.current = null
-      }
-      if (window.speechSynthesis) {
-        try { window.speechSynthesis.cancel() } catch (_) { }
-      }
-      isTTSPlayingRef.current = false
+      stopAudio()
 
       const currentQuestion = questions[currentQuestionIndex]
       stopSilenceTimer()
@@ -1872,7 +1932,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
             setCurrentQuestionIndex(nextIdx)
             questionStartTimeRef.current = Date.now()
             const nextQ = questions[nextIdx] || batch[0]
-            if (nextQ && nextQ.type !== 'coding') {
+            if (!isRoundTwoRef.current && !isRoundTwo && !isStartingRoundTwoRef.current && nextQ && nextQ.type !== 'coding' && nextQ.type !== 'case_study' && nextQ.caseStudyIndex === undefined) {
               speakAIQuestion(nextQ.text || nextQ.question || nextQ.prompt || '')
             }
           } else {
@@ -1917,7 +1977,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         setCurrentQuestionIndex(nextIdx)
         questionStartTimeRef.current = Date.now()
 
-        if (questions[nextIdx] && questions[nextIdx].type !== 'coding') {
+        if (!isRoundTwoRef.current && !isRoundTwo && !isStartingRoundTwoRef.current && questions[nextIdx] && questions[nextIdx].type !== 'coding' && questions[nextIdx].type !== 'case_study' && questions[nextIdx].caseStudyIndex === undefined) {
           speakAIQuestion(questions[nextIdx].text || questions[nextIdx].question || questions[nextIdx].prompt || '')
         }
       }
@@ -1964,6 +2024,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     if (isSubmittingRef.current) return  // Prevent double-submit
     isSubmittingRef.current = true
     setIsSaving(true)
+    stopAudio()
 
     // ── Immediately mark as completed so the interview UI hides right away ──
     // This prevents the interview from staying visible during async cleanup,
@@ -2225,6 +2286,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   handleSubmitInterviewRef.current = handleSubmitInterview
 
   const handleFinishEarly = () => {
+    stopAudio()
     Swal.fire({
       title: 'Finish Interview?',
       html: '<p style="color:#94a3b8;font-size:14px">Are you sure you want to end the interview now? Your answers will be saved and submitted.</p>',
@@ -2374,6 +2436,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     handleStartRound2Click,
     proceedToRoundTwo,
     handleNextQuestion,
+    stopAudio,
+    isAiSpeaking,
     handleSubmitInterview,
     handleFinishEarly,
     handleSkipUpload,

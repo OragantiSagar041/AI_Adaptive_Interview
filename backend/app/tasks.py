@@ -453,8 +453,8 @@ def send_email_task(
         }
         payload = {
             "sender": {
-                "name": "HireIQ Recruiting",
-                "email": os.getenv("BREVO_SENDER_EMAIL", "no-reply@hireiq.co.in"),
+                "name": (os.getenv("BREVO_SENDER_NAME") or "Hire IQ").strip(),
+                "email": (os.getenv("BREVO_SENDER_EMAIL") or "").strip(),
             },
             "to": [{"email": candidate_email, "name": candidate_name}],
             "subject": "Invitation to your HireIQ AI Interview",
@@ -612,8 +612,8 @@ def send_recruiter_credentials_email_task(
         }
         payload = {
             "sender": {
-                "name": "HireIQ Recruiting",
-                "email": os.getenv("BREVO_SENDER_EMAIL", "no-reply@hireiq.co.in"),
+                "name": (os.getenv("BREVO_SENDER_NAME") or "Hire IQ").strip(),
+                "email": (os.getenv("BREVO_SENDER_EMAIL") or "").strip(),
             },
             "to": [{"email": recruiter_email, "name": recruiter_name}],
             "subject": "Your HireIQ Recruiter Account Credentials",

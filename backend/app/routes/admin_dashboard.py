@@ -1552,11 +1552,12 @@ for _route in router.routes:
         break
 def send_submission_notification(candidate_email: str, candidate_name: str, admin_email: str, avg_score: float, total_questions: int, company_name: str = 'HireIQ'):
     """Send test submission notification to both admin and candidate."""
-    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    from pathlib import Path
+    env_path = Path(__file__).resolve().parents[2] / ".env"
     load_dotenv(env_path, override=False)
     api_key = os.getenv("BREVO_API_KEY")
-    sender_name = "Hire IQ Recruiting"
-    sender_email_addr = os.getenv("BREVO_SENDER_EMAIL")
+    sender_name = (os.getenv("BREVO_SENDER_NAME") or "Hire IQ Recruiting").strip()
+    sender_email_addr = (os.getenv("BREVO_SENDER_EMAIL") or "").strip()
     if not api_key:
         return False
 
@@ -1668,8 +1669,11 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
             "subject": "Your Interview Has Been Submitted — HireIQ",
             "htmlContent": candidate_html
         }, headers=headers, timeout=10)
+        if res.status_code >= 300:
+            print(f"❌ [BREVO ERROR candidate submission] {res.status_code}: {res.text}")
         results.append(res.status_code < 300)
-    except Exception:
+    except Exception as e:
+        print(f"❌ [BREVO EXCEPTION candidate submission]: {e}")
         results.append(False)
 
     # Send to admin
@@ -1681,8 +1685,11 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
                 "subject": f"Interview Submitted: {candidate_name}",
                 "htmlContent": admin_html
             }, headers=headers, timeout=10)
+            if res.status_code >= 300:
+                print(f"❌ [BREVO ERROR admin notification] {res.status_code}: {res.text}")
             results.append(res.status_code < 300)
-        except Exception:
+        except Exception as e:
+            print(f"❌ [BREVO EXCEPTION admin notification]: {e}")
             results.append(False)
 
     return all(results)
@@ -2197,11 +2204,12 @@ def reset_password(data: ResetPasswordRequest):
     return {"status": "success", "message": "Password updated successfully. You can now login."}
 
 def send_otp_email(email: str, name: str, otp: str):
-    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    from pathlib import Path
+    env_path = Path(__file__).resolve().parents[2] / ".env"
     load_dotenv(env_path, override=False)
     api_key = os.getenv("BREVO_API_KEY")
-    sender_name = "Hire IQ Recruiting"
-    sender_email = os.getenv("BREVO_SENDER_EMAIL")
+    sender_name = (os.getenv("BREVO_SENDER_NAME") or "Hire IQ Recruiting").strip()
+    sender_email = (os.getenv("BREVO_SENDER_EMAIL") or "").strip()
     
     if not api_key: return False
 
@@ -2227,8 +2235,11 @@ def send_otp_email(email: str, name: str, otp: str):
         url = "https://api.brevo.com/v3/smtp/email"
         headers = {"accept": "application/json", "api-key": api_key, "content-type": "application/json"}
         response = requests.post(url, json=payload, headers=headers, timeout=10)
+        if response.status_code >= 300:
+            print(f"❌ [BREVO ERROR reset otp] {response.status_code}: {response.text}")
         return response.status_code < 300
-    except:
+    except Exception as e:
+        print(f"❌ [BREVO EXCEPTION reset otp]: {e}")
         return False
 
 
