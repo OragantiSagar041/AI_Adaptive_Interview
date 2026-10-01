@@ -148,7 +148,7 @@ export default function SpectatorPage() {
     if (!ws || ws.readyState !== WebSocket.OPEN) return
 
     try {
-      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
+      const pc = new RTCPeerConnection({ iceServers: getIceServers() })
       pcRef.current = pc
 
       pc.onicecandidate = (e) => {

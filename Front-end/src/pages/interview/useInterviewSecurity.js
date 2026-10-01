@@ -394,6 +394,8 @@ export const useInterviewSecurity = ({
     }
   })
 
+  const recentMouthScoresRef = useRef([])
+
   // Track lip sync anomaly (Calibrated: requires sustained loud voice while mouth has zero variance and is sealed shut)
   useEffect(() => {
     if (!audioRmsRef || !isDisclaimerAccepted || showAllSet || loading || isSubmittingRef?.current) return
