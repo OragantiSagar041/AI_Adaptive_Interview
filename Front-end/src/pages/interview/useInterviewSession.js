@@ -343,11 +343,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       }
     }
 
-    fetchInsights()
-    const interval = setInterval(() => {
-      if (!stopped) fetchInsights()
-    }, 15000)
-    return () => clearInterval(interval)
+    // fetchInsights()
+    // const interval = setInterval(() => {
+    //   if (!stopped) fetchInsights()
+    // }, 15000)
+    // return () => clearInterval(interval)
   }, [interviewId, sessionDetail?.interview_id, sessionId, monitoringToken])
 
 

@@ -262,8 +262,11 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             )
         return response
 
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
 # --- Middleware ---
 # Middlewares are executed top-down. We want CORSMiddleware to be the outermost (last added)
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
