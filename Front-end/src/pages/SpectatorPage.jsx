@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { API_BASE_URL } from '../apiConfig'
-import { getIceServers } from '../utils/webrtcConfig'
+import { getIceServers, initIceServers } from '../utils/webrtcConfig'
 import { Video, MicOff, MonitorOff, Code, MessageSquare, Briefcase, RefreshCw, Eye, Monitor, Camera, Volume2, ShieldAlert } from 'lucide-react'
 
 // Maps violation_type values to a human-readable label
@@ -148,7 +148,9 @@ export default function SpectatorPage() {
     if (!ws || ws.readyState !== WebSocket.OPEN) return
 
     try {
+      await initIceServers()
       const pc = new RTCPeerConnection({ iceServers: getIceServers() })
+      console.log('[SpectatorPage] RTCPeerConnection created with', getIceServers().length, 'ICE servers')
       pcRef.current = pc
 
       pc.onicecandidate = (e) => {

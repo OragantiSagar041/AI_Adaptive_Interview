@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react'
 import { API_BASE_URL } from '../../../apiConfig'
-import { getIceServers } from '../../../utils/webrtcConfig'
+import { getIceServers, initIceServers } from '../../../utils/webrtcConfig'
 import Modal from '../../Modal'
 import { useSelector } from 'react-redux'
 import { Video, Mic, MicOff, MonitorOff, Monitor, Camera, Activity, ShieldAlert, Code, MessageSquare, Briefcase, AlertTriangle, RefreshCw, Share2, Copy, CheckCircle2, Users } from 'lucide-react'
@@ -334,7 +334,9 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
     closePc()
 
     try {
+      await initIceServers()
       const pc = new RTCPeerConnection({ iceServers: getIceServers() })
+      console.log('[LiveMonitor] RTCPeerConnection created with', getIceServers().length, 'ICE servers')
       pcRef.current = pc
       iceCandidateQueue.current = []
       const nextOfferAttempt = ++offerAttemptsRef.current

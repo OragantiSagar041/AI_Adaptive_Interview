@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { API_BASE_URL } from '../apiConfig'
-import { getIceServers } from '../utils/webrtcConfig'
+import { getIceServers, initIceServers } from '../utils/webrtcConfig'
 
 /**
  * useCandidateWebRTC
@@ -111,6 +111,9 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
           if (msg.type === 'webrtc_offer') {
             console.log(`[CandidateWebRTC] Received offer from ${msg.role === 'spectator' ? 'spectator' : 'admin'}: ${adminId}`)
 
+            // Await dynamic ICE servers from backend — ensures TURN credentials are fetched
+            // before RTCPeerConnection is created, not just fired as a background hint
+            ;(async () => {
             const cameraStream = mediaStreamRef.current
             const screenStream = secondaryMediaStreamRef?.current
 
@@ -129,9 +132,12 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
               try { pcsRef.current[adminId].close() } catch (_) {}
             }
 
+            // Always await fresh ICE servers before creating RTCPeerConnection
+            await initIceServers()
             const pc = new RTCPeerConnection({
               iceServers: getIceServers(),
             })
+            console.log('[CandidateWebRTC] RTCPeerConnection created with', getIceServers().length, 'ICE servers')
             pcsRef.current[adminId] = pc
 
             const streamTier = msg.stream_tier || (adminId.startsWith('grid_') ? 'low' : 'high')
@@ -222,6 +228,8 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
               spectator_id: adminId,
               offer_id: msg.offer_id,
             }))
+
+            })()
 
           } else if (msg.type === 'webrtc_ice_candidate') {
             const pc = pcsRef.current[adminId]
