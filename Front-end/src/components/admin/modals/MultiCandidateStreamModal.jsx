@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Activity, AlertTriangle, Camera, Mic, RefreshCw, Maximize2 } from 'lucide-react'
 import Modal from '../../Modal'
 import { API_BASE_URL } from '../../../apiConfig'
-import { getIceServers } from '../../../utils/webrtcConfig'
+import { getIceServers, initIceServers } from '../../../utils/webrtcConfig'
 import { useSelector } from 'react-redux'
 
 const MAX_CANDIDATES = 8
@@ -50,7 +50,9 @@ function CandidateStreamCard({ session, token, onSelectCandidate }) {
       if (!mountedRef.current || ws.readyState !== WebSocket.OPEN) return
       if (pcRef.current) pcRef.current.close()
 
+      await initIceServers()
       const pc = new RTCPeerConnection({ iceServers: getIceServers() })
+      console.log('[MultiCandidateStream] RTCPeerConnection created with', getIceServers().length, 'ICE servers')
       pcRef.current = pc
 
       // Low Layer Grid Optimization:
