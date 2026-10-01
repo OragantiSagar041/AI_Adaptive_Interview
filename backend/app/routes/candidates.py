@@ -368,8 +368,10 @@ def check_candidate(email: str, current_admin: dict = Depends(get_current_admin_
 def create_session(data: CreateSession, http_req: Request, current_admin: dict = Depends(get_current_admin_details)):
     company_id = current_admin.get("company_id")
     
+    role = current_admin.get("role")
+    
     # ATOMIC DEDUCTION (Prevents race conditions leading to negative credits)
-    if company_id:
+    if role in ["super_admin", "master"] and company_id:
         res = companies_collection.update_one(
             {"_id": ObjectId(company_id), "credits": {"$gte": 1}},
             {"$inc": {"credits": -1}}
@@ -377,22 +379,14 @@ def create_session(data: CreateSession, http_req: Request, current_admin: dict =
         if res.modified_count == 0:
             raise HTTPException(status_code=403, detail="Insufficient company credits (or concurrent request).")
             
-    if current_admin.get("role") == "admin":
+    else:
+        admin_id_to_charge = current_admin.get("admin_id") or current_admin.get("_id")
         res = admins_collection.update_one(
-            {"_id": ObjectId(current_admin["admin_id"]), "credits": {"$gte": 1}},
+            {"_id": ObjectId(admin_id_to_charge), "credits": {"$gte": 1}},
             {"$inc": {"credits": -1}}
         )
         if res.modified_count == 0:
-            if company_id:
-                companies_collection.update_one({"_id": ObjectId(company_id)}, {"$inc": {"credits": 1}})
             raise HTTPException(status_code=403, detail="Insufficient admin credits (or concurrent request).")
-    elif not company_id:
-        res = admins_collection.update_one(
-            {"_id": ObjectId(current_admin["admin_id"]), "credits": {"$gte": 1}},
-            {"$inc": {"credits": -1}}
-        )
-        if res.modified_count == 0:
-            raise HTTPException(status_code=403, detail="Insufficient admin credits.")
 
     link_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
@@ -546,9 +540,10 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
         
     num_candidates = len(data.candidates)
     company_id = current_admin.get("company_id")
+    role = current_admin.get("role")
     
     # ATOMIC DEDUCTION (Prevents race conditions leading to negative credits)
-    if company_id:
+    if role in ["super_admin", "master"] and company_id:
         res = companies_collection.update_one(
             {"_id": ObjectId(company_id), "credits": {"$gte": num_candidates}},
             {"$inc": {"credits": -num_candidates}}
@@ -556,18 +551,10 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
         if res.modified_count == 0:
             raise HTTPException(status_code=403, detail=f"Insufficient company credits (or concurrent request). You need {num_candidates} credits.")
             
-    if current_admin.get("role") == "admin":
+    else:
+        admin_id_to_charge = current_admin.get("admin_id") or current_admin.get("_id")
         res = admins_collection.update_one(
-            {"_id": ObjectId(current_admin["admin_id"]), "credits": {"$gte": num_candidates}},
-            {"$inc": {"credits": -num_candidates}}
-        )
-        if res.modified_count == 0:
-            if company_id:
-                companies_collection.update_one({"_id": ObjectId(company_id)}, {"$inc": {"credits": num_candidates}})
-            raise HTTPException(status_code=403, detail=f"Insufficient admin credits (or concurrent request). You need {num_candidates} credits.")
-    elif not company_id:
-        res = admins_collection.update_one(
-            {"_id": ObjectId(current_admin["admin_id"]), "credits": {"$gte": num_candidates}},
+            {"_id": ObjectId(admin_id_to_charge), "credits": {"$gte": num_candidates}},
             {"$inc": {"credits": -num_candidates}}
         )
         if res.modified_count == 0:
@@ -708,13 +695,14 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
     failed = num_candidates - successful
     if failed > 0:
         company_id = current_admin.get("company_id")
-        if company_id:
+        role = current_admin.get("role")
+        
+        if role in ["super_admin", "master"] and company_id:
             companies_collection.update_one({"_id": ObjectId(company_id)}, {"$inc": {"credits": failed}})
             
-        if current_admin.get("role") == "admin":
-            admins_collection.update_one({"_id": ObjectId(current_admin["admin_id"])}, {"$inc": {"credits": failed}})
-        elif not company_id:
-            admins_collection.update_one({"_id": ObjectId(current_admin["admin_id"])}, {"$inc": {"credits": failed}})
+        else:
+            admin_id_to_charge = current_admin.get("admin_id") or current_admin.get("_id")
+            admins_collection.update_one({"_id": ObjectId(admin_id_to_charge)}, {"$inc": {"credits": failed}})
 
     # Broadcast updated credits/profile to sync in real-time
     admin_doc = admins_collection.find_one({"_id": ObjectId(current_admin["admin_id"])})
@@ -2422,11 +2410,20 @@ def admin_copilot_execute(request: CopilotExecuteRequest, http_req: Request, cur
             if not super_admin_doc:
                 raise HTTPException(status_code=404, detail="Admin account not found")
 
-            current_credits = super_admin_doc.get("credits", 0)
+            if super_admin_doc.get("role") in ["super_admin", "master"] and super_admin_doc.get("company_id"):
+                comp = companies_collection.find_one({"_id": ObjectId(super_admin_doc["company_id"])})
+                current_credits = comp.get("credits", 0) if comp else 0
+            else:
+                current_credits = super_admin_doc.get("credits", 0)
+                
             if current_credits < amount:
                 raise HTTPException(status_code=400, detail=f"Insufficient credits. Available: {current_credits}, Requested: {amount}")
                 
-            admins_collection.update_one({"_id": ObjectId(super_admin_doc["_id"])}, {"$inc": {"credits": -amount}})
+            if super_admin_doc.get("role") in ["super_admin", "master"] and super_admin_doc.get("company_id"):
+                companies_collection.update_one({"_id": ObjectId(super_admin_doc["company_id"])}, {"$inc": {"credits": -amount}})
+            else:
+                admins_collection.update_one({"_id": ObjectId(super_admin_doc["_id"])}, {"$inc": {"credits": -amount}})
+                
             admins_collection.update_one({"_id": target_admin["_id"]}, {"$inc": {"credits": amount, "total_allocated_credits": amount}})
             return _persist_action_completed({
                 "status": "success", 

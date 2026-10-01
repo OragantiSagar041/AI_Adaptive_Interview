@@ -79,7 +79,7 @@ class RedisConnectionManager:
             logger.info(f"Connected to Redis at {REDIS_URL}")
         except Exception as e:
             logger.warning(f"Could not connect to Redis: {e}. Falling back to in-memory routing.")
-            self._redis_failed = True
+            self._redis_failed = False # patched to allow immediate reconnect
             self.redis = None
             self.pubsub = None
 
@@ -145,7 +145,7 @@ class RedisConnectionManager:
             # Mark as failed so next connect_redis call can retry after cooldown
             self.redis = None
             self.pubsub = None
-            self._redis_failed = True
+            self._redis_failed = False # patched to allow immediate reconnect
 
     # ─── Candidate connection ────────────────────────────────────────────────────
 
@@ -166,7 +166,7 @@ class RedisConnectionManager:
                 )
                 self.redis = None
                 self.pubsub = None
-                self._redis_failed = True
+                self._redis_failed = False # patched to allow immediate reconnect
 
     def disconnect_candidate(self, link_id: str):
         if link_id in self.local_connections:
@@ -205,7 +205,7 @@ class RedisConnectionManager:
                 )
                 self.redis = None
                 self.pubsub = None
-                self._redis_failed = True
+                self._redis_failed = False # patched to allow immediate reconnect
 
     def disconnect_admin(self, websocket: WebSocket, link_id: str, admin_id: Optional[str] = None):
         if link_id in self.local_connections:
@@ -259,7 +259,7 @@ class RedisConnectionManager:
                 )
                 self.redis = None
                 self.pubsub = None
-                self._redis_failed = True
+                self._redis_failed = False # patched to allow immediate reconnect
 
         if link_id not in self.local_connections:
             self.local_connections[link_id] = {"candidate": None, "admins": [], "admins_map": {}, "spectators": []}
@@ -377,7 +377,7 @@ class RedisConnectionManager:
                 logger.warning(f"Redis publish failed: {e}. Falling back to in-memory.")
                 self.redis = None
                 self.pubsub = None
-                self._redis_failed = True
+                self._redis_failed = False # patched to allow immediate reconnect
         # In-memory fallback
         local_group = self.local_connections.get(link_id)
         if local_group:
@@ -399,7 +399,7 @@ class RedisConnectionManager:
                 logger.warning(f"Redis publish failed: {e}. Falling back to in-memory.")
                 self.redis = None
                 self.pubsub = None
-                self._redis_failed = True
+                self._redis_failed = False # patched to allow immediate reconnect
         # In-memory fallback — fans out to both admins and spectators
         local_group = self.local_connections.get(link_id)
         if local_group:
@@ -424,7 +424,7 @@ class RedisConnectionManager:
                 logger.warning(f"Redis publish failed: {e}. Falling back to in-memory.")
                 self.redis = None
                 self.pubsub = None
-                self._redis_failed = True
+                self._redis_failed = False # patched to allow immediate reconnect
 
         # In-memory fallback
         local_group = self.local_connections.get(link_id)
@@ -470,7 +470,7 @@ class RedisConnectionManager:
                 logger.warning(f"Redis publish failed: {e}. Falling back to in-memory broadcast.")
                 self.redis = None
                 self.pubsub = None
-                self._redis_failed = True
+                self._redis_failed = False # patched to allow immediate reconnect
 
         # In-memory fallback
         await self.broadcast_dashboard(payload)

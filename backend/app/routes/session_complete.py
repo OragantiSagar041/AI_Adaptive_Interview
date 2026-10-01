@@ -918,9 +918,10 @@ async def get_webrtc_ice_servers(raw: bool = False):
 @router.websocket("/ws/webrtc/{role}/{link_id}")
 async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: Optional[str] = None):
     import os, tempfile
+    from datetime import datetime
     webrtc_log_path = os.path.join(tempfile.gettempdir(), "webrtc_debug.log")
     with open(webrtc_log_path, "a") as f:
-        f.write(f"\n--- New Connection ---\nRole: {role}, Link ID: {link_id}\nToken supplied: {bool(token)}\n")
+        f.write(f"\n[{datetime.now().isoformat()}] --- New Connection ---\nRole: {role}, Link ID: {link_id}\nToken supplied: {bool(token)}\n")
     
     admin_id: Optional[str] = None
     spectator_id: Optional[str] = None
@@ -931,7 +932,9 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
             return
         try:
             candidate_session = _validate_candidate_monitoring_token(token, link_id)
-        except HTTPException:
+        except HTTPException as e:
+            with open(webrtc_log_path, "a") as f:
+                f.write(f"Candidate validation failed: {e.detail}\n")
             await websocket.close(code=1008)
             return
         await manager.connect_candidate(websocket, link_id)
@@ -1092,8 +1095,9 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
                     await manager.send_to_candidate(link_id, data)
     except WebSocketDisconnect:
         webrtc_log_path = os.path.join(tempfile.gettempdir(), "webrtc_debug.log")
+        from datetime import datetime
         with open(webrtc_log_path, "a") as f:
-            f.write(f"WebSocketDisconnect for role {role}, link_id {link_id}\n")
+            f.write(f"[{datetime.now().isoformat()}] WebSocketDisconnect for role {role}, link_id {link_id}\n")
     except Exception as e:
         webrtc_log_path = os.path.join(tempfile.gettempdir(), "webrtc_debug.log")
         with open(webrtc_log_path, "a") as f:

@@ -178,7 +178,7 @@ def apply_recharge(
     current_credits: int = company.get("credits", 0)
     if new_plan and new_plan != company.get("subscription_plan"):
         # Changing plan → grant the new plan's full credit allocation
-        final_credits = plan_credits_granted + add_credits
+        final_credits = current_credits + plan_credits_granted + add_credits
     else:
         # Same plan → just top-up on top of existing balance
         final_credits = current_credits + add_credits + (

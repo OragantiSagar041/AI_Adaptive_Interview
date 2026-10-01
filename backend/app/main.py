@@ -192,7 +192,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if _TRUST_PROXY_HEADERS:
             real_ip = request.headers.get("x-real-ip", "").strip()
             forwarded_for = request.headers.get("x-forwarded-for", "")
-            client_ip = real_ip or (forwarded_for.split(",")[0].strip() if forwarded_for else client_ip)
+            # ALB/AWS uses X-Forwarded-For as the source of truth, prioritize it over X-Real-IP which is often poisoned by local proxies.
+            extracted_ff = forwarded_for.split(",")[0].strip() if forwarded_for else ""
+            client_ip = extracted_ff or real_ip or client_ip
 
         # Normalize a trailing slash so duplicate FastAPI route spellings cannot
         # bypass the stricter bucket (for example /start-interview/).
