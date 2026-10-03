@@ -2129,7 +2129,9 @@ def get_interview_insights(
     interview_id: str,
     current_admin: dict = Depends(get_current_admin_details),
 ):
-    session = interview_sessions_collection.find_one({"interview_id": interview_id})
+    session = interview_sessions_collection.find_one({
+        "$or": [{"interview_id": interview_id}, {"link_id": interview_id}]
+    })
     if not session:
         raise HTTPException(status_code=404, detail="Interview session not found")
     _require_admin_session_access(session, current_admin)
