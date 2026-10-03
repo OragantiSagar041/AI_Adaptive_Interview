@@ -55,9 +55,7 @@ class RedisConnectionManager:
                 return  # already connected on current loop
 
         now = time.monotonic()
-        if self._redis_failed and (now - self._redis_last_attempt) < self._redis_retry_cooldown:
-            return  # still in cooldown — keep using in-memory
-        # Reset flag so we actually attempt again
+                # Reset flag so we actually attempt again
         self._redis_failed = False
         self._redis_last_attempt = now
         try:

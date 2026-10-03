@@ -29,7 +29,7 @@ from groq import AsyncGroq
 from pydantic import BaseModel, validator, Field
 from starlette.background import BackgroundTask
 from fastapi import (
-    APIRouter, Depends, File, Form, HTTPException, Request, UploadFile,
+    APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, Body,
     WebSocket, WebSocketDisconnect, BackgroundTasks, Header
 )
 from fastapi.exceptions import RequestValidationError
@@ -93,13 +93,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.post("/api/calls/initiate/{session_id}")
-async def initiate_ai_call(session_id: str, request: Request, current_admin: dict = Depends(get_current_admin_details)):
+def initiate_ai_call(session_id: str, payload: dict = Body(default_factory=dict), current_admin: dict = Depends(get_current_admin_details)):
     """
     Initiates an outbound AI call via Omni Dimension for the given session.
     Expects a JSON body with an optional phone_number, if not already in DB.
     """
     try:
-        body = await request.json()
+        body = payload
     except Exception:
         body = {}
     
@@ -195,7 +195,7 @@ class ManualAICallRequest(BaseModel):
 # (duplicate removed — see /api/calls/agent-settings below)
 
 @router.post("/api/calls/initiate-manual")
-async def initiate_manual_ai_call(
+def initiate_manual_ai_call(
     phone_number: str = Form(...),
     candidate_name: Optional[str] = Form("Candidate"),
     job_description: Optional[str] = Form(""),
@@ -271,7 +271,7 @@ async def initiate_manual_ai_call(
         
         resume_text = ""
         if resume and resume.filename:
-            file_content = await resume.read()
+            file_content = resume.file.read()
             resume_text = extract_text_from_file(file_content, resume.filename)
         elif application_id:
             from bson import ObjectId
@@ -459,7 +459,7 @@ class BulkAICallRequest(BaseModel):
     default_job_description: Optional[str] = ""
 
 @router.post("/api/calls/initiate-bulk-manual")
-async def initiate_bulk_manual_ai_calls(
+def initiate_bulk_manual_ai_calls(
     req: BulkAICallRequest,
     current_admin: dict = Depends(get_current_admin_details)
 ):

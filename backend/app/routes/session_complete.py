@@ -919,9 +919,8 @@ async def get_webrtc_ice_servers(raw: bool = False):
 async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: Optional[str] = None):
     import os, tempfile
     from datetime import datetime
-    webrtc_log_path = os.path.join(tempfile.gettempdir(), "webrtc_debug.log")
-    with open(webrtc_log_path, "a") as f:
-        f.write(f"\n[{datetime.now().isoformat()}] --- New Connection ---\nRole: {role}, Link ID: {link_id}\nToken supplied: {bool(token)}\n")
+    , "webrtc_debug.log")
+    logger.info(f"\n[{datetime.now().isoformat()}] --- New Connection ---\nRole: {role}, Link ID: {link_id}\nToken supplied: {bool(token)}")
     
     admin_id: Optional[str] = None
     spectator_id: Optional[str] = None
@@ -933,8 +932,7 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
         try:
             candidate_session = _validate_candidate_monitoring_token(token, link_id)
         except HTTPException as e:
-            with open(webrtc_log_path, "a") as f:
-                f.write(f"Candidate validation failed: {e.detail}\n")
+            logger.info(f"Candidate validation failed: {e.detail}")
             await websocket.close(code=1008)
             return
         await manager.connect_candidate(websocket, link_id)
@@ -945,8 +943,7 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
             pass
     elif role == "admin":
         if not token:
-            with open(webrtc_log_path, "a") as f:
-                f.write("No token provided. Closing with 1008.\n")
+            logger.info("No token provided. Closing with 1008.")
             await websocket.close(code=1008)
             return
         try:
@@ -961,26 +958,22 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
                 admin_id = f"{base}_{uuid.uuid4().hex[:8]}"
 
             await manager.connect_admin(websocket, link_id, admin_id=admin_id)
-            with open(webrtc_log_path, "a") as f:
-                f.write(f"Admin ({admin_id}) connected successfully.\n")
+            logger.info(f"Admin ({admin_id}) connected successfully.")
             # Also notify candidate that a new admin connected
             try:
                 await manager.send_to_candidate(link_id, {"type": "admin_connected", "admin_id": admin_id})
             except Exception:
                 pass
         except HTTPException as e:
-            with open(webrtc_log_path, "a") as f:
-                f.write(f"Admin authorization error: {e.detail}\n")
+            logger.info(f"Admin authorization error: {e.detail}")
             await websocket.close(code=1008)
             return
         except jwt.PyJWTError as e:
-            with open(webrtc_log_path, "a") as f:
-                f.write(f"JWT Decode Error: {str(e)}\n")
+            logger.info(f"JWT Decode Error: {str(e)}")
             await websocket.close(code=1008)
             return
         except Exception as e:
-            with open(webrtc_log_path, "a") as f:
-                f.write(f"Other Error: {str(e)}\n{traceback.format_exc()}\n")
+            logger.info(f"Other Error: {str(e)}\n{traceback.format_exc()}")
             await websocket.close(code=1011)
             return
     elif role == "spectator":
@@ -990,8 +983,7 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
         try:
             decode_spectator_token(JWT_SECRET_KEY, ALGORITHM, token, link_id)
         except (jwt.PyJWTError, ValueError) as e:
-            with open(webrtc_log_path, "a") as f:
-                f.write(f"Spectator auth error: {str(e)}\n")
+            logger.info(f"Spectator auth error: {str(e)}")
             await websocket.close(code=1008)
             return
         # Verify session is not deactivated or cancelled
@@ -1000,8 +992,7 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
             {"status": 1, "is_deactivated": 1}
         )
         if not session_check or session_check.get("is_deactivated") or session_check.get("status") in ("terminated", "cancelled", "expired"):
-            with open(webrtc_log_path, "a") as f:
-                f.write(f"Spectator session check failed for link_id {link_id}: {session_check}\n")
+            logger.info(f"Spectator session check failed for link_id {link_id}: {session_check}")
             await websocket.close(code=1008)
             return
         spectator_id = f"spectator_{uuid.uuid4().hex[:8]}"
@@ -1094,14 +1085,11 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
                     data["role"] = "spectator"
                     await manager.send_to_candidate(link_id, data)
     except WebSocketDisconnect:
-        webrtc_log_path = os.path.join(tempfile.gettempdir(), "webrtc_debug.log")
-        from datetime import datetime
-        with open(webrtc_log_path, "a") as f:
-            f.write(f"[{datetime.now().isoformat()}] WebSocketDisconnect for role {role}, link_id {link_id}\n")
+        , "webrtc_debug.log")
+        logger.info(f"[{datetime.now().isoformat()}] WebSocketDisconnect for role {role}, link_id {link_id}")
     except Exception as e:
-        webrtc_log_path = os.path.join(tempfile.gettempdir(), "webrtc_debug.log")
-        with open(webrtc_log_path, "a") as f:
-            f.write(f"Exception in while loop: {str(e)}\n{traceback.format_exc()}\n")
+        , "webrtc_debug.log")
+        logger.info(f"Exception in while loop: {str(e)}\n{traceback.format_exc()}")
     finally:
         if role == "candidate":
             manager.disconnect_candidate(link_id)
