@@ -919,7 +919,7 @@ async def get_webrtc_ice_servers(raw: bool = False):
 async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: Optional[str] = None):
     import os, tempfile
     from datetime import datetime
-    , "webrtc_debug.log")
+
     logger.info(f"\n[{datetime.now().isoformat()}] --- New Connection ---\nRole: {role}, Link ID: {link_id}\nToken supplied: {bool(token)}")
     
     admin_id: Optional[str] = None
@@ -1085,10 +1085,10 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
                     data["role"] = "spectator"
                     await manager.send_to_candidate(link_id, data)
     except WebSocketDisconnect:
-        , "webrtc_debug.log")
+
         logger.info(f"[{datetime.now().isoformat()}] WebSocketDisconnect for role {role}, link_id {link_id}")
     except Exception as e:
-        , "webrtc_debug.log")
+
         logger.info(f"Exception in while loop: {str(e)}\n{traceback.format_exc()}")
     finally:
         if role == "candidate":
