@@ -922,14 +922,13 @@ async def get_webrtc_ice_servers(raw: bool = False):
 
 
 @router.websocket("/ws/webrtc/{role}/{link_id}")
-async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: Optional[str] = None):
+async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: Optional[str] = None, admin_id: Optional[str] = None, spectator_id: Optional[str] = None):
     import os, tempfile
     from datetime import datetime
 
     logger.info(f"\n[{datetime.now().isoformat()}] --- New Connection ---\nRole: {role}, Link ID: {link_id}\nToken supplied: {bool(token)}")
     
-    admin_id: Optional[str] = None
-    spectator_id: Optional[str] = None
+    # Re-use admin_id and spectator_id from query parameters
 
     if role == "candidate":
         if not token:
