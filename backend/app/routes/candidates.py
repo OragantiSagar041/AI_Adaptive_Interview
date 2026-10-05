@@ -388,118 +388,160 @@ def create_session(data: CreateSession, http_req: Request, current_admin: dict =
         if res.modified_count == 0:
             raise HTTPException(status_code=403, detail="Insufficient admin credits (or concurrent request).")
 
-    link_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc)
+    successful = False
+    try:
+        link_id = str(uuid.uuid4())
+        now = datetime.now(timezone.utc)
     
-    # Task 4: If scheduled, use scheduled_end as expiry; otherwise 24h
-    if data.scheduled_end:
-        try:
-            expires_at = datetime.fromisoformat(data.scheduled_end).isoformat()
-        except Exception:
+        # Task 4: If scheduled, use scheduled_end as expiry; otherwise 24h
+        if data.scheduled_end:
+            try:
+                expires_at = datetime.fromisoformat(data.scheduled_end).isoformat()
+            except Exception:
+                expires_at = (now + timedelta(hours=24)).isoformat()
+        else:
             expires_at = (now + timedelta(hours=24)).isoformat()
-    else:
-        expires_at = (now + timedelta(hours=24)).isoformat()
     
-    custom_questions = data.custom_questions
-    if isinstance(custom_questions, list):
-        custom_questions = "\n".join(custom_questions)
-    ai_instructions = data.ai_instructions
-    if isinstance(ai_instructions, list):
-        ai_instructions = "\n".join(ai_instructions)
+        custom_questions = data.custom_questions
+        if isinstance(custom_questions, list):
+            custom_questions = "\n".join(custom_questions)
+        ai_instructions = data.ai_instructions
+        if isinstance(ai_instructions, list):
+            ai_instructions = "\n".join(ai_instructions)
 
-    admin_name = current_admin.get("name") or current_admin.get("username") or "AD"
-    prefix = admin_name[:2].upper()
+        admin_name = current_admin.get("name") or current_admin.get("username") or "AD"
+        prefix = admin_name[:2].upper()
 
-    session_doc = {
-        "link_id": link_id,
-        "candidate_id": f"{prefix}{random.randint(1000, 9999)}",
-        "candidate_name": data.candidate_name.title(),
-        "candidate_email": data.candidate_email,
-        "experience": data.experience,
-        "location": data.location,
-        "current_ctc": data.current_ctc,
-        "expected_ctc": data.expected_ctc,
-        "current_company": data.current_company,
-        "notice_period": data.notice_period,
-        "resume_text": data.resume_text,
-        "resume_url": data.resume_url,
-        "resume_filename": data.resume_filename,
-        "job_description": data.job_description,
-        "custom_email_html": data.custom_email_html,
-        "jd_file_url": data.jd_file_url,
-        "created_by": data.admin_id,
-        "company_id": current_admin.get("company_id"),
-        "created_at": now.isoformat(),
-        "expires_at": expires_at,
-        "interview_duration": data.interview_duration,
-        "interview_format": data.interview_format,
-        "interview_type": data.interview_type,
-        "language": data.language,
-        "record_video": data.record_video,
-        "status": "pending",
-        "hr_screening": data.hr_screening.dict(),
-        "custom_questions": custom_questions,
-        "ai_instructions": ai_instructions,
-        "case_study_count": data.case_study_count,
-        "industry": data.industry,
-        "voice_clone": data.voice_clone,
-        "custom_voice_id": data.custom_voice_id,
-        "application_id": data.application_id,
-        "candidate_phone": data.candidate_phone,
-        "ats_score": data.ats_score,
-        "job_id": data.job_id,
-        "interview_title": data.interview_title
-    }
+        session_doc = {
+            "link_id": link_id,
+            "candidate_id": f"{prefix}{random.randint(1000, 9999)}",
+            "candidate_name": data.candidate_name.title(),
+            "candidate_email": data.candidate_email,
+            "experience": data.experience,
+            "location": data.location,
+            "current_ctc": data.current_ctc,
+            "expected_ctc": data.expected_ctc,
+            "current_company": data.current_company,
+            "notice_period": data.notice_period,
+            "resume_text": data.resume_text,
+            "resume_url": data.resume_url,
+            "resume_filename": data.resume_filename,
+            "job_description": data.job_description,
+            "custom_email_html": data.custom_email_html,
+            "jd_file_url": data.jd_file_url,
+            "created_by": data.admin_id,
+            "company_id": current_admin.get("company_id"),
+            "created_at": now.isoformat(),
+            "expires_at": expires_at,
+            "interview_duration": data.interview_duration,
+            "interview_format": data.interview_format,
+            "interview_type": data.interview_type,
+            "language": data.language,
+            "record_video": data.record_video,
+            "status": "pending",
+            "hr_screening": data.hr_screening.dict(),
+            "custom_questions": custom_questions,
+            "ai_instructions": ai_instructions,
+            "case_study_count": data.case_study_count,
+            "industry": data.industry,
+            "voice_clone": data.voice_clone,
+            "custom_voice_id": data.custom_voice_id,
+            "application_id": data.application_id,
+            "candidate_phone": data.candidate_phone,
+            "ats_score": data.ats_score,
+            "job_id": data.job_id,
+            "interview_title": data.interview_title
+        }
     
-    # Task 4: Store scheduled time window
-    if data.scheduled_start:
-        session_doc["scheduled_start"] = data.scheduled_start
-    if data.scheduled_end:
-        session_doc["scheduled_end"] = data.scheduled_end
+        # Task 4: Store scheduled time window
+        if data.scheduled_start:
+            session_doc["scheduled_start"] = data.scheduled_start
+        if data.scheduled_end:
+            session_doc["scheduled_end"] = data.scheduled_end
     
-    interview_sessions_collection.insert_one(session_doc)
+        interview_sessions_collection.insert_one(session_doc)
+        successful = True
     
-    # Process temp JD/Resume URLs in the background
-    if data.jd_file_url and data.jd_file_url.startswith("temp://"):
-        threading.Thread(target=process_temp_cloudinary_upload, args=(data.jd_file_url, "interview_sessions", "jd_file_url")).start()
-    if getattr(data, "resume_url", None) and getattr(data, "resume_url").startswith("temp://"):
-        threading.Thread(target=process_temp_cloudinary_upload, args=(data.resume_url, "interview_sessions", "resume_url")).start()
+        # Process temp JD/Resume URLs in the background
+        if data.jd_file_url and data.jd_file_url.startswith("temp://"):
+            threading.Thread(target=process_temp_cloudinary_upload, args=(data.jd_file_url, "interview_sessions", "jd_file_url")).start()
+        if getattr(data, "resume_url", None) and getattr(data, "resume_url").startswith("temp://"):
+            threading.Thread(target=process_temp_cloudinary_upload, args=(data.resume_url, "interview_sessions", "resume_url")).start()
 
     
-    # Credits were already deducted atomically at the beginning of the request.
-    # _id is already populated by insert_one
+        # Credits were already deducted atomically at the beginning of the request.
+        # _id is already populated by insert_one
     
-    frontend_base = _resolve_frontend_url(http_req)
-    link_url = f"{frontend_base}/interview?session_id={link_id}"
+        frontend_base = _resolve_frontend_url(http_req)
+        link_url = f"{frontend_base}/interview?session_id={link_id}"
     
-    email_result = queue_or_send_interview_email(session_doc, link_url)
+        email_result = queue_or_send_interview_email(session_doc, link_url)
     
-    # Broadcast updated credits/profile to sync in real-time
-    admin_doc = admins_collection.find_one({"_id": ObjectId(current_admin["admin_id"])})
-    if admin_doc:
-        broadcast_profile_update(
-            admin_id=str(admin_doc["_id"]),
-            company_id=str(admin_doc.get("company_id") or ""),
-            credits=admin_doc.get("credits"),
-            login_enabled=admin_doc.get("login_enabled")
-        )
-    if company_id:
-        comp_doc = companies_collection.find_one({"_id": ObjectId(company_id)})
-        if comp_doc:
+        # Broadcast updated credits/profile to sync in real-time
+        admin_doc = admins_collection.find_one({"_id": ObjectId(current_admin["admin_id"])})
+        if admin_doc:
             broadcast_profile_update(
-                admin_id=current_admin["admin_id"],
-                company_id=str(company_id),
-                credits=comp_doc.get("credits", 0)
+                admin_id=str(admin_doc["_id"]),
+                company_id=str(admin_doc.get("company_id") or ""),
+                credits=admin_doc.get("credits"),
+                login_enabled=admin_doc.get("login_enabled")
             )
+        if company_id:
+            comp_doc = companies_collection.find_one({"_id": ObjectId(company_id)})
+            if comp_doc:
+                broadcast_profile_update(
+                    admin_id=current_admin["admin_id"],
+                    company_id=str(company_id),
+                    credits=comp_doc.get("credits", 0)
+                )
             
-    return {
-        "status": "success", 
-        "link_id": link_id, 
-        "link_url": link_url,
-        "email_sent": email_result["email_sent"],
-        "email_scheduled": email_result["email_scheduled"],
-        "email_send_at": email_result["email_send_at"]
-    }
+        return {
+            "status": "success", 
+            "link_id": link_id, 
+            "link_url": link_url,
+            "email_sent": email_result["email_sent"],
+            "email_scheduled": email_result["email_scheduled"],
+            "email_send_at": email_result["email_send_at"]
+        }
+    finally:
+        if not successful:
+            company_id = current_admin.get("company_id")
+            role = current_admin.get("role")
+            
+            if role in ["super_admin", "master"] and company_id:
+                companies_collection.update_one({"_id": ObjectId(company_id)}, {"$inc": {"credits": 1}})
+            else:
+                admin_id_to_charge = current_admin.get("admin_id") or current_admin.get("_id")
+                admins_collection.update_one({"_id": ObjectId(admin_id_to_charge)}, {"$inc": {"credits": 1}})
+                
+            from datetime import datetime, timezone
+            from app.db.mongo_db import db
+            db.credit_ledger.insert_one({
+                "company_id": str(company_id) if company_id else None,
+                "super_admin_id": str(current_admin.get("admin_id") or current_admin.get("_id")),
+                "sub_admin_id": "system",
+                "org": "Refund - Invite Error",
+                "amount": 1,
+                "status": "Refund",
+                "date": datetime.now(timezone.utc).isoformat()
+            })
+
+        admin_doc = admins_collection.find_one({"_id": ObjectId(current_admin.get("admin_id") or current_admin.get("_id"))})
+        if admin_doc:
+            broadcast_profile_update(
+                admin_id=str(admin_doc["_id"]),
+                company_id=str(admin_doc.get("company_id") or ""),
+                credits=admin_doc.get("credits"),
+                login_enabled=admin_doc.get("login_enabled")
+            )
+        if company_id:
+            comp_doc = companies_collection.find_one({"_id": ObjectId(company_id)})
+            if comp_doc:
+                broadcast_profile_update(
+                    admin_id=str(current_admin.get("admin_id") or current_admin.get("_id")),
+                    company_id=str(company_id),
+                    credits=comp_doc.get("credits", 0)
+                )
 
 
 # ── Bulk Session Models ────────────────────────────────────────────────────────
