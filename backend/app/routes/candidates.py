@@ -560,181 +560,180 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
         if res.modified_count == 0:
             raise HTTPException(status_code=403, detail=f"Insufficient admin credits. You need {num_candidates} credits.")
 
-    session_docs = []
-    results = []
-    now = datetime.now(timezone.utc)
-    scheduled_expiry = parse_iso_datetime(data.scheduled_end)
-    expiry_iso = scheduled_expiry.isoformat() if scheduled_expiry else (now + timedelta(hours=24)).isoformat()
-
-    custom_questions = data.custom_questions
-    if isinstance(custom_questions, list):
-        custom_questions = "\n".join(custom_questions)
-    ai_instructions = data.ai_instructions
-    if isinstance(ai_instructions, list):
-        ai_instructions = "\n".join(ai_instructions)
-
-    admin_name = current_admin.get("name") or current_admin.get("username") or "AD"
-    prefix = admin_name[:2].upper()
-
-    frontend_base = _resolve_frontend_url(http_req)
-    # Step 1: Prepare documents
-    for candidate in data.candidates:
-        link_id = str(uuid.uuid4())
-        link_url = f"{frontend_base}/interview?session_id={link_id}"
-        
-        session_doc = {
-            "link_id": link_id,
-            "candidate_id": f"{prefix}{random.randint(1000, 9999)}",
-            "candidate_name": candidate.candidate_name.title(),
-            "candidate_email": candidate.candidate_email,
-            "candidate_phone": candidate.candidate_phone,
-            "experience": candidate.experience,
-            "location": candidate.location,
-            "current_ctc": candidate.current_ctc,
-            "expected_ctc": candidate.expected_ctc,
-            "current_company": candidate.current_company,
-            "notice_period": candidate.notice_period,
-            "resume_text": candidate.resume_text,
-            "job_description": data.job_description,
-            "custom_email_html": data.custom_email_html,
-            "jd_file_url": data.jd_file_url,
-            "created_by": data.admin_id,
-            "company_id": current_admin.get("company_id"),
-            "created_at": now.isoformat(),
-            "expires_at": expiry_iso,
-            "interview_duration": data.interview_duration,
-            "interview_format": data.interview_format,
-            "interview_type": data.interview_type,
-            "industry": data.industry_type,
-            "language": data.language,
-            "case_study_count": data.case_study_count,
-            "record_video": candidate.record_video,  # Task 5: Per-candidate video
-            "voice_clone": data.voice_clone,
-            "custom_voice_id": data.custom_voice_id,
-            "status": "pending",
-            "hr_screening": data.hr_screening.dict(),
-            "custom_questions": custom_questions,
-            "ai_instructions": ai_instructions
-        }
-        if data.scheduled_start:
-            session_doc["scheduled_start"] = data.scheduled_start
-            start_dt = parse_iso_datetime(data.scheduled_start)
-            if start_dt:
-                send_at = start_dt - timedelta(minutes=15)
-                if send_at > now:
-                    session_doc["invite_email_status"] = "pending"
-                    session_doc["invite_email_send_at"] = send_at.isoformat()
-                    session_doc["invite_email_sent_at"] = None
-        if data.scheduled_end:
-            session_doc["scheduled_end"] = data.scheduled_end
-
-        if "invite_email_status" not in session_doc:
-            session_doc["invite_email_status"] = "sent"
-            session_doc["invite_email_send_at"] = now.isoformat()
-            session_doc["invite_email_sent_at"] = now.isoformat()
-            
-        session_docs.append(session_doc)
-        
-        results.append({
-            "candidate_name": candidate.candidate_name.title(),
-            "candidate_email": candidate.candidate_email,
-            "link_id": link_id,
-            "link_url": link_url,
-            "email_sent": False,
-            "email_scheduled": False,
-            "email_send_at": "",
-            "status": "success",
-            "error": None,
-            "session_doc": session_doc # Temp storage for email queueing
-        })
-
-    # Step 2: Batch Insert to MongoDB
+    successful = 0
     try:
-        if session_docs:
-            insert_result = interview_sessions_collection.insert_many(session_docs)
-            for doc, object_id in zip(session_docs, insert_result.inserted_ids):
-                doc["_id"] = object_id
-    except Exception as db_err:
-        print(f" Bulk DB Insert Error: {db_err}")
-        # If the batch fails, mark all as failed
-        for r in results:
-            r["status"] = "error"
-            r["error"] = f"DB batch error: {db_err}"
-            r["link_id"] = None
-            r["link_url"] = None
+        session_docs = []
+        results = []
+        now = datetime.now(timezone.utc)
+        scheduled_expiry = parse_iso_datetime(data.scheduled_end)
+        expiry_iso = scheduled_expiry.isoformat() if scheduled_expiry else (now + timedelta(hours=24)).isoformat()
 
-    # Step 3: Trigger Background Emails
-    successful = sum(1 for r in results if r["status"] == "success")  # Only deduct credits for actually successful DB inserts
-    email_jobs = []
-    
-    for r in results:
-        if r["status"] == "success":
-            doc = r.pop("session_doc") # Remove temp doc before returning JSON
-            # ObjectId is not JSON serializable for Celery
-            if "_id" in doc:
-                doc["_id"] = str(doc["_id"])
-            email_jobs.append({"doc": doc, "link_url": r["link_url"]})
-            # Optimistically mark as sent/scheduled since we dispatch to background
-            r["email_sent"] = not doc.get("invite_email_send_at") or doc["invite_email_status"] == "sent"
-            r["email_scheduled"] = doc.get("invite_email_status") == "pending"
-            r["email_send_at"] = doc.get("invite_email_send_at") or ""
-        else:
-            r.pop("session_doc", None)
+        custom_questions = data.custom_questions
+        if isinstance(custom_questions, list):
+            custom_questions = "\n".join(custom_questions)
+        ai_instructions = data.ai_instructions
+        if isinstance(ai_instructions, list):
+            ai_instructions = "\n".join(ai_instructions)
 
-    # Queue the slow email sending process to run in the background (FastAPI native)
-    from app.tasks import process_bulk_emails_task
-    background_tasks.add_task(process_bulk_emails_task, email_jobs)
-    # Process temp JD URLs in the background for bulk sessions
-    if data.jd_file_url and data.jd_file_url.startswith("temp://"):
-        threading.Thread(target=process_temp_cloudinary_upload, args=(data.jd_file_url, "interview_sessions", "jd_file_url")).start()
+        admin_name = current_admin.get("name") or current_admin.get("username") or "AD"
+        prefix = admin_name[:2].upper()
 
-
-    print(f" Bulk sessions created: {successful}/{len(results)}")
-    
-    # Refund failed candidates (credits were deducted atomically beforehand)
-    failed = num_candidates - successful
-    if failed > 0:
-        company_id = current_admin.get("company_id")
-        role = current_admin.get("role")
+        frontend_base = _resolve_frontend_url(http_req)
+        # Step 1: Prepare documents
+        for candidate in data.candidates:
+            link_id = str(uuid.uuid4())
+            link_url = f"{frontend_base}/interview?session_id={link_id}"
         
-        if role in ["super_admin", "master"] and company_id:
-            companies_collection.update_one({"_id": ObjectId(company_id)}, {"$inc": {"credits": failed}})
-            
-        else:
-            admin_id_to_charge = current_admin.get("admin_id") or current_admin.get("_id")
-            admins_collection.update_one({"_id": ObjectId(admin_id_to_charge)}, {"$inc": {"credits": failed}})
-            
-        # Log refund to credit ledger
-        from datetime import datetime, timezone
-        from app.db.mongo_db import db
-        db.credit_ledger.insert_one({
-            "company_id": str(company_id) if company_id else None,
-            "super_admin_id": str(current_admin.get("admin_id") or current_admin.get("_id")),
-            "sub_admin_id": "system",
-            "org": "Refund - Bulk Invite Error",
-            "amount": failed,
-            "status": "Refund",
-            "date": datetime.now(timezone.utc).isoformat()
-        })
+            session_doc = {
+                "link_id": link_id,
+                "candidate_id": f"{prefix}{random.randint(1000, 9999)}",
+                "candidate_name": candidate.candidate_name.title(),
+                "candidate_email": candidate.candidate_email,
+                "candidate_phone": candidate.candidate_phone,
+                "experience": candidate.experience,
+                "location": candidate.location,
+                "current_ctc": candidate.current_ctc,
+                "expected_ctc": candidate.expected_ctc,
+                "current_company": candidate.current_company,
+                "notice_period": candidate.notice_period,
+                "resume_text": candidate.resume_text,
+                "job_description": data.job_description,
+                "custom_email_html": data.custom_email_html,
+                "jd_file_url": data.jd_file_url,
+                "created_by": data.admin_id,
+                "company_id": current_admin.get("company_id"),
+                "created_at": now.isoformat(),
+                "expires_at": expiry_iso,
+                "interview_duration": data.interview_duration,
+                "interview_format": data.interview_format,
+                "interview_type": data.interview_type,
+                "industry": data.industry_type,
+                "language": data.language,
+                "case_study_count": data.case_study_count,
+                "record_video": candidate.record_video,  # Task 5: Per-candidate video
+                "voice_clone": data.voice_clone,
+                "custom_voice_id": data.custom_voice_id,
+                "status": "pending",
+                "hr_screening": data.hr_screening.dict(),
+                "custom_questions": custom_questions,
+                "ai_instructions": ai_instructions
+            }
+            if data.scheduled_start:
+                session_doc["scheduled_start"] = data.scheduled_start
+                start_dt = parse_iso_datetime(data.scheduled_start)
+                if start_dt:
+                    send_at = start_dt - timedelta(minutes=15)
+                    if send_at > now:
+                        session_doc["invite_email_status"] = "pending"
+                        session_doc["invite_email_send_at"] = send_at.isoformat()
+                        session_doc["invite_email_sent_at"] = None
+            if data.scheduled_end:
+                session_doc["scheduled_end"] = data.scheduled_end
 
-    # Broadcast updated credits/profile to sync in real-time
-    admin_doc = admins_collection.find_one({"_id": ObjectId(current_admin["admin_id"])})
-    if admin_doc:
-        broadcast_profile_update(
-            admin_id=str(admin_doc["_id"]),
-            company_id=str(admin_doc.get("company_id") or ""),
-            credits=admin_doc.get("credits"),
-            login_enabled=admin_doc.get("login_enabled")
-        )
-    company_id = current_admin.get("company_id")
-    if company_id:
-        comp_doc = companies_collection.find_one({"_id": ObjectId(company_id)})
-        if comp_doc:
+            if "invite_email_status" not in session_doc:
+                session_doc["invite_email_status"] = "sent"
+                session_doc["invite_email_send_at"] = now.isoformat()
+                session_doc["invite_email_sent_at"] = now.isoformat()
+            
+            session_docs.append(session_doc)
+        
+            results.append({
+                "candidate_name": candidate.candidate_name.title(),
+                "candidate_email": candidate.candidate_email,
+                "link_id": link_id,
+                "link_url": link_url,
+                "email_sent": False,
+                "email_scheduled": False,
+                "email_send_at": "",
+                "status": "success",
+                "error": None,
+                "session_doc": session_doc # Temp storage for email queueing
+            })
+
+        # Step 2: Batch Insert to MongoDB
+        try:
+            if session_docs:
+                insert_result = interview_sessions_collection.insert_many(session_docs)
+                for doc, object_id in zip(session_docs, insert_result.inserted_ids):
+                    doc["_id"] = object_id
+        except Exception as db_err:
+            print(f" Bulk DB Insert Error: {db_err}")
+            # If the batch fails, mark all as failed
+            for r in results:
+                r["status"] = "error"
+                r["error"] = f"DB batch error: {db_err}"
+                r["link_id"] = None
+                r["link_url"] = None
+
+        # Step 3: Trigger Background Emails
+        successful = sum(1 for r in results if r["status"] == "success")  # Only deduct credits for actually successful DB inserts
+        email_jobs = []
+    
+        for r in results:
+            if r["status"] == "success":
+                doc = r.pop("session_doc") # Remove temp doc before returning JSON
+                # ObjectId is not JSON serializable for Celery
+                if "_id" in doc:
+                    doc["_id"] = str(doc["_id"])
+                email_jobs.append({"doc": doc, "link_url": r["link_url"]})
+                # Optimistically mark as sent/scheduled since we dispatch to background
+                r["email_sent"] = not doc.get("invite_email_send_at") or doc["invite_email_status"] == "sent"
+                r["email_scheduled"] = doc.get("invite_email_status") == "pending"
+                r["email_send_at"] = doc.get("invite_email_send_at") or ""
+            else:
+                r.pop("session_doc", None)
+
+        # Queue the slow email sending process to run in the background (FastAPI native)
+        from app.tasks import process_bulk_emails_task
+        background_tasks.add_task(process_bulk_emails_task, email_jobs)
+        # Process temp JD URLs in the background for bulk sessions
+        if data.jd_file_url and data.jd_file_url.startswith("temp://"):
+            threading.Thread(target=process_temp_cloudinary_upload, args=(data.jd_file_url, "interview_sessions", "jd_file_url")).start()
+
+
+        print(f" Bulk sessions created: {successful}/{len(results)}")
+    
+        # Refund failed candidates (credits were deducted atomically beforehand)
+    finally:
+        failed = num_candidates - successful
+        if failed > 0:
+            company_id = current_admin.get("company_id")
+            role = current_admin.get("role")
+            
+            if role in ["super_admin", "master"] and company_id:
+                companies_collection.update_one({"_id": ObjectId(company_id)}, {"$inc": {"credits": failed}})
+            else:
+                admin_id_to_charge = current_admin.get("admin_id") or current_admin.get("_id")
+                admins_collection.update_one({"_id": ObjectId(admin_id_to_charge)}, {"$inc": {"credits": failed}})
+                
+            from datetime import datetime, timezone
+            from app.db.mongo_db import db
+            db.credit_ledger.insert_one({
+                "company_id": str(company_id) if company_id else None,
+                "super_admin_id": str(current_admin.get("admin_id") or current_admin.get("_id")),
+                "sub_admin_id": "system",
+                "org": "Refund - Bulk Invite Error",
+                "amount": failed,
+                "status": "Refund",
+                "date": datetime.now(timezone.utc).isoformat()
+            })
+
+        admin_doc = admins_collection.find_one({"_id": ObjectId(current_admin.get("admin_id") or current_admin.get("_id"))})
+        if admin_doc:
             broadcast_profile_update(
-                admin_id=current_admin["admin_id"],
-                company_id=str(company_id),
-                credits=comp_doc.get("credits", 0)
+                admin_id=str(admin_doc["_id"]),
+                company_id=str(admin_doc.get("company_id") or ""),
+                credits=admin_doc.get("credits"),
+                login_enabled=admin_doc.get("login_enabled")
             )
+        if company_id:
+            comp_doc = companies_collection.find_one({"_id": ObjectId(company_id)})
+            if comp_doc:
+                broadcast_profile_update(
+                    admin_id=str(current_admin.get("admin_id") or current_admin.get("_id")),
+                    company_id=str(company_id),
+                    credits=comp_doc.get("credits", 0)
+                )
 
     return {
         "status": "success",

@@ -165,10 +165,10 @@ function CandidateStreamCard({ session, token, onSelectCandidate }) {
       mountedRef.current = false
       clearInterval(healthTimer)
       if (pcRef.current) pcRef.current.close()
-      if (wsRef.current) wsRef.current.close()
+      if (wsRef.current) { if (wsRef.current.readyState === WebSocket.OPEN) wsRef.current.close(); else wsRef.current.onopen = () => wsRef.current.close(); }
       setStream(null)
     }
-  }, [session, token])
+  }, [sessionLinkId(session), token])
 
   useEffect(() => {
     if (videoRef.current) {
@@ -183,7 +183,7 @@ function CandidateStreamCard({ session, token, onSelectCandidate }) {
     setNetworkIssue(false)
     setTelemetry(null)
     setStream(null)
-    if (wsRef.current) wsRef.current.close()
+    if (wsRef.current) { if (wsRef.current.readyState === WebSocket.OPEN) wsRef.current.close(); else wsRef.current.onopen = () => wsRef.current.close(); }
   }
 
   const handleCardClick = () => {
