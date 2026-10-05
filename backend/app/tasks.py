@@ -81,7 +81,6 @@ def requeue_delayed_answer_scoring():
             try:
                 # Direct synchronous fallback when Celery/Redis is down
                 score_answer_task(
-                    None,
                     interview_id=interview_id,
                     question_id=question_id,
                     question_text=answer.get("question_text", ""),

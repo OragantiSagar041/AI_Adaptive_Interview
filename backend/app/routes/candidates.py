@@ -703,6 +703,19 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
         else:
             admin_id_to_charge = current_admin.get("admin_id") or current_admin.get("_id")
             admins_collection.update_one({"_id": ObjectId(admin_id_to_charge)}, {"$inc": {"credits": failed}})
+            
+        # Log refund to credit ledger
+        from datetime import datetime, timezone
+        from app.db.mongo_db import db
+        db.credit_ledger.insert_one({
+            "company_id": str(company_id) if company_id else None,
+            "super_admin_id": str(current_admin.get("admin_id") or current_admin.get("_id")),
+            "sub_admin_id": "system",
+            "org": "Refund - Bulk Invite Error",
+            "amount": failed,
+            "status": "Refund",
+            "date": datetime.now(timezone.utc).isoformat()
+        })
 
     # Broadcast updated credits/profile to sync in real-time
     admin_doc = admins_collection.find_one({"_id": ObjectId(current_admin["admin_id"])})
@@ -2411,20 +2424,35 @@ def admin_copilot_execute(request: CopilotExecuteRequest, http_req: Request, cur
                 raise HTTPException(status_code=404, detail="Admin account not found")
 
             if super_admin_doc.get("role") in ["super_admin", "master"] and super_admin_doc.get("company_id"):
-                comp = companies_collection.find_one({"_id": ObjectId(super_admin_doc["company_id"])})
-                current_credits = comp.get("credits", 0) if comp else 0
+                sa_doc = companies_collection.find_one_and_update(
+                    {"_id": ObjectId(super_admin_doc["company_id"]), "credits": {"$gte": amount}},
+                    {"$inc": {"credits": -amount}},
+                    return_document=ReturnDocument.AFTER
+                )
             else:
-                current_credits = super_admin_doc.get("credits", 0)
+                sa_doc = admins_collection.find_one_and_update(
+                    {"_id": ObjectId(super_admin_doc["_id"]), "credits": {"$gte": amount}},
+                    {"$inc": {"credits": -amount}},
+                    return_document=ReturnDocument.AFTER
+                )
                 
-            if current_credits < amount:
-                raise HTTPException(status_code=400, detail=f"Insufficient credits. Available: {current_credits}, Requested: {amount}")
-                
-            if super_admin_doc.get("role") in ["super_admin", "master"] and super_admin_doc.get("company_id"):
-                companies_collection.update_one({"_id": ObjectId(super_admin_doc["company_id"])}, {"$inc": {"credits": -amount}})
-            else:
-                admins_collection.update_one({"_id": ObjectId(super_admin_doc["_id"])}, {"$inc": {"credits": -amount}})
+            if not sa_doc:
+                raise HTTPException(status_code=400, detail=f"Insufficient credits. Requested: {amount}")
                 
             admins_collection.update_one({"_id": target_admin["_id"]}, {"$inc": {"credits": amount, "total_allocated_credits": amount}})
+            
+            # Log to credit ledger
+            from datetime import datetime, timezone
+            db.credit_ledger.insert_one({
+                "company_id": super_admin_doc.get("company_id"),
+                "super_admin_id": str(super_admin_doc["_id"]),
+                "sub_admin_id": str(target_admin["_id"]),
+                "org": target_admin.get("name") or target_admin.get("username"),
+                "amount": amount,
+                "status": "Completed",
+                "date": datetime.now(timezone.utc).isoformat()
+            })
+            
             return _persist_action_completed({
                 "status": "success", 
                 "message": f"Successfully transferred {amount} credits to {target_admin.get('username') or target_username}."

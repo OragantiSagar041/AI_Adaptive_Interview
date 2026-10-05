@@ -811,21 +811,26 @@ def _get_fallback_ice_servers() -> list:
         if ":" not in turn_url.split("turn:")[-1] and ":" not in turn_url.split("turns:")[-1]:
             turn_url = f"{turn_url}:3478"
 
-        turn_entry = {"urls": turn_url}
-        if turn_user:
-            turn_entry["username"] = turn_user
-        if turn_cred:
-            turn_entry["credential"] = turn_cred
-        ice_servers.append(turn_entry)
-
-        if "transport=tcp" not in turn_url and ("443" in turn_url or "80" in turn_url or "3478" in turn_url):
-            delimiter = "&" if "?" in turn_url else "?"
-            tcp_entry = {"urls": f"{turn_url}{delimiter}transport=tcp"}
+        is_turn = "turn:" in turn_url or "turns:" in turn_url
+        if is_turn and (not turn_user or not turn_cred):
+            # Do not inject invalid TURN servers without credentials
+            pass
+        else:
+            turn_entry = {"urls": turn_url}
             if turn_user:
-                tcp_entry["username"] = turn_user
+                turn_entry["username"] = turn_user
             if turn_cred:
-                tcp_entry["credential"] = turn_cred
-            ice_servers.append(tcp_entry)
+                turn_entry["credential"] = turn_cred
+            ice_servers.append(turn_entry)
+
+            if "transport=tcp" not in turn_url and ("443" in turn_url or "80" in turn_url or "3478" in turn_url):
+                delimiter = "&" if "?" in turn_url else "?"
+                tcp_entry = {"urls": f"{turn_url}{delimiter}transport=tcp"}
+                if turn_user:
+                    tcp_entry["username"] = turn_user
+                if turn_cred:
+                    tcp_entry["credential"] = turn_cred
+                ice_servers.append(tcp_entry)
     else:
         # Default fallback STUN and free OpenRelay when no private TURN server configured
         ice_servers.extend([
@@ -874,6 +879,7 @@ async def get_metered_ice_servers() -> list:
 
     # Fetch fresh dynamic TURN/STUN credentials from Metered API
     try:
+        logger.info(f"[Metered Debug] Domain parsed: '{metered_domain}' | Key starts with: '{metered_api_key[:25]}' | Key length: {len(metered_api_key)}")
         import httpx
         url = f"https://{metered_domain}/api/v1/turn/credentials?apiKey={metered_api_key}"
         async with httpx.AsyncClient(timeout=4.0) as client:

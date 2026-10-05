@@ -323,9 +323,34 @@ def update_credit_request_alias(request_id: str, data: UpdateCreditRequestSchema
             admin_doc = admins_collection.find_one({"_id": ObjectId(admin_id)}) if admin_id else None
             if admin_doc:
                 company_id = admin_doc.get("company_id")
+                from pymongo import ReturnDocument
+                from datetime import datetime, timezone
+                
                 if company_id:
-                    companies_collection.update_one({"_id": ObjectId(company_id)}, {"$inc": {"credits": -amount}})
+                    comp_doc = companies_collection.find_one_and_update(
+                        {"_id": ObjectId(company_id), "credits": {"$gte": amount}},
+                        {"$inc": {"credits": -amount}},
+                        return_document=ReturnDocument.AFTER
+                    )
+                    if not comp_doc:
+                        # Revert status
+                        credit_requests_collection.update_one({"_id": ObjectId(request_id)}, {"$set": {"status": "pending"}})
+                        raise HTTPException(status_code=400, detail="Insufficient company credits")
+                        
                 admins_collection.update_one({"_id": ObjectId(admin_id)}, {"$inc": {"credits": amount}})
+                
+                if company_id:
+                    from app.db.mongo_db import db
+                    super_admin_id = str(current_admin.get("admin_id") or current_admin.get("_id") or "")
+                    db.credit_ledger.insert_one({
+                        "company_id": str(company_id),
+                        "super_admin_id": super_admin_id,
+                        "sub_admin_id": str(admin_id),
+                        "org": admin_doc.get("name") or admin_doc.get("username"),
+                        "amount": amount,
+                        "status": "Completed",
+                        "date": datetime.now(timezone.utc).isoformat()
+                    })
                 
         return {"status": "success", "message": f"Request {data.status} successfully"}
     except Exception as e:
