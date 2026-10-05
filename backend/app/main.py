@@ -214,11 +214,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 raise _redis_module.exceptions.ConnectionError("Redis not available")
             key = f"rl:{bucket}:{client_ip}"
             def _pipeline_rate_limit():
-                pipe = _redis_client.pipeline(transaction=True)
-                pipe.incr(key)
-                pipe.expire(key, config.RATE_LIMIT_WINDOW)
-                res = pipe.execute()
-                return res[0]
+                count = _redis_client.incr(key)
+                if count == 1:
+                    _redis_client.expire(key, config.RATE_LIMIT_WINDOW)
+                return count
             count = await asyncio.to_thread(_pipeline_rate_limit)
             if count > request_limit:
                 return JSONResponse(status_code=429, content={"detail": "Too many requests. Please slow down."})
