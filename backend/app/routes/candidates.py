@@ -514,7 +514,6 @@ def create_session(data: CreateSession, http_req: Request, current_admin: dict =
                 admin_id_to_charge = current_admin.get("admin_id") or current_admin.get("_id")
                 admins_collection.update_one({"_id": ObjectId(admin_id_to_charge)}, {"$inc": {"credits": 1}})
                 
-            from datetime import datetime, timezone
             from app.db.mongo_db import db
             db.credit_ledger.insert_one({
                 "company_id": str(company_id) if company_id else None,
@@ -748,7 +747,6 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
                 admin_id_to_charge = current_admin.get("admin_id") or current_admin.get("_id")
                 admins_collection.update_one({"_id": ObjectId(admin_id_to_charge)}, {"$inc": {"credits": failed}})
                 
-            from datetime import datetime, timezone
             from app.db.mongo_db import db
             db.credit_ledger.insert_one({
                 "company_id": str(company_id) if company_id else None,
