@@ -2599,61 +2599,82 @@ def admin_copilot_execute(request: CopilotExecuteRequest, http_req: Request, cur
                 if res.modified_count == 0:
                     raise HTTPException(status_code=403, detail="Insufficient admin credits.")
 
-            import uuid, random
-            link_id = str(uuid.uuid4())
-            now = datetime.now(timezone.utc)
-            expires_at = (now + timedelta(hours=24)).isoformat()
-            
-            admin_name = current_admin.get("name") or current_admin.get("username") or "AD"
-            prefix = admin_name[:2].upper()
-            
-            session_doc = {
-                "link_id": link_id,
-                "candidate_id": f"{prefix}{random.randint(1000, 9999)}",
-                "candidate_name": candidate_name.title(),
-                "candidate_email": candidate_email,
-                "experience": request.data.get("experience", ""),
-                "location": request.data.get("location", ""),
-                "current_ctc": request.data.get("current_ctc", ""),
-                "expected_ctc": request.data.get("expected_ctc", ""),
-                "resume_text": resume_text,
-                "job_description": job_description,
-                "created_by": admin_id,
-                "company_id": company_id,
-                "created_at": now.isoformat(),
-                "expires_at": expires_at,
-                "interview_duration": 30,
-                "interview_format": "Video",
-                "interview_type": "Technical",
-                "language": "English",
-                "record_video": True,
-                "status": "pending",
-                "hr_screening": {"enabled": False},
-                "custom_questions": "",
-                "ai_instructions": "",
-                "case_study_count": 0,
-                "industry": "General"
-            }
-            
-            interview_sessions_collection.insert_one(session_doc)
-            frontend_base = _resolve_frontend_url(http_req)
-            link_url = f"{frontend_base}/interview?session_id={link_id}"
-            
+            successful = False
             try:
-                from app.services.services import send_interview_email
-                import threading
-                threading.Thread(target=send_interview_email, args=(
-                    candidate_email,
-                    candidate_name.title(),
-                    link_url,
-                    30,
-                    job_description,
-                    ""
-                )).start()
-            except Exception as e:
-                print("Failed to send email during copilot create_interview:", e)
+                import uuid, random
+                link_id = str(uuid.uuid4())
+                now = datetime.now(timezone.utc)
+                expires_at = (now + timedelta(hours=24)).isoformat()
                 
-            return _persist_action_completed({"status": "success", "message": f"Successfully created interview for {candidate_name}. Invite sent!", "link_url": link_url})
+                admin_name = current_admin.get("name") or current_admin.get("username") or "AD"
+                prefix = admin_name[:2].upper()
+                
+                session_doc = {
+                    "link_id": link_id,
+                    "candidate_id": f"{prefix}{random.randint(1000, 9999)}",
+                    "candidate_name": candidate_name.title(),
+                    "candidate_email": candidate_email,
+                    "experience": request.data.get("experience", ""),
+                    "location": request.data.get("location", ""),
+                    "current_ctc": request.data.get("current_ctc", ""),
+                    "expected_ctc": request.data.get("expected_ctc", ""),
+                    "resume_text": resume_text,
+                    "job_description": job_description,
+                    "created_by": admin_id,
+                    "company_id": company_id,
+                    "created_at": now.isoformat(),
+                    "expires_at": expires_at,
+                    "interview_duration": 30,
+                    "interview_format": "Video",
+                    "interview_type": "Technical",
+                    "language": "English",
+                    "record_video": True,
+                    "status": "pending",
+                    "hr_screening": {"enabled": False},
+                    "custom_questions": "",
+                    "ai_instructions": "",
+                    "case_study_count": 0,
+                    "industry": "General"
+                }
+                
+                interview_sessions_collection.insert_one(session_doc)
+                successful = True
+                frontend_base = _resolve_frontend_url(http_req)
+                link_url = f"{frontend_base}/interview?session_id={link_id}"
+                
+                try:
+                    from app.services.services import send_interview_email
+                    import threading
+                    threading.Thread(target=send_interview_email, args=(
+                        candidate_email,
+                        candidate_name.title(),
+                        link_url,
+                        30,
+                        job_description,
+                        ""
+                    )).start()
+                except Exception as e:
+                    print("Failed to send email during copilot create_interview:", e)
+                    
+                return _persist_action_completed({"status": "success", "message": f"Successfully created interview for {candidate_name}. Invite sent!", "link_url": link_url})
+            finally:
+                if not successful:
+                    if role in ["super_admin", "master"] and company_id:
+                        companies_collection.update_one({"_id": ObjectId(company_id)}, {"$inc": {"credits": 1}})
+                    else:
+                        admins_collection.update_one({"_id": ObjectId(admin_id)}, {"$inc": {"credits": 1}})
+                    
+                    from datetime import datetime, timezone
+                    from app.db.mongo_db import db
+                    db.credit_ledger.insert_one({
+                        "company_id": str(company_id) if company_id else None,
+                        "super_admin_id": str(admin_id),
+                        "sub_admin_id": "system",
+                        "org": "Refund - Copilot Error",
+                        "amount": 1,
+                        "status": "Refund",
+                        "date": datetime.now(timezone.utc).isoformat()
+                    })
             
         elif request.action == "create_job":
             title = request.data.get("title")

@@ -307,6 +307,8 @@ def delete_session_alias(link_id: str, current_admin: dict = Depends(get_current
 
 @router.patch("/api/credits/request/{request_id}")
 def update_credit_request_alias(request_id: str, data: UpdateCreditRequestSchema, current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Super Admin access required")
     try:
         req = credit_requests_collection.find_one({"_id": ObjectId(request_id)})
         if not req:
