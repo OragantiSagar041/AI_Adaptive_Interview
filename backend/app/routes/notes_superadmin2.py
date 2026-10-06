@@ -272,6 +272,7 @@ def get_superadmin_recruiter_stats(current_admin: dict = Depends(get_current_adm
     }
 
 @router.get("/api/superadmin/credits/stats")
+@router.get("/superadmin/credits/stats")
 def get_superadmin_credit_stats(current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["master", "super_admin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
@@ -598,6 +599,8 @@ def get_superadmin_audit_logs(current_admin: dict = Depends(get_current_admin_de
 
 @router.post("/api/superadmin/security/stats")
 @router.get("/api/superadmin/security/stats")
+@router.post("/superadmin/security/stats")
+@router.get("/superadmin/security/stats")
 def get_superadmin_security_stats(role_filter: Optional[str] = None, current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["master", "super_admin", "superadmin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
@@ -880,6 +883,7 @@ class SecurityPoliciesUpdate(BaseModel):
     allowed_ips: Optional[List[str]] = None
 
 @router.get("/api/superadmin/security/policies")
+@router.get("/superadmin/security/policies")
 def get_security_policies(current_admin: dict = Depends(get_current_admin_details)):
     # ── Issue 2 Fix ──
     # Master is the platform owner. Global security policies only govern
@@ -921,6 +925,7 @@ def get_security_policies(current_admin: dict = Depends(get_current_admin_detail
     return {"status": "success", "policies": policies}
 
 @router.put("/api/superadmin/security/policies")
+@router.put("/superadmin/security/policies")
 def update_security_policies(data: SecurityPoliciesUpdate, request: Request, current_admin: dict = Depends(get_current_admin_details)):
     # ── Issue 2 Fix ──
     # Security policies only govern SuperAdmin and below — never master.

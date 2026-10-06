@@ -2298,7 +2298,7 @@ def get_admin_profile(current_admin: dict = Depends(get_current_admin_details)):
             company = None
         if company:
             admin_doc["company_name"] = company.get("name", admin_doc.get("company_name", ""))
-            if "credits" in company:
+            if "credits" in company and admin_doc.get("role") in ["super_admin", "superadmin", "master"]:
                 admin_doc["credits"] = company["credits"]
             admin_doc["status"] = company.get("status", "active" if admin_doc.get("login_enabled", True) else "blocked")
             admin_doc["login_enabled"] = admin_doc.get("login_enabled", True) and company.get("login_enabled", True)
