@@ -379,6 +379,7 @@ def delete_sub_admin(admin_id: str, current_admin: dict = Depends(get_current_ad
 
 @router.post("/super-admin/admins/{admin_id}/add-credits")
 @router.post("/api/superadmin/recruiters/{admin_id}/add-credits")
+@router.post("/superadmin/recruiters/{admin_id}/add-credits")
 def add_sub_admin_credits(admin_id: str, data: AddCreditsRequest, current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["super_admin", "master"]:
         raise HTTPException(status_code=403, detail="Super Admin access required")

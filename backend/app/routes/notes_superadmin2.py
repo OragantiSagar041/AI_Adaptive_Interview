@@ -137,6 +137,7 @@ import random
 from datetime import timedelta
 
 @router.get("/api/superadmin/organizations/stats")
+@router.get("/superadmin/organizations/stats")
 def get_superadmin_org_stats(current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["master", "super_admin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
@@ -374,6 +375,7 @@ def get_superadmin_credit_stats(current_admin: dict = Depends(get_current_admin_
     }
 
 @router.get("/api/superadmin/subscriptions/stats")
+@router.get("/superadmin/subscriptions/stats")
 def get_superadmin_subscription_stats(current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["master", "super_admin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
@@ -414,6 +416,7 @@ INTEGRATION_CATALOG = [
 
 
 @router.get("/api/superadmin/integrations")
+@router.get("/superadmin/integrations")
 def get_superadmin_integrations(current_admin: dict = Depends(get_current_admin_details)):
     """Return integration catalog merged with company-specific saved config from MongoDB."""
     if current_admin.get("role") not in ["master", "super_admin", "superadmin", "admin"]:
@@ -451,6 +454,7 @@ def get_superadmin_integrations(current_admin: dict = Depends(get_current_admin_
 
 
 @router.put("/api/superadmin/integrations/{integration_id}")
+@router.put("/superadmin/integrations/{integration_id}")
 def configure_superadmin_integration(
     integration_id: str,
     body: dict,
@@ -519,6 +523,7 @@ def configure_superadmin_integration(
 
 
 @router.patch("/api/superadmin/integrations/{integration_id}/toggle")
+@router.patch("/superadmin/integrations/{integration_id}/toggle")
 def toggle_superadmin_integration(
     integration_id: str,
     body: dict,
@@ -565,6 +570,7 @@ def toggle_superadmin_integration(
 
 
 @router.get("/api/superadmin/integrations/status")
+@router.get("/superadmin/integrations/status")
 def get_superadmin_integration_status(current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["master", "superadmin", "super_admin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
@@ -575,6 +581,7 @@ def get_superadmin_integration_status(current_admin: dict = Depends(get_current_
 
 
 @router.get("/api/superadmin/audit-logs")
+@router.get("/superadmin/audit-logs")
 def get_superadmin_audit_logs(current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["master", "superadmin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
@@ -598,8 +605,8 @@ def get_superadmin_audit_logs(current_admin: dict = Depends(get_current_admin_de
     }
 
 @router.post("/api/superadmin/security/stats")
-@router.get("/api/superadmin/security/stats")
 @router.post("/superadmin/security/stats")
+@router.get("/api/superadmin/security/stats")
 @router.get("/superadmin/security/stats")
 def get_superadmin_security_stats(role_filter: Optional[str] = None, current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["master", "super_admin", "superadmin"]:
@@ -1004,6 +1011,7 @@ class RecruiterMessage(BaseModel):
     body: str
 
 @router.put("/api/superadmin/recruiters/{admin_id}")
+@router.put("/superadmin/recruiters/{admin_id}")
 def update_recruiter(admin_id: str, data: RecruiterUpdate, current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["master", "super_admin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
@@ -1030,6 +1038,7 @@ def update_recruiter(admin_id: str, data: RecruiterUpdate, current_admin: dict =
     return {"status": "success", "message": "Recruiter updated successfully"}
 
 @router.post("/api/superadmin/recruiters/{admin_id}/message")
+@router.post("/superadmin/recruiters/{admin_id}/message")
 def send_recruiter_message(admin_id: str, data: RecruiterMessage, current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["master", "super_admin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
@@ -1072,6 +1081,7 @@ def send_recruiter_message(admin_id: str, data: RecruiterMessage, current_admin:
     return {"status": "success", "message": "Message sent successfully"}
 
 @router.put("/api/superadmin/recruiters/{admin_id}/toggle-status")
+@router.put("/superadmin/recruiters/{admin_id}/toggle-status")
 def toggle_recruiter_status(admin_id: str, current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["master", "super_admin"]:
         raise HTTPException(status_code=403, detail="Not authorized")

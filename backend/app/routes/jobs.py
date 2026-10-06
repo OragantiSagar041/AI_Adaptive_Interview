@@ -231,6 +231,7 @@ def get_public_job(job_id: str):
     return {"status": "success", "job": job}
 
 @router.get("/api/public/jobs/company/{company_id}")
+@router.get("/public/jobs/company/{company_id}")
 def get_public_company_jobs(company_id: str):
     """
     Fetch all active public jobs for a specific company.
@@ -282,6 +283,7 @@ os.makedirs(UPLOAD_RESUMES_DIR, exist_ok=True)
 os.makedirs(UPLOAD_COVER_LETTERS_DIR, exist_ok=True)
 
 @router.get("/api/public/resumes/{filename}")
+@router.get("/public/resumes/{filename}")
 def get_uploaded_resume_file(filename: str):
     """Serve locally stored resumes if not using Cloudinary."""
     safe_filename = os.path.basename(filename)
@@ -302,6 +304,7 @@ def get_uploaded_resume_file(filename: str):
     return FileResponse(file_path, media_type=media_type)
 
 @router.get("/api/public/cover_letters/{filename}")
+@router.get("/public/cover_letters/{filename}")
 def get_uploaded_cover_letter_file(filename: str):
     """Serve locally stored cover letters."""
     safe_filename = os.path.basename(filename)
@@ -535,6 +538,7 @@ async def apply_for_job(
     }
 
 @router.get("/api/jobs/{job_id}/applications")
+@router.get("/jobs/{job_id}/applications")
 def get_job_applications(job_id: str, current_admin: dict = Depends(get_current_admin_details)):
     """
     Returns all applications submitted for a given job_id.
@@ -597,6 +601,7 @@ def get_job_applications(job_id: str, current_admin: dict = Depends(get_current_
     return {"status": "success", "applications": applications, "total": len(applications)}
 
 @router.patch("/api/jobs/{job_id}/applications/{app_id}/status")
+@router.patch("/jobs/{job_id}/applications/{app_id}/status")
 def update_application_status(
     job_id: str,
     app_id: str,
@@ -683,6 +688,7 @@ import pypdf
 import io
 
 @router.post("/api/public/jobs/parse-resume")
+@router.post("/public/jobs/parse-resume")
 def parse_resume(resume: UploadFile = File(...)):
     try:
         allowed_extensions = {".pdf", ".docx", ".doc", ".txt"}

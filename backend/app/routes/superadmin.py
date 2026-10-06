@@ -209,6 +209,7 @@ async def superadmin_live_sessions(
 
 
 @router.post("/api/export/excel")
+@router.post("/export/excel")
 def export_excel(data: ExportExcelRequest, current_admin: dict = Depends(get_current_admin_details)):
     import csv
     import io
@@ -254,6 +255,7 @@ def export_excel(data: ExportExcelRequest, current_admin: dict = Depends(get_cur
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/api/candidates/bulk")
+@router.delete("/candidates/bulk")
 def bulk_delete_candidates(data: BulkDeleteRequest, current_admin: dict = Depends(get_current_admin_details)):
     try:
         deleted_count = 0
@@ -283,6 +285,7 @@ def bulk_delete_candidates(data: BulkDeleteRequest, current_admin: dict = Depend
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/api/interview/session/{link_id}")
+@router.delete("/interview/session/{link_id}")
 def delete_session_alias(link_id: str, current_admin: dict = Depends(get_current_admin_details)):
     try:
         row = interview_sessions_collection.find_one({"link_id": link_id})
@@ -306,6 +309,7 @@ def delete_session_alias(link_id: str, current_admin: dict = Depends(get_current
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.patch("/api/credits/request/{request_id}")
+@router.patch("/credits/request/{request_id}")
 def update_credit_request_alias(request_id: str, data: UpdateCreditRequestSchema, current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") != "super_admin":
         raise HTTPException(status_code=403, detail="Super Admin access required")
@@ -359,6 +363,7 @@ def update_credit_request_alias(request_id: str, data: UpdateCreditRequestSchema
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/api/admin/candidates/qualified")
+@router.get("/admin/candidates/qualified")
 def get_admin_qualified(pipeline: Optional[str] = "all", current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["admin"]:
         raise HTTPException(status_code=403, detail="Admin access required")
@@ -439,6 +444,7 @@ def get_admin_qualified(pipeline: Optional[str] = "all", current_admin: dict = D
     return merged_list
 
 @router.get("/api/admin/candidates/rejected")
+@router.get("/admin/candidates/rejected")
 def get_admin_rejected(pipeline: Optional[str] = "all", current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["admin"]:
         raise HTTPException(status_code=403, detail="Admin access required")

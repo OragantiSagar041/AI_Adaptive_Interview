@@ -2280,6 +2280,7 @@ CRITICAL RULES:
 
 # ─── COPILOT SESSIONS ENDPOINTS ───
 @router.get("/api/admin/copilot/sessions")
+@router.get("/admin/copilot/sessions")
 def get_admin_copilot_sessions(current_admin: dict = Depends(get_current_admin_details)):
     admin_id = current_admin.get("admin_id")
     sessions = list(copilot_sessions_collection.find(
@@ -2289,6 +2290,7 @@ def get_admin_copilot_sessions(current_admin: dict = Depends(get_current_admin_d
     return {"status": "success", "sessions": sessions}
 
 @router.post("/api/admin/copilot/sessions")
+@router.post("/admin/copilot/sessions")
 def create_admin_copilot_session(current_admin: dict = Depends(get_current_admin_details)):
     admin_id = current_admin.get("admin_id")
     role = current_admin.get("role", "admin")
@@ -2326,6 +2328,7 @@ def create_admin_copilot_session(current_admin: dict = Depends(get_current_admin
     return {"status": "success", "session": doc}
 
 @router.get("/api/admin/copilot/sessions/{session_id}")
+@router.get("/admin/copilot/sessions/{session_id}")
 def get_admin_copilot_session_detail(session_id: str, current_admin: dict = Depends(get_current_admin_details)):
     admin_id = current_admin.get("admin_id")
     role = current_admin.get("role", "admin")
@@ -2360,6 +2363,7 @@ def get_admin_copilot_session_detail(session_id: str, current_admin: dict = Depe
     return {"status": "success", "session": doc}
 
 @router.delete("/api/admin/copilot/sessions/{session_id}")
+@router.delete("/admin/copilot/sessions/{session_id}")
 def delete_admin_copilot_session(session_id: str, current_admin: dict = Depends(get_current_admin_details)):
     admin_id = current_admin.get("admin_id")
     copilot_sessions_collection.delete_one({"session_id": session_id, "admin_id": admin_id})

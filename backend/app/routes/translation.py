@@ -182,6 +182,7 @@ def _perform_translation(text: str, source_lang: str = "auto", target_lang: str 
 
 
 @router.post("/api/translate")
+@router.post("/translate")
 @router.post("/admin/translate")
 def translate_text(req: TranslateRequest):
     """
@@ -200,6 +201,7 @@ def translate_text(req: TranslateRequest):
 
 
 @router.post("/api/translate/batch")
+@router.post("/translate/batch")
 @router.post("/admin/translate/batch")
 def translate_batch(req: BatchTranslateRequest):
     """
@@ -217,6 +219,7 @@ def translate_batch(req: BatchTranslateRequest):
 
 
 @router.post("/api/translate/qa")
+@router.post("/translate/qa")
 @router.post("/admin/translate/qa")
 def translate_qa(req: QATranslateRequest):
     """

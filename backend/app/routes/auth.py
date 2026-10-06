@@ -754,6 +754,7 @@ def delete_plan(plan_id: str, master_id: str = Depends(get_current_admin)):
 # --------------------------------------------------------------------------------
 
 @router.post("/api/register")
+@router.post("/register")
 def register_admin(data: AdminRegister):
     """Public: Self-register from landing page pricing cards"""
     normalized_email = data.email.strip().lower()

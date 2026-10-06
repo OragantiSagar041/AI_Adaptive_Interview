@@ -6,7 +6,7 @@ export const loadDashboardData = createAsyncThunk(
   async (selectedAdminId, { getState, rejectWithValue }) => {
     try {
       const { API_BASE_URL, role, token } = getState().auth
-      const url = `${API_BASE_URL}/dashboard${selectedAdminId ? `?admin_id=${selectedAdminId}` : ''}`
+      const url = `${API_BASE_URL}/api/dashboard${selectedAdminId ? `?admin_id=${selectedAdminId}` : ''}`
       const res = await axios.get(url, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -37,7 +37,7 @@ export const loadSuperAdminDashboard = createAsyncThunk(
       const summaryOnly = typeof arg === 'object' && arg !== null ? !!arg.summaryOnly : false
       const params = { summary_only: summaryOnly }
       if (adminFilter) params.adminId = adminFilter
-      const res = await axios.get(`${API_BASE_URL}/superadmin/dashboard`, {
+      const res = await axios.get(`${API_BASE_URL}/api/superadmin/dashboard`, {
         headers: { Authorization: `Bearer ${token}` },
         params
       })
@@ -59,7 +59,7 @@ export const loadRecruitmentFunnel = createAsyncThunk(
     try {
       const { API_BASE_URL, token } = getState().auth
       const params = adminFilter ? { adminId: adminFilter } : {}
-      const res = await axios.get(`${API_BASE_URL}/superadmin/recruitment-funnel`, {
+      const res = await axios.get(`${API_BASE_URL}/api/superadmin/recruitment-funnel`, {
         headers: { Authorization: `Bearer ${token}` },
         params
       })
@@ -78,7 +78,7 @@ export const loadPlatformAnalytics = createAsyncThunk(
     try {
       const { API_BASE_URL, token } = getState().auth
       const params = adminFilter ? { adminId: adminFilter } : {}
-      const res = await axios.get(`${API_BASE_URL}/superadmin/platform-analytics`, {
+      const res = await axios.get(`${API_BASE_URL}/api/superadmin/platform-analytics`, {
         headers: { Authorization: `Bearer ${token}` },
         params
       })
@@ -97,7 +97,7 @@ export const loadLiveSessions = createAsyncThunk(
     try {
       const { API_BASE_URL, token } = getState().auth
       const params = adminFilter ? { adminId: adminFilter } : {}
-      const res = await axios.get(`${API_BASE_URL}/superadmin/live-sessions`, {
+      const res = await axios.get(`${API_BASE_URL}/api/superadmin/live-sessions`, {
         headers: { Authorization: `Bearer ${token}` },
         params
       })

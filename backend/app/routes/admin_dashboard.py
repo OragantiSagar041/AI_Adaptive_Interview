@@ -1724,6 +1724,7 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
 
 # ── Task 8: Dashboard Stats Endpoint ────────────────────────────────────────
 @router.get("/admin/dashboard-stats")
+@router.get("/api/admin/dashboard-stats")
 async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dict = Depends(get_current_admin_details)):
     """Return aggregated stats for the admin dashboard."""
     from app.db.redis_manager import manager
@@ -2125,6 +2126,7 @@ def invitation_email_scheduler_loop():
         EMAIL_SCHEDULER_STARTED = True
 
 @router.get("/api/interview/{interview_id}/insights")
+@router.get("/interview/{interview_id}/insights")
 def get_interview_insights(
     interview_id: str,
     current_admin: dict = Depends(get_current_admin_details),

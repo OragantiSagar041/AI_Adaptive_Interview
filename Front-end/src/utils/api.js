@@ -519,7 +519,7 @@ export const uploadProfileImage = async (formData) => {
 
 export const getDashboardStats = async (params) => {
   try {
-    const response = await api.get("/admin/dashboard-stats", { params });
+    const response = await api.get("/api/admin/dashboard-stats", { params });
     return response.data;
   } catch (error) {
     throw error.response?.data?.detail || error.response?.data?.message || "Failed to fetch dashboard stats";
@@ -773,7 +773,7 @@ export const getInterviewDetails = async (linkId) => {
 ============================================================================= */
 export const getSuperAdminDashboardStats = async (params) => {
   try {
-    const response = await api.get("/super-admin/dashboard-stats", { params });
+    const response = await api.get("/api/super-admin/dashboard-stats", { params });
     return response.data;
   } catch (error) {
     throw error.response?.data?.detail || error.response?.data?.message || "Failed to fetch dashboard stats";
@@ -818,7 +818,7 @@ export const updateCreditRequest = async (requestId, data) => {
 
 export const getSuperAdminDashboard = async (params) => {
   try {
-    const response = await api.get("/superadmin/dashboard", { params });
+    const response = await api.get("/api/superadmin/dashboard", { params });
     return response.data;
   } catch (error) {
     throw error.response?.data?.detail || error.response?.data?.message || "Failed to retrieve superadmin dashboard telemetry";
@@ -1101,7 +1101,7 @@ export const stripeWebhook = async (data) => {
 ============================================================================= */
 export const getAggregatedDashboardData = async (params) => {
   try {
-    const response = await api.get("/dashboard", { params });
+    const response = await api.get("/api/dashboard", { params });
     return response.data;
   } catch (error) {
     throw error.response?.data?.detail || error.response?.data?.message || "Failed to fetch aggregated dashboard data";

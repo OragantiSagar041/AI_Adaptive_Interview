@@ -189,6 +189,7 @@ class StartAICallRequest(BaseModel):
     phone_number: str
 
 @router.post("/api/calls/start/{link_id}")
+@router.post("/calls/start/{link_id}")
 def start_ai_call(link_id: str, data: StartAICallRequest, current_admin: dict = Depends(get_current_admin_details)):
     # Find the candidate session
     session = interview_sessions_collection.find_one({"link_id": link_id})
@@ -244,6 +245,7 @@ def start_ai_call(link_id: str, data: StartAICallRequest, current_admin: dict = 
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/api/calls/status/{link_id}")
+@router.get("/calls/status/{link_id}")
 def get_ai_call_status(link_id: str, current_admin: dict = Depends(get_current_admin_details)):
     session = interview_sessions_collection.find_one({"link_id": link_id})
     if not session:

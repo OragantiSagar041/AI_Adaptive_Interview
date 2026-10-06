@@ -182,6 +182,7 @@ async def dashboard_websocket(websocket: WebSocket, token: Optional[str] = None)
                 pass
 
 @router.get("/dashboard")
+@router.get("/api/dashboard")
 async def get_dashboard_aggregated_data(
     admin_id: Optional[str] = None,
     summary_only: bool = False,

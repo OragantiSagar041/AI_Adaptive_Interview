@@ -8,7 +8,6 @@ router = APIRouter()
 
 @router.get("/api/plans")
 @router.get("/plans")
-@router.get("/api/api/plans")
 @router.get("/api/plans/")
 @router.get("/plans/")
 def get_plans():
