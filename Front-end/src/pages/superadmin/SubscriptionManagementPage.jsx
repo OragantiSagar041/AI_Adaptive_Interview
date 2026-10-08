@@ -80,7 +80,7 @@ function DetailPanel({ companyId }) {
 
   useEffect(() => {
     let m = true;
-    api.get(`/api/superadmin/subscriptions/${companyId}`)
+    api.get(`/superadmin/subscriptions/${companyId}`)
       .then(r => { if (m) setDetail(r.data); })
       .catch(() => {})
       .finally(() => { if (m) setLoading(false); });
@@ -232,7 +232,7 @@ function RechargeModal({ company, onClose, onSuccess }) {
           return;
         }
 
-        const orderRes = await api.post(`/api/superadmin/subscriptions/${company.company_id}/razorpay-order`, intentPayload);
+        const orderRes = await api.post(`/superadmin/subscriptions/${company.company_id}/razorpay-order`, intentPayload);
         const { order_id, key_id, amount, currency } = orderRes.data;
 
         const options = {
@@ -244,7 +244,7 @@ function RechargeModal({ company, onClose, onSuccess }) {
           order_id: order_id,
           handler: async function (response) {
             try {
-              await api.post(`/api/superadmin/subscriptions/${company.company_id}/razorpay-verify`, {
+              await api.post(`/superadmin/subscriptions/${company.company_id}/razorpay-verify`, {
                 razorpay_order_id: response.razorpay_order_id,
                 razorpay_payment_id: response.razorpay_payment_id,
                 razorpay_signature: response.razorpay_signature,
@@ -284,7 +284,7 @@ function RechargeModal({ company, onClose, onSuccess }) {
       }
     } else {
       try {
-        const res = await api.post(`/api/superadmin/subscriptions/${company.company_id}/recharge`, intentPayload);
+        const res = await api.post(`/superadmin/subscriptions/${company.company_id}/recharge`, intentPayload);
         toast.success(res.data.message || "Subscription updated!");
         onSuccess();
         onClose();
@@ -633,8 +633,8 @@ export default function SubscriptionManagementPage() {
     setError(null);
     try {
       const [subsRes, statsRes] = await Promise.all([
-        api.get("/api/superadmin/subscriptions"),
-        api.get("/api/superadmin/subscriptions/stats"),
+        api.get("/superadmin/subscriptions"),
+        api.get("/superadmin/subscriptions/stats"),
       ]);
       setSubs(subsRes.data?.data || []);
       setStats(statsRes.data);
