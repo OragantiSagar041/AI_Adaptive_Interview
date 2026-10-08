@@ -16,7 +16,7 @@ const AdminCopilot = () => {
   
   const sessionUser = (() => {
     try {
-      return JSON.parse(sessionStorage.getItem('adminUser') || '{}');
+      return JSON.parse(localStorage.getItem('adminUser') || '{}');
     } catch {
       return {};
     }
@@ -34,7 +34,7 @@ const AdminCopilot = () => {
     sessionUser?.name || 
     user?.username || 
     sessionUser?.username || 
-    sessionStorage.getItem('adminName') || 
+    localStorage.getItem('adminName') || 
     sessionStorage.getItem('adminUsername') || 
     (isMaster ? 'master' : (isSuperAdmin ? 'Super Admin' : 'Recruiter'));
 

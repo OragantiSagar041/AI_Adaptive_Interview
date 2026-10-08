@@ -295,7 +295,7 @@ export default function CreateInterviewPage() {
       const response = await axios.post(`${API_BASE_URL}/admin/parse-resume`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
-          'Authorization': `Bearer ${sessionStorage.getItem('superadminToken') || sessionStorage.getItem('adminToken')}`
+          'Authorization': `Bearer ${localStorage.getItem('superadminToken') || localStorage.getItem('adminToken')}`
         }
       })
       onParsed(null, response.data)

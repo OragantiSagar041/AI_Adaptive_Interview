@@ -504,8 +504,8 @@ export default function LoginPage() {
     const planCapabilities = data.plan_capabilities || {}
 
     if (data.token) {
-      sessionStorage.setItem('adminToken', data.token)
-      sessionStorage.setItem('masterToken', data.token)
+      localStorage.setItem('adminToken', data.token)
+      localStorage.setItem('masterToken', data.token)
 
       dispatch(
         setCredentials({
@@ -516,11 +516,11 @@ export default function LoginPage() {
       )
     }
 
-    sessionStorage.setItem('adminId', adminId)
-    sessionStorage.setItem('adminEmail', adminEmail)
-    sessionStorage.setItem('adminName', adminName)
-    sessionStorage.setItem('adminRole', finalRole)
-    sessionStorage.setItem('adminUser', JSON.stringify(data))
+    localStorage.setItem('adminId', adminId)
+    localStorage.setItem('adminEmail', adminEmail)
+    localStorage.setItem('adminName', adminName)
+    localStorage.setItem('adminRole', finalRole)
+    localStorage.setItem('adminUser', JSON.stringify(data))
 
     sessionStorage.setItem('subscriptionPlan', plan)
     sessionStorage.setItem('subscriptionPlanKey', planKey)
@@ -695,16 +695,16 @@ const response = await axios.post(
       const planCapabilities = data.plan_capabilities || {}
 
       if (data.token) {
-        sessionStorage.setItem('adminToken', data.token)
-        sessionStorage.setItem('masterToken', data.token)
+        localStorage.setItem('adminToken', data.token)
+        localStorage.setItem('masterToken', data.token)
         dispatch(setCredentials({ role: finalRole, token: data.token, adminUser: data }))
       }
 
-      sessionStorage.setItem('adminId', adminId)
-      sessionStorage.setItem('adminEmail', adminEmail)
-      sessionStorage.setItem('adminName', adminName)
-      sessionStorage.setItem('adminRole', finalRole)
-      sessionStorage.setItem('adminUser', JSON.stringify(data))
+      localStorage.setItem('adminId', adminId)
+      localStorage.setItem('adminEmail', adminEmail)
+      localStorage.setItem('adminName', adminName)
+      localStorage.setItem('adminRole', finalRole)
+      localStorage.setItem('adminUser', JSON.stringify(data))
       sessionStorage.setItem('subscriptionPlan', plan)
       sessionStorage.setItem('subscriptionPlanKey', planKey)
       sessionStorage.setItem('planCapabilities', JSON.stringify(planCapabilities))

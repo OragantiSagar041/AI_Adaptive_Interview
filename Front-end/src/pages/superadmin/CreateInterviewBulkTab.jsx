@@ -376,9 +376,7 @@ export default function CreateInterviewBulkTab({
                     )}
                   </div>
                 </div>
-</FeatureLockOverlay>
-
-                {/* AI Instructions Section (Bulk) */}
+</FeatureLockOverlay>{/* AI Instructions Section (Bulk) */}
                 <FeatureLockOverlay isLocked={!hasCustomAIInstructions} featureName="Custom AI Interviewer Instructions">
 <div className="border border-slate-200 dark:border-slate-700/80 rounded-2xl overflow-hidden bg-white dark:bg-slate-800/60/82 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-slate-300">
                   <div className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-900/50/50 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">

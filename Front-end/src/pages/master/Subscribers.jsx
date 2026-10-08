@@ -37,7 +37,7 @@ const FEATURE_GROUPS = [
 export default function Subscribers() {
   const token = useSelector(state => state.auth.token) || ''
   const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
-  const adminId = sessionStorage.getItem('adminId') || ''
+  const adminId = localStorage.getItem('adminId') || ''
 
   // Subscribers state
   const [companies, setCompanies] = useState([])
