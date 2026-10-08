@@ -76,10 +76,10 @@ const FAQ_SCHEMA = {
     },
     {
       "@type": "Question",
-      "name": "Can candidates practice with HireIQ AI mock interview platform?",
+      "name": "Can candidates practice with HireIQ AI interview platform?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Yes. HireIQ features an AI mock interview platform that simulates realistic technical, behavioral, and system design interviews with instant feedback, scoring rubrics, and detailed improvement roadmaps."
+        "text": "Yes. HireIQ features an AI interview platform that simulates realistic technical, behavioral, and system design interviews with instant feedback, scoring rubrics, and detailed improvement roadmaps."
       }
     },
     {
@@ -105,13 +105,13 @@ export default function LandingPage() {
 
   useSEO({
     title: "HireIQ — #1 AI Interview Platform & AI Recruitment Software India",
-    description: "HireIQ is India's leading AI interview platform & AI recruitment software. Features AI mock interviews, automated HR screening tool, AI calling agent for recruitment, and bulk hiring software.",
+    description: "HireIQ is India's leading AI interview platform & AI recruitment software. Features AI interviews, automated HR screening tool, AI calling agent for recruitment, and bulk hiring software.",
     path: "/",
     keywords: [
       "AI interview platform India",
       "AI recruitment software India",
       "Automated HR screening tool",
-      "AI mock interview platform",
+      "AI interview platform",
       "Bulk hiring software India",
       "AI calling agent for recruitment",
       "Online interview platform India",
@@ -251,7 +251,7 @@ function Hero() {
             HireIQ: India’s #1 <span className="text-gradient">AI Interview Platform</span> & Recruitment Software.
           </h1>
           <p className="mt-6 text-lg text-muted-foreground max-w-2xl leading-relaxed">
-            HireIQ is the leading <strong>AI mock interview platform</strong>, <strong>automated HR screening tool</strong>, and <strong>AI calling agent for recruitment</strong>. Automate candidate outreach, resume screening, live technical assessments, and <strong>bulk hiring in India</strong> 10× faster with predictive AI scoring.
+            HireIQ is the leading <strong>AI interview platform</strong>, <strong>automated HR screening tool</strong>, and <strong>AI calling agent for recruitment</strong>. Automate candidate outreach, resume screening, live technical assessments, and <strong>bulk hiring in India</strong> 10× faster with predictive AI scoring.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <a
@@ -904,7 +904,7 @@ function FAQ() {
   const faqs = [
     {
       q: "Why is HireIQ the best AI interview platform in India?",
-      a: "HireIQ is built specifically to address high-volume talent challenges in India and globally. It combines AI voice calling agents, automated technical assessments, AI mock interviews, and ATS integrations to deliver 10× faster recruitment cycles with unbiased candidate scoring.",
+      a: "HireIQ is built specifically to address high-volume talent challenges in India and globally. It combines AI voice calling agents, automated technical assessments, AI interviews, and ATS integrations to deliver 10× faster recruitment cycles with unbiased candidate scoring.",
     },
     {
       q: "How does the AI calling agent for recruitment work?",
@@ -915,8 +915,8 @@ function FAQ() {
       a: "For high-volume hiring (BPO, campus drives, IT services, retail), HireIQ can interview thousands of candidates simultaneously 24/7, reducing screening turnaround from weeks to minutes.",
     },
     {
-      q: "Can job seekers use HireIQ as an AI mock interview platform?",
-      a: "Yes. HireIQ offers comprehensive AI mock interview practice modules covering software engineering, data science, product management, and HR rounds with instant performance analytics.",
+      q: "Can job seekers use HireIQ as an AI interview platform?",
+      a: "Yes. HireIQ offers comprehensive AI interview practice modules covering software engineering, data science, product management, and HR rounds with instant performance analytics.",
     },
     {
       q: "What makes HireIQ an effective automated HR screening tool?",

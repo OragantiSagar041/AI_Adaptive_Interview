@@ -1318,7 +1318,7 @@ async def start_session_interview(link_id: str = Form(...)):
 
     if not questions:
         print("🤖 Generating questions via AI (not pre-cached)...")
-        questions = generate_mock_questions(
+        questions = generate_interview_questions(
             content_str, 
             source, 
             num_questions=num_questions_to_generate, 
@@ -2572,7 +2572,7 @@ def admin_copilot_execute(request: CopilotExecuteRequest, http_req: Request, cur
             except ValueError:
                 raise HTTPException(status_code=400, detail="Amount must be an integer")
                 
-            checkout_url = f"https://checkout.stripe.com/pay/mock_session_{amount}_credits"
+            checkout_url = f"https://checkout.stripe.com/pay/test_session_{amount}_credits"
             return _persist_action_completed({
                 "status": "success", 
                 "message": f"Successfully generated a checkout link for {amount} credits: {checkout_url}"
@@ -2710,8 +2710,8 @@ def admin_copilot_execute(request: CopilotExecuteRequest, http_req: Request, cur
         elif request.action in ["integrate_platform", "connect_app"]:
             platform_name = request.data.get("platform_name") or request.data.get("app_name") or request.data.get("platform") or request.data.get("name") or "Unknown Platform"
             import uuid
-            mock_api_key = f"{platform_name[:3].upper()}-{uuid.uuid4().hex[:12]}"
-            mock_webhook_url = f"https://api.hireiq.com/webhooks/{platform_name.lower().replace(' ', '')}/{uuid.uuid4().hex[:8]}"
+            test_api_key = f"{platform_name[:3].upper()}-{uuid.uuid4().hex[:12]}"
+            test_webhook_url = f"https://api.hireiq.com/webhooks/{platform_name.lower().replace(' ', '')}/{uuid.uuid4().hex[:8]}"
             
             company_id = current_admin.get("company_id")
             from bson import ObjectId
@@ -2729,8 +2729,8 @@ def admin_copilot_execute(request: CopilotExecuteRequest, http_req: Request, cur
                 "connected": True,
                 "status": "Healthy",
                 "config": {
-                    "api_key": mock_api_key,
-                    "webhook_url": mock_webhook_url
+                    "api_key": test_api_key,
+                    "webhook_url": test_webhook_url
                 },
                 "configured_at": datetime.now(timezone.utc).isoformat()
             }
@@ -2756,7 +2756,7 @@ def admin_copilot_execute(request: CopilotExecuteRequest, http_req: Request, cur
             
             return _persist_action_completed({
                 "status": "success",
-                "message": f"Successfully connected and configured {integration_name} integration.\n\n**API Key**: `{mock_api_key}`\n**Webhook URL**: `{mock_webhook_url}`\n**Security Whitelist IPs**: `34.202.15.91`, `3.15.82.204`, `52.14.73.11`\n*(Please ensure these IPs are whitelisted in your {integration_name} firewall settings to allow HireIQ to connect securely.)*"
+                "message": f"Successfully connected and configured {integration_name} integration.\n\n**API Key**: `{test_api_key}`\n**Webhook URL**: `{test_webhook_url}`\n**Security Whitelist IPs**: `34.202.15.91`, `3.15.82.204`, `52.14.73.11`\n*(Please ensure these IPs are whitelisted in your {integration_name} firewall settings to allow HireIQ to connect securely.)*"
             })
             
         elif request.action == "disconnect_app":

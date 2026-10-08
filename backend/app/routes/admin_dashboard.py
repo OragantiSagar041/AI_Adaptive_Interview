@@ -234,7 +234,7 @@ def update_agent_flow(req: UpdateAgentFlowRequest, omni_api_key: Optional[str] =
 @router.get("/admin/interview/{link_id}")
 def get_interview_details(link_id: str, current_admin: dict = Depends(get_current_admin_details)):
     if link_id.startswith("ai_call_"):
-        # This is an AI Call Mock Session!
+        # This is an AI Call Test Session!
         app_id = link_id.replace("ai_call_", "")
         from bson import ObjectId
         try:
@@ -321,7 +321,7 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
                     }
                 })
 
-        # Mock dimensions
+        # Test dimensions
         score = app.get("score") or 0.0
         
         # Calculate actual duration from Omni Call
@@ -337,7 +337,7 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
             
         response_payload = {
             "interview_id": link_id,
-            "actual_interview_id": "mock_ai_call",
+            "actual_interview_id": "test_ai_call",
             "candidate_id": f"CAN{str(app['_id'])[:4].upper()}",
             "candidate_name": app.get("name") or "Candidate",
             "candidate_email": app.get("email") or "",

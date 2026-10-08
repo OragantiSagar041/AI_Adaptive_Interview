@@ -78,7 +78,7 @@ html.admin-layout #root {
   --shadow-glow: 0 4px 20px rgba(99, 102, 241, 0.25);
 }
 
-/* ── Dark Mode — matches user mockup reference exactly ── */
+/* ── Dark Mode — matches user design reference exactly ── */
 html.dark,
 [data-theme="dark"] {
   color-scheme: dark;

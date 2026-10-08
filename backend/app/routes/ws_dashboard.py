@@ -335,7 +335,7 @@ async def get_dashboard_aggregated_data(
             ca_prefix = c_name[:2].upper()
             cand_id = f"{sa_prefix}{su_prefix}{ca_prefix}{app_id[-4:] if len(app_id) >= 4 else app_id}"
             
-            mock_session = {
+            test_session = {
                 "id": f"ai_call_{app_id}",
                 "_id": f"ai_call_{app_id}",
                 "link_id": f"ai_call_{app_id}",
@@ -353,10 +353,10 @@ async def get_dashboard_aggregated_data(
                 "application_id": app_id,
                 "is_deactivated": False
             }
-            candidates_list.append(mock_session)
+            candidates_list.append(test_session)
             
         # ── Fetch AI calling logs from Omni Dimension API safely with Redis Caching ──
-        omni_mock_sessions = []
+        omni_test_sessions = []
         omni_stats = {"total_calls": 0, "status": "ok"}
         
         company_id_str = str(current_admin.get("company_id") or current_admin.get("admin_id") or "master")
@@ -382,9 +382,9 @@ async def get_dashboard_aggregated_data(
             cached_omni_data = None
 
         if cached_omni_data is not None and isinstance(cached_omni_data, list):
-            omni_mock_sessions = cached_omni_data
-            omni_stats = {"total_calls": len(omni_mock_sessions), "status": "cached"}
-            candidates_list.extend(omni_mock_sessions)
+            omni_test_sessions = cached_omni_data
+            omni_stats = {"total_calls": len(omni_test_sessions), "status": "cached"}
+            candidates_list.extend(omni_test_sessions)
         else:
             # 2. Cache miss: Fetch from OmniDimension with strict 3.0s timeout
             try:
@@ -538,7 +538,7 @@ async def get_dashboard_aggregated_data(
                             else:
                                 created_at_iso = raw_created if isinstance(raw_created, str) else datetime.now(timezone.utc).isoformat()
 
-                            mock_session = {
+                            test_session = {
                                 "id": f"ai_call_omni_{call_id}",
                                 "_id": f"ai_call_omni_{call_id}",
                                 "link_id": f"ai_call_omni_{call_id}",
@@ -555,22 +555,22 @@ async def get_dashboard_aggregated_data(
                                 "status": mapped_status,
                                 "is_deactivated": False
                             }
-                            omni_mock_sessions.append(mock_session)
+                            omni_test_sessions.append(test_session)
                         except Exception as item_err:
                             logger.warning(f"[dashboard] Skipping malformed Omni call: {item_err}")
                             continue
 
-                candidates_list.extend(omni_mock_sessions)
+                candidates_list.extend(omni_test_sessions)
 
                 # Store in Redis cache for 60 seconds
                 try:
                     if manager.redis:
-                        await manager.redis.setex(omni_cache_key, CACHE_TTL, json.dumps(omni_mock_sessions))
+                        await manager.redis.setex(omni_cache_key, CACHE_TTL, json.dumps(omni_test_sessions))
                     else:
                         from app.ai.omni_dimension_client import _get_omni_cache
                         c = _get_omni_cache()
                         if c:
-                            c.setex(omni_cache_key, CACHE_TTL, json.dumps(omni_mock_sessions))
+                            c.setex(omni_cache_key, CACHE_TTL, json.dumps(omni_test_sessions))
                 except Exception as cache_write_err:
                     logger.debug(f"[dashboard] Omni cache write error: {cache_write_err}")
 

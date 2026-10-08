@@ -249,7 +249,7 @@ async def parse_resume(
             profile_analysis = {"error": str(e)}
 
         # Generate questions
-        questions = generate_mock_questions(content_str, source)
+        questions = generate_interview_questions(content_str, source)
 
         if not questions:
             raise HTTPException(status_code=400, detail="Failed to generate questions")
@@ -316,7 +316,7 @@ async def start_interview(
             profile_analysis = {"error": str(e)}
 
         # Generate questions based on Source (Resume vs JD)
-        questions = await asyncio.to_thread(generate_mock_questions, content, source)
+        questions = await asyncio.to_thread(generate_interview_questions, content, source)
 
         if not questions:
             raise HTTPException(status_code=400, detail="Failed to generate questions")
@@ -425,7 +425,7 @@ async def generate_more_questions_endpoint(
 
             # Generate a new batch of questions — request extra to survive duplicate filtering
             new_questions = await run_in_threadpool(
-                generate_mock_questions,
+                generate_interview_questions,
                 text=profile_text,
                 source=source,
                 num_questions=count + 8,

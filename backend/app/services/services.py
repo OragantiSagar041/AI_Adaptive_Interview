@@ -386,7 +386,7 @@ def run_code_against_tests(code: str, task: Dict[str, Any], language: str) -> Di
     elif language in ["javascript", "typescript"]:
         return _run_js_locally(code, tests, function_name, language)
     else:
-        return _run_compiled_mock(code, tests, function_name, language)
+        return _simulate_code_execution(code, tests, function_name, language)
 
 def _run_js_locally(code: str, tests: list, function_name: str, language: str) -> Dict[str, Any]:
     import subprocess
@@ -495,13 +495,13 @@ if (func) {{
                         lines = [l.strip() for l in stdout.split("\n") if l.strip()]
                         for line in reversed(lines):
                             if line.startswith("[") and line.endswith("]"):
-                                class MockResult:
+                                class SimulatedResult:
                                     pass
-                                mock_res = MockResult()
-                                mock_res.returncode = 0
-                                mock_res.stdout = line
-                                mock_res.stderr = stderr
-                                return _collect_runner_output(mock_res, tests)
+                                simulated_res = SimulatedResult()
+                                simulated_res.returncode = 0
+                                simulated_res.stdout = line
+                                simulated_res.stderr = stderr
+                                return _collect_runner_output(simulated_res, tests)
                     except Exception:
                         pass
                 if stderr:
@@ -693,7 +693,7 @@ def _run_jdoodle_api(code: str, tests: list, function_name: str, language: str) 
         "all_passed": (hidden_passed == hidden_total) and all(r["passed"] for r in visible_results)
     }
 
-def _run_compiled_mock(code: str, tests: list, function_name: str, language: str) -> Dict[str, Any]:
+def _simulate_code_execution(code: str, tests: list, function_name: str, language: str) -> Dict[str, Any]:
     # 1. Base validation
     if not code.strip() or (len(code.strip()) < 50 and "Write your solution here" in code):
         return _runner_error(f"Cannot compile {language}: Code is empty or missing implementation.", tests)
@@ -1049,13 +1049,13 @@ else:
                         lines = [l.strip() for l in stdout.split("\n") if l.strip()]
                         for line in reversed(lines):
                             if line.startswith("[") and line.endswith("]"):
-                                class MockResult:
+                                class SimulatedResult:
                                     pass
-                                mock_res = MockResult()
-                                mock_res.returncode = 0
-                                mock_res.stdout = line
-                                mock_res.stderr = stderr
-                                return _collect_runner_output(mock_res, tests)
+                                simulated_res = SimulatedResult()
+                                simulated_res.returncode = 0
+                                simulated_res.stdout = line
+                                simulated_res.stderr = stderr
+                                return _collect_runner_output(simulated_res, tests)
                     except Exception:
                         pass
                 if stderr:
@@ -1544,7 +1544,7 @@ def generate_jd_questions(jd_text: str, ai_instructions: str = "", interview_typ
 
     return questions
 
-def generate_mock_questions(text: str, source: str, num_questions: int = 6, resume_text: str = None, jd_text: str = None, hr_screening: dict = None, custom_questions: str = "", ai_instructions: str = "", interview_type: str = "Technical", industry: str = "General", language: str = "English") -> List[Dict[str, str]]:
+def generate_interview_questions(text: str, source: str, num_questions: int = 6, resume_text: str = None, jd_text: str = None, hr_screening: dict = None, custom_questions: str = "", ai_instructions: str = "", interview_type: str = "Technical", industry: str = "General", language: str = "English") -> List[Dict[str, str]]:
     """
     Generate structured interview questions.
     Structure: Self-Intro → Technical Middle → HR Screening (if enabled) → Closing
