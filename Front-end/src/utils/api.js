@@ -17,14 +17,14 @@ api.interceptors.request.use(
   (config) => {
     const requestPath = String(config.url || "");
     const candidateRequest = CANDIDATE_ROUTE_RE.test(requestPath);
-    let token = candidateRequest ? getCandidateSessionToken() : sessionStorage.getItem("masterToken");
+    let token = candidateRequest ? getCandidateSessionToken() : localStorage.getItem('masterToken');
 
     if (!candidateRequest) {
-      if (!token) token = sessionStorage.getItem("adminToken");
-      if (!token) token = sessionStorage.getItem("token");
+      if (!token) token = localStorage.getItem('adminToken');
+      if (!token) token = localStorage.getItem('token');
 
       if (!token) {
-        const adminUserStr = sessionStorage.getItem("adminUser");
+        const adminUserStr = localStorage.getItem('adminUser');
         if (adminUserStr) {
           try {
             const parsed = JSON.parse(adminUserStr);
@@ -64,7 +64,7 @@ let _refreshPromise = null; // deduplicate simultaneous refresh calls
 
 async function proactiveTokenRefresh() {
   // Only refresh admin tokens, not candidate tokens
-  const token = sessionStorage.getItem('adminToken') || sessionStorage.getItem('masterToken') || sessionStorage.getItem('token');
+  const token = localStorage.getItem('adminToken') || localStorage.getItem('masterToken') || localStorage.getItem('token');
   if (!token) return;
 
   const expiry = getTokenExpiry(token);
@@ -87,15 +87,15 @@ async function proactiveTokenRefresh() {
     const newToken = res.data?.token;
     if (newToken) {
       // Update all storage keys so every subsequent request uses the new token
-      if (sessionStorage.getItem('adminToken')) sessionStorage.setItem('adminToken', newToken);
-      if (sessionStorage.getItem('masterToken')) sessionStorage.setItem('masterToken', newToken);
-      if (sessionStorage.getItem('token')) sessionStorage.setItem('token', newToken);
+      if (localStorage.getItem('adminToken')) localStorage.setItem('adminToken', newToken);
+      if (localStorage.getItem('masterToken')) localStorage.setItem('masterToken', newToken);
+      if (localStorage.getItem('token')) localStorage.setItem('token', newToken);
       // Also update the token embedded in adminUser JSON
       try {
-        const adminUser = JSON.parse(sessionStorage.getItem('adminUser') || '{}');
+        const adminUser = JSON.parse(localStorage.getItem('adminUser') || '{}');
         if (adminUser.token) {
           adminUser.token = newToken;
-          sessionStorage.setItem('adminUser', JSON.stringify(adminUser));
+          localStorage.setItem('adminUser', JSON.stringify(adminUser));
         }
       } catch (_) {}
     }
@@ -139,10 +139,10 @@ api.interceptors.response.use(
         }
       } else if (!isLoginRoute && !window.__hireIqAuthRedirecting) {
         window.__hireIqAuthRedirecting = true
-        sessionStorage.removeItem("auth")
-        sessionStorage.removeItem("masterToken")
-        sessionStorage.removeItem("adminToken")
-        sessionStorage.removeItem("token")
+        localStorage.removeItem('auth')
+        localStorage.removeItem('masterToken')
+        localStorage.removeItem('adminToken')
+        localStorage.removeItem('token')
         window.location.assign("/login")
       }
     }

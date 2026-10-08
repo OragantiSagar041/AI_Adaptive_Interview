@@ -801,7 +801,7 @@ export default function AICallingAgentPage() {
                   onRefresh={() => {
                     const fetchIntegrations = async () => {
                       try {
-                        const token = sessionStorage.getItem('token');
+                        const token = localStorage.getItem('token');
                         const r = await fetch(`${API_BASE_URL}/api/calls/integrations`, {
                           headers: {
                             Authorization: `Bearer ${token}`

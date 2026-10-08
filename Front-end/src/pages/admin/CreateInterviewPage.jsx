@@ -391,7 +391,7 @@ export default function CreateInterviewPage() {
       const response = await axios.post(`${API_BASE_URL}/admin/parse-resume`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
-          'Authorization': `Bearer ${sessionStorage.getItem('adminToken')}`
+          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
         }
       })
       onParsed(null, response.data)
@@ -1572,9 +1572,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       </ol>
                     )}
                   </div>
-                </div>
-
-                {/* AI Instructions Section */}
+                </div>{/* AI Instructions Section */}
                 <div className="border border-slate-200 dark:border-slate-700/80 rounded-2xl overflow-hidden bg-white dark:bg-slate-800/60/82 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-slate-300">
                   <div className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-900/50/50 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2">
@@ -2245,9 +2243,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       </ol>
                     )}
                   </div>
-                </div>
-
-                {/* AI Instructions Section (Bulk) */}
+                </div>{/* AI Instructions Section (Bulk) */}
                 <div className="border border-slate-200 dark:border-slate-700/80 rounded-2xl overflow-hidden bg-white dark:bg-slate-800/60/82 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-slate-300">
                   <div className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-900/50/50 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2">

@@ -10,7 +10,7 @@ export default function CreateTenant() {
   const navigate = useNavigate()
   const token = useSelector(state => state.auth.token) || ''
   const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
-  const adminId = sessionStorage.getItem('adminId') || ''
+  const adminId = localStorage.getItem('adminId') || ''
 
   // Form states
   const [username, setUsername] = useState('')
