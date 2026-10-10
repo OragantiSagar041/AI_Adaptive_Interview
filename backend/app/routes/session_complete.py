@@ -1156,3 +1156,38 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
 # --------------------------------------------------------------------------------
 # MASTER & SUBSCRIPTION APIs
 # --------------------------------------------------------------------------------
+
+@router.post('/api/webrtc/telemetry/{link_id}')
+async def telemetry_fallback(
+    link_id: str,
+    payload: dict,
+    request: Request,
+):
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        raise HTTPException(status_code=401, detail='Missing token')
+    token = auth_header.split(' ')[1]
+    candidate_session = _validate_candidate_monitoring_token(token, link_id)
+    if not candidate_session:
+        raise HTTPException(status_code=401, detail='Invalid token')
+    data = {'type': 'telemetry', 'data': payload}
+    from app.db.redis_manager import manager
+    await manager.send_to_admins(link_id, data)
+    proctoring_status = payload.get('proctoring_status', {}) or {}
+    updates = {
+        'audio_level': _bounded_number(payload.get('audio_level'), 0, 100),
+        'current_question': _bounded_number(payload.get('current_question'), 0, 10_000, integer=True),
+        'total_questions': _bounded_number(payload.get('total_questions'), 0, 10_000, integer=True),
+        'question_text': str(payload.get('question_text') or '')[:500],
+        'round_type': _safe_round_type(payload.get('round_type')),
+        'proctoring_alerts': _bounded_number(payload.get('proctoring_alerts'), 0, 10_000, integer=True),
+        'last_alert_type': str(proctoring_status.get('lastAlertType') or '')[:64] or None,
+        'face_visible': _optional_bool(proctoring_status.get('faceVisible')),
+        'face_count': _bounded_number(proctoring_status.get('faceCount'), 0, 20, integer=True),
+        'multi_face': _optional_bool(proctoring_status.get('multiFace')),
+        'phone_detected': _optional_bool(proctoring_status.get('phoneDetected')),
+        'eye_contact_lost': _optional_bool(proctoring_status.get('eyeContactLost')),
+    }
+    await _store_live_snapshot(link_id, updates, candidate_session)
+    return {'status': 'success'}
+

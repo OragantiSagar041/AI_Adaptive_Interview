@@ -344,13 +344,32 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
       }
     }
 
-    const sendTelemetry = () => {
+    const sendTelemetry = async () => {
       const current = latestTelemetryRef.current
-      if (wsRef.current?.readyState === WebSocket.OPEN && current) {
+      if (!current) return
+
+      const payload = { ...current, audio_level: measureAudioLevel() }
+
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
           type: 'telemetry',
-          data: { ...current, audio_level: measureAudioLevel() },
+          data: payload,
         }))
+      } else {
+        // Fallback to HTTP if WebRTC signaling socket is blocked or reconnecting
+        try {
+          const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL
+          await fetch(`${baseUrl}/api/webrtc/telemetry/${linkId}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${monitoringToken}`
+            },
+            body: JSON.stringify(payload)
+          })
+        } catch (err) {
+          // Silent catch for telemetry
+        }
       }
     }
 
