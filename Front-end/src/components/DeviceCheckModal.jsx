@@ -36,7 +36,7 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
 
   const hasFaceVerified = proctoring.faceVisible && proctoring.faceCount === 1 && !proctoring.multiFace;
   const hasEnvironmentVerified = env.isIsolated;
-  const canProceed = isReady && !error && hasAudioVerified && hasFaceVerified && hasEnvironmentVerified && hasScreenShareVerified && !env.hasMultipleTabs;
+  const canProceed = isReady && !error && hasAudioVerified && hasFaceVerified && hasEnvironmentVerified && hasScreenShareVerified && !env.hasMultipleTabs && proctoring.agentConnected;
 
   useEffect(() => {
     let active = true;
@@ -362,10 +362,10 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
                 <button
                   type="button"
                   onClick={env.startIsolationTest}
-                  disabled={env.isTesting || env.hasMultipleTabs}
+                  disabled={env.isTesting || env.hasMultipleTabs || !proctoring.agentConnected}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 shrink-0 ${env.isTesting
                       ? 'bg-indigo-600/50 text-indigo-200 cursor-wait'
-                      : env.hasMultipleTabs
+                      : env.hasMultipleTabs || !proctoring.agentConnected
                         ? 'bg-red-500/20 text-red-300 cursor-not-allowed border border-red-500/30'
                         : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/30 hover:-translate-y-0.5 cursor-pointer'
                     }`}
@@ -374,6 +374,11 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
                     <>
                       <i className="fas fa-spinner fa-spin text-xs"></i>
                       <span>Testing Fullscreen ({env.countdown}s)...</span>
+                    </>
+                  ) : !proctoring.agentConnected ? (
+                    <>
+                      <i className="fas fa-shield-alt"></i>
+                      <span>Agent Required First</span>
                     </>
                   ) : env.hasMultipleTabs ? (
                     <>
@@ -422,7 +427,11 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
             <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
               <i className="fas fa-desktop text-indigo-400 text-xs"></i> Screen Sharing & Display Security
             </span>
-            {hasScreenShareVerified ? (
+            {!proctoring.agentConnected ? (
+              <span className="text-[11px] font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded animate-pulse">
+                Agent Not Connected
+              </span>
+            ) : hasScreenShareVerified ? (
               <span className="text-[11px] font-bold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded">
                 No Screen Share Active ✓
               </span>
@@ -433,9 +442,43 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
             )}
           </div>
 
-          {isScreenCastDetected ? (
+          {!proctoring.agentConnected ? (
             <div
-              className="rounded-lg p-2.5 border"
+              className="rounded-lg p-2.5 border mt-2"
+              style={{ backgroundColor: 'rgba(245, 158, 11, 0.12)', borderColor: 'rgba(245, 158, 11, 0.35)', color: '#fcd34d' }}
+            >
+              <div className="flex items-start gap-2">
+                <i className="fas fa-shield-alt text-amber-400 text-xs mt-0.5 flex-shrink-0 animate-bounce"></i>
+                <div className="flex-1 text-[11px]">
+                  <p className="font-bold text-amber-100 text-xs">
+                    HireIQ Security Agent Required
+                  </p>
+                  <p className="mt-0.5 text-slate-200 leading-snug">
+                    To ensure a secure environment, you must download and run the HireIQ Security Agent. This detects unauthorized background apps and mirroring tools (e.g. SpaceDesk, AnyDesk).
+                  </p>
+                  <div className="mt-2 flex gap-2">
+                    {(() => {
+                      const ua = window.navigator.userAgent.toLowerCase();
+                      const isMac = ua.includes('mac');
+                      const isLinux = ua.includes('linux');
+                      const link = isMac ? '/downloads/hireiq-agent-mac' : isLinux ? '/downloads/hireiq-agent-linux' : '/downloads/hireiq-agent.exe';
+                      const label = isMac ? 'Download for Mac' : isLinux ? 'Download for Linux' : 'Download for Windows (.exe)';
+                      return (
+                        <a href={link} download className="bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded text-xs font-bold transition-all shadow shadow-amber-600/30">
+                          {label}
+                        </a>
+                      );
+                    })()}
+                  </div>
+                  <p className="mt-1.5 text-amber-300/80 font-semibold text-[10px]">
+                    Once running, this check will verify automatically.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : isScreenCastDetected ? (
+            <div
+              className="rounded-lg p-2.5 border mt-2"
               style={{ backgroundColor: 'rgba(239, 68, 68, 0.12)', borderColor: 'rgba(239, 68, 68, 0.35)', color: '#fecaca' }}
             >
               <div className="flex items-start gap-2">
@@ -460,7 +503,7 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
               </div>
             </div>
           ) : (
-            <p className="text-[11px] text-slate-400 leading-tight">
+            <p className="text-[11px] text-slate-400 leading-tight mt-2">
               Single monitor verified. No screen mirroring, casting, or remote display software detected.
             </p>
           )}
@@ -483,7 +526,9 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
           >
             {isReady && !error && !canProceed
               ? (
-                isScreenCastDetected
+                !proctoring.agentConnected
+                  ? 'Security Agent Required to Continue'
+                  : isScreenCastDetected
                   ? `Stop Screen Sharing (${proctoring.detectedPlatforms?.[0] || 'SpaceDesk/AnyDesk'}) to Continue`
                   : env.hasMultipleTabs
                     ? 'Close Other Tabs to Continue'
