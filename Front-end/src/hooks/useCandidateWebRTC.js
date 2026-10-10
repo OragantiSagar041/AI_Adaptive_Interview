@@ -148,20 +148,21 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
             // High Tier: Camera + Screen + Audio
             // Low Tier: Camera only (360p/15fps) to conserve candidate upload and proctor download
             let cameraSender = null
+            let screenSender = null
             if (cameraVideoTrack) {
-              console.log(`[CandidateWebRTC] Adding camera track (${isLowTier ? '360p/15fps Low Tier' : '720p/30fps High Tier'}) to PC`)
+              console.log(`[CandidateWebRTC] Adding camera track (${isLowTier ? '360p/15fps Low Tier' : '720p/24fps High Tier'}) to PC`)
               cameraSender = pc.addTrack(cameraVideoTrack, cameraStream || new MediaStream([cameraVideoTrack]))
             }
             if (!isLowTier && screenVideoTrack) {
               console.log('[CandidateWebRTC] Adding screen track to PC (High Tier)')
-              pc.addTrack(screenVideoTrack, screenStream || new MediaStream([screenVideoTrack]))
+              screenSender = pc.addTrack(screenVideoTrack, screenStream || new MediaStream([screenVideoTrack]))
             }
             if (!isLowTier && audioTrack) {
               console.log('[CandidateWebRTC] Adding audio track to PC (High Tier)')
               pc.addTrack(audioTrack, new MediaStream([audioTrack]))
             }
 
-            // Apply Layered Adaptive Stream Subscription (LASS) parameters to camera sender
+            // Apply encoding parameters to camera sender
             if (cameraSender) {
               try {
                 const params = cameraSender.getParameters()
@@ -169,20 +170,37 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
                   params.encodings = [{}]
                 }
                 if (isLowTier) {
-                  // Low Layer: 360p / ~15 FPS / ~220 kbps (matches SFU Simulcast low-tier spec)
+                  // Low Layer: 360p / ~15 FPS / ~200 kbps
                   params.encodings[0].scaleResolutionDownBy = 2.0
                   params.encodings[0].maxFramerate = 15
-                  params.encodings[0].maxBitrate = 220000
+                  params.encodings[0].maxBitrate = 200000
                 } else {
-                  // High Layer: 720p / ~30 FPS / ~1.5 Mbps (matches SFU Simulcast high-tier spec)
+                  // High Layer: 720p / ~24 FPS / ~900 kbps (smooth video without buffer bloat)
                   params.encodings[0].scaleResolutionDownBy = 1.0
-                  params.encodings[0].maxFramerate = 30
-                  params.encodings[0].maxBitrate = 1500000
+                  params.encodings[0].maxFramerate = 24
+                  params.encodings[0].maxBitrate = 900000
                 }
                 await cameraSender.setParameters(params)
                 console.log(`[CandidateWebRTC] Successfully set ${streamTier.toUpperCase()} tier encoding parameters on camera sender.`)
               } catch (paramErr) {
-                console.warn('[CandidateWebRTC] Could not set encoding parameters (browser fallback active):', paramErr)
+                console.warn('[CandidateWebRTC] Could not set camera encoding parameters:', paramErr)
+              }
+            }
+
+            // Apply encoding parameters to screen sender (prevents 4-6 Mbps spikes)
+            if (screenSender) {
+              try {
+                const sParams = screenSender.getParameters()
+                if (!sParams.encodings || sParams.encodings.length === 0) {
+                  sParams.encodings = [{}]
+                }
+                // Cap screen share to 1.2 Mbps at 15 FPS (crystal clear text without buffering)
+                sParams.encodings[0].maxFramerate = 15
+                sParams.encodings[0].maxBitrate = 1200000
+                await screenSender.setParameters(sParams)
+                console.log('[CandidateWebRTC] Successfully set screen encoding parameters.')
+              } catch (sErr) {
+                console.warn('[CandidateWebRTC] Could not set screen encoding parameters:', sErr)
               }
             }
 

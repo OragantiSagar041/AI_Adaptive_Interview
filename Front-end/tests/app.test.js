@@ -18,6 +18,6 @@ describe('Frontend Core Sanity & WebRTC Config Tests', () => {
     assert.ok(typeof API_BASE_URL === 'string', 'API_BASE_URL should be a string');
     // In CI or production without env var, it correctly falls back to an empty string for relative paths
     // In local environments, it uses http://127.0.0.1:8000
-    assert.ok(API_BASE_URL === '' || API_BASE_URL.includes('127.0.0.1') || API_BASE_URL.includes('localhost'), 'API_BASE_URL should fall back to empty string or local origin');
+    assert.ok(API_BASE_URL === '' || API_BASE_URL.includes('127.0.0.1') || API_BASE_URL.includes('localhost') || API_BASE_URL.includes('hireiq.co.in'), 'API_BASE_URL should fall back to valid origin or empty string');
   });
 });

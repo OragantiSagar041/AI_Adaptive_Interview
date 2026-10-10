@@ -712,12 +712,12 @@ export default function CreateInterviewBulkTab({
                       onChange={(e) => handleBulkConfigChange('industry', e.target.value)}
                       options={[
                         { value: 'General', label: 'General (No Specific)' },
-                        { value: 'Information Technology', label: 'Information Technology' },
-                        { value: 'Software & SaaS', label: 'Software & SaaS' },
-                        { value: 'Healthcare', label: 'Healthcare' },
-                        { value: 'Financial Services', label: 'Financial Services' },
                         { value: 'Education', label: 'Education' },
-                        { value: 'Human Resources & Staffing', label: 'Human Resources & Staffing' }
+                        { value: 'Financial Services', label: 'Financial Services' },
+                        { value: 'Healthcare', label: 'Healthcare' },
+                        { value: 'Human Resources & Staffing', label: 'Human Resources & Staffing' },
+                        { value: 'Information Technology', label: 'Information Technology' },
+                        { value: 'Software & SaaS', label: 'Software & SaaS' }
                       ]}
                     />
                   </div>

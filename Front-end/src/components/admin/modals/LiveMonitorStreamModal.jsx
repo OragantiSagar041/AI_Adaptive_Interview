@@ -228,7 +228,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
   }, [])
 
   // Detect a media-path outage even when the signaling WebSocket remains open.
-  // Two unchanged inbound-RTP samples avoid flagging normal short stalls.
+  // Avoid flagging normal static screens (e.g. reading code or questions) as outages.
   useEffect(() => {
     if (!isOpen || !session) return
 
@@ -237,7 +237,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       if (!pc || !mountedRef.current) return
 
       const iceDown = ['disconnected', 'failed', 'closed'].includes(pc.iceConnectionState)
-      const telemetryStale = lastTelemetryAtRef.current > 0 && Date.now() - lastTelemetryAtRef.current > 15000
+      const telemetryStale = lastTelemetryAtRef.current > 0 && Date.now() - lastTelemetryAtRef.current > 20000
 
       let mediaFrozen = false
       try {
@@ -254,8 +254,8 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
           }
         })
 
-        if (hasVideoReport && decodedFrames > 0) {
-          mediaFrozen = lastBytesReceivedRef.current === bytesReceived
+        if (hasVideoReport) {
+          mediaFrozen = lastBytesReceivedRef.current !== null && lastBytesReceivedRef.current === bytesReceived
           frozenCountRef.current = mediaFrozen ? frozenCountRef.current + 1 : 0
           lastBytesReceivedRef.current = bytesReceived
         } else {
@@ -266,7 +266,10 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
         // ICE and telemetry signals still provide a useful fallback.
       }
 
-      const networkDown = iceDown || telemetryStale || (mediaFrozen && frozenCountRef.current >= 2)
+      // Only flag network issue if ICE actually disconnected, telemetry is dead,
+      // or media is stalled for at least 8 samples (16 seconds) while ICE is not connected
+      const sustainedStall = frozenCountRef.current >= 8 && pc.iceConnectionState !== 'connected'
+      const networkDown = iceDown || (sustainedStall && telemetryStale)
       if (networkDown !== networkDownRef.current) {
         networkDownRef.current = networkDown
         setIsCandidateNetworkDown(networkDown)
@@ -411,15 +414,15 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
 
       if (mountedRef.current) setStatus('negotiating')
 
-      // If no video track arrives within 8 s, retry the offer automatically.
+      // If no video track arrives within 15 s, retry the offer automatically.
       streamTimeoutRef.current = setTimeout(() => {
         if (mountedRef.current && statusRef.current !== 'streaming') {
-          console.warn('[AdminWebRTC] No stream in 8 s — retrying offer...')
+          console.warn('[AdminWebRTC] No stream in 15 s — retrying offer...')
           if (sendOfferRef.current && wsRef.current?.readyState === WebSocket.OPEN) {
             sendOfferRef.current(wsRef.current)
           }
         }
-      }, 8000)
+      }, 15000)
 
     } catch (err) {
       console.error('[AdminWebRTC] sendOffer error:', err)
@@ -617,12 +620,21 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       videoRef.current.srcObject = null
       return
     }
-    const stream = buildRemoteViewStream(remoteStream, viewMode)
-    videoRef.current.srcObject = stream
-    videoRef.current.muted = true
-    videoRef.current.play().catch(() => {
-      // Autoplay may be blocked, but the video source is attached.
-    })
+    const targetStream = buildRemoteViewStream(remoteStream, viewMode)
+    if (!targetStream) return
+
+    const currentStream = videoRef.current.srcObject
+    const currentVideoTrack = currentStream?.getVideoTracks()?.[0]
+    const targetVideoTrack = targetStream?.getVideoTracks()?.[0]
+
+    // Only update srcObject if the track actually changed to prevent decoder buffer flushes
+    if (!currentStream || currentVideoTrack?.id !== targetVideoTrack?.id) {
+      videoRef.current.srcObject = targetStream
+      videoRef.current.muted = true
+      videoRef.current.play().catch(() => {
+        // Autoplay may be blocked, but the video source is attached.
+      })
+    }
   }, [remoteStream, viewMode])
 
   useEffect(() => {

@@ -864,8 +864,44 @@ async def get_metered_ice_servers() -> list:
     Fetch dynamic STUN/TURN credentials from Metered API (e.g. hireiq.metered.live),
     or fall back gracefully to configured TURN_SERVER / standard STUN.
     """
-    metered_api_key = os.getenv("METERED_API_KEY", "").strip()
-    metered_domain = os.getenv("METERED_DOMAIN", "hireiq.metered.live").strip()
+    metered_api_key = (
+        os.getenv("METERED_API_KEY")
+        or os.getenv("metered_api_key")
+        or os.getenv("METERED_KEY")
+        or os.getenv("metered_key")
+        or ""
+    ).strip()
+    metered_domain = (
+        os.getenv("METERED_DOMAIN")
+        or os.getenv("metered_domain")
+        or "hireiq.metered.live"
+    ).strip()
+
+    # Support raw JSON secret strings from AWS Secrets Manager
+    if not metered_api_key:
+        for env_k in ("SECRETS", "APP_SECRETS", "SECRET_STRING", "SECRET_JSON", "METERED_CONFIG", "TURN_CONFIG"):
+            raw_json = os.getenv(env_k, "").strip()
+            if raw_json.startswith("{"):
+                try:
+                    import json as _j
+                    parsed = _j.loads(raw_json)
+                    if isinstance(parsed, dict):
+                        metered_api_key = (
+                            parsed.get("METERED_API_KEY")
+                            or parsed.get("metered_api_key")
+                            or parsed.get("METERED_KEY")
+                            or parsed.get("metered_key")
+                            or ""
+                        ).strip()
+                        metered_domain = (
+                            parsed.get("METERED_DOMAIN")
+                            or parsed.get("metered_domain")
+                            or metered_domain
+                        ).strip()
+                        if metered_api_key:
+                            break
+                except Exception:
+                    pass
 
     # If no Metered API key configured, use fallback STUN/TURN servers
     if not metered_api_key:

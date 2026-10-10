@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '../apiConfig'
+import { API_BASE_URL } from '../apiConfig.js'
 
 function getMeteredIceServers(username, credential) {
   return [
@@ -70,7 +70,7 @@ if (typeof window !== 'undefined') {
 
 export function getIceServers() {
   if (dynamicIceServers && dynamicIceServers.length > 0) {
-    return [...dynamicIceServers, ...FREE_TURN_FALLBACK]
+    return dynamicIceServers
   }
 
   const env = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : {}

@@ -149,8 +149,8 @@ function CandidateStreamCard({ session, token, onSelectCandidate }) {
             decoded += report.framesDecoded || 0
           }
         })
-        if (decoded > 0) {
-          frozen = lastBytesRef.current === bytes
+        if (bytes > 0) {
+          frozen = lastBytesRef.current !== null && lastBytesRef.current === bytes
           frozenSamplesRef.current = frozen ? frozenSamplesRef.current + 1 : 0
           lastBytesRef.current = bytes
         } else {
@@ -158,7 +158,8 @@ function CandidateStreamCard({ session, token, onSelectCandidate }) {
           lastBytesRef.current = null
         }
       } catch { /* ICE state and telemetry remain valid fallbacks. */ }
-      setIssue(iceDown || telemetryStale || (frozen && frozenSamplesRef.current >= 2))
+      const sustainedStall = frozenSamplesRef.current >= 8 && pc.iceConnectionState !== 'connected'
+      setIssue(iceDown || (sustainedStall && telemetryStale))
     }, HEALTH_INTERVAL_MS)
 
     return () => {
@@ -171,9 +172,11 @@ function CandidateStreamCard({ session, token, onSelectCandidate }) {
   }, [sessionLinkId(session), token])
 
   useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.srcObject = stream
-      videoRef.current.play().catch(() => {})
+    if (videoRef.current && stream) {
+      if (videoRef.current.srcObject !== stream) {
+        videoRef.current.srcObject = stream
+        videoRef.current.play().catch(() => {})
+      }
     }
   }, [stream])
 
