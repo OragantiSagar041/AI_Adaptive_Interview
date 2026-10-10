@@ -216,15 +216,19 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
     const pc = pcRef.current
     if (!pc) return
 
+    // addTransceiver creates receivers immediately. Only consider them active if the PC is connected
+    // or if the tracks are unmuted (meaning media is flowing).
+    const isConnected = pc.connectionState === 'connected'
+    
     const receiverTracks = pc.getReceivers()
       .map(receiver => receiver.track)
-      .filter(Boolean)
+      .filter(track => track && (!track.muted || isConnected))
 
     if (receiverTracks.length === 0) return
 
     const receiverStream = new MediaStream(receiverTracks)
     setRemoteStream(receiverStream)
-    if (mountedRef.current) setStatus('streaming')
+    if (mountedRef.current && isConnected) setStatus('streaming')
   }, [])
 
   // Detect a media-path outage even when the signaling WebSocket remains open.
