@@ -80,6 +80,8 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   const [resumeSubTab, setResumeSubTab] = useState('document')
   const [showResumeContent, setShowResumeContent] = useState(false)
   const [showRecordingModal, setShowRecordingModal] = useState(false)
+  const [camVideoError, setCamVideoError] = useState(false)
+  const [screenVideoError, setScreenVideoError] = useState(false)
   const [showTranscriptModal, setShowTranscriptModal] = useState(false)
   const [transcriptTab, setTranscriptTab] = useState('verbal')
   const [showAllTests, setShowAllTests] = useState(false)
@@ -250,6 +252,8 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
     setAtsData(null)
     setError(null)
     setShowResumeContent(false)
+    setCamVideoError(false)
+    setScreenVideoError(false)
     setTranslations({})
     setTranslatingKeys({})
     setTranslatingAll(false)
@@ -484,12 +488,22 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
 
   const formatMediaUrl = (url) => {
     if (!url) return null
-    if (url.startsWith('http')) return url
-    return `${API_BASE_URL}/${url.replace(/^\/+/, '')}`
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url
+    }
+    if (url.includes('recordings/') || url.startsWith('uploads/')) {
+      const fname = url.split('/').pop()
+      const apiBase = (API_BASE_URL || '').replace(/\/+$/, '')
+      return `${apiBase}/admin/recordings/stream/${fname}`
+    }
+    const base = (API_BASE_URL || '').replace(/\/api\/?$/, '').replace(/\/+$/, '')
+    return `${base}/${url.replace(/^\/+/, '')}`
   }
 
-  const recordingUrl = formatMediaUrl(c.recording_url)
-  const screenRecordingUrl = formatMediaUrl(c.screen_recording_url)
+  const rawCam = c.recording_url !== undefined ? c.recording_url : candidate?.recording_url
+  const rawScreen = c.screen_recording_url !== undefined ? c.screen_recording_url : candidate?.screen_recording_url
+  const recordingUrl = formatMediaUrl(rawCam)
+  const screenRecordingUrl = formatMediaUrl(rawScreen)
 
   const handleDownloadRecording = async () => {
     const urlsToDownload = [];
@@ -1371,21 +1385,27 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
-                          {(recordingUrl || screenRecordingUrl) && (
-                            <button
-                              onClick={handleDownloadRecording}
-                              className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors shadow-sm"
-                              title="Download Recording"
-                            >
-                              <Download size={16} /> Download
-                            </button>
+                          {recordingUrl || screenRecordingUrl ? (
+                            <>
+                              <button
+                                onClick={handleDownloadRecording}
+                                className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors shadow-sm"
+                                title="Download Recording"
+                              >
+                                <Download size={16} /> Download
+                              </button>
+                              <button
+                                onClick={() => setShowRecordingModal(true)}
+                                className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl hover:bg-emerald-100 transition-colors shadow-sm"
+                              >
+                                <Video size={16} /> Recording <ChevronRight size={14} />
+                              </button>
+                            </>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-400 bg-slate-50 border border-slate-200/60 rounded-xl">
+                              <Video size={14} className="opacity-40" /> Unavailable
+                            </span>
                           )}
-                          <button
-                            onClick={() => setShowRecordingModal(true)}
-                            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl hover:bg-emerald-100 transition-colors shadow-sm"
-                          >
-                            <Video size={16} /> Recording <ChevronRight size={14} />
-                          </button>
                         </div>
                       </div>
                     </section>
@@ -1660,13 +1680,27 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                         <div className="text-xs text-slate-400 font-medium">Interview video feed</div>
                       </div>
                     </div>
-                    {recordingUrl ? (
-                      <video controls preload="none" className="w-full aspect-video object-contain rounded-lg border border-slate-200 bg-black" src={recordingUrl}>
-                        Your browser does not support video.
-                      </video>
+                    {recordingUrl && !camVideoError ? (
+                      <div className="flex flex-col gap-2">
+                        <video 
+                          controls 
+                          preload="metadata" 
+                          playsInline 
+                          onError={() => setCamVideoError(true)}
+                          className="w-full aspect-video object-contain rounded-lg border border-slate-200 bg-black" 
+                          src={recordingUrl}
+                        >
+                          Your browser does not support video.
+                        </video>
+                        <div className="flex justify-end">
+                          <a href={recordingUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold text-indigo-600 hover:underline">
+                            Open video in new tab ↗
+                          </a>
+                        </div>
+                      </div>
                     ) : (
                       <div className="w-full aspect-video flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
-                        No camera recording available
+                        {camVideoError ? "Camera recording currently unavailable" : "No camera recording available"}
                       </div>
                     )}
                   </div>
@@ -1679,13 +1713,27 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                         <div className="text-xs text-slate-400 font-medium">Screen share capture</div>
                       </div>
                     </div>
-                    {screenRecordingUrl ? (
-                      <video controls preload="none" className="w-full aspect-video object-contain rounded-lg border border-slate-200 bg-black" src={screenRecordingUrl}>
-                        Your browser does not support video.
-                      </video>
+                    {screenRecordingUrl && !screenVideoError ? (
+                      <div className="flex flex-col gap-2">
+                        <video 
+                          controls 
+                          preload="metadata" 
+                          playsInline 
+                          onError={() => setScreenVideoError(true)}
+                          className="w-full aspect-video object-contain rounded-lg border border-slate-200 bg-black" 
+                          src={screenRecordingUrl}
+                        >
+                          Your browser does not support video.
+                        </video>
+                        <div className="flex justify-end">
+                          <a href={screenRecordingUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold text-emerald-600 hover:underline">
+                            Open video in new tab ↗
+                          </a>
+                        </div>
+                      </div>
                     ) : (
                       <div className="w-full aspect-video flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
-                        No screen recording available
+                        {screenVideoError ? "Screen recording currently unavailable" : "No screen recording available"}
                       </div>
                     )}
                   </div>

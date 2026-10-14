@@ -242,6 +242,10 @@ async def get_dashboard_aggregated_data(
             "rejected_by": 1,
             "last_action_by_name": 1,
             "admin_name": 1,
+            "recording_path": 1,
+            "screen_recording_path": 1,
+            "interview_id": 1,
+            "record_video": 1,
         }
         
         def _load_dashboard_candidates():
