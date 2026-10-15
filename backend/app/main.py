@@ -308,8 +308,13 @@ app.add_middleware(
 # private Cloudinary assets and must never be exposed by an unauthenticated
 # static-file mount.
 import os as _os
-if _os.getenv("ENV", "local") != "production" and _os.path.isdir("uploads"):
-    app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+_backend_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+_uploads_dir = _os.path.join(_backend_dir, "uploads")
+if not _os.path.isdir(_uploads_dir) and _os.path.isdir("uploads"):
+    _uploads_dir = _os.path.abspath("uploads")
+
+if _os.getenv("ENV", "local") != "production" and _os.path.isdir(_uploads_dir):
+    app.mount("/uploads", StaticFiles(directory=_uploads_dir), name="uploads")
 
 # --- Routers ---
 app.include_router(admin_dashboard_router)

@@ -78,6 +78,8 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
   const [error, setError] = useState(null)
   const [showResumeModal, setShowResumeModal] = useState(false)
   const [showRecordingModal, setShowRecordingModal] = useState(false)
+  const [camVideoError, setCamVideoError] = useState(false)
+  const [screenVideoError, setScreenVideoError] = useState(false)
   const [showTranscriptModal, setShowTranscriptModal] = useState(false)
 
   // New States
@@ -149,6 +151,8 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
     setDetail(null)
     setAtsData(null)
     setError(null)
+    setCamVideoError(false)
+    setScreenVideoError(false)
     setTranslations({})
     setTranslatingKeys({})
 
@@ -348,12 +352,22 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
 
   const formatMediaUrl = (url) => {
     if (!url) return null
-    if (url.startsWith('http')) return url
-    return `${API_BASE_URL}/${url.replace(/^\/+/, '')}`
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url
+    }
+    if (url.includes('recordings/') || url.startsWith('uploads/')) {
+      const fname = url.split('/').pop()
+      const apiBase = (API_BASE_URL || '').replace(/\/+$/, '')
+      return `${apiBase}/admin/recordings/stream/${fname}`
+    }
+    const base = (API_BASE_URL || '').replace(/\/api\/?$/, '').replace(/\/+$/, '')
+    return `${base}/${url.replace(/^\/+/, '')}`
   }
 
-  const recordingUrl = formatMediaUrl(c.recording_url)
-  const screenRecordingUrl = formatMediaUrl(c.screen_recording_url)
+  const rawCam = c.recording_url !== undefined ? c.recording_url : candidate?.recording_url
+  const rawScreen = c.screen_recording_url !== undefined ? c.screen_recording_url : candidate?.screen_recording_url
+  const recordingUrl = formatMediaUrl(rawCam)
+  const screenRecordingUrl = formatMediaUrl(rawScreen)
 
   const handleDecision = async (newDecision) => {
     if (!candidate) return;
@@ -919,13 +933,27 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                           <div className="text-xs text-slate-400 font-medium">Interview video feed</div>
                         </div>
                       </div>
-                      {recordingUrl ? (
-                        <video controls className="w-full aspect-video object-contain rounded-lg border border-slate-200 bg-black max-h-48" src={recordingUrl}>
-                          Your browser does not support video.
-                        </video>
+                      {recordingUrl && !camVideoError ? (
+                        <div className="flex flex-col gap-2">
+                          <video 
+                            controls 
+                            preload="metadata" 
+                            playsInline 
+                            onError={() => setCamVideoError(true)}
+                            className="w-full aspect-video object-contain rounded-lg border border-slate-200 bg-black max-h-48" 
+                            src={recordingUrl}
+                          >
+                            Your browser does not support video.
+                          </video>
+                          <div className="flex justify-end">
+                            <a href={recordingUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold text-indigo-600 hover:underline">
+                              Open video in new tab ↗
+                            </a>
+                          </div>
+                        </div>
                       ) : (
                         <div className="h-28 flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
-                          No camera recording available
+                          {camVideoError ? "Camera recording currently unavailable" : "No camera recording available"}
                         </div>
                       )}
                     </div>
@@ -939,13 +967,27 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                           <div className="text-xs text-slate-400 font-medium">Screen share capture</div>
                         </div>
                       </div>
-                      {screenRecordingUrl ? (
-                        <video controls className="w-full aspect-video object-contain rounded-lg border border-slate-200 bg-black max-h-48" src={screenRecordingUrl}>
-                          Your browser does not support video.
-                        </video>
+                      {screenRecordingUrl && !screenVideoError ? (
+                        <div className="flex flex-col gap-2">
+                          <video 
+                            controls 
+                            preload="metadata" 
+                            playsInline 
+                            onError={() => setScreenVideoError(true)}
+                            className="w-full aspect-video object-contain rounded-lg border border-slate-200 bg-black max-h-48" 
+                            src={screenRecordingUrl}
+                          >
+                            Your browser does not support video.
+                          </video>
+                          <div className="flex justify-end">
+                            <a href={screenRecordingUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold text-emerald-600 hover:underline">
+                              Open video in new tab ↗
+                            </a>
+                          </div>
+                        </div>
                       ) : (
                         <div className="h-28 flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
-                          No screen recording available
+                          {screenVideoError ? "Screen recording currently unavailable" : "No screen recording available"}
                         </div>
                       )}
                     </div>
