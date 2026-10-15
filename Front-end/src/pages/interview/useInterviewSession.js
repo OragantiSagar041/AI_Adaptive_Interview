@@ -1129,7 +1129,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
         // Web Speech is display-only "ghost" text for the *current* in-progress segment.
         // Gate: ignore Web Speech hallucination if no real acoustic energy occurred
-        if (segmentPeakRmsRef.current < 0.04 && audioRmsRef.current < 0.04) {
+        if (segmentPeakRmsRef.current < 0.012 && audioRmsRef.current < 0.012) {
           return
         }
 
@@ -1234,6 +1234,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       const AudioCtx = window.AudioContext || window.webkitAudioContext
       const actx = new AudioCtx()
       noiseAudioContextRef.current = actx
+      if (actx.state === 'suspended') {
+        actx.resume().catch(e => console.log("Noise AudioContext resume failed:", e))
+      }
       const source = actx.createMediaStreamSource(stream)
       const analyser = actx.createAnalyser()
       analyser.fftSize = 256
@@ -1242,6 +1245,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
       const tick = () => {
         if (!noiseAudioContextRef.current) return
+        if (noiseAudioContextRef.current.state === 'suspended') {
+          noiseAudioContextRef.current.resume().catch(() => {})
+        }
         noiseMonitorFrameRef.current = requestAnimationFrame(tick)
         analyser.getByteTimeDomainData(dataArray)
 
@@ -1257,8 +1263,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
         const now = Date.now()
 
-        // Treat RMS > 0.03 as speech and bump the silence timer
-        if (rms > 0.03) {
+        // Treat RMS > 0.015 as speech and bump the silence timer
+        if (rms > 0.015) {
           lastSpeechTimeRef.current = now
           if (isSpeechRecordingRef.current && !isTTSPlayingRef.current) {
             markSegmentHasSpeech()

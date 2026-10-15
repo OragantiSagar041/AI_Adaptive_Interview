@@ -49,11 +49,65 @@ _SUMMARY_SYSTEM = (
 
 _FOLLOWUP_SYSTEM = (
     "You are an intelligent technical interviewer. Generate ONE follow-up question as valid JSON. "
+    "CRITICAL SPOKEN INTERVIEW FORMAT: This is a spoken interview conducted over a microphone. "
+    "NEVER ask the candidate to 'write code', 'write a function', 'write a script', or 'write a SQL query'. "
+    "NEVER ask them to dictate raw code. Instead, ask them to explain concepts, describe their approach, or walk through logic verbally. "
     "No markdown, no explanation."
 )
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
+
+def sanitize_verbal_question_text(text: str) -> str:
+    """
+    Ensure technical questions are framed for verbal/spoken answers.
+    Converts prompts like 'Write a python function to...' into verbal walk-through questions.
+    """
+    if not text:
+        return text
+    cleaned = text.strip()
+
+    # Replace "Write a SQL query to ..." -> "How would you structure a SQL query to ..."
+    cleaned = re.sub(
+        r'(?i)^(?:can you\s+|please\s+)?write (?:a |an )?(sql query|query)\s+(?:to|that|for)\s+',
+        r'How would you structure a \1 to ',
+        cleaned
+    )
+    # Replace "Write a [python/java/...] function/method/script/program/algorithm to ..." -> "How would you approach designing a \1 to ..."
+    cleaned = re.sub(
+        r'(?i)^(?:can you\s+|please\s+)?write (?:a |an )?((?:python |java |javascript |c\+\+ |go |sql )?(?:function|method|script|program|algorithm|code snippet|query))\s+(?:to|that|for)\s+',
+        r'How would you approach designing a \1 to ',
+        cleaned
+    )
+    # Replace "Write code to ..." -> "Walk me through how you would structure code to "
+    cleaned = re.sub(
+        r'(?i)^(?:can you\s+|please\s+)?write (?:some |the )?code\s+(?:to|that|for)\s+',
+        r'Walk me through how you would structure code to ',
+        cleaned
+    )
+    # Replace any leftover "write a query/function to" inside sentence
+    cleaned = re.sub(
+        r'(?i)\bwrite (?:a |an )?(sql query|query)\s+(?:to|that|for)\s+',
+        r'structure a \1 to ',
+        cleaned
+    )
+    cleaned = re.sub(
+        r'(?i)\bwrite (?:a |an )?((?:python |java |javascript |c\+\+ |go )?(?:function|script|method))\s+(?:to|that|for)\s+',
+        r'design a \1 to ',
+        cleaned
+    )
+    # Replace "code a solution..." or "implement a function to..."
+    cleaned = re.sub(
+        r'(?i)^(?:can you\s+|please\s+)?(?:implement|code) (?:a |an )?((?:python |java |javascript )?(?:function|method|solution|query))\s+(?:to|that|for)\s+',
+        r'How would you approach implementing a \1 to ',
+        cleaned
+    )
+    if cleaned != text.strip() and not re.search(r'\b(walk me through|explain|describe)\b', cleaned, re.IGNORECASE):
+        if cleaned.endswith('.'):
+            cleaned = cleaned[:-1] + '. Walk me through your approach verbally.'
+        elif cleaned.endswith('?'):
+            cleaned = cleaned[:-1] + ', and walk me through your approach?'
+    return cleaned
 
 def _truncate(text: str, limit: int) -> str:
     text = (text or "").strip()
@@ -74,7 +128,12 @@ def _extract_json_robust(text: str) -> Optional[Dict]:
     try:
         return json.loads(text[start:end])
     except json.JSONDecodeError:
-        return None
+        # Secondary recovery: remove trailing commas before closing braces/brackets
+        try:
+            cleaned = re.sub(r",\s*([\]}])", r"\1", text[start:end])
+            return json.loads(cleaned)
+        except Exception:
+            return None
 
 
 def _parse_with_schema(raw: str, schema_class, fallback):
@@ -325,13 +384,17 @@ Rules:
 - Ask directly, never say "You mentioned" or "Based on your answer"
 - Under 2 sentences, conversational and punchy
 - Dig into a project, technology, or specific claim they made
+- Spoken interview format: DO NOT ask to write code, write queries, or dictate syntax. Ask them to explain or walk through their approach verbally.
 
 Return JSON: {{"question": "...", "difficulty": "Medium", "type": "Follow-up", "category": "Deep Dive"}}"""
     else:
         user_msg = f"""Change topic. Generate ONE new interview question in {language} from this JD.
 Job Description: {jd_short}
 
-Rules: Ask a role-specific question. Under 2 sentences.
+Rules:
+- Ask a role-specific question. Under 2 sentences.
+- Spoken interview format: DO NOT ask to write code, write queries, or dictate syntax. Ask them to explain or walk through their approach verbally.
+
 Return JSON: {{"question": "...", "difficulty": "Medium", "type": "JD-Based", "category": "Role Requirement"}}"""
 
     import random
@@ -359,11 +422,17 @@ Return JSON: {{"question": "...", "difficulty": "Medium", "type": "JD-Based", "c
         )
         result = _parse_with_schema(raw, FollowupQuestion, fallback)
         result.id = current_q_id + 1
-        return result.to_dict()
+        res_dict = result.to_dict()
+        if res_dict.get("question"):
+            res_dict["question"] = sanitize_verbal_question_text(res_dict["question"])
+        return res_dict
     except Exception as e:
         print(f"[typed_ai_layer] generate_followup error: {e}")
         fallback.id = current_q_id + 1
-        return fallback.to_dict()
+        fb_dict = fallback.to_dict()
+        if fb_dict.get("question"):
+            fb_dict["question"] = sanitize_verbal_question_text(fb_dict["question"])
+        return fb_dict
 
 def detect_spoken_language(text: str) -> str:
     """

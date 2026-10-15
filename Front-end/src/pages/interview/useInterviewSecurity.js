@@ -151,10 +151,10 @@ export const useInterviewSecurity = ({
     }
 
     if (type === 'noise_alert') {
-      if (noiseAlertCountRef?.current >= 10) {
+      if (noiseAlertCountRef?.current >= 25) {
         Swal.fire({
           title: 'Interview Terminated',
-          text: `Your interview has been automatically submitted because you exceeded the maximum allowed background noise alerts (10).`,
+          text: `Your interview has been automatically submitted because you exceeded the maximum allowed background noise alerts (25).`,
           icon: 'error',
           background: '#161c2d',
           color: '#fff',
@@ -170,7 +170,7 @@ export const useInterviewSecurity = ({
           },
           buttonsStyling: false
         }).then(() => {
-          if (handleSubmitInterview) handleSubmitInterview(true, "Terminated: Exceeded Background Noise Alerts (10)")
+          if (handleSubmitInterview) handleSubmitInterview(true, "Terminated: Exceeded Background Noise Alerts (25)")
         })
       }
     } else if (type === 'tab_switch') {

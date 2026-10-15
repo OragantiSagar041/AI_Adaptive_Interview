@@ -857,7 +857,7 @@ def get_session_by_link(link_id: str):
             is_terminated = (
                 violation_count >= 20 or
                 warnings_count >= 10 or
-                noise_alerts >= 10 or
+                noise_alerts >= 25 or
                 tab_switches >= 3 or
                 screenshare_stops >= 3
             )
@@ -1158,7 +1158,7 @@ async def start_session_interview(link_id: str = Form(...)):
             is_terminated = (
                 violation_count >= 20 or
                 warnings_count >= 10 or
-                noise_alerts >= 10 or
+                noise_alerts >= 25 or
                 tab_switches >= 3 or
                 screenshare_stops >= 3
             )
@@ -2862,7 +2862,7 @@ Return this EXACT JSON (all score fields are integers 0-100, weighted_total is t
                 from groq import Groq
                 client = Groq(api_key=groq_key.strip())
                 response = client.chat.completions.create(
-                    model=os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"),
+                    model=os.getenv("GROQ_MODEL", "openai/gpt-oss-20b"),
                     messages=[
                         {"role": "system", "content": "You are a precise ATS scoring engine. Return ONLY valid JSON. No markdown. Be extremely fast and concise."},
                         {"role": "user", "content": prompt}

@@ -73,10 +73,12 @@ try:
     from app.ai.typed_ai_layer import parse_resume as _typed_parse_resume
     from app.ai.typed_ai_layer import generate_summary as _typed_generate_summary
     from app.ai.typed_ai_layer import generate_followup as _typed_generate_followup
+    from app.ai.typed_ai_layer import sanitize_verbal_question_text
     _TYPED_LAYER_AVAILABLE = True
 except ImportError:
     _TYPED_LAYER_AVAILABLE = False
     print("[WARN] typed_ai_layer not available")
+    def sanitize_verbal_question_text(t): return t
 
 try:
     from app.data.interview_graphs import run_question_generation_graph, run_followup_graph, run_summary_graph
@@ -1450,6 +1452,10 @@ def generate_jd_questions(jd_text: str, ai_instructions: str = "", interview_typ
            - Do NOT ask generic "soft skill" questions unless the JD emphasizes them.
            - Vary difficulty: Start with basic checks, move to scenario-based/hard problems.
            - Act as a real human interviewer. NEVER say "According to the job description" or "You mentioned in your resume". Just ask the question directly.
+           - CRITICAL SPOKEN INTERVIEW FORMAT: This is a verbal/spoken interview conducted over a microphone.
+             NEVER ask the candidate to 'write code', 'write a function', 'write a script', or 'write a SQL query'.
+             NEVER ask them to dictate raw programming syntax.
+             Instead, ask them to EXPLAIN concepts, DESCRIBE their algorithmic approach, DISCUSS trade-offs, or WALK THROUGH how they would structure the logic verbally.
            - CRITICAL LENGTH CONSTRAINT: Keep every question strictly under 2-3 sentences. Make it conversational, punchy, and direct. Do NOT generate multi-part essay questions.
         """
 
@@ -1485,9 +1491,10 @@ def generate_jd_questions(jd_text: str, ai_instructions: str = "", interview_typ
         
         # Add generated questions to the list
         for q in data.get("questions", []):
+            q_text = sanitize_verbal_question_text(q.get("question", ""))
             questions.append({
                 "id": len(questions) + 1,
-                "question": q["question"],
+                "question": q_text,
                 "difficulty": q.get("difficulty", "Medium"),
                 "type": q.get("type", "General"),
                 "category": q.get("category", "JD Requirement")
@@ -1747,6 +1754,8 @@ def generate_interview_questions(text: str, source: str, num_questions: int = 6,
         all_questions.append(q)
         idx += 1
     for q in middle_questions:
+        if q.get("question"):
+            q["question"] = sanitize_verbal_question_text(q["question"])
         q["id"] = idx
         all_questions.append(q)
         idx += 1
@@ -2310,6 +2319,7 @@ def generate_followup_question(answer_text: str, resume_context: str, jd_text: s
         - If they mentioned a Project, ask about architectural decisions or challenges in THAT project.
         - If they mentioned a specific Tech Stack (e.g., React, Python), ask a conceptual question about it.
         - If their answer was vague, ask them to clarify specific examples.
+        - CRITICAL SPOKEN INTERVIEW FORMAT: This is a spoken voice interview over a microphone. NEVER ask the candidate to write code or write queries. Ask them to explain concepts, describe their approach, or walk through logic verbally.
         - CRITICAL LENGTH CONSTRAINT: Keep your follow-up strictly under 2 sentences. It must sound like a natural, brief spoken conversation.
         
         Return STRICT JSON:
@@ -2331,6 +2341,7 @@ def generate_followup_question(answer_text: str, resume_context: str, jd_text: s
         Change the topic and ask ONE new interview question (JSON) based strictly on the Job Description.
         - Act as a human interviewer making a natural conversation.
         - Frame the question based on the skills, requirements, or responsibilities mentioned in the JD.
+        - CRITICAL SPOKEN INTERVIEW FORMAT: This is a spoken voice interview over a microphone. NEVER ask the candidate to write code or write queries. Ask them to explain concepts or walk through logic verbally.
         
         Return STRICT JSON:
         {{
@@ -2350,7 +2361,9 @@ def generate_followup_question(answer_text: str, resume_context: str, jd_text: s
         if not q_data:
             raise Exception("Invalid JSON returned")
         
-        # Add ID
+        # Add ID and sanitize question
+        if q_data.get("question"):
+            q_data["question"] = sanitize_verbal_question_text(q_data["question"])
         q_data["id"] = current_q_id + 1
         return q_data
     except Exception as e:
@@ -2370,7 +2383,7 @@ def generate_followup_question(answer_text: str, resume_context: str, jd_text: s
         
         return {
             "id": current_q_id + 1,
-            "question": random.choice(fallback_list),
+            "question": sanitize_verbal_question_text(random.choice(fallback_list)),
             "difficulty": "Medium",
             "type": "Follow-up",
             "category": "Deep Dive"
