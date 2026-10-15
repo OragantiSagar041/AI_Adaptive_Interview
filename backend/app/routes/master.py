@@ -12,6 +12,8 @@ import threading, traceback, logging
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Union
+from firebase_admin import auth as firebase_auth_admin
+
 
 # ---------------------------------------------------------------------------
 # Third-party
@@ -41,6 +43,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.utils import simpleSplit
 from reportlab.pdfgen import canvas
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from fastapi import Depends, HTTPException, Request
 
 # ---------------------------------------------------------------------------
 # Internal / project
@@ -92,6 +95,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+@router.post("/api/master/login")
 @router.post("/master/login")
 def master_login(data: AdminLogin, request: Request):
     x_forwarded_for = request.headers.get("x-forwarded-for")
@@ -220,8 +224,8 @@ def get_companies(
     result = []
     for c in companies:
         company_id = str(c["_id"])
-        mock_user = {"company_id": company_id}
-        plan_context = get_admin_plan_context(mock_user)
+        test_user = {"company_id": company_id}
+        plan_context = get_admin_plan_context(test_user)
         
         c_date_str = c.get("created_at") or c.get("subscription_start")
         if start_dt or end_dt:
@@ -382,8 +386,8 @@ def get_master_dashboard_stats(
     total_sales_inr = 0
     for c in all_companies:
         company_id = str(c["_id"])
-        mock_user = {"company_id": company_id}
-        plan_context = get_admin_plan_context(mock_user)
+        test_user = {"company_id": company_id}
+        plan_context = get_admin_plan_context(test_user)
         plan_key = (plan_context.get("plan_key") or "trial").lower()
         plan_label = plan_context.get("plan_label") or "Free Trial"
         is_expired = plan_context.get("is_expired", False)
@@ -527,7 +531,61 @@ def get_master_dashboard_stats(
         }
     }
 
+@router.post("/master/migrate-features")
+def migrate_existing_account_features(master_id: str = Depends(get_current_admin)):
+    """
+    One-time migration: for every company that has features=null (inheriting from the
+    global plan dynamically), snapshot the current effective plan features onto the
+    company document.  After this, editing the global plan template will NOT change
+    any existing account — only newly-created accounts (via Create Tenant) will pick
+    up the plan's features at the moment of creation.
+    """
+    require_master_user(master_id)
+
+    companies = list(companies_collection.find({"features": {"$exists": False}}))
+    # Also catch docs where features is explicitly None
+    companies += list(companies_collection.find({"features": None}))
+
+    updated = 0
+    skipped = 0
+    errors = []
+
+    seen_ids = set()
+    for company in companies:
+        cid = str(company["_id"])
+        if cid in seen_ids:
+            continue
+        seen_ids.add(cid)
+
+        try:
+            plan_name = company.get("subscription_plan", "trial")
+            plan_def = get_plan_definition(plan_name)
+            features_snapshot = list(plan_def.get("features", []))
+
+            companies_collection.update_one(
+                {"_id": company["_id"]},
+                {"$set": {"features": features_snapshot}}
+            )
+            updated += 1
+        except Exception as e:
+            errors.append({"company_id": cid, "error": str(e)})
+            skipped += 1
+
+    return {
+        "status": "success",
+        "updated": updated,
+        "skipped": skipped,
+        "errors": errors,
+        "message": (
+            f"Migrated {updated} companies. "
+            "Existing accounts are now isolated from global plan changes. "
+            "Use the ⚙ button in Subscribers to modify individual account features."
+        )
+    }
+
+
 @router.post("/master/tenants")
+
 def create_tenant(data: TenantCreate, master_id: str = Depends(get_current_admin), current_admin: str = Depends(get_current_admin)):
     require_master_user(master_id)
         
@@ -547,7 +605,10 @@ def create_tenant(data: TenantCreate, master_id: str = Depends(get_current_admin
         "subscription_start": start.isoformat(),
         "subscription_expiry": expiry.isoformat(),
         "credits": data.credits if data.credits > 0 else credits_to_grant,
-        "created_at": start.isoformat()
+        "created_at": start.isoformat(),
+        # Snapshot the plan's features at creation time so that future edits
+        # to the global plan template do NOT affect this account's features.
+        "features": list(plan_def.get("features", [])),
     }
     company_insert = companies_collection.insert_one(new_company)
     company_id = str(company_insert.inserted_id)
@@ -565,9 +626,8 @@ def create_tenant(data: TenantCreate, master_id: str = Depends(get_current_admin
     new_tenant["custom_id"] = get_next_sequence_value("recruiter", "RC")
     admins_collection.insert_one(new_tenant)
     
-    # Send credentials email to the new tenant
-    brevo_key = os.getenv("BREVO_API_KEY")
-    sender_email = os.getenv("BREVO_SENDER_EMAIL", "support@hireiq.com")
+    brevo_key = (os.getenv("BREVO_API_KEY") or "").strip().strip('"').strip("'")
+    sender_email = (os.getenv("BREVO_SENDER_EMAIL") or "").strip().strip('"').strip("'")
     if brevo_key:
         try:
             import requests
@@ -586,13 +646,17 @@ def create_tenant(data: TenantCreate, master_id: str = Depends(get_current_admin
                 <p>Best regards,<br>The Hire IQ Team</p>
             </body></html>
             """
-            requests.post("https://api.brevo.com/v3/smtp/email", json={
-                "sender": {"name": "Hire IQ", "email": sender_email},
+            sender_name = (os.getenv("BREVO_SENDER_NAME") or "Hire IQ").strip()
+            resp = requests.post("https://api.brevo.com/v3/smtp/email", json={
+                "sender": {"name": sender_name, "email": sender_email},
                 "to": [{"email": data.email, "name": data.company_name}],
                 "subject": f"Welcome to Hire IQ - Account Credentials for {data.company_name}",
                 "htmlContent": email_html
             }, headers={"api-key": brevo_key, "content-type": "application/json"}, timeout=5)
-            logger.info(f"Sent credentials email to {data.email}")
+            if resp.status_code >= 300:
+                logger.error(f"❌ [BREVO ERROR tenant credentials] {resp.status_code}: {resp.text}")
+            else:
+                logger.info(f"Sent credentials email to {data.email}")
         except Exception as email_err:
             logger.error(f'Error sending tenant credentials email: {email_err}')
 
@@ -658,6 +722,13 @@ def update_company(company_id: str, data: TenantUpdate, master_id: str = Depends
             {"_id": ObjectId(company_id)},
             {"$push": {"plan_history": history_entry}}
         )
+        
+        # When changing the plan, automatically snapshot the new plan's features
+        # (unless custom features were explicitly passed in this same update)
+        if data.features is None:
+            plan_def = get_plan_definition(req_plan)
+            update_fields["features"] = list(plan_def.get("features", []))
+            
     elif req_plan:
         update_fields["subscription_plan"] = req_plan
         admin_update_fields["subscription_plan"] = req_plan
@@ -834,8 +905,8 @@ def get_company_revenue(
     
     for c in companies:
         company_id = str(c["_id"])
-        mock_user = {"company_id": company_id}
-        plan_context = get_admin_plan_context(mock_user)
+        test_user = {"company_id": company_id}
+        plan_context = get_admin_plan_context(test_user)
         plan_key = (plan_context.get("plan_key") or "trial").lower()
         plan_label = plan_context.get("plan_label") or "Free Trial"
         is_expired = plan_context.get("is_expired", False)

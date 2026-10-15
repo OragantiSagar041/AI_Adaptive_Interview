@@ -3,6 +3,7 @@ import json
 import asyncio
 import logging
 import time
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from fastapi import WebSocket
 from app.services.live_monitoring_security import admin_can_receive_dashboard_event
@@ -29,35 +30,54 @@ class RedisConnectionManager:
         self._redis_last_attempt: float = 0.0
         # Only retry Redis once per 60 seconds after a failure
         self._redis_retry_cooldown = 60.0
+        self._loop = None
 
     async def connect_redis(self):
         """Try to connect to Redis. After a failure, retry at most once per cooldown period.
-        This prevents the permanent _redis_failed=True lockout that silently disabled
-        in-memory fallback across the full process lifetime.
+        Ensures the Redis client is always bound to the active running event loop.
         """
+        try:
+            current_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            current_loop = None
+
         if self.redis:
-            return  # already connected
+            if getattr(self, "_loop", None) is not current_loop:
+                if self.listener_task and not self.listener_task.done():
+                    try:
+                        self.listener_task.cancel()
+                    except Exception:
+                        pass
+                self.redis = None
+                self.pubsub = None
+                self.listener_task = None
+            else:
+                return  # already connected on current loop
+
         now = time.monotonic()
-        if self._redis_failed and (now - self._redis_last_attempt) < self._redis_retry_cooldown:
-            return  # still in cooldown — keep using in-memory
-        # Reset flag so we actually attempt again
+                # Reset flag so we actually attempt again
         self._redis_failed = False
         self._redis_last_attempt = now
         try:
-            temp_redis = redis.from_url(
-                REDIS_URL,
-                decode_responses=True,
-                socket_connect_timeout=3,  # fail fast instead of hanging
-                protocol=2,
-            )
+            import ssl as _ssl
+            redis_kwargs = {
+                "decode_responses": True,
+                "socket_connect_timeout": 3,  # fail fast instead of hanging
+                "protocol": 2,
+            }
+            if REDIS_URL.startswith("rediss://"):
+                redis_kwargs["ssl_cert_reqs"] = _ssl.CERT_NONE
+
+            temp_redis = redis.from_url(REDIS_URL, **redis_kwargs)
             await temp_redis.ping()
             self.redis = temp_redis
             self.pubsub = self.redis.pubsub()
+            self._loop = current_loop
             self.listener_task = asyncio.create_task(self._listen_to_redis())
             logger.info(f"Connected to Redis at {REDIS_URL}")
         except Exception as e:
             logger.warning(f"Could not connect to Redis: {e}. Falling back to in-memory routing.")
-            self._redis_failed = True
+            self._redis_failed = False # patched to allow immediate reconnect
             self.redis = None
             self.pubsub = None
 
@@ -114,7 +134,7 @@ class RedisConnectionManager:
                                             await ws.send_json(data)
                                         except Exception as e:
                                             logger.error(f"Error sending to local admin/spectator: {e}")
-                    elif channel == "dashboard:updates":
+                    elif channel in ("dashboard:updates", "interview:events"):
                         await self.broadcast_dashboard(data)
         except asyncio.CancelledError:
             pass
@@ -123,7 +143,7 @@ class RedisConnectionManager:
             # Mark as failed so next connect_redis call can retry after cooldown
             self.redis = None
             self.pubsub = None
-            self._redis_failed = True
+            self._redis_failed = False # patched to allow immediate reconnect
 
     # ─── Candidate connection ────────────────────────────────────────────────────
 
@@ -144,7 +164,7 @@ class RedisConnectionManager:
                 )
                 self.redis = None
                 self.pubsub = None
-                self._redis_failed = True
+                self._redis_failed = False # patched to allow immediate reconnect
 
     def disconnect_candidate(self, link_id: str):
         if link_id in self.local_connections:
@@ -183,7 +203,7 @@ class RedisConnectionManager:
                 )
                 self.redis = None
                 self.pubsub = None
-                self._redis_failed = True
+                self._redis_failed = False # patched to allow immediate reconnect
 
     def disconnect_admin(self, websocket: WebSocket, link_id: str, admin_id: Optional[str] = None):
         if link_id in self.local_connections:
@@ -237,7 +257,7 @@ class RedisConnectionManager:
                 )
                 self.redis = None
                 self.pubsub = None
-                self._redis_failed = True
+                self._redis_failed = False # patched to allow immediate reconnect
 
         if link_id not in self.local_connections:
             self.local_connections[link_id] = {"candidate": None, "admins": [], "admins_map": {}, "spectators": []}
@@ -355,7 +375,7 @@ class RedisConnectionManager:
                 logger.warning(f"Redis publish failed: {e}. Falling back to in-memory.")
                 self.redis = None
                 self.pubsub = None
-                self._redis_failed = True
+                self._redis_failed = False # patched to allow immediate reconnect
         # In-memory fallback
         local_group = self.local_connections.get(link_id)
         if local_group:
@@ -377,7 +397,7 @@ class RedisConnectionManager:
                 logger.warning(f"Redis publish failed: {e}. Falling back to in-memory.")
                 self.redis = None
                 self.pubsub = None
-                self._redis_failed = True
+                self._redis_failed = False # patched to allow immediate reconnect
         # In-memory fallback — fans out to both admins and spectators
         local_group = self.local_connections.get(link_id)
         if local_group:
@@ -402,7 +422,7 @@ class RedisConnectionManager:
                 logger.warning(f"Redis publish failed: {e}. Falling back to in-memory.")
                 self.redis = None
                 self.pubsub = None
-                self._redis_failed = True
+                self._redis_failed = False # patched to allow immediate reconnect
 
         # In-memory fallback
         local_group = self.local_connections.get(link_id)
@@ -415,6 +435,102 @@ class RedisConnectionManager:
                 except Exception:
                     pass
 
+    async def publish_interview_event(
+        self,
+        event_type: str,
+        session_id: str,
+        company_id: Optional[str] = None,
+        created_by: Optional[str] = None,
+        extra: Optional[Dict[str, Any]] = None,
+    ):
+        """Publish an interview event to Redis Pub/Sub channels 'interview:events' and 'dashboard:updates'."""
+        payload = {
+            "type": event_type,
+            "session_id": str(session_id),
+            "link_id": str(session_id),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        if company_id:
+            payload["company_id"] = str(company_id)
+        if created_by:
+            payload["created_by"] = str(created_by)
+        if extra:
+            payload.update(extra)
+
+        await self.connect_redis()
+        if self.redis:
+            try:
+                data_str = json.dumps(payload)
+                await self.redis.publish("interview:events", data_str)
+                await self.redis.publish("dashboard:updates", data_str)
+                return
+            except Exception as e:
+                logger.warning(f"Redis publish failed: {e}. Falling back to in-memory broadcast.")
+                self.redis = None
+                self.pubsub = None
+                self._redis_failed = False # patched to allow immediate reconnect
+
+        # In-memory fallback
+        await self.broadcast_dashboard(payload)
+
 
 manager = RedisConnectionManager()
+
+
+def broadcast_interview_event(
+    event_type: str,
+    session_id: str,
+    company_id: Optional[str] = None,
+    created_by: Optional[str] = None,
+    extra: Optional[Dict[str, Any]] = None,
+):
+    """Sync-safe helper to publish interview events from any sync or async context without event loop conflicts."""
+    # 1. If called from an active event loop (e.g. FastAPI async context)
+    try:
+        loop = asyncio.get_running_loop()
+        if loop.is_running():
+            loop.create_task(manager.publish_interview_event(
+                event_type=event_type,
+                session_id=session_id,
+                company_id=company_id,
+                created_by=created_by,
+                extra=extra,
+            ))
+            return
+    except RuntimeError:
+        pass
+
+    # 2. If called from a synchronous background thread / Celery worker:
+    # Use synchronous Redis directly to avoid creating short-lived asyncio loops that break manager.redis
+    try:
+        import redis as sync_redis
+        import ssl as _ssl
+        payload = {
+            "type": event_type,
+            "session_id": str(session_id),
+            "link_id": str(session_id),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        if company_id:
+            payload["company_id"] = str(company_id)
+        if created_by:
+            payload["created_by"] = str(created_by)
+        if extra:
+            payload.update(extra)
+
+        kwargs = {
+            "decode_responses": True,
+            "socket_connect_timeout": 2.0,
+            "socket_timeout": 2.0,
+            "protocol": 2,
+        }
+        if REDIS_URL.startswith("rediss://"):
+            kwargs["ssl_cert_reqs"] = _ssl.CERT_NONE
+        r = sync_redis.from_url(REDIS_URL, **kwargs)
+        data_str = json.dumps(payload)
+        r.publish("interview:events", data_str)
+        r.publish("dashboard:updates", data_str)
+        r.close()
+    except Exception as e:
+        logger.warning(f"Sync Redis broadcast failed: {e}")
 

@@ -523,7 +523,7 @@ export function CandidateTable({
                   fetch(`${API_BASE_URL}/admin/sessions/${rescheduleModal.session?.link_id || rescheduleModal.session?.id}/reschedule`, {
                     method: 'POST',
                     headers: {
-                      'Authorization': `Bearer ${sessionStorage.getItem("masterToken") || sessionStorage.getItem("adminToken") || sessionStorage.getItem("token")}`
+                      'Authorization': `Bearer ${localStorage.getItem('masterToken') || localStorage.getItem('adminToken') || localStorage.getItem('token')}`
                     },
                     body: body
                   }).then(res => {

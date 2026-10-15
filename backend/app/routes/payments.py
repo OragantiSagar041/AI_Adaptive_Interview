@@ -94,6 +94,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.post("/api/razorpay/create-order")
+@router.post("/razorpay/create-order")
 def create_razorpay_order(data: RazorpayOrderRequest):
     """Create a Razorpay order for a paid subscription."""
     key_id, key_secret = get_razorpay_credentials()
@@ -403,6 +404,7 @@ def _verify_razorpay_signup_payment(data: RazorpayVerifyRequest, key_id: str, ke
 
 
 @router.post("/api/razorpay/verify-payment")
+@router.post("/razorpay/verify-payment")
 def verify_razorpay_payment(data: RazorpayVerifyRequest):
     """Verify Razorpay signature and activate the paid subscription."""
     key_id, key_secret = get_razorpay_credentials()
@@ -517,6 +519,7 @@ def verify_razorpay_payment(data: RazorpayVerifyRequest):
 
 
 @router.post("/api/razorpay/create-upgrade-order")
+@router.post("/razorpay/create-upgrade-order")
 def create_razorpay_upgrade_order(
     data: RazorpayUpgradeOrderRequest,
     current_admin: dict = Depends(get_current_admin_details),
@@ -584,6 +587,7 @@ def create_razorpay_upgrade_order(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/api/razorpay/verify-upgrade")
+@router.post("/razorpay/verify-upgrade")
 def verify_razorpay_upgrade(
     data: RazorpayUpgradeVerifyRequest,
     current_admin: dict = Depends(get_current_admin_details),
@@ -754,6 +758,7 @@ def verify_razorpay_upgrade(
 # --------------------------------------------------------------------------------
 
 @router.post("/api/stripe/create-checkout-session")
+@router.post("/stripe/create-checkout-session")
 def create_stripe_checkout(data: StripeCheckoutRequest):
     """Create a Stripe Checkout session for paid plan subscription"""
     import stripe
@@ -821,6 +826,7 @@ def create_stripe_checkout(data: StripeCheckoutRequest):
         raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}")
 
 @router.post("/api/stripe/webhook")
+@router.post("/stripe/webhook")
 async def stripe_webhook(request):
     """Handle Stripe webhook for paid subscription completion"""
     import stripe

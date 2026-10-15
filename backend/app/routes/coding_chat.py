@@ -120,13 +120,13 @@ All test cases failed due to this error."""
             else:
                 visible = rr.get("visible_results", [])
                 hidden  = rr.get("hidden_summary", {})
-                passed_v = sum(1 for r in visible if r.get("passed"))
+                passed_v = sum(1 for r in visible if str(r.get("passed", "")).strip().lower() in {"true", "1", "yes", "y", "passed", "pass"})
                 total_v  = len(visible)
                 passed_h = hidden.get("passed", 0)
                 total_h  = hidden.get("total", 0)
                 all_passed = rr.get("all_passed", False)
 
-                failed_cases = [r for r in visible if not r.get("passed")]
+                failed_cases = [r for r in visible if str(r.get("passed", "")).strip().lower() not in {"true", "1", "yes", "y", "passed", "pass"}]
                 failed_details = ""
                 for fc in failed_cases[:2]:   # Show max 2 failing examples
                     failed_details += f"  - Input: {fc.get('input')} | Got: {fc.get('output')} | Expected: {fc.get('expected')}\n"
@@ -189,6 +189,7 @@ class StartAICallRequest(BaseModel):
     phone_number: str
 
 @router.post("/api/calls/start/{link_id}")
+@router.post("/calls/start/{link_id}")
 def start_ai_call(link_id: str, data: StartAICallRequest, current_admin: dict = Depends(get_current_admin_details)):
     # Find the candidate session
     session = interview_sessions_collection.find_one({"link_id": link_id})
@@ -244,6 +245,7 @@ def start_ai_call(link_id: str, data: StartAICallRequest, current_admin: dict = 
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/api/calls/status/{link_id}")
+@router.get("/calls/status/{link_id}")
 def get_ai_call_status(link_id: str, current_admin: dict = Depends(get_current_admin_details)):
     session = interview_sessions_collection.find_one({"link_id": link_id})
     if not session:

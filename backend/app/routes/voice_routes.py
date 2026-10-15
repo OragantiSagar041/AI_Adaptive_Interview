@@ -151,7 +151,7 @@ async def interview_websocket(websocket: WebSocket, link_id: str):
 
             elif action == "coding_observation":
                 # Add heavy LLM generation to the background task queue
-                # In a real app, this would trigger an LLM call. Here we just mock a queue job.
+                # In a real app, this would trigger an LLM call. Here we just simulate a queue job.
                 async def process_coding_insight(code, lang):
                     await asyncio.sleep(2) # Simulate processing
                     await pubsub.publish(f"interview_{link_id}", {

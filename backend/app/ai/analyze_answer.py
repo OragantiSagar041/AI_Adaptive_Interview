@@ -285,6 +285,8 @@ Return VALID JSON ONLY:
   "keywords": ["key1", "key2"]
 }}"""
 
+    time_context = ""
+    time_score_hint = 0
     try:
         # Use LangGraph based multi-step scoring
         if _GRAPH_LAYER_AVAILABLE:

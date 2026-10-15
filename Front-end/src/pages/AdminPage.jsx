@@ -424,7 +424,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
       const response = await fetch(`${API_BASE_URL}/admin/parse-resume`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${sessionStorage.getItem('adminToken')}`
+          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
         },
         body: formData
       })
@@ -944,7 +944,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
       const orderData = orderRes.data;
       const storedUser = (() => {
         try {
-          return JSON.parse(sessionStorage.getItem('adminUser')) || {};
+          return JSON.parse(localStorage.getItem('adminUser')) || {};
         } catch {
           return {};
         }

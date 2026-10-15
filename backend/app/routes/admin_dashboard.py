@@ -234,7 +234,7 @@ def update_agent_flow(req: UpdateAgentFlowRequest, omni_api_key: Optional[str] =
 @router.get("/admin/interview/{link_id}")
 def get_interview_details(link_id: str, current_admin: dict = Depends(get_current_admin_details)):
     if link_id.startswith("ai_call_"):
-        # This is an AI Call Mock Session!
+        # This is an AI Call Test Session!
         app_id = link_id.replace("ai_call_", "")
         from bson import ObjectId
         try:
@@ -321,7 +321,7 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
                     }
                 })
 
-        # Mock dimensions
+        # Test dimensions
         score = app.get("score") or 0.0
         
         # Calculate actual duration from Omni Call
@@ -337,7 +337,7 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
             
         response_payload = {
             "interview_id": link_id,
-            "actual_interview_id": "mock_ai_call",
+            "actual_interview_id": "test_ai_call",
             "candidate_id": f"CAN{str(app['_id'])[:4].upper()}",
             "candidate_name": app.get("name") or "Candidate",
             "candidate_email": app.get("email") or "",
@@ -372,7 +372,8 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
             "admin_notes": app.get("admin_notes", ""),
             "alerts": [],
             "answers": answers,
-            "started_at": app.get("applied_at") or app.get("updated_at") or app.get("created_at")
+            "started_at": app.get("applied_at") or app.get("updated_at") or app.get("created_at"),
+            "talent_pool_status": app.get("talent_pool_status", "archived")
         }
         return response_payload
 
@@ -406,37 +407,91 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
     candidate_email = session_data.get("candidate_email")
 
 
-    def get_url_from_raw_path(rpath):
-        if not rpath: return None
-        if rpath.startswith("cloudinary-authenticated://"):
-            public_id = rpath.split("://", 1)[1]
-            signed_url, _ = cloudinary.utils.cloudinary_url(
-                public_id,
-                resource_type="video",
-                type="authenticated",
-                secure=True,
-                sign_url=True,
-            )
-            return signed_url
-        if rpath.startswith("http"): return rpath
+    def find_local_recording_file(raw_path_str):
+        if not raw_path_str:
+            return None
+        raw_clean = str(raw_path_str).replace("\\", "/").strip()
+        filename = os.path.basename(raw_clean)
+        if not filename or filename == ".":
+            return None
         
-        raw_path_fixed = rpath.replace("\\", "/")
-        idx = raw_path_fixed.find("uploads/")
+        backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        check_dirs = [
+            os.path.join(backend_dir, "uploads", "recordings"),
+            os.path.join(backend_dir, "uploads"),
+            os.path.abspath("backend/uploads/recordings"),
+            os.path.abspath("backend/uploads"),
+            os.path.abspath("uploads/recordings"),
+            os.path.abspath("uploads"),
+        ]
         
-        if idx != -1: 
-            relative_path = raw_path_fixed[idx:]
-            if os.path.exists(rpath):
-                return relative_path
-            else:
-                # If running locally, the file might be on the production server
-                return "https://ai-adaptive-interview-1hsw.onrender.com/" + relative_path
-                
-        print(f"Recording file not found on disk: {rpath}")
+        # Direct check if path is absolute or relative
+        if os.path.isfile(raw_path_str) and os.path.getsize(raw_path_str) > 0:
+            return os.path.abspath(raw_path_str)
+        if os.path.isfile(os.path.join("backend", raw_path_str)) and os.path.getsize(os.path.join("backend", raw_path_str)) > 0:
+            return os.path.abspath(os.path.join("backend", raw_path_str))
+            
+        for d in check_dirs:
+            candidate = os.path.join(d, filename)
+            if os.path.isfile(candidate) and os.path.getsize(candidate) > 0:
+                return candidate
         return None
 
-    recording_url = None
-    screen_recording_url = None
-    
+    def get_url_from_raw_path(rpath):
+        if not rpath: return None
+        try:
+            if rpath.startswith("cloudinary-authenticated://"):
+                from urllib.parse import urlparse, parse_qs
+                import cloudinary
+                import cloudinary.utils
+                
+                parsed_uri = urlparse(rpath)
+                public_id = (parsed_uri.netloc + parsed_uri.path).lstrip("/")
+                if not public_id or public_id == "None":
+                    return None
+
+                query_params = parse_qs(parsed_uri.query)
+                
+                cloud_name = query_params.get("cloud_name", [None])[0] or os.getenv("CLOUDINARY_CLOUD_NAME")
+                api_key = query_params.get("api_key", [None])[0] or os.getenv("CLOUDINARY_API_KEY")
+                api_secret = query_params.get("api_secret", [None])[0] or os.getenv("CLOUDINARY_API_SECRET")
+                
+                if cloud_name and api_key and api_secret:
+                    cloudinary.config(
+                        cloud_name=cloud_name,
+                        api_key=api_key,
+                        api_secret=api_secret,
+                        secure=True
+                    )
+                
+                signed_url, _ = cloudinary.utils.cloudinary_url(
+                    public_id,
+                    resource_type="video",
+                    type="authenticated",
+                    secure=True,
+                    sign_url=True,
+                )
+                return signed_url
+
+            if rpath.startswith("http://") or rpath.startswith("https://"):
+                if "onrender.com/uploads/" in rpath:
+                    fname = os.path.basename(rpath)
+                    local_match = find_local_recording_file(fname)
+                    if local_match:
+                        return f"/api/admin/recordings/stream/{fname}"
+                return rpath
+
+            local_file = find_local_recording_file(rpath)
+            if local_file:
+                fname = os.path.basename(local_file)
+                return f"/api/admin/recordings/stream/{fname}"
+
+            # If not found locally on disk, return None
+            return None
+        except Exception as e:
+            print(f"Error generating recording URL for {rpath}: {e}")
+            return None
+
     raw_path = session_data.get("recording_path")
     raw_screen_path = session_data.get("screen_recording_path")
     
@@ -447,7 +502,7 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
                 raw_path = rec_row["recording_path"]
             if not raw_screen_path and rec_row.get("screen_recording_path"):
                 raw_screen_path = rec_row["screen_recording_path"]
-                
+
     recording_url = get_url_from_raw_path(raw_path)
     screen_recording_url = get_url_from_raw_path(raw_screen_path)
 
@@ -456,24 +511,60 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
     # Calculate integrity totals from the violations array, as it accurately tracks all events
     # even if the interview terminates before any questions are answered.
     violations = session_data.get("violations", [])
-    total_tab_switches = sum(1 for v in violations if v.get("type") == "tab_switch")
-    total_face_alerts = sum(1 for v in violations if v.get("type") not in ("tab_switch", "noise_alert"))
-    total_noise_alerts = sum(1 for v in violations if v.get("type") == "noise_alert")
-    
+    session_integrity = session_data.get("integrity") or {}
+
+    tab_switch_types = {
+        "tab_switch", "screen_casting", "screen_share_detected", 
+        "screen_recording", "screenshare_stopped", "multiple_displays", 
+        "multi_monitor", "fullscreen_exit", "window_blur"
+    }
+    noise_types = {"noise_alert", "background_noise", "noise"}
+
+    total_tab_switches = sum(1 for v in violations if v.get("type") in tab_switch_types)
+    total_face_alerts = sum(1 for v in violations if v.get("type") not in tab_switch_types and v.get("type") not in noise_types)
+    total_noise_alerts = sum(1 for v in violations if v.get("type") in noise_types)
+
+    if total_tab_switches == 0 and session_integrity.get("total_tab_switches"):
+        total_tab_switches = session_integrity.get("total_tab_switches")
+    if total_face_alerts == 0 and session_integrity.get("total_face_alerts"):
+        total_face_alerts = session_integrity.get("total_face_alerts")
+    if total_noise_alerts == 0 and session_integrity.get("total_noise_alerts"):
+        total_noise_alerts = session_integrity.get("total_noise_alerts")
+
     total_time = 0
-    # Note: if all per-question time_spent_seconds are 0 (old records pre-fix),
-    # we fall back to session-level timestamps below after the answers loop.
+    ans_tab_sw = 0
+    ans_face_al = 0
+    ans_noise_al = 0
 
     if actual_interview_id:
-        rows = answers_collection.find({"interview_id": actual_interview_id}).sort("question_id", 1)
+        ans_projection = {
+            "question_id": 1,
+            "question_text": 1,
+            "answer_text": 1,
+            "ai_score": 1,
+            "content_score": 1,
+            "relevance_score": 1,
+            "time_score": 1,
+            "time_spent_seconds": 1,
+            "time_limit_seconds": 1,
+            "ai_feedback": 1,
+            "corrected_answer": 1,
+            "wpm": 1,
+            "pause_count": 1,
+            "filler_count": 1,
+            "keyword_match_pct": 1,
+            "tab_switches": 1,
+            "face_alerts": 1,
+            "noise_alerts": 1,
+        }
+        rows = answers_collection.find({"interview_id": actual_interview_id}, ans_projection).sort("question_id", 1)
         for row in rows:
             tab_sw = row.get("tab_switches") or 0
             face_al = row.get("face_alerts") or 0
             noise_al = row.get("noise_alerts") or 0
-            # We no longer sum these from answers since we pull directly from the violations array
-            # total_tab_switches += tab_sw
-            # total_face_alerts += face_al
-            # total_noise_alerts += noise_al
+            ans_tab_sw += tab_sw
+            ans_face_al += face_al
+            ans_noise_al += noise_al
             total_time += (row.get("time_spent_seconds") or 0)
             results.append({
                 "question_id": row.get("question_id"),
@@ -495,6 +586,13 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
                 "face_alerts": face_al,
                 "noise_alerts": noise_al
             })
+
+    if total_tab_switches == 0 and ans_tab_sw > 0:
+        total_tab_switches = ans_tab_sw
+    if total_face_alerts == 0 and ans_face_al > 0:
+        total_face_alerts = ans_face_al
+    if total_noise_alerts == 0 and ans_noise_al > 0:
+        total_noise_alerts = ans_noise_al
 
     # ── Timestamp-based fallback for older sessions where time_spent_seconds was not stored ──
     # If total_time is still 0 after reading all answers, calculate from session timestamps.
@@ -533,6 +631,7 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
     avg_score = 0
     round1_s = 0.0
     round2_s = 0.0
+    interview_type = (session_data.get("interview_type") if session_data else None) or "Technical"
     scores = [r["ai_score"] for r in results if r["ai_score"] is not None]
     verbal_avg = round(sum(scores) / len(scores), 1) if scores else 0
 
@@ -638,7 +737,11 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
             except Exception as e:
                 print(f"Error updating detected accent: {e}")
     else:
-        summary = generate_interview_summary(candidate_name or "Candidate", results)
+        try:
+            summary = generate_interview_summary(candidate_name or "Candidate", results)
+        except Exception as sum_err:
+            print(f"Error generating interview summary: {sum_err}")
+            summary = {}
         recommendation = summary.get("recommendation", "No Data")
         strengths = summary.get("strengths", "")
         weaknesses = summary.get("weaknesses", "")
@@ -824,6 +927,7 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
         "current_company": comp_val,
         "status": sync_session_status(session_data),
         "decision": session_data.get("decision", ""),
+        "talent_pool_status": session_data.get("talent_pool_status"),
         "resume_url": resume_url_val,
         "resume_filename": resume_filename_val,
         "resume_text": session_data.get("resume_text", ""),
@@ -867,7 +971,8 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
         "alerts": session_data.get("violations", session_data.get("alerts", [])),
         "answers": results,
         "candidate_feedback": session_data.get("candidate_feedback", ""),
-        "ats_score": session_data.get("ats_score")
+        "ats_score": session_data.get("ats_score"),
+        "talent_pool_status": session_data.get("talent_pool_status", "archived")
     }
     
     # Include full question list so admin can see which questions were skipped
@@ -939,6 +1044,7 @@ class DecisionRequest(BaseModel):
     link_id: str
     decision: str # 'selected' or 'rejected'
     admin_id: Optional[str] = None
+    talent_pool_status: Optional[str] = None
 
 @router.post("/analyze-answer")
 def analyze(req: AnalyzeRequest):
@@ -1017,6 +1123,7 @@ def upload_full_recording(
         link_id=link_id,
         interview_id=interview_id,
         allow_completed=True,
+        allow_terminated=True,
     )
     link_id = session.get("link_id")
     if recording_type not in {"camera", "screen"}:
@@ -1082,37 +1189,87 @@ def upload_full_recording(
                     if bytes_written > max_recording_bytes:
                         raise HTTPException(status_code=413, detail="Recording too large. Maximum size is 500MB.")
                     buffer.write(chunk)
-        except Exception:
-            if os.path.exists(file_path):
-                os.remove(file_path)
-            raise
-            
-        # Upload to Cloudinary
-        try:
-            upload_result = cloudinary.uploader.upload_large(
-                file_path,
-                resource_type="video",
-                type="authenticated",
-                folder="hireiq_interview_recordings",
-            )
-            cloudinary_public_id = upload_result.get("public_id")
-            normalized_path = f"cloudinary-authenticated://{cloudinary_public_id}"
-            
-            # Clean up local file after successful upload
-            os.remove(file_path)
-            
-        except Exception as cloud_e:
-            logger.exception("Recording upload to private Cloudinary storage failed")
-            if os.getenv("ENV", "local") == "production":
+        except Exception as e:
+            logger.warning(f"Client disconnected or upload interrupted: {e}. Saving {bytes_written} bytes as truncated recording.")
+            recording_truncated = True
+            if bytes_written == 0:
                 if os.path.exists(file_path):
                     os.remove(file_path)
-                raise HTTPException(
-                    status_code=503,
-                    detail="Secure recording storage is temporarily unavailable",
-                ) from cloud_e
+                raise
+            
+        # Upload to Cloudinary using round-robin rotation
+        cloudinary_public_id = None
+        normalized_path = None
+        
+        try:
+            from app.core.cloudinary_manager import cloudinary_manager
+            
+            # Try uploading using the round-robin accounts
+            last_error = None
+            for account in cloudinary_manager.get_next_accounts_generator():
+                try:
+                    cloud_name = account.get("cloud_name")
+                    api_key = account.get("api_key")
+                    api_secret = account.get("api_secret")
+                    
+                    if not all([cloud_name, api_key, api_secret]):
+                        continue
+                        
+                    # Cloudinary's Python SDK upload_large method has a bug where it
+                    # sometimes ignores credentials passed as kwargs and uses globals.
+                    # We can force it by passing it as a `cloud_name` kwarg but using the 
+                    # api_proxy or environment variable, or we can just safely update the config
+                    # using cloudinary.config() before uploading. Since we're in a threaded
+                    # environment, we'll pass the `cloudinary://` URL explicitly using the 
+                    # undocumented `_connection` override or just set config.
+                    
+                    import cloudinary
+                    
+                    # Temporarily update the global config for this thread
+                    cloudinary.config(
+                        cloud_name=cloud_name,
+                        api_key=api_key,
+                        api_secret=api_secret,
+                        secure=True
+                    )
+                    
+                    upload_kwargs = {
+                        "resource_type": "video",
+                        "type": "authenticated",
+                        "folder": "hireiq_interview_recordings"
+                    }
+                    
+                    upload_result = cloudinary.uploader.upload_large(
+                        file_path,
+                        **upload_kwargs
+                    )
+                    
+                    cloudinary_public_id = upload_result.get("public_id")
+                    if not cloudinary_public_id:
+                        raise ValueError(f"Cloudinary returned empty public_id: {upload_result}")
+                    
+                    # Store the account details in the DB along with the path so we know which 
+                    # credentials to use when generating signed URLs later, since we have multiple keys!
+                    normalized_path = f"cloudinary-authenticated://{cloudinary_public_id}?cloud_name={cloud_name}&api_key={api_key}&api_secret={api_secret}"
+                    
+                    # Clean up local file after successful upload
+                    os.remove(file_path)
+                    last_error = None
+                    break  # Success, exit the retry loop
+                    
+                except Exception as cloud_e:
+                    logger.warning(f"Cloudinary upload failed for key {account.get('api_key')}: {cloud_e}")
+                    last_error = cloud_e
+                    continue # Try the next account
+                    
+            if last_error:
+                raise last_error
+            
+        except Exception as cloud_e:
+            logger.exception("All Cloudinary upload attempts failed")
+            # Fall back to local storage instead of deleting the file
             normalized_path = file_path.replace("\\", "/")
             cloudinary_public_id = None
-
         # Update database
         uploaded_at = datetime.now(timezone.utc)
         
@@ -1200,6 +1357,44 @@ def upload_full_recording(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/admin/recordings/stream/{filename}")
+@router.get("/api/admin/recordings/stream/{filename}")
+def stream_local_recording(filename: str):
+    """
+    Stream a local video recording from server disk with media headers.
+    Ensures recordings work reliably even if they haven't been uploaded to Cloudinary yet.
+    """
+    clean_filename = os.path.basename(filename.strip().replace("\\", "/"))
+    if not clean_filename or clean_filename != filename.strip().replace("\\", "/"):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    check_dirs = [
+        os.path.join(backend_dir, "uploads", "recordings"),
+        os.path.join(backend_dir, "uploads"),
+        os.path.abspath("backend/uploads/recordings"),
+        os.path.abspath("backend/uploads"),
+        os.path.abspath("uploads/recordings"),
+        os.path.abspath("uploads"),
+    ]
+
+    target_file = None
+    for d in check_dirs:
+        cand = os.path.join(d, clean_filename)
+        if os.path.isfile(cand) and os.path.getsize(cand) > 0:
+            target_file = cand
+            break
+
+    if not target_file:
+        raise HTTPException(status_code=404, detail="Recording file not found on server disk")
+
+    media_type = "video/webm"
+    if clean_filename.lower().endswith(".mp4"):
+        media_type = "video/mp4"
+
+    return FileResponse(target_file, media_type=media_type)
+
+
 class RecordingUploadFailure(BaseModel):
     interview_id: str
     link_id: Optional[str] = None
@@ -1215,6 +1410,7 @@ def record_recording_upload_failure(
         link_id=data.link_id,
         interview_id=data.interview_id,
         allow_completed=True,
+        allow_terminated=True,
     )
     interview_sessions_collection.update_one(
         {"_id": session["_id"]},
@@ -1452,11 +1648,12 @@ for _route in router.routes:
         break
 def send_submission_notification(candidate_email: str, candidate_name: str, admin_email: str, avg_score: float, total_questions: int, company_name: str = 'HireIQ'):
     """Send test submission notification to both admin and candidate."""
-    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    from pathlib import Path
+    env_path = Path(__file__).resolve().parents[2] / ".env"
     load_dotenv(env_path, override=False)
-    api_key = os.getenv("BREVO_API_KEY")
-    sender_name = "Hire IQ Recruiting"
-    sender_email_addr = os.getenv("BREVO_SENDER_EMAIL")
+    api_key = (os.getenv("BREVO_API_KEY") or "").strip().strip('"').strip("'")
+    sender_name = (os.getenv("BREVO_SENDER_NAME") or "Hire IQ Recruiting").strip().strip('"').strip("'")
+    sender_email_addr = (os.getenv("BREVO_SENDER_EMAIL") or "").strip().strip('"').strip("'")
     if not api_key:
         return False
 
@@ -1568,8 +1765,11 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
             "subject": "Your Interview Has Been Submitted — HireIQ",
             "htmlContent": candidate_html
         }, headers=headers, timeout=10)
+        if res.status_code >= 300:
+            print(f"❌ [BREVO ERROR candidate submission] {res.status_code}: {res.text}")
         results.append(res.status_code < 300)
-    except Exception:
+    except Exception as e:
+        print(f"❌ [BREVO EXCEPTION candidate submission]: {e}")
         results.append(False)
 
     # Send to admin
@@ -1581,8 +1781,11 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
                 "subject": f"Interview Submitted: {candidate_name}",
                 "htmlContent": admin_html
             }, headers=headers, timeout=10)
+            if res.status_code >= 300:
+                print(f"❌ [BREVO ERROR admin notification] {res.status_code}: {res.text}")
             results.append(res.status_code < 300)
-        except Exception:
+        except Exception as e:
+            print(f"❌ [BREVO EXCEPTION admin notification]: {e}")
             results.append(False)
 
     return all(results)
@@ -1590,6 +1793,7 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
 
 # ── Task 8: Dashboard Stats Endpoint ────────────────────────────────────────
 @router.get("/admin/dashboard-stats")
+@router.get("/api/admin/dashboard-stats")
 async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dict = Depends(get_current_admin_details)):
     """Return aggregated stats for the admin dashboard."""
     from app.db.redis_manager import manager
@@ -1991,11 +2195,14 @@ def invitation_email_scheduler_loop():
         EMAIL_SCHEDULER_STARTED = True
 
 @router.get("/api/interview/{interview_id}/insights")
+@router.get("/interview/{interview_id}/insights")
 def get_interview_insights(
     interview_id: str,
     current_admin: dict = Depends(get_current_admin_details),
 ):
-    session = interview_sessions_collection.find_one({"interview_id": interview_id})
+    session = interview_sessions_collection.find_one({
+        "$or": [{"interview_id": interview_id}, {"link_id": interview_id}]
+    })
     if not session:
         raise HTTPException(status_code=404, detail="Interview session not found")
     _require_admin_session_access(session, current_admin)
@@ -2097,11 +2304,12 @@ def reset_password(data: ResetPasswordRequest):
     return {"status": "success", "message": "Password updated successfully. You can now login."}
 
 def send_otp_email(email: str, name: str, otp: str):
-    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    from pathlib import Path
+    env_path = Path(__file__).resolve().parents[2] / ".env"
     load_dotenv(env_path, override=False)
-    api_key = os.getenv("BREVO_API_KEY")
-    sender_name = "Hire IQ Recruiting"
-    sender_email = os.getenv("BREVO_SENDER_EMAIL")
+    api_key = (os.getenv("BREVO_API_KEY") or "").strip().strip('"').strip("'")
+    sender_name = (os.getenv("BREVO_SENDER_NAME") or "Hire IQ Recruiting").strip().strip('"').strip("'")
+    sender_email = (os.getenv("BREVO_SENDER_EMAIL") or "").strip().strip('"').strip("'")
     
     if not api_key: return False
 
@@ -2127,8 +2335,11 @@ def send_otp_email(email: str, name: str, otp: str):
         url = "https://api.brevo.com/v3/smtp/email"
         headers = {"accept": "application/json", "api-key": api_key, "content-type": "application/json"}
         response = requests.post(url, json=payload, headers=headers, timeout=10)
+        if response.status_code >= 300:
+            print(f"❌ [BREVO ERROR reset otp] {response.status_code}: {response.text}")
         return response.status_code < 300
-    except:
+    except Exception as e:
+        print(f"❌ [BREVO EXCEPTION reset otp]: {e}")
         return False
 
 
@@ -2158,7 +2369,7 @@ def get_admin_profile(current_admin: dict = Depends(get_current_admin_details)):
             company = None
         if company:
             admin_doc["company_name"] = company.get("name", admin_doc.get("company_name", ""))
-            if "credits" in company:
+            if "credits" in company and admin_doc.get("role") in ["super_admin", "superadmin", "master"]:
                 admin_doc["credits"] = company["credits"]
             admin_doc["status"] = company.get("status", "active" if admin_doc.get("login_enabled", True) else "blocked")
             admin_doc["login_enabled"] = admin_doc.get("login_enabled", True) and company.get("login_enabled", True)
@@ -2183,7 +2394,7 @@ def update_profile(data: UpdateProfileRequest, current_admin: str = Depends(get_
     try:
         from bson import ObjectId
         
-        admin_id_obj = ObjectId(str(data.admin_id))
+        admin_id_obj = ObjectId(str(current_admin))
         admin = admins_collection.find_one({"_id": admin_id_obj})
         if not admin:
             raise HTTPException(status_code=404, detail="Admin not found")
@@ -2270,7 +2481,7 @@ def upload_profile_image(
 ):
     try:
         from bson import ObjectId
-        admin_id_obj = ObjectId(admin_id)
+        admin_id_obj = ObjectId(str(current_admin["admin_id"]))
         admin = admins_collection.find_one({"_id": admin_id_obj})
         if not admin:
             raise HTTPException(status_code=404, detail="Admin not found")

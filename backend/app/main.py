@@ -11,6 +11,15 @@ All business logic lives in services.py, routes.py, and tasks.py.
 """
 
 import sys
+import os
+from dotenv import load_dotenv
+
+_env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+if os.path.exists(_env_path):
+    load_dotenv(dotenv_path=_env_path)
+else:
+    load_dotenv()
+
 sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
 
@@ -18,6 +27,8 @@ import time
 import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
+import firebase_admin
+from firebase_admin import auth
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
@@ -53,6 +64,7 @@ from app.routes.platform import router as platform_router
 
 from app.routes.conversation_flow import router as conversation_flow_router
 from app.routes.omni_sync import router as omni_sync_router
+from app.routes.translation import router as translation_router
 import app.services.transcription as transcription                # Voice transcription sub-router
 from app.routes import voice_routes     # WebRTC voice routes
 from app.core import config
@@ -68,6 +80,9 @@ from app.db.mongo_db import (
     crash_logs_collection,
 )
 
+from app.core.config import init_firebase_admin
+init_firebase_admin()
+
 # ---------------------------------------------------------------------------
 # Redis singleton — created ONCE at module load, reused by every request.
 # Creating Redis.from_url() inside dispatch() was adding connection overhead
@@ -82,21 +97,20 @@ _last_rate_limit_cleanup = 0.0
 try:
     # socket_connect_timeout: max seconds to wait for TCP connection
     # socket_timeout: max seconds to wait for any command response (incl. PING)
-    _redis_client = _redis_module.Redis.from_url(
-        _REDIS_URL,
-        socket_connect_timeout=2,
-        socket_timeout=2,
-        protocol=2,
-    )
+    import ssl as _ssl
+    _redis_kwargs = {
+        "socket_connect_timeout": 2,
+        "socket_timeout": 2,
+        "protocol": 2,
+    }
+    if _REDIS_URL.startswith("rediss://"):
+        _redis_kwargs["ssl_cert_reqs"] = _ssl.CERT_NONE
+
+    _redis_client = _redis_module.Redis.from_url(_REDIS_URL, **_redis_kwargs)
     _redis_client.ping()  # verify Redis is reachable at startup
-except _redis_module.exceptions.RedisError:
-    # RedisError is the base class for ConnectionError, TimeoutError,
-    # AuthenticationError, etc. — any Redis failure falls back gracefully.
-    print("WARNING: Redis unavailable at startup — falling back to in-memory rate limiting.")
-    _redis_client = None
-except Exception:
-    # Catch any other unexpected error (e.g. DNS failure) without crashing startup.
-    print("WARNING: Redis init failed — falling back to in-memory rate limiting.")
+except Exception as _re_err:
+    # Catch any Redis error or timeout without crashing startup.
+    print(f"WARNING: Redis unavailable at startup ({_re_err}) — falling back to in-memory rate limiting.")
     _redis_client = None
 
 from app.core.routes_core import startup_event_cloudinary, startup_event_db_and_email
@@ -109,6 +123,12 @@ async def lifespan(app: FastAPI):
         interview_sessions_collection.create_index([("company_id", ASCENDING), ("created_at", DESCENDING)])
         interview_sessions_collection.create_index([("company_id", ASCENDING), ("created_by", ASCENDING), ("status", ASCENDING)])
         interview_sessions_collection.create_index([("company_id", ASCENDING), ("created_by", ASCENDING), ("created_at", DESCENDING)])
+        interview_sessions_collection.create_index([("company_id", ASCENDING), ("is_deactivated", ASCENDING), ("created_at", DESCENDING)])
+        interview_sessions_collection.create_index([("company_id", ASCENDING), ("created_by", ASCENDING), ("is_deactivated", ASCENDING), ("created_at", DESCENDING)])
+        interview_sessions_collection.create_index([("omni_call_id", ASCENDING)])
+        interview_sessions_collection.create_index([("candidate_name", ASCENDING), ("company_id", ASCENDING)])
+        interview_sessions_collection.create_index([("company_id", ASCENDING), ("decision", ASCENDING), ("created_at", DESCENDING)])
+        interview_sessions_collection.create_index([("company_id", ASCENDING), ("created_by", ASCENDING), ("decision", ASCENDING), ("created_at", DESCENDING)])
         interview_sessions_collection.create_index([("link_id", ASCENDING)], unique=True)
         # Security indexes for fast queries
         security_logs_collection.create_index([("timestamp", DESCENDING)])
@@ -121,6 +141,14 @@ async def lifespan(app: FastAPI):
     startup_event_cloudinary()
     await startup_event_db_and_email()
     await voice_routes.start_realtime_services()
+
+    # Automatically recover and score any past delayed answers in the background
+    try:
+        import threading
+        from app.tasks import requeue_delayed_answer_scoring
+        threading.Thread(target=requeue_delayed_answer_scoring, daemon=True).start()
+    except Exception as _e:
+        print(f"Warning: Failed to launch answer scoring recovery thread: {_e}")
     try:
         yield
     finally:
@@ -131,6 +159,7 @@ app = FastAPI(
     description="Backend API for HireIQ AI-powered interviews",
     version="2.0.0",
     lifespan=lifespan,
+    root_path=os.getenv("FASTAPI_ROOT_PATH", ""),
 )
 
 app.add_middleware(GZipMiddleware, minimum_size=500)
@@ -172,7 +201,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if _TRUST_PROXY_HEADERS:
             real_ip = request.headers.get("x-real-ip", "").strip()
             forwarded_for = request.headers.get("x-forwarded-for", "")
-            client_ip = real_ip or (forwarded_for.split(",")[0].strip() if forwarded_for else client_ip)
+            # ALB/AWS uses X-Forwarded-For as the source of truth, prioritize it over X-Real-IP which is often poisoned by local proxies.
+            extracted_ff = forwarded_for.split(",")[0].strip() if forwarded_for else ""
+            client_ip = extracted_ff or real_ip or client_ip
 
         # Normalize a trailing slash so duplicate FastAPI route spellings cannot
         # bypass the stricter bucket (for example /start-interview/).
@@ -191,9 +222,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             if _redis_client is None:
                 raise _redis_module.exceptions.ConnectionError("Redis not available")
             key = f"rl:{bucket}:{client_ip}"
-            count = await asyncio.to_thread(_redis_client.incr, key)
-            if count == 1:
-                await asyncio.to_thread(_redis_client.expire, key, config.RATE_LIMIT_WINDOW)
+            def _pipeline_rate_limit():
+                count = _redis_client.incr(key)
+                if count == 1:
+                    _redis_client.expire(key, config.RATE_LIMIT_WINDOW)
+                return count
+            count = await asyncio.to_thread(_pipeline_rate_limit)
             if count > request_limit:
                 return JSONResponse(status_code=429, content={"detail": "Too many requests. Please slow down."})
         except _redis_module.exceptions.RedisError:
@@ -224,7 +258,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
-        response.headers.setdefault("X-Frame-Options", "DENY")
+        if not request.url.path.startswith("/api/public/"):
+            response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("Referrer-Policy", "no-referrer")
         response.headers.setdefault(
             "Permissions-Policy",
@@ -237,8 +272,11 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             )
         return response
 
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
 # --- Middleware ---
 # Middlewares are executed top-down. We want CORSMiddleware to be the outermost (last added)
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
@@ -257,10 +295,10 @@ app.add_middleware(
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:5174",
-        "http://127.0.0.1:5174",
         "https://hire-ai-iq.netlify.app",
+        "http://sb-lb-1304167006.us-east-1.elb.amazonaws.com",
     ],
-    allow_origin_regex=os.getenv("CORS_ORIGIN_REGEX") or None,
+    allow_origin_regex=os.getenv("CORS_ORIGIN_REGEX") or r"^https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -270,8 +308,13 @@ app.add_middleware(
 # private Cloudinary assets and must never be exposed by an unauthenticated
 # static-file mount.
 import os as _os
-if _os.getenv("ENV", "local") != "production" and _os.path.isdir("uploads"):
-    app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+_backend_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+_uploads_dir = _os.path.join(_backend_dir, "uploads")
+if not _os.path.isdir(_uploads_dir) and _os.path.isdir("uploads"):
+    _uploads_dir = _os.path.abspath("uploads")
+
+if _os.getenv("ENV", "local") != "production" and _os.path.isdir(_uploads_dir):
+    app.mount("/uploads", StaticFiles(directory=_uploads_dir), name="uploads")
 
 # --- Routers ---
 app.include_router(admin_dashboard_router)
@@ -294,12 +337,15 @@ app.include_router(voice_tts_router)
 app.include_router(ws_dashboard_router)
 app.include_router(debug_router)
 app.include_router(plans_router)
+app.include_router(platform_router)
 app.include_router(platform_router, prefix="/api/platform", tags=["Platform Settings"])
+app.include_router(platform_router, prefix="/platform", tags=["Platform Settings"])
 
 app.include_router(conversation_flow_router)
 app.include_router(omni_sync_router)
 app.include_router(transcription.router)
 app.include_router(voice_routes.router)
+app.include_router(translation_router)
 
 # Subscription Management — dedicated modular router
 from app.routes.subscription import router as subscription_router

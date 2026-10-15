@@ -38,9 +38,9 @@ class AnswerScore(BaseModel):
     key_facts_required: List[str] = Field(default_factory=list)
     facts_mentioned_by_candidate: List[str] = Field(default_factory=list)
     corrected_answer: str = "N/A"
-    content_score: int = Field(default=0, ge=0, le=50)
-    relevance_score: int = Field(default=0, ge=0, le=30)
-    time_score: int = Field(default=0, ge=0, le=20)
+    content_score: int = Field(default=0, ge=0, le=100)
+    relevance_score: int = Field(default=0, ge=0, le=100)
+    time_score: int = Field(default=0, ge=0, le=100)
     overall_score: int = Field(default=0, ge=0, le=100)
     clarity_score: int = Field(default=50, ge=0, le=100)
     technical_depth_score: int = Field(default=50, ge=0, le=100)

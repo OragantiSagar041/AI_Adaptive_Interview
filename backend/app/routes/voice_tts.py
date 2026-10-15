@@ -129,8 +129,12 @@ def get_admin_voices(current_admin: dict = Depends(get_current_admin_details)):
     for key, value in sorted(os.environ.items()):
         if key.startswith("CARTESIA_VOICE_ID_") and value:
             val = str(value).strip()
+            if not val or val in seen_ids:
+                continue
             name_part = key.replace("CARTESIA_VOICE_ID_", "").replace("_", " ").title()
             real_name = _get_cartesia_name(val)
+            if cartesia_client and real_name is None:
+                continue
             display_name = f"{name_part} ({real_name})" if real_name else name_part
             voices.append({"name": display_name, "id": val})
             seen_ids.add(val)
@@ -139,15 +143,16 @@ def get_admin_voices(current_admin: dict = Depends(get_current_admin_details)):
     default_voice_id = str(os.getenv("CARTESIA_VOICE_ID") or "").strip()
     if default_voice_id and default_voice_id not in seen_ids:
         real_name = _get_cartesia_name(default_voice_id)
-        display_name = f"Default Voice ({real_name})" if real_name else "Default Voice"
-        voices.insert(0, {"name": display_name, "id": default_voice_id})
+        if not cartesia_client or real_name is not None:
+            display_name = f"Default Voice ({real_name})" if real_name else "Default Voice"
+            voices.insert(0, {"name": display_name, "id": default_voice_id})
             
     return {"status": "success", "voices": voices}
 
 @router.post("/voice-clone-instant")
 async def voice_clone_instant(
     audio: UploadFile = File(...),
-    voice_name: Optional[str] = "CandidateVoice",
+    voice_name: Optional[str] = Form("CandidateVoice"),
     candidate_session: dict = Depends(require_active_candidate),
 ):
     """
@@ -202,13 +207,12 @@ async def voice_clone_instant(
         def _do_clone():
             client = Cartesia(api_key=api_key)
             # Clone the voice from the clip; voices.clone() returns VoiceMetadata directly
-            with open(temp_audio, "rb") as clip_file:
-                new_voice = client.voices.clone(
-                    clip=clip_file,
-                    name=voice_name or "CandidateVoice",
-                    language="en",
-                    description="Auto-cloned from interview voice sample",
-                )
+            new_voice = client.voices.clone(
+                filepath=temp_audio,
+                name=voice_name or "CandidateVoice",
+                language="en",
+                description="Auto-cloned from interview voice sample",
+            )
             return new_voice
 
         new_voice_data = await asyncio.get_event_loop().run_in_executor(None, _do_clone)
@@ -261,8 +265,12 @@ async def generate_tts(
     session_custom_voice = str(candidate_session.get("custom_voice_id") or "").strip()
     requested_voice_id = str(req.voice_id or "").strip()
 
-    # Security check: If a per-session clone exists and a different requested_voice_id is passed, reject.
-    if session_cloned_voice and requested_voice_id and not hmac.compare_digest(requested_voice_id, session_cloned_voice):
+    # Allowed voices: session clone, session custom voice, or any admin-configured voice from env
+    env_voices = {str(v).strip() for k, v in os.environ.items() if (k == "CARTESIA_VOICE_ID" or k.startswith("CARTESIA_VOICE_ID_")) and v}
+    allowed_voices = {v for v in [session_cloned_voice, session_custom_voice] if v} | env_voices
+
+    # Security check: If allowed_voices is configured and a different requested_voice_id is passed, reject.
+    if requested_voice_id and allowed_voices and requested_voice_id not in allowed_voices:
         raise HTTPException(status_code=403, detail="Voice ID does not belong to this interview session")
 
     # Priority: on-the-fly session clone > interview-configured custom voice > requested voice > global default Cartesia voice
@@ -273,7 +281,13 @@ async def generate_tts(
         or default_cartesia_voice
     )
 
-    is_voice_cloning_enabled = bool(req.use_custom_voice)
+    is_voice_cloning_enabled = bool(
+        req.use_custom_voice
+        or candidate_session.get("voice_clone")
+        or session_cloned_voice
+        or session_custom_voice
+        or requested_voice_id
+    )
 
     from fastapi.responses import StreamingResponse
     import io
@@ -290,7 +304,27 @@ async def generate_tts(
         "Kannada":   "kn-IN-SapnaNeural",
         "English":   base_edge_voice,
     }
-    requested_lang = req.language.title()
+    # Map BCP-47 codes (sent by frontend, e.g. "te-IN") to full language names
+    bcp47_to_lang_name = {
+        "hi-in": "Hindi",
+        "hi":    "Hindi",
+        "te-in": "Telugu",
+        "te":    "Telugu",
+        "ta-in": "Tamil",
+        "ta":    "Tamil",
+        "ml-in": "Malayalam",
+        "ml":    "Malayalam",
+        "kn-in": "Kannada",
+        "kn":    "Kannada",
+        "en-in": "English",
+        "en-us": "English",
+        "en-gb": "English",
+        "en":    "English",
+    }
+    # Normalise: accept both full names ("Telugu") and BCP-47 codes ("te-IN")
+    raw_lang = (req.language or "English").strip()
+    normalised_lang = bcp47_to_lang_name.get(raw_lang.lower(), raw_lang.title())
+    requested_lang = normalised_lang
     edge_voice = edge_language_map.get(requested_lang, base_edge_voice)
 
     # Cartesia multilingual language code mapping
@@ -324,12 +358,20 @@ async def generate_tts(
         "indonesian": "id",
         "thai": "th",
     }
-    cartesia_lang = cartesia_language_map.get(str(req.language or "English").strip().lower(), "en")
+    cartesia_lang = cartesia_language_map.get(normalised_lang.lower(), "en")
 
     # ──────────────────────────────────────────────────────────────────────────
     # 2. Cartesia path — for ALL languages when keys are configured and voice cloning is enabled
     # ──────────────────────────────────────────────────────────────────────────
-    if is_voice_cloning_enabled and cartesia_api_key and target_voice_id:
+    
+    # Cartesia sonic-3 multilingual supported languages (includes English, Telugu, Hindi, Tamil, etc.)
+    cartesia_supported = {
+        "en", "hi", "te", "ta", "kn", "ml", "bn", "mr", "gu", "pa",
+        "fr", "de", "es", "pt", "zh", "ja", "it", "ko", "nl", "pl",
+        "ru", "sv", "tr", "tl", "vi", "id", "th", "ar"
+    }
+    
+    if is_voice_cloning_enabled and cartesia_api_key and target_voice_id and (cartesia_lang in cartesia_supported):
         try:
             import asyncio
             # pyrefly: ignore [missing-import]
@@ -337,8 +379,12 @@ async def generate_tts(
 
             def _call_cartesia(voice_id_to_use: str):
                 client = Cartesia(api_key=cartesia_api_key)
+                
+                # Use sonic-3 (Cartesia's current multilingual model)
+                model = "sonic-3"
+                
                 result = client.tts.generate(
-                    model_id="sonic-latest",
+                    model_id=model,
                     transcript=req.text,
                     voice={"mode": "id", "id": voice_id_to_use},
                     language=cartesia_lang,
@@ -348,7 +394,11 @@ async def generate_tts(
                         "sample_rate": 44100,
                     },
                 )
-                return result.read()
+                if hasattr(result, "read"):
+                    return result.read()
+                elif hasattr(result, "__iter__"):
+                    return b"".join(result)
+                return bytes(result)
 
             try:
                 audio_bytes = await asyncio.get_event_loop().run_in_executor(
@@ -367,13 +417,60 @@ async def generate_tts(
                 print(f"[TTS] Cartesia: OK ({len(audio_bytes)} bytes) | voice={target_voice_id} | lang={cartesia_lang}")
                 return StreamingResponse(io.BytesIO(audio_bytes), media_type="audio/mpeg")
             else:
-                print(f"[TTS] Cartesia error: No audio returned. Falling back to Edge TTS.")
+                print(f"[TTS] Cartesia error: No audio returned. Falling back to next TTS provider.")
 
         except Exception as err:
-            print(f"[TTS] Cartesia exception: {err}. Falling back to Edge TTS.")
+            print(f"[TTS] Cartesia exception: {err}. Falling back to next TTS provider.")
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 3. Edge TTS fallback 
+    # 2. Microsoft Azure Speech (Cognitive Services) — official, cloud-safe
+    # ──────────────────────────────────────────────────────────────────────────
+    azure_speech_key = os.getenv("AZURE_SPEECH_KEY", "").strip()
+    azure_speech_region = os.getenv("AZURE_SPEECH_REGION", "centralindia").strip()
+
+    if azure_speech_key:
+        try:
+            lang_bcp47_map = {
+                "Hindi": "hi-IN",
+                "Telugu": "te-IN",
+                "Tamil": "ta-IN",
+                "Malayalam": "ml-IN",
+                "Kannada": "kn-IN",
+                "English": "en-US",
+            }
+            azure_lang_code = lang_bcp47_map.get(requested_lang, "en-US")
+            azure_voice_name = edge_voice  # Identical neural voice identifiers
+
+            azure_url = f"https://{azure_speech_region}.tts.speech.microsoft.com/cognitiveservices/v1"
+            azure_headers = {
+                "Ocp-Apim-Subscription-Key": azure_speech_key,
+                "Content-Type": "application/ssml+xml",
+                "X-Microsoft-OutputFormat": "audio-16khz-128kbitrate-mono-mp3",
+                "User-Agent": "AIAdaptiveInterviewBackend",
+            }
+            escaped_text = html.escape(req.text)
+            ssml_body = (
+                f"<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='{azure_lang_code}'>"
+                f"<voice name='{azure_voice_name}'>{escaped_text}</voice>"
+                f"</speak>"
+            )
+
+            import aiohttp
+            async with aiohttp.ClientSession() as session:
+                async with session.post(azure_url, headers=azure_headers, data=ssml_body.encode("utf-8"), timeout=aiohttp.ClientTimeout(total=12)) as resp:
+                    if resp.status == 200:
+                        audio_data = await resp.read()
+                        if audio_data:
+                            print(f"[TTS] Azure Speech: OK ({len(audio_data)} bytes) | voice={azure_voice_name} | lang={requested_lang}")
+                            return StreamingResponse(io.BytesIO(audio_data), media_type="audio/mpeg")
+                    else:
+                        resp_text = await resp.text()
+                        logger.warning(f"[TTS] Azure Speech returned HTTP {resp.status}: {resp_text[:150]}")
+        except Exception as az_err:
+            logger.warning(f"[TTS] Azure Speech Error: {az_err}. Falling back to Edge TTS.")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # 3. Edge TTS fallback (Free Microsoft Edge read-aloud)
     # ──────────────────────────────────────────────────────────────────────────
     try:
         print(f"[TTS] Using Microsoft Edge TTS | voice={edge_voice} | lang={requested_lang}")
@@ -385,10 +482,19 @@ async def generate_tts(
             if chunk["type"] == "audio":
                 audio_chunks.append(chunk["data"])
         audio_bytes = b"".join(audio_chunks)
-        return StreamingResponse(io.BytesIO(audio_bytes), media_type="audio/mpeg")
+        if audio_bytes:
+            return StreamingResponse(io.BytesIO(audio_bytes), media_type="audio/mpeg")
     except Exception as edge_err:
-        print(f"[TTS] Edge TTS Error: {edge_err}")
-        raise HTTPException(status_code=500, detail=f"TTS generation failed: {edge_err}")
+        logger.warning(f"[TTS] Edge TTS Error: {edge_err}. Falling back to client-side Web Speech API.")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # 4. Graceful Fallback: Signal frontend to use browser Web Speech API
+    # ──────────────────────────────────────────────────────────────────────────
+    raise HTTPException(
+        status_code=503,
+        detail="TTS_CLIENT_FALLBACK: All backend TTS providers unavailable. Use client-side Web Speech API.",
+        headers={"X-TTS-Fallback": "browser"}
+    )
 
 
 
@@ -435,10 +541,12 @@ def fix_candidate_name(text: str, candidate_name: str) -> str:
 stt_inflight_counter = 0
 
 @router.post("/stt")
+@router.post("/speech-to-text-whisper")
 async def stt_endpoint(
     file: UploadFile = File(...),
     language: Optional[str] = None,
     known_terms: Optional[str] = Form(None),
+    prompt: Optional[str] = Form(None),
     candidate_session: dict = Depends(require_active_candidate),
 ):
     """Transcribe audio via Groq Whisper with concurrency & rate limit tracking"""
@@ -454,7 +562,7 @@ async def stt_endpoint(
         if file_size > 25 * 1024 * 1024:
             raise HTTPException(status_code=413, detail="Audio upload exceeds 25 MB")
         if file_size < 3000:
-            return {"transcript": ""}
+            return {"transcript": "", "text": ""}
         header_hex = audio_content[:16].hex() if file_size >= 16 else ""
         print(f"📊 [STT CONCURRENCY TRACE - REQ #{req_id}] Started | In-Flight Requests: {current_inflight} | File: {file.filename} ({file_size} bytes)")
         
@@ -473,9 +581,10 @@ async def stt_endpoint(
             
             candidate_name = str(candidate_session.get("candidate_name") or "").strip()
 
+            effective_terms = known_terms or prompt
             known_terms_hint = ""
-            if known_terms:
-                clean_terms = [t.strip() for t in (known_terms.split(",") if isinstance(known_terms, str) else known_terms) if t.strip()]
+            if effective_terms:
+                clean_terms = [t.strip() for t in (effective_terms.split(",") if isinstance(effective_terms, str) else effective_terms) if t.strip()]
                 if clean_terms:
                     known_terms_hint = ", ".join(clean_terms)
 
@@ -644,7 +753,7 @@ async def stt_endpoint(
             if dropped_segment_texts:
                 print(f"🚫 [STT HALLUCINATION FILTER] Rejected {len(dropped_segment_texts)} segments: {dropped_segment_texts[:3]}")
             print(f"✅ [STT CONCURRENCY TRACE - REQ #{req_id}] HTTP 200 OK | Latency: {dur}s | Transcript: {transcript_text[:50]}...")
-            return {"transcript": transcript_text}
+            return {"transcript": transcript_text, "text": transcript_text}
         finally:
             if os.path.exists(temp_filename):
                 os.remove(temp_filename)

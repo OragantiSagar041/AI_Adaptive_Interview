@@ -210,9 +210,9 @@ export default function MasterProfile() {
         )
 
         // Update sessionStorage values
-        sessionStorage.setItem('adminName', username)
-        sessionStorage.setItem('adminEmail', email)
-        const cachedUser = sessionStorage.getItem('adminUser')
+        localStorage.setItem('adminName', username)
+        localStorage.setItem('adminEmail', email)
+        const cachedUser = localStorage.getItem('adminUser')
         if (cachedUser) {
           try {
             const parsed = JSON.parse(cachedUser)

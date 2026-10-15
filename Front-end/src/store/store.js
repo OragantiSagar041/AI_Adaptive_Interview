@@ -6,21 +6,21 @@ import candidatesReducer from './slices/candidatesSlice'
 import interviewReducer from './slices/interviewSlice'
 import creditsReducer from './slices/creditsSlice'
 
-const sessionStorageWrapper = {
-  getItem: (key) => Promise.resolve(sessionStorage.getItem(key)),
+const localStorageWrapper = {
+  getItem: (key) => Promise.resolve(localStorage.getItem(key)),
   setItem: (key, value) => {
-    sessionStorage.setItem(key, value)
+    localStorage.setItem(key, value)
     return Promise.resolve()
   },
   removeItem: (key) => {
-    sessionStorage.removeItem(key)
+    localStorage.removeItem(key)
     return Promise.resolve()
   }
 }
 
 const authPersistConfig = {
   key: 'auth',
-  storage: sessionStorageWrapper,
+  storage: localStorageWrapper,
   whitelist: ['role', 'token', 'adminUser'] // only persist these fields
 }
 
@@ -35,7 +35,7 @@ const appReducer = combineReducers({
 const rootReducer = (state, action) => {
   if (action.type === 'auth/logout') {
     // Clear local storage and reset entire Redux state
-    sessionStorage.removeItem('auth')
+    localStorage.removeItem('auth')
     state = undefined
   }
   return appReducer(state, action)

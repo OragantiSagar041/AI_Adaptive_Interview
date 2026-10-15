@@ -7,6 +7,9 @@ from app.core.config import PLAN_DEFINITIONS
 router = APIRouter()
 
 @router.get("/api/plans")
+@router.get("/plans")
+@router.get("/api/plans/")
+@router.get("/plans/")
 def get_plans():
     plans_list = []
     

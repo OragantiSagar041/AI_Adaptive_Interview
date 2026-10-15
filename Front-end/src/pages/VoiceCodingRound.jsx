@@ -282,8 +282,26 @@ export default function VoiceCodingRound({
   const audioChunksRef = useRef([])
   const currentTxRef = useRef('')
   const submittingRef = useRef(false)
-  const lastRunResultRef = useRef(null)  // stores latest run result for chat context
   const activeAudioRef = useRef(null)    // prevents overlapping audio
+
+  // Cancel any lingering audio or speech synthesis from previous rounds on mount/unmount
+  useEffect(() => {
+    if (window.speechSynthesis) {
+      try { window.speechSynthesis.cancel() } catch (_) { }
+    }
+    return () => {
+      if (window.speechSynthesis) {
+        try { window.speechSynthesis.cancel() } catch (_) { }
+      }
+      if (activeAudioRef.current) {
+        try {
+          activeAudioRef.current.pause()
+          activeAudioRef.current.src = ''
+        } catch (_) { }
+        activeAudioRef.current = null
+      }
+    }
+  }, [])
 
   // Unload Tracking + Exit Confirmation Dialog
   useExitConfirmation({
@@ -323,83 +341,19 @@ export default function VoiceCodingRound({
 
   const fmt = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 
-  // ── TTS ────────────────────────────────────────────────────────────────
+  // ── TTS: Suppressed in Round 2 (Technical Coding) ────────────────────────
   const speak = useCallback(async (text, onEnd) => {
-    try {
-      if (activeAudioRef.current) {
+    if (activeAudioRef.current) {
+      try {
         activeAudioRef.current.pause()
-        activeAudioRef.current = null
-      }
-      setAiStatus('speaking')
-      setOrbLabel('Zara speaking…')
-      const useCustomVoice = !!(sessionDetail?.voice_clone || sessionDetail?.voice_cloning_enabled || sessionDetail?.custom_voice_id || sessionDetail?.cloned_voice_id);
-      const languageMap = {
-        Hindi: 'hi-IN',
-        Telugu: 'te-IN',
-        Tamil: 'ta-IN',
-        Malayalam: 'ml-IN',
-        Kannada: 'kn-IN',
-        English: 'en-US',
-      };
-      const ttsLang = languageMap[(sessionLang || sessionDetail?.language || 'English').toLowerCase().replace(/^\w/, c => c.toUpperCase())] || 'en-US';
-      const res = await candidateFetch(`${API_BASE_URL}/tts`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text,
-          voice: 'shimmer',
-          language: ttsLang,
-          use_custom_voice: useCustomVoice,
-        })
-      })
-      if (!res.ok) throw new Error('TTS Failed')
-      const blob = await res.blob()
-      if (blob.size === 0) {
-        // Fallback to browser SpeechSynthesis if no audio returned
-        const utterance = new SpeechSynthesisUtterance(text)
-        utterance.lang = ttsLang
-        utterance.onend = () => {
-          setAiStatus('idle')
-          setOrbLabel('Zara is watching')
-          onEnd?.()
-        }
-        speechSynthesis.speak(utterance)
-        setAiStatus('speaking')
-        setOrbLabel('Zara speaking…')
-        return
-      }
-      const url = URL.createObjectURL(blob)
-      const audio = new Audio(url)
-      activeAudioRef.current = audio
-      audio.onended = () => {
-        setAiStatus('idle')
-        setOrbLabel('Zara is watching')
-        URL.revokeObjectURL(url)
-        activeAudioRef.current = null
-        onEnd?.()
-      }
-      audio.onerror = () => {
-        setAiStatus('idle')
-        setOrbLabel('Zara is watching')
-        activeAudioRef.current = null
-        onEnd?.()
-      }
-      audio.play().catch(() => {
-          // Fallback to speech synthesis if audio playback fails
-          const utterance = new SpeechSynthesisUtterance(text);
-          utterance.lang = ttsLang;
-          utterance.onend = () => {
-            setAiStatus('idle');
-            setOrbLabel('Zara is watching');
-            onEnd?.();
-          };
-          speechSynthesis.speak(utterance);
-        });
-    } catch (e) {
-      setAiStatus('idle')
-      setOrbLabel('Zara is watching')
-      onEnd?.()
+        activeAudioRef.current.currentTime = 0
+      } catch (_) { }
+      activeAudioRef.current = null
     }
+    if (window.speechSynthesis) window.speechSynthesis.cancel()
+    setAiStatus('idle')
+    setOrbLabel('Zara is watching')
+    onEnd?.()
   }, [])
 
   const aiSay = useCallback((text, onEnd) => {
@@ -567,7 +521,7 @@ export default function VoiceCodingRound({
         })
       })
     }, 800)
-  }, [])
+  }, [])  
 
   // ── Code Sentinel ─────────────────────────────────────────────────────
   const handleCodeChange = useCallback((value) => {
@@ -671,7 +625,7 @@ export default function VoiceCodingRound({
     submittingRef.current = true
     setIsSubmitting(true)
     stopListening()
-
+    
     // Stop ongoing audio immediately
     if (window.speechSynthesis) window.speechSynthesis.cancel()
     if (activeAudioRef.current) {
@@ -681,7 +635,7 @@ export default function VoiceCodingRound({
     setAiStatus('idle')
 
     const timeoutFlag = typeof isTimeout === 'boolean' ? isTimeout : false;
-    const message = timeoutFlag
+    const message = timeoutFlag 
       ? "Thank you for the interview."
       : "We are saving your interview, please wait.";
 
@@ -709,16 +663,29 @@ export default function VoiceCodingRound({
     }
   }, [stopListening, interviewId, code, selectedLang, onComplete, aiSay])
 
-  // Store latest handleSubmit to avoid timer resets
-  const submitFnRef = useRef(handleSubmit);
-  useEffect(() => { submitFnRef.current = handleSubmit; }, [handleSubmit]);
+  const handleSubmitRef = useRef(handleSubmit)
+  useEffect(() => {
+    handleSubmitRef.current = handleSubmit
+  }, [handleSubmit])
+
+  useEffect(() => {
+    timeLeftRef.current = timeLeft
+  }, [timeLeft])
 
   // Timer
   useEffect(() => {
-    const t = setInterval(() => setTimeLeft(p => {
-      if (p <= 1) { submitFnRef.current(true); return 0 }
-      return p - 1
-    }), 1000)
+    timerExpiredRef.current = false
+    const t = setInterval(() => {
+      const nextValue = timeLeftRef.current <= 1 ? 0 : timeLeftRef.current - 1
+      timeLeftRef.current = nextValue
+      setTimeLeft(nextValue)
+
+      if (nextValue === 0 && !timerExpiredRef.current) {
+        timerExpiredRef.current = true
+        clearInterval(t)
+        handleSubmitRef.current(true)
+      }
+    }, 1000)
     return () => clearInterval(t)
   }, [])
 
@@ -737,24 +704,9 @@ export default function VoiceCodingRound({
     }
     const handleFullscreenChange = async () => {
       if (!document.fullscreenElement) {
-        Swal.fire({
-          icon: 'warning',
-          title: '⚠️ Fullscreen Required',
-          text: 'Exiting fullscreen mode is not allowed during the interview.',
-          showCancelButton: true,
-          confirmButtonText: 'Enable full screen mode',
-          cancelButtonText: 'Exit interview',
-          allowOutsideClick: false,
-          allowEscapeKey: false
-        }).then((result) => {
-          if (result.isConfirmed) {
-            if (document.documentElement.requestFullscreen) {
-              document.documentElement.requestFullscreen().catch(() => { })
-            }
-          } else {
-            window.location.href = '/dashboard'
-          }
-        })
+        clearTimeout(fullscreenAlertTimerRef.current)
+        setFullscreenAlert(true)
+        fullscreenAlertTimerRef.current = setTimeout(() => setFullscreenAlert(false), 5000)
       }
     }
     document.addEventListener('keydown', handleKeyDown)
@@ -900,8 +852,8 @@ export default function VoiceCodingRound({
                     <div>
                       <span className="text-slate-500 mr-1">Expected:</span>
                       <span className="text-amber-300">
-                        {typeof (tc.expected !== undefined ? tc.expected : tc.output) === 'object'
-                          ? JSON.stringify(tc.expected !== undefined ? tc.expected : tc.output)
+                        {typeof (tc.expected !== undefined ? tc.expected : tc.output) === 'object' 
+                          ? JSON.stringify(tc.expected !== undefined ? tc.expected : tc.output) 
                           : String(tc.expected !== undefined ? tc.expected : tc.output)}
                       </span>
                     </div>
@@ -957,7 +909,7 @@ export default function VoiceCodingRound({
               <Editor
                 height="100%"
                 language={selectedLang === 'cpp' ? 'cpp' : selectedLang}
-                defaultValue={code}
+                value={code}
                 onChange={handleCodeChange}
                 onMount={(editor, monaco) => {
                   setupMonacoIntelliSense(monaco)

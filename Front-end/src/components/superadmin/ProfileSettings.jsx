@@ -75,7 +75,7 @@ export default function ProfileSettings() {
         email: formData.email,
         company_name: formData.company_name
       }
-      sessionStorage.setItem('adminUser', JSON.stringify(updatedUser))
+      localStorage.setItem('adminUser', JSON.stringify(updatedUser))
       dispatch(setCredentials({ role, token, adminUser: updatedUser }))
 
       Swal.fire({
@@ -126,7 +126,7 @@ export default function ProfileSettings() {
         profile_image: newImageUrl,
         avatar: newImageUrl
       }
-      sessionStorage.setItem('adminUser', JSON.stringify(updatedUser))
+      localStorage.setItem('adminUser', JSON.stringify(updatedUser))
       dispatch(setCredentials({ role, token, adminUser: updatedUser }))
       
       Swal.fire({

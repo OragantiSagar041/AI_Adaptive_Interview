@@ -108,6 +108,28 @@ export function useExamSecurity({ enabled = true, onViolation } = {}) {
         return
       }
 
+      // Tab switching & new window/tab prevention
+      if (key === 'tab') {
+        e.preventDefault()
+        e.stopPropagation()
+        report('tab_switch', 'Tab switching is not allowed during the interview.')
+        return
+      }
+
+      if (key === 't' || key === 'n' || key === 'w') {
+        e.preventDefault()
+        e.stopPropagation()
+        report('tab_switch', 'Opening new tabs or windows is strictly prohibited.')
+        return
+      }
+
+      if (['1', '2', '3', '4', '5', '6', '7', '8', '9'].includes(key)) {
+        e.preventDefault()
+        e.stopPropagation()
+        report('tab_switch', 'Tab switching shortcuts are disabled.')
+        return
+      }
+
       // Ctrl+A (select all — often precedes copy)
       if (key === 'a') {
         e.preventDefault()
@@ -115,16 +137,31 @@ export function useExamSecurity({ enabled = true, onViolation } = {}) {
       }
     }
 
+    // Alt+Tab or Alt+Escape prevention
+    const onAltKeyDown = (e) => {
+      if (e.altKey && (e.key === 'Tab' || e.key === 'Escape')) {
+        e.preventDefault()
+        e.stopPropagation()
+        report('tab_switch', 'Application switching is strictly prohibited.')
+      }
+    }
+
+    if ('keyboard' in navigator && navigator.keyboard?.lock) {
+      try { navigator.keyboard.lock() } catch (_) {}
+    }
+
     document.addEventListener('copy',  blockClipboard)
     document.addEventListener('cut',   blockClipboard)
     document.addEventListener('paste', blockClipboard)
     document.addEventListener('keydown', onKeyDown, true)
+    window.addEventListener('keydown', onAltKeyDown, true)
 
     return () => {
       document.removeEventListener('copy',  blockClipboard)
       document.removeEventListener('cut',   blockClipboard)
       document.removeEventListener('paste', blockClipboard)
       document.removeEventListener('keydown', onKeyDown, true)
+      window.removeEventListener('keydown', onAltKeyDown, true)
     }
   }, [enabled, report])
 
@@ -196,6 +233,35 @@ export function useExamSecurity({ enabled = true, onViolation } = {}) {
 
     window.screen?.addEventListener?.('change', onChange)
     return () => window.screen?.removeEventListener?.('change', onChange)
+  }, [enabled, report])
+
+  // ─── 5. Multiple tabs detection during live exam ─────────────────────────
+  useEffect(() => {
+    if (!enabled) return
+    let channel = null
+    const examTabId = `exam_tab_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        channel = new BroadcastChannel('interview_tab_isolation_bus')
+        channel.onmessage = (event) => {
+          const { senderId } = event.data || {}
+          if (senderId && senderId !== examTabId) {
+            report('tab_switch', 'Another browser tab was opened! Opening multiple tabs is strictly prohibited.')
+            channel.postMessage({ type: 'PONG', senderId: examTabId })
+          }
+        }
+        channel.postMessage({ type: 'PING', senderId: examTabId })
+      }
+    } catch (_) {}
+
+    return () => {
+      if (channel) {
+        try {
+          channel.close()
+        } catch (_) {}
+      }
+    }
   }, [enabled, report])
 }
 

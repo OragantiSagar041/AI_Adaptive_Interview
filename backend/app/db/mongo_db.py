@@ -34,6 +34,15 @@ candidates_collection = db["candidates"]
 interviews_collection = db["interviews"]
 answers_collection = db["answers"]
 admins_collection = db["admins"]
+
+# Ensure each Firebase account can be linked to only one admin.
+# sparse=True allows existing admins without firebase_uid.
+admins_collection.create_index(
+    [("firebase_uid", 1)],
+    unique=True,
+    sparse=True,
+)
+
 interview_sessions_collection = db["interview_sessions"]
 plans_collection = db["plans"]
 companies_collection = db["companies"]
@@ -117,9 +126,18 @@ async def init_db_indexes():
     safe_create_index(pending_signups_collection, "expires_at", expireAfterSeconds=0)
     safe_create_index(admins_collection, "stripe_session_id", unique=True, sparse=True)
     
-    # New Latency Reduction Indexes for Job Portal & Dashboards
+    # Latency Reduction Indexes for Job Portal, Dashboards, and Candidate Details
     safe_create_index(jobs_collection, "company_id")
     safe_create_index(jobs_collection, "admin_id")
     safe_create_index(job_applications_collection, "job_id")
+    safe_create_index(job_applications_collection, [("job_id", 1), ("created_at", -1)])
     safe_create_index(job_applications_collection, "omni_call_id")
+    safe_create_index(answers_collection, [("interview_id", 1), ("created_at", -1)])
+    safe_create_index(interview_sessions_collection, [("company_id", 1), ("created_by", 1), ("created_at", -1)])
+    safe_create_index(omni_call_logs_collection, "call_id", unique=True, sparse=True)
+    safe_create_index(omni_call_logs_collection, "company_id")
+    safe_create_index(omni_call_logs_collection, "admin_id")
+    safe_create_index(interview_sessions_collection, "status")
+    safe_create_index(interview_sessions_collection, "is_deactivated")
+    safe_create_index(interview_sessions_collection, "omni_call_id", sparse=True)
     print("MongoDB connected and initialized.")

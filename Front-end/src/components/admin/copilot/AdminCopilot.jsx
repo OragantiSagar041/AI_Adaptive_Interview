@@ -16,7 +16,7 @@ const AdminCopilot = () => {
   
   const sessionUser = (() => {
     try {
-      return JSON.parse(sessionStorage.getItem('adminUser') || '{}');
+      return JSON.parse(localStorage.getItem('adminUser') || '{}');
     } catch {
       return {};
     }
@@ -34,7 +34,7 @@ const AdminCopilot = () => {
     sessionUser?.name || 
     user?.username || 
     sessionUser?.username || 
-    sessionStorage.getItem('adminName') || 
+    localStorage.getItem('adminName') || 
     sessionStorage.getItem('adminUsername') || 
     (isMaster ? 'master' : (isSuperAdmin ? 'Super Admin' : 'Recruiter'));
 
@@ -195,6 +195,26 @@ const AdminCopilot = () => {
     }
   };
 
+  const handleActionComplete = (msgIndex, res, err, updatedData) => {
+    setMessages(prev => {
+      const updated = [...prev];
+      if (updated[msgIndex]?.actionRequired) {
+        updated[msgIndex] = {
+          ...updated[msgIndex],
+          actionRequired: {
+            ...updated[msgIndex].actionRequired,
+            ...(updatedData || {}),
+            status: err ? 'failed' : 'completed',
+            result: res?.message || (res ? "Action completed successfully." : null),
+            link_url: res?.link_url || updated[msgIndex].actionRequired.link_url,
+            error: err || null
+          }
+        };
+      }
+      return updated;
+    });
+  };
+
   const handleSend = async (overrideText = null) => {
     const textToSend = typeof overrideText === 'string' ? overrideText : inputValue;
     if (!textToSend.trim() && !attachedFileText) return;
@@ -210,28 +230,6 @@ const AdminCopilot = () => {
     setAttachedFileText(null);
     setAttachedFileName('');
     setIsLoading(true);
-
-    const lowerText = textToSend.toLowerCase();
-
-    // Offline Interceptor: Buy Credits
-    const buyMatch = lowerText.match(/buy.*?(\d+)/);
-    if (buyMatch || lowerText.includes("buy credit")) {
-      const amount = buyMatch ? parseInt(buyMatch[1], 10) : 100;
-      setTimeout(() => {
-        setMessages(prev => [...prev, {
-          role: 'assistant',
-          content: `I can help you purchase credits. Please review and confirm the transaction below:`,
-          actionRequired: {
-            action: "buy_credits",
-            amount: amount,
-            admin_username: user?.username || "",
-            reason: "Purchase via platform"
-          }
-        }]);
-        setIsLoading(false);
-      }, 600);
-      return;
-    }
 
     try {
       const history = messages.map(m => ({ role: m.role, content: m.content }));
@@ -485,7 +483,11 @@ const AdminCopilot = () => {
               {/* Render Action Card if present */}
               {msg.actionRequired && (
                 <div className="w-full mt-2">
-                  <CopilotActionCard actionRequired={msg.actionRequired} />
+                  <CopilotActionCard 
+                    actionRequired={msg.actionRequired}
+                    sessionId={currentSessionId}
+                    onComplete={(res, err, updatedData) => handleActionComplete(index, res, err, updatedData)}
+                  />
                 </div>
               )}
             </div>

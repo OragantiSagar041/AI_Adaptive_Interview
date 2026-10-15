@@ -36,6 +36,13 @@ const formatPhoneNumber = (phone) => {
   return phone.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
 };
 
+const parseSkills = (skills) => {
+  if (!skills) return [];
+  if (Array.isArray(skills)) return skills.map(s => String(s).trim()).filter(Boolean);
+  if (typeof skills === 'string') return skills.split(',').map(s => s.trim()).filter(Boolean);
+  return [String(skills).trim()].filter(Boolean);
+};
+
 export default function SuperAdminJobsPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -156,6 +163,25 @@ export default function SuperAdminJobsPage() {
   };
 
   const handleScheduleInterview = async (app) => {
+    const userFeatures = adminUser?.features || ['Create Interview'];
+    if (!userFeatures.includes('Create Interview') && adminUser?.role !== 'super_admin' && adminUser?.role !== 'master') {
+      Swal.fire({
+        title: 'Feature Locked',
+        text: 'Upgrade your plan to create interviews.',
+        icon: 'info',
+        showCancelButton: true,
+        confirmButtonColor: '#6366f1',
+        cancelButtonColor: '#94a3b8',
+        confirmButtonText: '<i class="fas fa-crown mr-1 text-amber-300"></i> View Plans',
+        cancelButtonText: 'Close'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          window.location.href = '/superadmin/subscription';
+        }
+      });
+      return;
+    }
+
     if (app.status !== 'Interview Scheduled') {
       try {
         await handleStatusChange(app, 'Interview Scheduled');
@@ -202,10 +228,14 @@ export default function SuperAdminJobsPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        setJobs(data.jobs || []);
+        const rawJobs = Array.isArray(data) ? data : (data.jobs || data.data || []);
+        setJobs(rawJobs);
         if (data.pagination) {
           setTotalPages(data.pagination.total_pages || 1);
-          setTotalJobs(data.pagination.total_jobs ?? 0);
+          setTotalJobs(data.pagination.total_jobs ?? rawJobs.length);
+        } else {
+          setTotalPages(1);
+          setTotalJobs(rawJobs.length);
         }
       } else {
         console.error('Failed to fetch jobs:', res.status);
@@ -447,26 +477,28 @@ export default function SuperAdminJobsPage() {
 
           <div className="flex flex-wrap items-center gap-3">
             {/* View Toggle */}
-            <div className="flex items-center bg-secondary rounded-xl p-1 gap-1 border border-border dark:border-slate-700/80">
+            <div className="flex items-center bg-slate-100 dark:bg-slate-900/80 rounded-xl p-1 gap-1.5 border border-slate-300 dark:border-slate-600 shadow-xs">
               <button
+                type="button"
                 onClick={() => setViewMode('grid')}
                 title="Grid View"
-                className={`p-2.5 rounded-lg transition-all border-none cursor-pointer ${viewMode === 'grid'
-                  ? 'bg-card text-indigo-600 dark:text-indigo-400 shadow-sm'
-                  : 'bg-transparent text-muted-foreground hover:text-foreground'
+                className={`p-2 rounded-lg transition-all cursor-pointer border ${viewMode === 'grid'
+                  ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 border-indigo-500/50 dark:border-indigo-400 shadow-xs'
+                  : 'bg-transparent text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700/80 hover:text-slate-900 dark:hover:text-slate-100 hover:border-slate-400 dark:hover:border-slate-500 hover:bg-slate-200/50 dark:hover:bg-slate-800/60'
                   }`}
               >
-                <LayoutGrid size={18} />
+                <LayoutGrid size={18} strokeWidth={2.2} />
               </button>
               <button
+                type="button"
                 onClick={() => setViewMode('list')}
                 title="List View"
-                className={`p-2.5 rounded-lg transition-all border-none cursor-pointer ${viewMode === 'list'
-                  ? 'bg-card text-indigo-600 dark:text-indigo-400 shadow-sm'
-                  : 'bg-transparent text-muted-foreground hover:text-foreground'
+                className={`p-2 rounded-lg transition-all cursor-pointer border ${viewMode === 'list'
+                  ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 border-indigo-500/50 dark:border-indigo-400 shadow-xs'
+                  : 'bg-transparent text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700/80 hover:text-slate-900 dark:hover:text-slate-100 hover:border-slate-400 dark:hover:border-slate-500 hover:bg-slate-200/50 dark:hover:bg-slate-800/60'
                   }`}
               >
-                <LayoutList size={18} />
+                <LayoutList size={18} strokeWidth={2.2} />
               </button>
             </div>
 
@@ -566,14 +598,14 @@ export default function SuperAdminJobsPage() {
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); handleEditJob(job); }}
-                      className="p-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white rounded-xl border border-indigo-100 cursor-pointer transition-all shadow-xs"
+                      className="p-2 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-600 dark:hover:text-white rounded-xl border border-indigo-200 dark:border-indigo-500/40 cursor-pointer transition-all shadow-xs"
                       title="Edit Job Details"
                     >
                       <Pencil size={14} />
                     </button>
                     <button
                       onClick={(e) => confirmDeleteJob(job, e)}
-                      className="p-2 bg-rose-50 text-rose-500 hover:bg-rose-600 hover:text-white rounded-xl border border-rose-100 cursor-pointer transition-all shadow-xs"
+                      className="p-2 bg-rose-50 dark:bg-rose-950/40 text-rose-500 dark:text-rose-400 hover:bg-rose-600 hover:text-white dark:hover:bg-rose-600 dark:hover:text-white rounded-xl border border-rose-200 dark:border-rose-500/40 cursor-pointer transition-all shadow-xs"
                       title="Delete Job Opening"
                     >
                       <Trash2 size={14} />
@@ -608,14 +640,14 @@ export default function SuperAdminJobsPage() {
 
                 {/* Skills */}
                 <div className="flex flex-wrap gap-1.5">
-                  {job.skills.split(',').slice(0, 3).map((skill, i) => (
+                  {parseSkills(job.skills).slice(0, 3).map((skill, i) => (
                     <span key={i} className="px-2.5 py-1 bg-indigo-50 text-indigo-700 text-[0.68rem] font-bold rounded-lg border border-indigo-100/60">
-                      {skill.trim()}
+                      {skill}
                     </span>
                   ))}
-                  {job.skills.split(',').length > 3 && (
+                  {parseSkills(job.skills).length > 3 && (
                     <span className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 text-[0.68rem] font-bold rounded-lg">
-                      +{job.skills.split(',').length - 3}
+                      +{parseSkills(job.skills).length - 3}
                     </span>
                   )}
                 </div>
@@ -712,11 +744,11 @@ export default function SuperAdminJobsPage() {
                     </td>
                     <td className="p-4">
                       <div className="flex flex-wrap gap-1">
-                        {job.skills.split(',').slice(0, 2).map((s, i) => (
-                          <span key={i} className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[0.65rem] font-bold rounded-md border border-indigo-100/60">{s.trim()}</span>
+                        {parseSkills(job.skills).slice(0, 2).map((s, i) => (
+                          <span key={i} className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[0.65rem] font-bold rounded-md border border-indigo-100/60">{s}</span>
                         ))}
-                        {job.skills.split(',').length > 2 && (
-                          <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 text-[0.65rem] font-bold rounded-md">+{job.skills.split(',').length - 2}</span>
+                        {parseSkills(job.skills).length > 2 && (
+                          <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 text-[0.65rem] font-bold rounded-md">+{parseSkills(job.skills).length - 2}</span>
                         )}
                       </div>
                     </td>
@@ -1635,7 +1667,7 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
               {resumeFullUrl && isPdf ? (
                 <div className="w-full rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-inner bg-white dark:bg-slate-800/60">
                   <iframe
-                    src={resumeFullUrl}
+                    src={`${resumeFullUrl}#toolbar=0&navpanes=0&view=FitH`}
                     title="Candidate Resume"
                     className="w-full h-[540px] border-none"
                   />

@@ -97,6 +97,19 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# In-memory fallbacks for local dev (Redis used in production if available)
+_LOCAL_FUNNEL_CACHE: Dict[str, tuple[float, Dict[str, Any]]] = {}
+_LOCAL_ANALYTICS_CACHE: Dict[str, tuple[float, Dict[str, Any]]] = {}
+_LOCAL_CACHE_TTL = 30.0
+
+@router.get("/api/superadmin/recruiters/stats")
+@router.get("/superadmin/recruiters/stats")
+@router.get("/api/superadmin/recruiters/stats/")
+@router.get("/superadmin/recruiters/stats/")
+def superadmin_recruiters_stats(current_admin: dict = Depends(get_current_admin_details)):
+    from app.routes.notes_superadmin2 import get_superadmin_recruiter_stats
+    return get_superadmin_recruiter_stats(current_admin)
+
 @router.get("/api/superadmin/live-sessions")
 @router.get("/superadmin/live-sessions")
 async def superadmin_live_sessions(
@@ -196,6 +209,7 @@ async def superadmin_live_sessions(
 
 
 @router.post("/api/export/excel")
+@router.post("/export/excel")
 def export_excel(data: ExportExcelRequest, current_admin: dict = Depends(get_current_admin_details)):
     import csv
     import io
@@ -241,6 +255,7 @@ def export_excel(data: ExportExcelRequest, current_admin: dict = Depends(get_cur
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/api/candidates/bulk")
+@router.delete("/candidates/bulk")
 def bulk_delete_candidates(data: BulkDeleteRequest, current_admin: dict = Depends(get_current_admin_details)):
     try:
         deleted_count = 0
@@ -270,6 +285,7 @@ def bulk_delete_candidates(data: BulkDeleteRequest, current_admin: dict = Depend
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/api/interview/session/{link_id}")
+@router.delete("/interview/session/{link_id}")
 def delete_session_alias(link_id: str, current_admin: dict = Depends(get_current_admin_details)):
     try:
         row = interview_sessions_collection.find_one({"link_id": link_id})
@@ -293,7 +309,10 @@ def delete_session_alias(link_id: str, current_admin: dict = Depends(get_current
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.patch("/api/credits/request/{request_id}")
+@router.patch("/credits/request/{request_id}")
 def update_credit_request_alias(request_id: str, data: UpdateCreditRequestSchema, current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Super Admin access required")
     try:
         req = credit_requests_collection.find_one({"_id": ObjectId(request_id)})
         if not req:
@@ -310,15 +329,41 @@ def update_credit_request_alias(request_id: str, data: UpdateCreditRequestSchema
             admin_doc = admins_collection.find_one({"_id": ObjectId(admin_id)}) if admin_id else None
             if admin_doc:
                 company_id = admin_doc.get("company_id")
+                from pymongo import ReturnDocument
+                from datetime import datetime, timezone
+                
                 if company_id:
-                    companies_collection.update_one({"_id": ObjectId(company_id)}, {"$inc": {"credits": -amount}})
+                    comp_doc = companies_collection.find_one_and_update(
+                        {"_id": ObjectId(company_id), "credits": {"$gte": amount}},
+                        {"$inc": {"credits": -amount}},
+                        return_document=ReturnDocument.AFTER
+                    )
+                    if not comp_doc:
+                        # Revert status
+                        credit_requests_collection.update_one({"_id": ObjectId(request_id)}, {"$set": {"status": "pending"}})
+                        raise HTTPException(status_code=400, detail="Insufficient company credits")
+                        
                 admins_collection.update_one({"_id": ObjectId(admin_id)}, {"$inc": {"credits": amount}})
+                
+                if company_id:
+                    from app.db.mongo_db import db
+                    super_admin_id = str(current_admin.get("admin_id") or current_admin.get("_id") or "")
+                    db.credit_ledger.insert_one({
+                        "company_id": str(company_id),
+                        "super_admin_id": super_admin_id,
+                        "sub_admin_id": str(admin_id),
+                        "org": admin_doc.get("name") or admin_doc.get("username"),
+                        "amount": amount,
+                        "status": "Completed",
+                        "date": datetime.now(timezone.utc).isoformat()
+                    })
                 
         return {"status": "success", "message": f"Request {data.status} successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/api/admin/candidates/qualified")
+@router.get("/admin/candidates/qualified")
 def get_admin_qualified(pipeline: Optional[str] = "all", current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["admin"]:
         raise HTTPException(status_code=403, detail="Admin access required")
@@ -357,6 +402,10 @@ def get_admin_qualified(pipeline: Optional[str] = "all", current_admin: dict = D
         s["status"] = sync_session_status(s, now)
         s["id"] = str(s["_id"])
         s["_id"] = str(s["_id"])
+        if not s.get("admin_name"):
+            s["admin_name"] = s.get("decision_by_name") or s.get("last_action_by_name")
+        if not s.get("talent_pool_status"):
+            s["talent_pool_status"] = "archived"
         merged_list.append(s)
         
     for app in apps:
@@ -369,7 +418,7 @@ def get_admin_qualified(pipeline: Optional[str] = "all", current_admin: dict = D
             
         app_id = str(app.get("_id"))
         score = app.get("score") or 0.0
-        mock_session = {
+        test_session = {
             "id": f"ai_call_{app_id}",
             "_id": f"ai_call_{app_id}",
             "link_id": f"ai_call_{app_id}",
@@ -383,13 +432,19 @@ def get_admin_qualified(pipeline: Optional[str] = "all", current_admin: dict = D
             "decision": "selected",
             "status": "completed",
             "application_id": app_id,
-            "is_deactivated": False
+            "is_deactivated": False,
+            "admin_name": app.get("decision_by_name") or app.get("last_action_by_name"),
+            "rejection_reason": app.get("rejection_reason"),
+            "created_by": app.get("admin_id"),
+            "decision_at": app.get("decision_at"),
+            "talent_pool_status": app.get("talent_pool_status", "archived")
         }
-        merged_list.append(mock_session)
+        merged_list.append(test_session)
         
     return merged_list
 
 @router.get("/api/admin/candidates/rejected")
+@router.get("/admin/candidates/rejected")
 def get_admin_rejected(pipeline: Optional[str] = "all", current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["admin"]:
         raise HTTPException(status_code=403, detail="Admin access required")
@@ -427,6 +482,10 @@ def get_admin_rejected(pipeline: Optional[str] = "all", current_admin: dict = De
         s["status"] = sync_session_status(s, now)
         s["id"] = str(s["_id"])
         s["_id"] = str(s["_id"])
+        if not s.get("admin_name"):
+            s["admin_name"] = s.get("decision_by_name") or s.get("last_action_by_name")
+        if not s.get("talent_pool_status"):
+            s["talent_pool_status"] = "archived"
         merged_list.append(s)
         
     for app in apps:
@@ -439,7 +498,7 @@ def get_admin_rejected(pipeline: Optional[str] = "all", current_admin: dict = De
             
         app_id = str(app.get("_id"))
         score = app.get("score") or 0.0
-        mock_session = {
+        test_session = {
             "id": f"ai_call_{app_id}",
             "_id": f"ai_call_{app_id}",
             "link_id": f"ai_call_{app_id}",
@@ -451,11 +510,20 @@ def get_admin_rejected(pipeline: Optional[str] = "all", current_admin: dict = De
             "avg_score": score,
             "created_at": app.get("applied_at") or app.get("updated_at") or datetime.now(timezone.utc).isoformat(),
             "decision": "rejected",
+            "talent_pool_status": app.get("talent_pool_status"),
+            "rejected_by": app.get("rejected_by") or app.get("decision_by_name") or app.get("last_action_by_name"),
+            "decision_by_name": app.get("decision_by_name") or app.get("rejected_by") or app.get("last_action_by_name"),
+            "rejected_at": app.get("rejected_at") or app.get("decision_at") or app.get("last_action_at") or app.get("updated_at"),
             "status": "completed",
             "application_id": app_id,
-            "is_deactivated": False
+            "is_deactivated": False,
+            "admin_name": app.get("decision_by_name") or app.get("last_action_by_name"),
+            "rejection_reason": app.get("rejection_reason"),
+            "created_by": app.get("admin_id"),
+            "decision_at": app.get("decision_at"),
+            "talent_pool_status": app.get("talent_pool_status", "archived")
         }
-        merged_list.append(mock_session)
+        merged_list.append(test_session)
         
     return merged_list
 
@@ -470,55 +538,86 @@ async def superadmin_dashboard(
 ):
     if current_admin.get("role") not in ["super_admin", "master"]:
         raise HTTPException(status_code=403, detail="Super Admin access required")
-    return await get_dashboard_aggregated_data(
-        admin_id=adminId,
-        summary_only=summary_only,
-        current_admin=current_admin,
-    )
+    try:
+        return await get_dashboard_aggregated_data(
+            admin_id=adminId,
+            summary_only=summary_only,
+            current_admin=current_admin,
+        )
+    except Exception as e:
+        logger.error(f"[superadmin_dashboard] Error aggregating dashboard: {e}", exc_info=True)
+        return {
+            "dbStats": {},
+            "candidates": [],
+            "omni_stats": {"status": "unavailable", "error": str(e)},
+            "liveSessions": [],
+            "ongoingMonitoredCount": 0,
+            "ongoingLiveCount": 0,
+            "ongoingAlertCount": 0,
+            "ongoingSpeakingCount": 0,
+            "ongoingCodingCount": 0,
+            "creditRequests": []
+        }
 
 
 @router.get("/api/superadmin/recruitment-funnel")
 @router.get("/superadmin/recruitment-funnel")
-def superadmin_recruitment_funnel(adminId: Optional[str] = None, current_admin: dict = Depends(get_current_admin_details)):
-    """Return stage-by-stage recruitment funnel counts from real DB data."""
+async def superadmin_recruitment_funnel(adminId: Optional[str] = None, current_admin: dict = Depends(get_current_admin_details)):
+    """Return stage-by-stage recruitment funnel counts from real DB data with caching and parallel execution."""
     if current_admin.get("role") not in ["super_admin", "master"]:
         raise HTTPException(status_code=403, detail="Super Admin access required")
     try:
         company_id = current_admin.get("company_id")
+        cache_key = f"superadmin_funnel:{company_id}:{adminId or 'all'}"
+
+        # 1. Check cache (Redis in production, local in-memory fallback for local dev)
+        if manager.redis:
+            try:
+                cached = await manager.redis.get(cache_key)
+                if cached:
+                    return json.loads(cached)
+            except Exception:
+                pass
+        else:
+            cached = _LOCAL_FUNNEL_CACHE.get(cache_key)
+            if cached and time.monotonic() - cached[0] < _LOCAL_CACHE_TTL:
+                return cached[1]
+
         base_q = {}
         if current_admin.get("role") != "master":
             base_q["company_id"] = company_id
         if adminId:
             base_q["created_by"] = adminId
 
-        # Stage 1 & 2: total interview sessions assigned
-        total       = interview_sessions_collection.count_documents(base_q)
-        # Stage 4: sessions where interview was actually completed
-        completed   = interview_sessions_collection.count_documents({**base_q, "status": "completed"})
-        # Stage 5 & 6: candidates marked as selected (qualified) by recruiter
-        qualified   = interview_sessions_collection.count_documents({**base_q, "decision": "selected"})
-        # Stage 7: candidates to whom an offer email was sent (invite_email_status=sent and decision=selected)
-        offers_sent = interview_sessions_collection.count_documents({
-            **base_q,
-            "decision": "selected",
-            "invite_email_status": "sent"
-        })
-        # If no offers_sent data yet, fall back to qualified count
+        # 2. Parallelize stage count queries
+        total_fut = asyncio.to_thread(interview_sessions_collection.count_documents, base_q)
+        completed_fut = asyncio.to_thread(interview_sessions_collection.count_documents, {**base_q, "status": "completed"})
+        qualified_fut = asyncio.to_thread(interview_sessions_collection.count_documents, {**base_q, "decision": "selected"})
+        offers_sent_fut = asyncio.to_thread(
+            interview_sessions_collection.count_documents,
+            {**base_q, "decision": "selected", "invite_email_status": "sent"}
+        )
+
+        def _get_ai_call_apps():
+            try:
+                jobs_q = {}
+                if current_admin.get("role") != "master":
+                    jobs_q["company_id"] = company_id
+                if adminId:
+                    jobs_q["admin_id"] = adminId
+                job_ids = [j.get("job_id") for j in jobs_collection.find(jobs_q, {"job_id": 1}) if j.get("job_id")]
+                return job_applications_collection.count_documents({"job_id": {"$in": job_ids}}) if job_ids else 0
+            except Exception:
+                return 0
+
+        ai_call_fut = asyncio.to_thread(_get_ai_call_apps)
+
+        total, completed, qualified, offers_sent, ai_call_apps = await asyncio.gather(
+            total_fut, completed_fut, qualified_fut, offers_sent_fut, ai_call_fut
+        )
+
         if offers_sent == 0 and qualified > 0:
             offers_sent = qualified
-
-        # Count AI calling candidates (from job_applications)
-        ai_call_apps = 0
-        try:
-            jobs_q = {}
-            if current_admin.get("role") != "master":
-                jobs_q["company_id"] = company_id
-            if adminId:
-                jobs_q["admin_id"] = adminId
-            job_ids = [j.get("job_id") for j in jobs_collection.find(jobs_q, {"job_id": 1}) if j.get("job_id")]
-            ai_call_apps = job_applications_collection.count_documents({"job_id": {"$in": job_ids}}) if job_ids else 0
-        except Exception:
-            ai_call_apps = 0
 
         colors = ["#3b82f6", "#0ea5e9", "#0284c7", "#0d9488", "#10b981", "#22c55e", "#eab308", "#f59e0b"]
         funnel = [
@@ -531,7 +630,21 @@ def superadmin_recruitment_funnel(adminId: Optional[str] = None, current_admin: 
             {"name": "Candidates Hired",        "value": qualified,           "fill": colors[6]},
             {"name": "Offers Released",         "value": offers_sent,         "fill": colors[7]},
         ]
-        return {"funnel": funnel}
+        result = {"funnel": funnel}
+
+        # 3. Store in cache
+        if manager.redis:
+            try:
+                await manager.redis.setex(cache_key, int(_LOCAL_CACHE_TTL), json.dumps(result))
+            except Exception:
+                pass
+        else:
+            _LOCAL_FUNNEL_CACHE[cache_key] = (time.monotonic(), result)
+            if len(_LOCAL_FUNNEL_CACHE) > 100:
+                oldest_k = min(_LOCAL_FUNNEL_CACHE, key=lambda k: _LOCAL_FUNNEL_CACHE[k][0])
+                _LOCAL_FUNNEL_CACHE.pop(oldest_k, None)
+
+        return result
     except Exception as e:
         print(f"Funnel error: {e}")
         return {"funnel": []}
@@ -539,14 +652,28 @@ def superadmin_recruitment_funnel(adminId: Optional[str] = None, current_admin: 
 
 @router.get("/api/superadmin/platform-analytics")
 @router.get("/superadmin/platform-analytics")
-def superadmin_platform_analytics(adminId: Optional[str] = None, current_admin: dict = Depends(get_current_admin_details)):
-    """Return key platform analytics metrics and average time-to-hire."""
+async def superadmin_platform_analytics(adminId: Optional[str] = None, current_admin: dict = Depends(get_current_admin_details)):
+    """Return key platform analytics metrics and average time-to-hire with caching and parallel execution."""
     if current_admin.get("role") not in ["super_admin", "master"]:
         raise HTTPException(status_code=403, detail="Super Admin access required")
     try:
         company_id = current_admin.get("company_id")
+        cache_key = f"superadmin_analytics:{company_id}:{adminId or 'all'}"
+
+        # 1. Check cache (Redis in production, local in-memory fallback for local dev)
+        if manager.redis:
+            try:
+                cached = await manager.redis.get(cache_key)
+                if cached:
+                    return json.loads(cached)
+            except Exception:
+                pass
+        else:
+            cached = _LOCAL_ANALYTICS_CACHE.get(cache_key)
+            if cached and time.monotonic() - cached[0] < _LOCAL_CACHE_TTL:
+                return cached[1]
+
         base_q = {"company_id": company_id}
-        
         allowed_ids = _get_authorized_creator_ids(current_admin)
         if adminId:
             if current_admin.get("role") in ["super_admin", "superadmin"] and adminId not in allowed_ids:
@@ -555,44 +682,52 @@ def superadmin_platform_analytics(adminId: Optional[str] = None, current_admin: 
         else:
             base_q["created_by"] = {"$in": allowed_ids}
 
-        total     = interview_sessions_collection.count_documents(base_q) or 1
-        completed = interview_sessions_collection.count_documents({**base_q, "status": "completed"})
-        selected  = interview_sessions_collection.count_documents({**base_q, "decision": "selected"})
-        rejected  = interview_sessions_collection.count_documents({**base_q, "decision": "rejected"})
-        decided   = selected + rejected or 1
+        # 2. Parallelize queries
+        total_fut = asyncio.to_thread(interview_sessions_collection.count_documents, base_q)
+        completed_fut = asyncio.to_thread(interview_sessions_collection.count_documents, {**base_q, "status": "completed"})
+        selected_fut = asyncio.to_thread(interview_sessions_collection.count_documents, {**base_q, "decision": "selected"})
+        rejected_fut = asyncio.to_thread(interview_sessions_collection.count_documents, {**base_q, "decision": "rejected"})
 
-        # Average AI score
         pipeline_agg = [
             {"$match": {**base_q, "avg_score": {"$gt": 0}}},
             {"$group": {"_id": None, "avg": {"$avg": "$avg_score"}}}
         ]
-        agg_result = list(interview_sessions_collection.aggregate(pipeline_agg))
-        avg_score  = round(agg_result[0]["avg"], 0) if agg_result else 0
+        avg_score_fut = asyncio.to_thread(lambda: list(interview_sessions_collection.aggregate(pipeline_agg)))
+
+        def _get_time_to_hire():
+            try:
+                hired_sessions = list(interview_sessions_collection.find(
+                    {**base_q, "decision": "selected", "started_at": {"$exists": True}},
+                    {"started_at": 1, "created_at": 1, "updated_at": 1, "completed_at": 1}
+                ).limit(200))
+                deltas = []
+                for s in hired_sessions:
+                    try:
+                        start = datetime.fromisoformat((s.get("started_at") or s.get("created_at")).replace("Z", "+00:00"))
+                        end   = datetime.fromisoformat((s.get("updated_at") or s.get("completed_at") or s.get("created_at")).replace("Z", "+00:00"))
+                        diff  = (end - start).days
+                        if 0 <= diff <= 365:
+                            deltas.append(diff)
+                    except Exception:
+                        pass
+                if deltas:
+                    return round(sum(deltas) / len(deltas), 0)
+            except Exception as e:
+                print(f"Time-to-hire error: {e}")
+            return None
+
+        time_to_hire_fut = asyncio.to_thread(_get_time_to_hire)
+
+        total_raw, completed, selected, rejected, agg_result, avg_days = await asyncio.gather(
+            total_fut, completed_fut, selected_fut, rejected_fut, avg_score_fut, time_to_hire_fut
+        )
+
+        total     = total_raw or 1
+        decided   = selected + rejected or 1
+        avg_score = round(agg_result[0]["avg"], 0) if agg_result else 0
 
         completion_rate = round((completed / total) * 100, 0)
         hire_rate       = round((selected / decided) * 100, 0)
-
-        # Average time-to-hire in days
-        avg_days = None
-        try:
-            hired_sessions = list(interview_sessions_collection.find(
-                {**base_q, "decision": "selected", "started_at": {"$exists": True}},
-                {"started_at": 1, "created_at": 1}
-            ).limit(200))
-            deltas = []
-            for s in hired_sessions:
-                try:
-                    start = datetime.fromisoformat((s.get("started_at") or s.get("created_at")).replace("Z", "+00:00"))
-                    end   = datetime.fromisoformat((s.get("updated_at") or s.get("completed_at") or s.get("created_at")).replace("Z", "+00:00"))
-                    diff  = (end - start).days
-                    if 0 <= diff <= 365:
-                        deltas.append(diff)
-                except Exception:
-                    pass
-            if deltas:
-                avg_days = round(sum(deltas) / len(deltas), 0)
-        except Exception as e:
-            print(f"Time-to-hire error: {e}")
 
         analytics = [
             {"label": "AI Resume Screening Success Rate", "value": min(100, completion_rate)},
@@ -604,10 +739,24 @@ def superadmin_platform_analytics(adminId: Optional[str] = None, current_admin: 
             {"label": "AI Recommendation Accuracy",       "value": min(100, int(avg_score) + 5 if avg_score else 0)},
         ]
 
-        return {
+        result = {
             "analytics": analytics,
             "avg_time_to_hire_days": avg_days
         }
+
+        # 3. Store in cache
+        if manager.redis:
+            try:
+                await manager.redis.setex(cache_key, int(_LOCAL_CACHE_TTL), json.dumps(result))
+            except Exception:
+                pass
+        else:
+            _LOCAL_ANALYTICS_CACHE[cache_key] = (time.monotonic(), result)
+            if len(_LOCAL_ANALYTICS_CACHE) > 100:
+                oldest_k = min(_LOCAL_ANALYTICS_CACHE, key=lambda k: _LOCAL_ANALYTICS_CACHE[k][0])
+                _LOCAL_ANALYTICS_CACHE.pop(oldest_k, None)
+
+        return result
     except Exception as e:
         print(f"Platform analytics error: {e}")
         return {"analytics": [], "avg_time_to_hire_days": None}
@@ -665,6 +814,10 @@ def get_superadmin_qualified(adminId: Optional[str] = None, pipeline: Optional[s
         s["status"] = sync_session_status(s, now)
         s["id"] = str(s["_id"])
         s["_id"] = str(s["_id"])
+        if not s.get("admin_name"):
+            s["admin_name"] = s.get("decision_by_name") or s.get("last_action_by_name")
+        if not s.get("talent_pool_status"):
+            s["talent_pool_status"] = "archived"
         merged_list.append(s)
         
     for app in apps:
@@ -677,7 +830,7 @@ def get_superadmin_qualified(adminId: Optional[str] = None, pipeline: Optional[s
             
         app_id = str(app.get("_id"))
         score = app.get("score") or 0.0
-        mock_session = {
+        test_session = {
             "id": f"ai_call_{app_id}",
             "_id": f"ai_call_{app_id}",
             "link_id": f"ai_call_{app_id}",
@@ -691,9 +844,14 @@ def get_superadmin_qualified(adminId: Optional[str] = None, pipeline: Optional[s
             "decision": "selected",
             "status": "completed",
             "application_id": app_id,
-            "is_deactivated": False
+            "is_deactivated": False,
+            "admin_name": app.get("decision_by_name") or app.get("last_action_by_name"),
+            "rejection_reason": app.get("rejection_reason"),
+            "created_by": app.get("admin_id"),
+            "decision_at": app.get("decision_at"),
+            "talent_pool_status": app.get("talent_pool_status", "archived")
         }
-        merged_list.append(mock_session)
+        merged_list.append(test_session)
         
     return merged_list
 
@@ -748,6 +906,10 @@ def get_superadmin_rejected(adminId: Optional[str] = None, pipeline: Optional[st
         s["status"] = sync_session_status(s, now)
         s["id"] = str(s["_id"])
         s["_id"] = str(s["_id"])
+        if not s.get("admin_name"):
+            s["admin_name"] = s.get("decision_by_name") or s.get("last_action_by_name")
+        if not s.get("talent_pool_status"):
+            s["talent_pool_status"] = "archived"
         merged_list.append(s)
         
     for app in apps:
@@ -760,7 +922,7 @@ def get_superadmin_rejected(adminId: Optional[str] = None, pipeline: Optional[st
             
         app_id = str(app.get("_id"))
         score = app.get("score") or 0.0
-        mock_session = {
+        test_session = {
             "id": f"ai_call_{app_id}",
             "_id": f"ai_call_{app_id}",
             "link_id": f"ai_call_{app_id}",
@@ -772,17 +934,26 @@ def get_superadmin_rejected(adminId: Optional[str] = None, pipeline: Optional[st
             "avg_score": score,
             "created_at": app.get("applied_at") or app.get("updated_at") or datetime.now(timezone.utc).isoformat(),
             "decision": "rejected",
+            "talent_pool_status": app.get("talent_pool_status"),
+            "rejected_by": app.get("rejected_by") or app.get("decision_by_name") or app.get("last_action_by_name"),
+            "decision_by_name": app.get("decision_by_name") or app.get("rejected_by") or app.get("last_action_by_name"),
+            "rejected_at": app.get("rejected_at") or app.get("decision_at") or app.get("last_action_at") or app.get("updated_at"),
             "status": "completed",
             "application_id": app_id,
-            "is_deactivated": False
+            "is_deactivated": False,
+            "admin_name": app.get("decision_by_name") or app.get("last_action_by_name"),
+            "rejection_reason": app.get("rejection_reason"),
+            "created_by": app.get("admin_id"),
+            "decision_at": app.get("decision_at"),
+            "talent_pool_status": app.get("talent_pool_status", "archived")
         }
-        merged_list.append(mock_session)
+        merged_list.append(test_session)
         
     return merged_list
 
 @router.post("/api/superadmin/interview/create")
 @router.post("/superadmin/interview/create")
-def superadmin_interview_create(data: dict, background_tasks: BackgroundTasks, current_admin: dict = Depends(get_current_admin_details)):
+def superadmin_interview_create(data: dict, background_tasks: BackgroundTasks, request: Request, current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["super_admin", "master"]:
         raise HTTPException(status_code=403, detail="Super Admin access required")
     if "candidates" in data:
@@ -790,13 +961,13 @@ def superadmin_interview_create(data: dict, background_tasks: BackgroundTasks, c
             bulk_data = BulkCreateSession(**data)
         except Exception as e:
             raise HTTPException(status_code=422, detail=str(e))
-        return bulk_create_sessions(bulk_data, background_tasks, current_admin)
+        return bulk_create_sessions(bulk_data, background_tasks, request, current_admin)
     else:
         try:
             single_data = CreateSession(**data)
         except Exception as e:
             raise HTTPException(status_code=422, detail=str(e))
-        return create_session(single_data, current_admin)
+        return create_session(single_data, request, current_admin)
 @router.get("/api/superadmin/crash-logs")
 @router.get("/superadmin/crash-logs")
 def get_crash_logs(current_admin: dict = Depends(get_current_admin_details)):

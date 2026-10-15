@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useProctoring } from '../hooks/useProctoring';
+import { useEnvironmentIsolation } from '../hooks/useEnvironmentIsolation';
 
 const DeviceCheckModal = ({ onSuccess, onCancel }) => {
   const videoRef = useRef(null);
@@ -14,13 +15,37 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
   const [volLevel, setVolLevel] = useState(0);
   const [isReady, setIsReady] = useState(false);
   const [hasAudioVerified, setHasAudioVerified] = useState(false);
+  const [selectedOS, setSelectedOS] = useState(() => {
+    if (typeof window === 'undefined') return 'windows';
+    const ua = (window.navigator?.userAgent || '').toLowerCase();
+    const platform = (window.navigator?.userAgentData?.platform || window.navigator?.platform || '').toLowerCase();
+    if (platform.includes('mac') || ua.includes('mac') || ua.includes('darwin')) return 'mac';
+    if (platform.includes('linux') || ua.includes('linux') || ua.includes('x11')) return 'linux';
+    return 'windows';
+  });
+  const [copiedCmd, setCopiedCmd] = useState(false);
+
+  const env = useEnvironmentIsolation({
+    enabled: true,
+  });
 
   const proctoring = useProctoring({
     videoRef,
-    enabled: isReady && !error
+    enabled: isReady && !error,
+    isPreCheck: true,
   });
 
-  const hasFaceVerified = proctoring.faceVisible && proctoring.faceCount === 1;
+  const isScreenCastDetected = Boolean(
+    proctoring.screenCastingDetected ||
+    proctoring.screenShareActive ||
+    proctoring.screenRecordingActive ||
+    proctoring.multipleDisplaysDetected
+  );
+  const hasScreenShareVerified = !isScreenCastDetected;
+
+  const hasFaceVerified = proctoring.faceVisible && proctoring.faceCount === 1 && !proctoring.multiFace;
+  const hasEnvironmentVerified = env.isIsolated;
+  const canProceed = isReady && !error && hasAudioVerified && hasFaceVerified && hasEnvironmentVerified && hasScreenShareVerified && !env.hasMultipleTabs && proctoring.agentConnected;
 
   useEffect(() => {
     let active = true;
@@ -67,7 +92,7 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
 
           const unlockAudio = () => {
             if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-              audioContextRef.current.resume().catch(() => {});
+              audioContextRef.current.resume().catch(() => { });
             }
             window.removeEventListener('click', unlockAudio);
             window.removeEventListener('keydown', unlockAudio);
@@ -98,7 +123,7 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
           // NEW: self-heal — if the context ever drops back to suspended
           // (tab backgrounded, OS interruption, etc.) keep trying to resume it.
           if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-            audioContextRef.current.resume().catch(() => {});
+            audioContextRef.current.resume().catch(() => { });
           }
 
           analyserRef.current.getByteTimeDomainData(dataArrayRef.current);
@@ -146,7 +171,7 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
       active = false;
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       if (sourceRef.current) {
-        try { sourceRef.current.disconnect(); } catch (_) {}
+        try { sourceRef.current.disconnect(); } catch (_) { }
         sourceRef.current = null;
       }
       if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
@@ -159,6 +184,26 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
   }, []);
 
   const handleProceed = () => {
+    // Strict zero-tolerance guard at the exact moment of proceeding: no screen casting/mirroring allowed
+    if (isScreenCastDetected) {
+      return;
+    }
+    if (proctoring.multiFace) {
+      return;
+    }
+    if (!document.fullscreenElement) {
+      env.revokeIsolation("Cannot proceed: Fullscreen is not active. The interview requires full-screen mode to prevent other applications from displaying.");
+      return;
+    }
+    if (env.hasMultipleTabs) {
+      env.revokeIsolation("Cannot proceed: Multiple Chrome tabs are open. Please close all other tabs.");
+      return;
+    }
+    if (typeof document.hasFocus === 'function' && !document.hasFocus()) {
+      env.revokeIsolation("Cannot proceed: Window focus was lost. Close all background applications (VS Code, WhatsApp, AnyDesk, etc.) before proceeding.");
+      return;
+    }
+
     if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop());
@@ -166,28 +211,38 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
     onSuccess();
   };
 
+  const handleCancel = () => {
+    if (document.fullscreenElement) {
+      try { document.exitFullscreen(); } catch (_) { }
+    }
+    onCancel();
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0a0f1e]/90 backdrop-blur-sm p-4 overflow-y-auto">
-      <div 
-        className="bg-[#161c2d] border rounded-2xl shadow-2xl max-w-2xl w-full p-6 sm:p-8 text-white relative overflow-y-auto max-h-[94vh] my-auto flex flex-col justify-between"
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0a0f1e]/90 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto">
+      <div
+        className="bg-[#161c2d] border rounded-2xl shadow-2xl max-w-xl sm:max-w-2xl w-full p-4 sm:p-5 text-white relative overflow-y-auto max-h-[96vh] my-auto flex flex-col gap-2.5"
         style={{ backgroundColor: '#161c2d', borderColor: 'rgba(255,255,255,0.1)', color: '#ffffff' }}
       >
-        <div className="mb-4 text-center">
-          <h2 className="text-2xl font-bold mb-2">Hardware Check</h2>
-          <p className="text-slate-400 text-sm mb-3">Let's make sure your camera and microphone are working properly before we begin.</p>
-          <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full text-xs font-medium text-blue-400">
-            <i className="fab fa-chrome"></i>
+        <div className="text-center">
+          <h2 className="text-xl sm:text-2xl font-bold mb-1">Hardware Check</h2>
+          <p className="text-slate-400 text-xs sm:text-sm mb-1.5">Let's make sure your camera and microphone are working properly before we begin.</p>
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded-full text-[11px] font-medium text-blue-400">
+            <i className="fab fa-chrome text-xs"></i>
             <span>Google Chrome is recommended for the best interview experience</span>
           </div>
         </div>
 
-        <div className="relative w-full aspect-video max-h-[38vh] bg-black rounded-3xl overflow-hidden mb-5 flex items-center justify-center">
+        <div
+          className="relative w-full shrink-0 h-48 sm:h-52 bg-black rounded-xl overflow-hidden flex items-center justify-center border border-white/10"
+          style={{ backgroundColor: '#000000', maxHeight: '230px' }}
+        >
           {error ? (
-            <div className="text-center p-6">
-              <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-4">
-                <i className="fas fa-exclamation-triangle text-2xl text-red-400"></i>
+            <div className="text-center p-4">
+              <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-2">
+                <i className="fas fa-exclamation-triangle text-xl text-red-400"></i>
               </div>
-              <p className="text-red-400 font-medium">{error}</p>
+              <p className="text-red-400 font-medium text-xs">{error}</p>
             </div>
           ) : (
             <video
@@ -201,60 +256,425 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
 
           {!isReady && !error && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 backdrop-blur-sm">
-              <i className="fas fa-spinner fa-spin text-3xl text-indigo-400 mb-3"></i>
-              <p className="text-slate-300 font-medium animate-pulse">Requesting permissions...</p>
+              <i className="fas fa-spinner fa-spin text-2xl text-indigo-400 mb-2"></i>
+              <p className="text-slate-300 text-xs font-medium animate-pulse">Requesting permissions...</p>
             </div>
           )}
         </div>
 
-        <div className="bg-[#1e293b] rounded-2xl p-4 sm:p-5 mb-4">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-bold text-slate-200 flex items-center gap-2">
-              <i className="fas fa-microphone text-indigo-500"></i> Microphone Level
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div className="bg-[#1e293b] rounded-xl p-2.5 sm:p-3 flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                <i className="fas fa-microphone text-indigo-400 text-xs"></i> Microphone Level
+              </span>
+              {hasAudioVerified ? (
+                <span className="text-[11px] font-bold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded">Audio Verified ✓</span>
+              ) : isReady ? (
+                <span className="text-[11px] font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded">Speak to verify...</span>
+              ) : null}
+            </div>
+            <div className="h-2 w-full bg-[#0f172a] rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-blue-500 to-emerald-400 transition-all duration-75"
+                style={{ width: `${volLevel}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="bg-[#1e293b] rounded-xl p-2.5 sm:p-3 flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+              <i className="fas fa-user-check text-indigo-400 text-xs"></i> Face Detection
             </span>
-            {hasAudioVerified ? (
-              <span className="text-xs font-bold text-emerald-400 bg-emerald-400/10 px-3 py-1 rounded-md">Audio Verified ✓</span>
+            {proctoring.multiFace ? (
+              <span className="text-[11px] font-bold text-red-500 bg-red-500/10 px-2 py-0.5 rounded">Multiple Faces!</span>
+            ) : hasFaceVerified ? (
+              <span className="text-[11px] font-bold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded">Face Verified ✓</span>
             ) : isReady ? (
-              <span className="text-xs font-bold text-amber-500 bg-amber-500/10 px-3 py-1 rounded-md">Speak to verify...</span>
+              <span className="text-[11px] font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded">Looking for face...</span>
             ) : null}
           </div>
-          <div className="h-3 w-full bg-[#0f172a] rounded-full overflow-hidden">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-blue-500 to-emerald-400 transition-all duration-75"
-              style={{ width: `${volLevel}%` }}
-            />
+        </div>
+
+        {/* Environment & Tab Isolation Check */}
+        <div className="bg-[#1e293b] rounded-xl p-2.5 sm:p-3">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+              <i className="fas fa-shield-alt text-indigo-400 text-xs"></i> Zero External Applications & Tab Lockdown
+            </span>
+            {hasEnvironmentVerified ? (
+              <span className="text-[11px] font-bold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded">
+                All Apps Isolated ✓
+              </span>
+            ) : env.hasMultipleTabs ? (
+              <span className="text-[11px] font-bold text-red-400 bg-red-500/20 border border-red-500/40 px-2 py-0.5 rounded animate-pulse">
+                ⚠️ Multiple Tabs Detected!
+              </span>
+            ) : env.isTesting ? (
+              <span className="text-[11px] font-bold text-indigo-400 bg-indigo-400/10 px-2 py-0.5 rounded animate-pulse">
+                Testing Focus ({env.countdown}s)...
+              </span>
+            ) : env.failureReason ? (
+              <span className="text-[11px] font-bold text-red-500 bg-red-500/10 px-2 py-0.5 rounded">
+                Isolation Failed
+              </span>
+            ) : (
+              <span className="text-[11px] font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded">
+                Verification Required
+              </span>
+            )}
           </div>
+
+          <p className="text-[11px] text-slate-400 mb-2 leading-tight">
+            All other running software on your PC (IDEs, browsers, messengers, recording tools) must be closed.
+          </p>
+
+          {!hasEnvironmentVerified ? (
+            <div
+              className="rounded-lg p-2.5 border"
+              style={{ backgroundColor: '#0f172a', borderColor: 'rgba(255, 255, 255, 0.1)', color: '#ffffff' }}
+            >
+              {env.hasMultipleTabs && (
+                <div
+                  className="p-2 mb-2 rounded-lg text-[11px] flex items-start gap-2 shadow-lg"
+                  style={{ backgroundColor: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.4)', color: '#fecaca' }}
+                >
+                  <i className="fas fa-window-restore text-red-400 text-xs mt-0.5 flex-shrink-0 animate-bounce"></i>
+                  <div className="flex-1">
+                    <p className="font-bold text-red-100 text-xs">Background Chrome Tabs Detected!</p>
+                    <p className="mt-0.5 text-slate-200">
+                      {env.multiTabError || 'Multiple Chrome tabs are open on your browser.'}
+                    </p>
+                    <p className="mt-1 text-red-300 font-semibold">
+                      👉 Action Required: Close all other Chrome tabs.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="text-[11px] space-y-1 font-medium" style={{ color: '#e2e8f0' }}>
+                  <div className="flex items-center gap-1.5">
+                    <i className="fas fa-ban text-red-400 shrink-0 text-[10px]"></i>
+                    <span>Close <strong className="text-white font-bold">ALL other applications</strong></span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <i className="fas fa-window-restore text-indigo-400 shrink-0 text-[10px]"></i>
+                    <span>Close all other Chrome tabs and windows</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <i className="fas fa-bell-slash text-amber-400 shrink-0 text-[10px]"></i>
+                    <span>Press <kbd className="px-1 py-0.2 bg-black/80 rounded border border-white/20 font-mono text-[9px] text-white font-bold shadow-sm">Win + N</kbd> to turn on <strong className="text-white font-bold">Do Not Disturb</strong></span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={env.startIsolationTest}
+                  disabled={env.isTesting || env.hasMultipleTabs || !proctoring.agentConnected}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 shrink-0 ${env.isTesting
+                      ? 'bg-indigo-600/50 text-indigo-200 cursor-wait'
+                      : env.hasMultipleTabs || !proctoring.agentConnected
+                        ? 'bg-red-500/20 text-red-300 cursor-not-allowed border border-red-500/30'
+                        : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/30 hover:-translate-y-0.5 cursor-pointer'
+                    }`}
+                >
+                  {env.isTesting ? (
+                    <>
+                      <i className="fas fa-spinner fa-spin text-xs"></i>
+                      <span>Testing Fullscreen ({env.countdown}s)...</span>
+                    </>
+                  ) : !proctoring.agentConnected ? (
+                    <>
+                      <i className="fas fa-shield-alt"></i>
+                      <span>Agent Required First</span>
+                    </>
+                  ) : env.hasMultipleTabs ? (
+                    <>
+                      <i className="fas fa-exclamation-circle text-xs"></i>
+                      <span>Close Other Tabs to Test</span>
+                    </>
+                  ) : (
+                    <>
+                      <i className="fas fa-check-double text-xs"></i>
+                      <span>Run 5s Isolation Test</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {env.failureReason && !env.isTesting && !env.hasMultipleTabs && (
+                <div
+                  className="mt-2 p-1.5 rounded-md text-[11px] flex items-center justify-between"
+                  style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#fca5a5' }}
+                >
+                  <span>⚠️ {env.failureReason}</span>
+                  <button
+                    type="button"
+                    onClick={env.resetIsolationTest}
+                    className="underline hover:text-white text-[11px] font-semibold ml-2 cursor-pointer"
+                  >
+                    Reset
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div
+              className="p-2 rounded-lg text-xs flex items-center gap-2 border"
+              style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', borderColor: 'rgba(16, 185, 129, 0.25)', color: '#34d399' }}
+            >
+              <i className="fas fa-check-circle text-emerald-400 text-xs"></i>
+              <span><strong className="text-white font-semibold">Fullscreen focus verified.</strong> All external tabs and apps isolated.</span>
+            </div>
+          )}
         </div>
 
-        <div className="bg-[#1e293b] rounded-2xl p-4 sm:p-5 mb-6 flex items-center justify-between">
-          <span className="text-sm font-bold text-slate-200 flex items-center gap-2">
-            <i className="fas fa-user-check text-indigo-500"></i> Face Detection
-          </span>
-          {hasFaceVerified ? (
-            <span className="text-xs font-bold text-emerald-400 bg-emerald-400/10 px-3 py-1 rounded-md">Face Verified ✓</span>
-          ) : proctoring.multiFace ? (
-            <span className="text-xs font-bold text-red-500 bg-red-500/10 px-3 py-1 rounded-md">Multiple Faces Detected!</span>
-          ) : isReady ? (
-            <span className="text-xs font-bold text-amber-500 bg-amber-500/10 px-3 py-1 rounded-md">Looking for face...</span>
-          ) : null}
+        {/* Screen Sharing & Display Security Check */}
+        <div className="bg-[#1e293b] rounded-xl p-2.5 sm:p-3">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+              <i className="fas fa-desktop text-indigo-400 text-xs"></i> Screen Sharing & Display Security
+            </span>
+            {!proctoring.agentConnected ? (
+              <span className="text-[11px] font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded animate-pulse">
+                Agent Not Connected
+              </span>
+            ) : hasScreenShareVerified ? (
+              <span className="text-[11px] font-bold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded">
+                No Screen Share Active ✓
+              </span>
+            ) : (
+              <span className="text-[11px] font-bold text-red-400 bg-red-500/20 border border-red-500/40 px-2 py-0.5 rounded animate-pulse">
+                ⚠️ Screen Sharing Detected!
+              </span>
+            )}
+          </div>
+
+          {!proctoring.agentConnected ? (
+            <div
+              className="rounded-lg p-2.5 border mt-2"
+              style={{ backgroundColor: 'rgba(245, 158, 11, 0.12)', borderColor: 'rgba(245, 158, 11, 0.35)', color: '#fcd34d' }}
+            >
+              <div className="flex items-start gap-2">
+                <i className="fas fa-shield-alt text-amber-400 text-xs mt-0.5 flex-shrink-0 animate-bounce"></i>
+                <div className="flex-1 text-[11px]">
+                  <p className="font-bold text-amber-100 text-xs">
+                    HireIQ Security Agent Required
+                  </p>
+                  <p className="mt-0.5 text-slate-200 leading-snug">
+                    To ensure a secure environment, you must download and run the HireIQ Security Agent. This detects unauthorized background apps and mirroring tools (e.g. SpaceDesk, AnyDesk).
+                  </p>
+                  {/* Primary Download Button */}
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <a
+                      href={
+                        selectedOS === 'mac'
+                          ? '/downloads/hireiq-agent-mac'
+                          : selectedOS === 'linux'
+                            ? '/downloads/hireiq-agent-linux'
+                            : '/downloads/hireiq-agent.exe'
+                      }
+                      download={
+                        selectedOS === 'mac'
+                          ? 'hireiq-agent-mac'
+                          : selectedOS === 'linux'
+                            ? 'hireiq-agent-linux'
+                            : 'hireiq-agent.exe'
+                      }
+                      className="inline-flex items-center gap-1.5 bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded text-xs font-bold transition-all shadow shadow-amber-600/30"
+                    >
+                      <i className={
+                        selectedOS === 'mac'
+                          ? 'fab fa-apple text-sm'
+                          : selectedOS === 'linux'
+                            ? 'fab fa-linux text-sm'
+                            : 'fab fa-windows text-sm'
+                      }></i>
+                      <span>
+                        {selectedOS === 'mac'
+                          ? 'Download for macOS'
+                          : selectedOS === 'linux'
+                            ? 'Download for Linux'
+                            : 'Download for Windows (.exe)'}
+                      </span>
+                    </a>
+                  </div>
+
+                  {/* Manual Platform Switcher */}
+                  <div className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-300">
+                    <span className="text-amber-300/80 font-medium">Platform:</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedOS('windows')}
+                      className={`px-2 py-0.5 rounded text-[10px] transition-all cursor-pointer ${
+                        selectedOS === 'windows'
+                          ? 'bg-amber-500/30 text-amber-200 font-bold border border-amber-400/50'
+                          : 'bg-black/30 hover:bg-black/50 text-slate-300 hover:text-white border border-white/10'
+                      }`}
+                    >
+                      <i className="fab fa-windows mr-1"></i>Windows
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedOS('linux')}
+                      className={`px-2 py-0.5 rounded text-[10px] transition-all cursor-pointer ${
+                        selectedOS === 'linux'
+                          ? 'bg-amber-500/30 text-amber-200 font-bold border border-amber-400/50'
+                          : 'bg-black/30 hover:bg-black/50 text-slate-300 hover:text-white border border-white/10'
+                      }`}
+                    >
+                      <i className="fab fa-linux mr-1"></i>Linux
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedOS('mac')}
+                      className={`px-2 py-0.5 rounded text-[10px] transition-all cursor-pointer ${
+                        selectedOS === 'mac'
+                          ? 'bg-amber-500/30 text-amber-200 font-bold border border-amber-400/50'
+                          : 'bg-black/30 hover:bg-black/50 text-slate-300 hover:text-white border border-white/10'
+                      }`}
+                    >
+                      <i className="fab fa-apple mr-1"></i>macOS
+                    </button>
+                  </div>
+
+                  {/* Platform-Specific Step-by-Step Run Guidance */}
+                  {selectedOS === 'windows' ? (
+                    <div className="mt-2.5 p-2 rounded-lg bg-black/40 border border-amber-500/25 text-[10px]">
+                      <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-amber-100 font-medium font-sans">
+                        <span className="bg-amber-500/30 text-amber-200 font-bold px-1.5 py-0.5 rounded text-[9px] border border-amber-400/30">Step 1</span>
+                        <span>Click download above</span>
+                        <span className="text-amber-400 font-bold">→</span>
+                        <span className="bg-amber-500/30 text-amber-200 font-bold px-1.5 py-0.5 rounded text-[9px] border border-amber-400/30">Step 2</span>
+                        <span>Open & double-click <code className="text-amber-300 font-mono font-bold bg-black/60 px-1 py-0.5 rounded">hireiq-agent.exe</code></span>
+                      </div>
+                      <p className="mt-1 text-[9px] text-amber-300/70 font-sans">
+                        💡 If Chrome warns "Suspicious download blocked": Click download details (arrow) → select "Download suspicious file" / "Keep anyway"
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="mt-2.5 p-2 rounded-lg bg-black/40 border border-amber-500/25 text-[10px]">
+                      {/* Explicit 2-Step Visual Flow */}
+                      <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-amber-100 font-medium mb-2 pb-1.5 border-b border-amber-500/20 font-sans">
+                        <span className="bg-amber-500/30 text-amber-200 font-bold px-1.5 py-0.5 rounded text-[9px] border border-amber-400/30">Step 1</span>
+                        <span>Click download above</span>
+                        <span className="text-amber-400 font-bold">→</span>
+                        <span className="bg-amber-500/30 text-amber-200 font-bold px-1.5 py-0.5 rounded text-[9px] border border-amber-400/30">Step 2</span>
+                        <span>{selectedOS === 'linux' ? 'Open Terminal (Ctrl+Alt+T) & paste command:' : 'Open Terminal & paste command:'}</span>
+                      </div>
+
+                      <div className="flex items-center justify-between text-amber-200/90 mb-1 font-sans">
+                        <span className="font-semibold flex items-center gap-1 text-[10px]">
+                          <i className="fas fa-terminal text-[9px] text-amber-400"></i> Command to run:
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const cmd = `cd ~/Downloads && chmod +x hireiq-agent-${selectedOS} && ./hireiq-agent-${selectedOS}`;
+                            if (navigator?.clipboard?.writeText) {
+                              navigator.clipboard.writeText(cmd);
+                              setCopiedCmd(true);
+                              setTimeout(() => setCopiedCmd(false), 2000);
+                            }
+                          }}
+                          className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-sans text-[10px] shrink-0 cursor-pointer font-bold transition-all"
+                          title="Copy command"
+                        >
+                          {copiedCmd ? (
+                            <span className="flex items-center gap-1 text-emerald-400"><i className="fas fa-check"></i> Copied</span>
+                          ) : (
+                            <span className="flex items-center gap-1"><i className="fas fa-copy"></i> Copy</span>
+                          )}
+                        </button>
+                      </div>
+                      <div className="bg-black/60 px-2 py-1.5 rounded font-mono text-[10px] text-amber-200 break-all select-all">
+                        cd ~/Downloads && chmod +x hireiq-agent-{selectedOS} && ./hireiq-agent-{selectedOS}
+                      </div>
+                      {selectedOS === 'linux' ? (
+                        <p className="mt-1 text-[9px] text-amber-300/70 font-sans">
+                          💡 Or right-click file in Downloads → Properties → Allow executing as program
+                        </p>
+                      ) : (
+                        <p className="mt-1 text-[9px] text-amber-300/70 font-sans">
+                          💡 If prompted: System Settings → Privacy & Security → Click "Open Anyway"
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  <p className="mt-1.5 text-amber-300/80 font-semibold text-[10px]">
+                    Once running, this check will verify automatically.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : isScreenCastDetected ? (
+            <div
+              className="rounded-lg p-2.5 border mt-2"
+              style={{ backgroundColor: 'rgba(239, 68, 68, 0.12)', borderColor: 'rgba(239, 68, 68, 0.35)', color: '#fecaca' }}
+            >
+              <div className="flex items-start gap-2">
+                <i className="fas fa-ban text-red-400 text-xs mt-0.5 flex-shrink-0 animate-bounce"></i>
+                <div className="flex-1 text-[11px]">
+                  <p className="font-bold text-red-100 text-xs">
+                    Screen Mirroring / Secondary Display Detected
+                  </p>
+                  <p className="mt-0.5 text-slate-200 leading-snug">
+                    {proctoring.detectedPlatforms && proctoring.detectedPlatforms.length > 0
+                      ? `Active tool: ${proctoring.detectedPlatforms.join(', ')}. `
+                      : ''}
+                    {proctoring.multipleDisplaysDetected
+                      ? `Multiple displays detected (${proctoring.displayCount} connected screens). `
+                      : ''}
+                    Screen casting, mirroring (e.g. SpaceDesk, AnyDesk, TeamViewer), or secondary monitors cannot be used during the interview.
+                  </p>
+                  <p className="mt-1.5 text-red-300 font-semibold">
+                    👉 Action Required: Disconnect screen sharing software and secondary monitors. This check verifies automatically once closed.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-[11px] text-slate-400 leading-tight mt-2">
+              Single monitor verified. No screen mirroring, casting, or remote display software detected.
+            </p>
+          )}
         </div>
 
-        <div className="flex gap-4 pt-1">
+        <div className="flex gap-3 pt-0.5">
           <button
-            onClick={onCancel}
-            className="flex-1 py-3 rounded-2xl font-bold text-sm bg-[#1e293b] hover:bg-[#334155] text-white transition-all"
+            onClick={handleCancel}
+            className="flex-1 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-[#1e293b] hover:bg-[#334155] text-white transition-all cursor-pointer"
           >
             Cancel
           </button>
           <button
             onClick={handleProceed}
-            disabled={!isReady || !!error || !hasAudioVerified || !hasFaceVerified}
-            className={`flex-1 py-3 rounded-2xl font-bold text-sm transition-all shadow-lg ${isReady && !error && hasAudioVerified && hasFaceVerified
-                ? 'bg-primary hover:bg-primary-hover text-white shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5'
+            disabled={!canProceed}
+            className={`flex-1 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all shadow-md ${canProceed
+                ? 'bg-primary hover:bg-primary-hover text-white shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5 cursor-pointer'
                 : 'bg-[#1e293b] text-slate-500 cursor-not-allowed shadow-none'
               }`}
           >
-            {isReady && !error && (!hasAudioVerified || !hasFaceVerified) ? 'Awaiting Checks...' : 'Proceed to Interview'}
+            {isReady && !error && !canProceed
+              ? (
+                !proctoring.agentConnected
+                  ? 'Security Agent Required to Continue'
+                  : isScreenCastDetected
+                  ? `Stop Screen Sharing (${proctoring.detectedPlatforms?.[0] || 'SpaceDesk/AnyDesk'}) to Continue`
+                  : env.hasMultipleTabs
+                    ? 'Close Other Tabs to Continue'
+                    : proctoring.multiFace
+                      ? 'Multiple Faces Detected (Only 1 Allowed)'
+                      : !hasFaceVerified
+                        ? 'Face Verification Required'
+                        : !hasAudioVerified
+                          ? 'Speak to Verify Microphone'
+                          : !hasEnvironmentVerified
+                            ? (env.isTesting ? `Testing Environment (${env.countdown}s)...` : 'Verify Environment to Continue')
+                            : 'Awaiting Checks...'
+              )
+              : 'Proceed to Interview'}
           </button>
         </div>
 

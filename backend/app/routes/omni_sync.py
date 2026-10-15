@@ -8,6 +8,7 @@ from scripts.sync_omni_data import sync_all_omni_data
 router = APIRouter()
 
 @router.post("/api/calls/sync-all")
+@router.post("/calls/sync-all")
 def trigger_omni_sync(
     current_admin: dict = Depends(get_current_admin_details),
     omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key"),

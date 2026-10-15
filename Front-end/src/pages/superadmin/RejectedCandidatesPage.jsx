@@ -5,6 +5,7 @@ import {
   MessageSquare, Calendar, Search, Eye, Download, Share2, X, FileText, ArrowRightLeft, Recycle
 } from 'lucide-react'
 import axios from 'axios'
+import Swal from 'sweetalert2'
 import { getComputedStatus } from '../../utils/adminFormatters'
 import { loadSuperAdminRejectedCandidates, handleSuperAdminExportExcel } from '../../store/slices/candidatesSlice'
 import { setSelectedAdminFilter } from '../../store/slices/dashboardSlice'
@@ -16,9 +17,12 @@ function scoreTone(score) {
   return "text-rose-600 font-bold"
 }
 
-function StatCard({ icon: Icon, label, value, accent }) {
+function StatCard({ icon: Icon, label, value, accent, onClick }) {
   return (
-    <div className="bg-card rounded-xl border border-border shadow-sm p-5 hover:shadow-md transition-shadow">
+    <div 
+      onClick={onClick}
+      className="bg-card rounded-xl border border-border shadow-sm p-5 hover:shadow-md transition-all cursor-pointer"
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{label}</p>
@@ -32,12 +36,44 @@ function StatCard({ icon: Icon, label, value, accent }) {
   )
 }
 
+
+const FeatureLockOverlay = ({ isLocked, featureName, children }) => {
+  if (!isLocked) return children;
+  return (
+    <div className="relative overflow-hidden rounded-xl h-full w-full">
+      <div className="filter blur-[6px] opacity-40 pointer-events-none select-none transition-all duration-300 h-full w-full">
+         {children}
+      </div>
+      <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/30 dark:bg-slate-900/40 backdrop-blur-[1px] z-10 p-4 text-center">
+         <div className="bg-indigo-100 text-indigo-600 w-12 h-12 flex items-center justify-center rounded-full mb-3 shadow-sm border border-indigo-200">
+            <i className="fas fa-lock text-xl"></i>
+         </div>
+         <h3 className="text-[15px] font-extrabold text-slate-800 dark:text-white mb-1">This feature is locked</h3>
+         <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-4 max-w-[200px] leading-relaxed">Upgrade your plan to access {featureName}</p>
+         <button 
+             type="button"
+             className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border-2 border-indigo-100 dark:border-indigo-800/60 text-indigo-600 dark:text-indigo-400 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors font-bold text-xs shadow-sm cursor-pointer"
+             onClick={(e) => {
+               e.preventDefault();
+               e.stopPropagation();
+               window.location.href = '/superadmin/subscription';
+             }}
+           >
+            <i className="fas fa-crown text-[#f59e0b]"></i> Upgrade Plan
+         </button>
+      </div>
+    </div>
+  );
+};
+
 export default function RejectedCandidatesPage() {
   const dispatch = useDispatch()
   const [selectedCandidate, setSelectedCandidate] = useState(null)
   const token = useSelector(state => state.auth.token)
-  const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
   const adminUser = useSelector(state => state.auth.adminUser)
+  const userFeatures = adminUser?.plan_features || []
+  const hasTalentPool = userFeatures.includes('Talent Pool Management')
+  const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
 
   const candidates = useSelector(state => state.candidates.candidates) || []
   const selectedAdminFilter = useSelector(state => state.dashboard.selectedAdminFilter)
@@ -47,9 +83,11 @@ export default function RejectedCandidatesPage() {
   const [subAdmins, setSubAdmins] = useState([])
   const [pipelineFilter, setPipelineFilter] = useState('all')
 
+  const [talentPoolFilter, setTalentPoolFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [jobFilter, setJobFilter] = useState('all')
   const [dateFilter, setDateFilter] = useState('')
+  const [activePoolModal, setActivePoolModal] = useState(null)
 
   useEffect(() => {
     if (!token) return
@@ -82,9 +120,19 @@ export default function RejectedCandidatesPage() {
       if (jobFilter !== "all" && jobApplied !== jobFilter) return false
       
       if (dateFilter) {
-        if (!c.created_at) return false
-        const candidateDate = new Date(c.created_at).toISOString().split('T')[0]
-        if (candidateDate !== dateFilter) return false
+        const rejectionDateRaw = c.rejected_at || c.decision_at || c.last_action_at || c.updated_at || c.created_at
+        if (!rejectionDateRaw) return false
+        try {
+          const candidateDate = new Date(rejectionDateRaw).toISOString().split('T')[0]
+          if (candidateDate !== dateFilter) return false
+        } catch {
+          return false
+        }
+      }
+
+      if (talentPoolFilter !== 'all') {
+        const tps = c.talent_pool_status || 'archived';
+        if (tps !== talentPoolFilter) return false;
       }
 
       if (!q) return true
@@ -94,7 +142,7 @@ export default function RejectedCandidatesPage() {
         (c.email || "").toLowerCase().includes(q)
       )
     })
-  }, [search, jobFilter, dateFilter, rejectedCandidates])
+  }, [search, jobFilter, dateFilter, rejectedCandidates, talentPoolFilter])
 
   const handleExportAction = () => {
     if (filtered.length === 0) {
@@ -109,14 +157,31 @@ export default function RejectedCandidatesPage() {
 
   // Calculate Stats
   const totalRejected = rejectedCandidates.length
+  const tpCount = rejectedCandidates.filter(c => c.talent_pool_status === 'talent_pool').length;
+  const eligibleCount = rejectedCandidates.filter(c => c.talent_pool_status === 'eligible').length;
+  const tpReconsiderCount = rejectedCandidates.filter(c => c.talent_pool_status === 'reconsider').length;
+  const archivedCount = rejectedCandidates.filter(c => !c.talent_pool_status || c.talent_pool_status === 'archived').length;
+  
   const avgScore = totalRejected > 0 ? (rejectedCandidates.reduce((acc, c) => acc + Number(c.score ?? c.avg_score ?? 0), 0) / totalRejected).toFixed(1) : 0
-  const reconsiderCount = rejectedCandidates.filter(c => Number(c.score ?? c.avg_score ?? 0) >= 50).length // mock metric
+  const reconsiderCount = tpReconsiderCount // Use actual reconsider bucket
+  const completedCount = rejectedCandidates.filter(c => c.status === 'completed' || c.status === 'Completed').length
+  const recruiterDecisionsCount = rejectedCandidates.filter(c => c.created_by !== 'System' && c.created_by !== 'system').length
+  const techRejectionsCount = rejectedCandidates.filter(c => {
+    const r = (c.rejection_reason || '').toLowerCase();
+    return r.includes('tech') || r.includes('skill') || r.includes('code') || r.includes('experience');
+  }).length
+  const commRejectionsCount = rejectedCandidates.filter(c => {
+    const r = (c.rejection_reason || '').toLowerCase();
+    return r.includes('comm') || r.includes('language') || r.includes('speak') || r.includes('english') || r.includes('clear');
+  }).length
   const thisMonthCount = rejectedCandidates.filter(c => {
     if (!c.created_at) return false;
     const date = new Date(c.created_at);
     const now = new Date();
     return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
   }).length
+
+
 
   return (
     <div className="flex flex-col gap-6 min-h-screen bg-background p-6 pb-12">
@@ -129,7 +194,7 @@ export default function RejectedCandidatesPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={() => alert("Talent pool synced")} className="flex items-center gap-2 px-4 py-2 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-300 font-bold text-sm rounded-xl hover:bg-indigo-100 transition-colors border border-indigo-200 dark:border-indigo-800/60">
+          <button onClick={(e) => { if(!hasTalentPool) { e.preventDefault(); Swal.fire('Locked', 'Upgrade your plan to sync Talent Pool.', 'info'); } else { alert("Talent pool synced"); } } } className={`flex items-center gap-2 px-4 py-2 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-300 font-bold text-sm rounded-xl hover:bg-indigo-100 transition-colors border border-indigo-200 dark:border-indigo-800/60 ${!hasTalentPool ? 'opacity-50 cursor-not-allowed' : ''}`}>
             <Recycle size={16} /> Talent Pool
           </button>
           <button onClick={handleExportAction} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white font-bold text-sm rounded-xl hover:bg-indigo-700 transition-colors shadow-sm">
@@ -148,9 +213,9 @@ export default function RejectedCandidatesPage() {
 
       {/* Stats row 2 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard icon={ClipboardList} label="Recruiter Decisions" value={totalRejected} accent="bg-blue-500/15 dark:bg-blue-500/25 border border-blue-400/30 text-blue-600 dark:text-blue-400" />
-        <StatCard icon={AlertTriangle} label="Technical Rejections" value={Math.floor(totalRejected * 0.4)} accent="bg-orange-500/15 dark:bg-orange-500/25 border border-orange-400/30 text-orange-600 dark:text-orange-400" />
-        <StatCard icon={MessageSquare} label="Communication Rejections" value={Math.floor(totalRejected * 0.3)} accent="bg-sky-500/15 dark:bg-sky-500/25 border border-sky-400/30 text-sky-600 dark:text-sky-400" />
+        <StatCard icon={ClipboardList} label="Recruiter Decisions" value={recruiterDecisionsCount} accent="bg-blue-500/15 dark:bg-blue-500/25 border border-blue-400/30 text-blue-600 dark:text-blue-400" />
+        <StatCard icon={AlertTriangle} label="Technical Rejections" value={techRejectionsCount} accent="bg-orange-500/15 dark:bg-orange-500/25 border border-orange-400/30 text-orange-600 dark:text-orange-400" />
+        <StatCard icon={MessageSquare} label="Communication Rejections" value={commRejectionsCount} accent="bg-sky-500/15 dark:bg-sky-500/25 border border-sky-400/30 text-sky-600 dark:text-sky-400" />
         <StatCard icon={Calendar} label="This Month" value={thisMonthCount} accent="bg-violet-500/15 dark:bg-violet-500/25 border border-violet-400/30 text-violet-600 dark:text-violet-400" />
       </div>
 
@@ -272,14 +337,48 @@ export default function RejectedCandidatesPage() {
             <tbody className="divide-y divide-slate-100/80">
               {filtered.map((c) => {
                 const scoreNum = Number(c.score ?? c.avg_score ?? 0)
-                const adminObj = subAdmins.find(adm => adm.id === c.created_by || adm._id === c.created_by)
-                let adminName = c.admin_name || (adminObj ? (adminObj.name || adminObj.username) : null)
-                if (!adminName && adminUser && (adminUser._id === c.created_by || adminUser.id === c.created_by)) {
-                  adminName = adminUser.name || adminUser.username || "Super Admin"
+
+                // 1. Resolve rejector dynamically from rejection event data
+                let rejectorName = null
+                if (c.rejected_by && typeof c.rejected_by === 'string' && c.rejected_by.trim() && c.rejected_by.length !== 24) {
+                  rejectorName = c.rejected_by.trim()
+                } else if (c.decision_by_name && typeof c.decision_by_name === 'string' && c.decision_by_name.trim() && c.decision_by_name.length !== 24) {
+                  rejectorName = c.decision_by_name.trim()
+                } else if (c.last_action_by_name && typeof c.last_action_by_name === 'string' && c.last_action_by_name.trim() && c.last_action_by_name.length !== 24) {
+                  rejectorName = c.last_action_by_name.trim()
+                } else {
+                  const rejectorId = c.rejected_by_id || c.decision_by_id || c.last_action_by_id
+                  if (rejectorId) {
+                    const matchedAdmin = subAdmins.find(adm => adm.id === rejectorId || adm._id === rejectorId)
+                    if (matchedAdmin) rejectorName = matchedAdmin.name || matchedAdmin.username || matchedAdmin.email
+                    else if (adminUser && (adminUser._id === rejectorId || adminUser.id === rejectorId)) {
+                      rejectorName = adminUser.name || adminUser.username || "Super Admin"
+                    }
+                  }
                 }
-                if (!adminName) {
-                  adminName = (typeof c.created_by === 'string' && c.created_by.length === 24) ? "System" : c.created_by || "System"
+
+                // Fallback to creator if rejector was not explicitly captured
+                if (!rejectorName) {
+                  const adminObj = subAdmins.find(adm => adm.id === c.created_by || adm._id === c.created_by)
+                  rejectorName = c.admin_name || (adminObj ? (adminObj.name || adminObj.username) : null)
+                  if (!rejectorName && adminUser && (adminUser._id === c.created_by || adminUser.id === c.created_by)) {
+                    rejectorName = adminUser.name || adminUser.username || "Super Admin"
+                  }
+                  if (!rejectorName) {
+                    rejectorName = (typeof c.created_by === 'string' && c.created_by.length === 24) ? "System" : c.created_by || "System"
+                  }
                 }
+
+                // 2. Resolve rejection reason dynamically without hardcoded fallback
+                const rawReason = (c.rejection_reason && typeof c.rejection_reason === 'string') ? c.rejection_reason.trim() : ''
+                const rejectionReasonText = (rawReason && rawReason !== 'Low Score / Did not meet criteria')
+                  ? rawReason
+                  : 'Not specified'
+
+                // 3. Resolve exact rejection date & time
+                const rejectionDateRaw = c.rejected_at || c.decision_at || c.last_action_at || c.updated_at || c.created_at
+                const rejectionDate = rejectionDateRaw ? new Date(rejectionDateRaw) : null
+                const isValidDate = rejectionDate && !isNaN(rejectionDate.getTime())
                 
                 return (
                   <tr key={c.id || c.link_id || c.email} onClick={() => setSelectedCandidate(c)} className="hover:bg-rose-50/30 transition-colors group whitespace-nowrap cursor-pointer">
@@ -319,13 +418,13 @@ export default function RejectedCandidatesPage() {
                         Not Recommended
                       </span>
                     </td>
-                    <td className="px-5 py-4 text-sm text-slate-600 dark:text-slate-400">{c.rejection_reason || "Low Score / Did not meet criteria"}</td>
-                    <td className="px-5 py-4 text-sm font-medium text-slate-500 dark:text-slate-400">{adminName}</td>
+                    <td className="px-5 py-4 text-sm text-slate-600 dark:text-slate-400 font-medium">{rejectionReasonText}</td>
+                    <td className="px-5 py-4 text-sm font-medium text-slate-600 dark:text-slate-300">{rejectorName}</td>
                     <td className="px-5 py-4 text-sm font-medium text-slate-500 dark:text-slate-400">
-                      {c.created_at ? (
+                      {isValidDate ? (
                         <div className="flex flex-col">
-                          <span className="text-slate-700 dark:text-slate-200 font-semibold">{new Date(c.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                          <span className="text-[11px] text-slate-400 mt-0.5">{new Date(c.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span className="text-slate-700 dark:text-slate-200 font-semibold">{rejectionDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                          <span className="text-[11px] text-slate-400 mt-0.5">{rejectionDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</span>
                         </div>
                       ) : "N/A"}
                     </td>
@@ -356,7 +455,8 @@ export default function RejectedCandidatesPage() {
       </section>
       
       {/* Talent Pool Section */}
-      <section className="bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700/60 shadow-sm p-6 mt-4">
+      <FeatureLockOverlay isLocked={!hasTalentPool} featureName="Talent Pool Management">
+<section className="bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700/60 shadow-sm p-6 mt-4">
         <div className="mb-5">
           <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100 flex items-center gap-2">
             Talent Pool
@@ -364,12 +464,109 @@ export default function RejectedCandidatesPage() {
           <p className="text-sm text-slate-500 dark:text-slate-400 font-medium mt-1">Not every rejected candidate should be permanently discarded.</p>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard icon={Users} label="Talent Pool Candidates" value={Math.floor(totalRejected * 0.2)} accent="bg-emerald-500/15 dark:bg-emerald-500/25 border border-emerald-400/30 text-emerald-600 dark:text-emerald-400" />
-          <StatCard icon={RotateCcw} label="Eligible for Future Roles" value={Math.floor(totalRejected * 0.15)} accent="bg-sky-500/15 dark:bg-sky-500/25 border border-sky-400/30 text-sky-600 dark:text-sky-400" />
-          <StatCard icon={ArrowRightLeft} label="Reconsideration Requests" value={0} accent="bg-amber-500/15 dark:bg-amber-500/25 border border-amber-400/30 text-amber-600 dark:text-amber-400" />
-          <StatCard icon={FileText} label="Archived Candidates" value={totalRejected} accent="bg-purple-500/15 dark:bg-purple-500/25 border border-purple-400/30 text-purple-600 dark:text-purple-400" />
+          <StatCard 
+              icon={Users} 
+              label="Talent Pool Candidates" 
+              value={tpCount} 
+              accent="bg-emerald-500/15 dark:bg-emerald-500/25 border border-emerald-400/30 text-emerald-600 dark:text-emerald-400" 
+              onClick={() => setActivePoolModal('talent_pool')}
+            />
+          <StatCard 
+              icon={RotateCcw} 
+              label="Eligible for Future Roles" 
+              value={eligibleCount} 
+              accent="bg-sky-500/15 dark:bg-sky-500/25 border border-sky-400/30 text-sky-600 dark:text-sky-400" 
+              onClick={() => setActivePoolModal('eligible')}
+            />
+          <StatCard 
+              icon={ArrowRightLeft} 
+              label="Reconsideration Requests" 
+              value={tpReconsiderCount} 
+              accent="bg-amber-500/15 dark:bg-amber-500/25 border border-amber-400/30 text-amber-600 dark:text-amber-400" 
+              onClick={() => setActivePoolModal('reconsider')}
+            />
+          <StatCard 
+              icon={FileText} 
+              label="Archived Candidates" 
+              value={archivedCount} 
+              accent="bg-purple-500/15 dark:bg-purple-500/25 border border-purple-400/30 text-purple-600 dark:text-purple-400" 
+              onClick={() => setActivePoolModal('archived')}
+            />
         </div>
-      </section>
+      
+</section>
+</FeatureLockOverlay>
+
+            {activePoolModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-card w-full max-w-3xl rounded-[1.25rem] shadow-2xl border border-border flex flex-col max-h-[85vh] overflow-hidden transform scale-100 transition-all">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-border bg-slate-50/50 dark:bg-slate-900/50">
+              <h2 className="text-lg font-bold flex items-center gap-3 text-foreground tracking-tight">
+                {activePoolModal === 'talent_pool' ? <div className="p-2 bg-emerald-100 dark:bg-emerald-500/20 rounded-xl shadow-sm"><Users className="text-emerald-600 dark:text-emerald-400" size={18}/></div> : 
+                 activePoolModal === 'eligible' ? <div className="p-2 bg-sky-100 dark:bg-sky-500/20 rounded-xl shadow-sm"><RotateCcw className="text-sky-600 dark:text-sky-400" size={18}/></div> : 
+                 activePoolModal === 'reconsider' ? <div className="p-2 bg-amber-100 dark:bg-amber-500/20 rounded-xl shadow-sm"><ArrowRightLeft className="text-amber-600 dark:text-amber-400" size={18}/></div> : 
+                 <div className="p-2 bg-purple-100 dark:bg-purple-500/20 rounded-xl shadow-sm"><FileText className="text-purple-600 dark:text-purple-400" size={18}/></div>}
+                {activePoolModal === 'talent_pool' ? 'Talent Pool Candidates' : 
+                 activePoolModal === 'eligible' ? 'Eligible for Future Roles' : 
+                 activePoolModal === 'reconsider' ? 'Reconsideration Requests' : 'Archived Candidates'}
+              </h2>
+              <button onClick={() => setActivePoolModal(null)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full transition-colors outline-none focus:ring-2 focus:ring-indigo-500/50">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="overflow-y-auto p-4 bg-slate-50/50 dark:bg-slate-900/20">
+              <div className="flex flex-col gap-3">
+                {rejectedCandidates.filter(c => (c.talent_pool_status || 'archived') === activePoolModal).map(c => {
+                  const initial = (c.candidate_name || "U").charAt(0).toUpperCase()
+                  return (
+                    <div key={c.id || c.link_id || c.email} className="group flex items-center justify-between p-4 bg-card border border-border/80 rounded-xl hover:border-indigo-400/50 hover:shadow-md hover:shadow-indigo-500/10 transition-all duration-200">
+                      <div className="flex items-center gap-4">
+                        <div className="h-11 w-11 rounded-full bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-500/20 dark:to-indigo-500/10 border border-indigo-200/50 dark:border-indigo-500/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-lg shadow-sm">
+                          {initial}
+                        </div>
+                        <div>
+                          <p className="font-bold text-[14px] text-foreground tracking-tight">{c.candidate_name || "Unknown Candidate"}</p>
+                          <p className="text-[12px] font-medium text-slate-500 dark:text-slate-400 mt-0.5">{c.email || c.candidate_email || "No email provided"}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="hidden sm:flex flex-col items-start gap-1.5 ml-4 flex-1">
+                        <span className="px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700 uppercase tracking-wider">
+                          {c.interview_title || c.job_applied || "General Application"}
+                        </span>
+                        <span className="text-[11px] font-semibold text-slate-400 flex items-center gap-1.5 ml-1">
+                          <Calendar size={12} className="opacity-70" />
+                          {c.created_at ? new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "--"}
+                        </span>
+                      </div>
+                      
+                      <div className="pl-4">
+                        <button 
+                          onClick={() => { setActivePoolModal(null); setSelectedCandidate(c); }}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-[0.5rem] text-[12px] font-bold text-slate-600 dark:text-slate-300 group-hover:border-indigo-400 group-hover:text-indigo-600 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-500/20 dark:group-hover:border-indigo-500/50 dark:group-hover:text-indigo-300 transition-all shadow-sm outline-none focus:ring-2 focus:ring-indigo-500/50"
+                        >
+                          <Eye size={15} strokeWidth={2.5} /> View Details
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+                
+                {rejectedCandidates.filter(c => (c.talent_pool_status || 'archived') === activePoolModal).length === 0 && (
+                  <div className="py-16 flex flex-col items-center justify-center text-center bg-card border border-border/80 rounded-xl border-dashed">
+                    <div className="h-14 w-14 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
+                      <Users className="text-slate-400" size={28} />
+                    </div>
+                    <p className="font-bold text-[15px] text-slate-700 dark:text-slate-200 tracking-tight">No candidates found</p>
+                    <p className="text-[13px] text-slate-500 mt-1 max-w-xs">There are currently no candidates assigned to this pool. Once added, they will appear here.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <CandidateDialog 
         candidate={selectedCandidate} 

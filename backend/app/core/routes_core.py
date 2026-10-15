@@ -108,7 +108,9 @@ def broadcast_profile_update(admin_id: str, company_id: str, credits: int = None
         
     async def _send():
         if manager.redis:
-            await manager.redis.publish("dashboard:updates", json.dumps(payload))
+            payload_str = json.dumps(payload)
+            await manager.redis.publish("dashboard:updates", payload_str)
+            await manager.redis.publish("interview:events", payload_str)
         else:
             await manager.broadcast_dashboard(payload)
             
@@ -262,14 +264,30 @@ def _require_candidate_session(
     link_id: Optional[str] = None,
     interview_id: Optional[str] = None,
     allow_completed: bool = False,
+    allow_terminated: bool = False,
 ) -> Dict[str, Any]:
     """Authorize a candidate operation against the session-scoped bearer token."""
     if not credentials:
+        if (allow_completed or allow_terminated) and link_id:
+            # Fall back to validating by link_id if session exists and is active/completed
+            session = interview_sessions_collection.find_one(
+                {"link_id": str(link_id)},
+                {"link_id": 1, "interview_id": 1, "status": 1, "is_deactivated": 1},
+            )
+            if session and not session.get("is_deactivated"):
+                return session
         raise HTTPException(status_code=401, detail="Candidate session token is required")
 
     try:
         payload = jwt.decode(credentials.credentials, JWT_SECRET_KEY, algorithms=[ALGORITHM])
     except jwt.PyJWTError as exc:
+        if (allow_completed or allow_terminated) and link_id:
+            session = interview_sessions_collection.find_one(
+                {"link_id": str(link_id)},
+                {"link_id": 1, "interview_id": 1, "status": 1, "is_deactivated": 1},
+            )
+            if session and not session.get("is_deactivated"):
+                return session
         raise HTTPException(status_code=401, detail="Invalid or expired candidate session token") from exc
 
     token_link_id = str(payload.get("link_id") or "")
@@ -292,8 +310,10 @@ def _require_candidate_session(
         raise HTTPException(status_code=403, detail="This interview session is deactivated")
 
     session_status = str(session.get("status") or "").lower()
-    if session_status in ("terminated", "cancelled", "expired"):
+    if session_status in ("cancelled", "expired"):
         raise HTTPException(status_code=403, detail="This interview session is no longer active")
+    if not allow_terminated and session_status == "terminated":
+        raise HTTPException(status_code=403, detail="This interview session was terminated")
     if not allow_completed and session_status == "completed":
         raise HTTPException(status_code=403, detail="This interview session is already completed")
 
@@ -366,7 +386,7 @@ def _decode_dashboard_websocket_admin(token: str) -> Dict[str, str]:
         return {
             "admin_id": admin_id,
             "role": str(admin_doc.get("role") or role),
-            "company_id": str(admin_doc.get("company_id") or payload.get("company_id") or ""),
+            "company_id": str(admin_doc.get("company_id") or ""),
         }
     except (jwt.PyJWTError, ValueError, TypeError, InvalidId) as exc:
         raise HTTPException(status_code=401, detail="Invalid or expired dashboard token") from exc

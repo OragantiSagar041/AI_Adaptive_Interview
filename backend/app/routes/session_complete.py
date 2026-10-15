@@ -162,13 +162,27 @@ def complete_session(
         }
         if session:
             violations = session.get("violations", [])
+            existing_integrity = session.get("integrity") or {}
             if violations:
+                tab_switch_types = {
+                    "tab_switch", "screen_casting", "screen_share_detected", 
+                    "screen_recording", "screenshare_stopped", "multiple_displays", 
+                    "multi_monitor", "fullscreen_exit", "window_blur"
+                }
+                noise_types = {"noise_alert", "background_noise", "noise"}
                 if update_data["integrity"]["total_tab_switches"] == 0:
-                    update_data["integrity"]["total_tab_switches"] = sum(1 for v in violations if v.get("type") == "tab_switch")
+                    update_data["integrity"]["total_tab_switches"] = sum(1 for v in violations if v.get("type") in tab_switch_types)
                 if update_data["integrity"]["total_face_alerts"] == 0:
-                    update_data["integrity"]["total_face_alerts"] = sum(1 for v in violations if v.get("type") not in ("tab_switch", "noise_alert"))
+                    update_data["integrity"]["total_face_alerts"] = sum(1 for v in violations if v.get("type") not in tab_switch_types and v.get("type") not in noise_types)
                 if update_data["integrity"]["total_noise_alerts"] == 0:
-                    update_data["integrity"]["total_noise_alerts"] = sum(1 for v in violations if v.get("type") == "noise_alert")
+                    update_data["integrity"]["total_noise_alerts"] = sum(1 for v in violations if v.get("type") in noise_types)
+
+            if update_data["integrity"]["total_tab_switches"] == 0 and existing_integrity.get("total_tab_switches"):
+                update_data["integrity"]["total_tab_switches"] = existing_integrity.get("total_tab_switches")
+            if update_data["integrity"]["total_face_alerts"] == 0 and existing_integrity.get("total_face_alerts"):
+                update_data["integrity"]["total_face_alerts"] = existing_integrity.get("total_face_alerts")
+            if update_data["integrity"]["total_noise_alerts"] == 0 and existing_integrity.get("total_noise_alerts"):
+                update_data["integrity"]["total_noise_alerts"] = existing_integrity.get("total_noise_alerts")
             
             candidate_id = session.get("candidate_id")
             if candidate_id and not candidate_id.endswith("IQ"):
@@ -189,6 +203,19 @@ def complete_session(
                 
         interview_sessions_collection.update_one({"link_id": link_id}, {"$set": update_data})
         sync_session_to_application(link_id)
+
+        # Publish interview_completed event to Redis Pub/Sub
+        try:
+            from app.db.redis_manager import broadcast_interview_event
+            broadcast_interview_event(
+                event_type="interview_completed",
+                session_id=link_id,
+                company_id=session.get("company_id") if session else None,
+                created_by=session.get("created_by") if session else None,
+                extra={"candidate_name": session.get("candidate_name") if session else None}
+            )
+        except Exception as _ev_err:
+            logger.warning(f"Failed to publish interview_completed event: {_ev_err}")
         
         # Broadcast real-time completion to update credits and dashboard
         if session:
@@ -436,7 +463,9 @@ async def _store_live_snapshot(link_id: str, updates: Dict[str, Any], session: D
         "data": dashboard_data,
     }
     if manager.redis:
-        await manager.redis.publish("dashboard:updates", json.dumps(payload))
+        payload_str = json.dumps(payload)
+        await manager.redis.publish("dashboard:updates", payload_str)
+        await manager.redis.publish("interview:events", payload_str)
     else:
         await manager.broadcast_dashboard(payload)
     return merged
@@ -729,15 +758,226 @@ async def get_spectator_count(
     return {"link_id": link_id, "spectator_count": count}
 
 
-@router.websocket("/ws/webrtc/{role}/{link_id}")
-async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: Optional[str] = None):
-    import os, tempfile
-    webrtc_log_path = os.path.join(tempfile.gettempdir(), "webrtc_debug.log")
-    with open(webrtc_log_path, "a") as f:
-        f.write(f"\n--- New Connection ---\nRole: {role}, Link ID: {link_id}\nToken supplied: {bool(token)}\n")
+_METERED_ICE_CACHE: Dict[str, tuple[float, list]] = {}
+_METERED_CACHE_TTL = 600.0  # Cache for 10 minutes to prevent API rate limits & eliminate latency
+
+
+def _get_fallback_ice_servers() -> list:
+    """Standard STUN servers + any manual TURN servers configured in environment / Secrets Manager."""
+    ice_servers = [
+        {"urls": "stun:stun.l.google.com:19302"},
+        {"urls": "stun:stun1.l.google.com:19302"},
+    ]
+    turn_server = (
+        os.getenv("TURN_SERVER_URL")
+        or os.getenv("TURN_SERVER")
+        or os.getenv("TURN_URL")
+        or os.getenv("TURN_HOST")
+        or os.getenv("COTURN_URL")
+        or ""
+    ).strip().strip('"').strip("'")
+
+    turn_user = (
+        os.getenv("TURN_USERNAME")
+        or os.getenv("TURN_USER")
+        or ""
+    ).strip().strip('"').strip("'")
+
+    turn_cred = (
+        os.getenv("TURN_CREDENTIAL")
+        or os.getenv("TURN_PASSWORD")
+        or os.getenv("TURN_CRED")
+        or os.getenv("TURN_SECRET")
+        or ""
+    ).strip().strip('"').strip("'")
+
+    # Support JSON secret objects from AWS Secrets Manager
+    turn_json_raw = os.getenv("TURN_CONFIG") or os.getenv("TURN_CREDENTIALS") or ""
+    if turn_json_raw.strip().startswith("{"):
+        try:
+            import json as _py_json
+            parsed_cfg = _py_json.loads(turn_json_raw)
+            if isinstance(parsed_cfg, dict):
+                turn_server = turn_server or parsed_cfg.get("urls") or parsed_cfg.get("url") or parsed_cfg.get("TURN_SERVER_URL") or parsed_cfg.get("TURN_SERVER") or parsed_cfg.get("server") or ""
+                turn_user = turn_user or parsed_cfg.get("username") or parsed_cfg.get("user") or parsed_cfg.get("TURN_USERNAME") or ""
+                turn_cred = turn_cred or parsed_cfg.get("credential") or parsed_cfg.get("password") or parsed_cfg.get("TURN_CREDENTIAL") or parsed_cfg.get("TURN_PASSWORD") or ""
+        except Exception:
+            pass
+
+    if turn_server:
+        turn_url = turn_server
+        if not turn_url.startswith("turn:") and not turn_url.startswith("turns:"):
+            turn_url = f"turn:{turn_url}"
+        if ":" not in turn_url.split("turn:")[-1] and ":" not in turn_url.split("turns:")[-1]:
+            turn_url = f"{turn_url}:3478"
+
+        is_turn = "turn:" in turn_url or "turns:" in turn_url
+        if is_turn and (not turn_user or not turn_cred):
+            # Do not inject invalid TURN servers without credentials
+            pass
+        else:
+            turn_entry = {"urls": turn_url}
+            if turn_user:
+                turn_entry["username"] = turn_user
+            if turn_cred:
+                turn_entry["credential"] = turn_cred
+            ice_servers.append(turn_entry)
+
+            if "transport=tcp" not in turn_url and ("443" in turn_url or "80" in turn_url or "3478" in turn_url):
+                delimiter = "&" if "?" in turn_url else "?"
+                tcp_entry = {"urls": f"{turn_url}{delimiter}transport=tcp"}
+                if turn_user:
+                    tcp_entry["username"] = turn_user
+                if turn_cred:
+                    tcp_entry["credential"] = turn_cred
+                ice_servers.append(tcp_entry)
+    else:
+        # Default fallback STUN and free OpenRelay when no private TURN server configured
+        ice_servers.extend([
+            {"urls": "stun:stun.relay.metered.ca:80"},
+            {
+                "urls": "turn:openrelay.metered.ca:80",
+                "username": "openrelayproject",
+                "credential": "openrelayproject",
+            },
+            {
+                "urls": "turn:openrelay.metered.ca:443",
+                "username": "openrelayproject",
+                "credential": "openrelayproject",
+            },
+            {
+                "urls": "turn:openrelay.metered.ca:443?transport=tcp",
+                "username": "openrelayproject",
+                "credential": "openrelayproject",
+            },
+            {
+                "urls": "turns:openrelay.metered.ca:443?transport=tcp",
+                "username": "openrelayproject",
+                "credential": "openrelayproject",
+            },
+        ])
+    return ice_servers
+
+
+async def get_metered_ice_servers() -> list:
+    """
+    Fetch dynamic STUN/TURN credentials from Metered API (e.g. hireiq.metered.live),
+    or fall back gracefully to configured TURN_SERVER / standard STUN.
+    """
+    metered_api_key = (
+        os.getenv("METERED_API_KEY")
+        or os.getenv("metered_api_key")
+        or os.getenv("METERED_KEY")
+        or os.getenv("metered_key")
+        or ""
+    ).strip()
+    metered_domain = (
+        os.getenv("METERED_DOMAIN")
+        or os.getenv("metered_domain")
+        or "hireiq.metered.live"
+    ).strip().replace("https://", "").replace("http://", "").strip("/")
+
+    # Support raw JSON secret strings from AWS Secrets Manager
+    if not metered_api_key:
+        for env_k in ("SECRETS", "APP_SECRETS", "SECRET_STRING", "SECRET_JSON", "METERED_CONFIG", "TURN_CONFIG"):
+            raw_json = os.getenv(env_k, "").strip()
+            if raw_json.startswith("{"):
+                try:
+                    import json as _j
+                    parsed = _j.loads(raw_json)
+                    if isinstance(parsed, dict):
+                        metered_api_key = (
+                            parsed.get("METERED_API_KEY")
+                            or parsed.get("metered_api_key")
+                            or parsed.get("METERED_KEY")
+                            or parsed.get("metered_key")
+                            or ""
+                        ).strip()
+                        metered_domain = (
+                            parsed.get("METERED_DOMAIN")
+                            or parsed.get("metered_domain")
+                            or metered_domain
+                        ).strip().replace("https://", "").replace("http://", "").strip("/")
+                        if metered_api_key:
+                            break
+                except Exception:
+                    pass
+
+    # If no Metered API key configured, use fallback STUN/TURN servers
+    if not metered_api_key:
+        return _get_fallback_ice_servers()
+
+    # Check in-memory cache
+    cache_key = f"{metered_domain}:{metered_api_key[:8]}"
+    cached = _METERED_ICE_CACHE.get(cache_key)
+    if cached and (time.monotonic() - cached[0]) < _METERED_CACHE_TTL:
+        return cached[1]
+
+    # Fetch fresh dynamic TURN/STUN credentials from Metered API
+    try:
+        logger.info(f"[Metered Debug] Domain parsed: '{metered_domain}' | Key starts with: '{metered_api_key[:25]}' | Key length: {len(metered_api_key)}")
+        import httpx
+        url = f"https://{metered_domain}/api/v1/turn/credentials?apiKey={metered_api_key}"
+        async with httpx.AsyncClient(timeout=4.0) as client:
+            resp = await client.get(url)
+            if resp.status_code == 200:
+                data = resp.json()
+                if isinstance(data, list) and len(data) > 0:
+                    _METERED_ICE_CACHE[cache_key] = (time.monotonic(), data)
+                    return data
+            logger.warning(f"Metered API returned status {resp.status_code}: {resp.text}")
+    except Exception as e:
+        logger.warning(f"Failed to fetch dynamic ICE servers from Metered: {e}")
+
+    # If previous cache exists (even expired), use it rather than bare STUN
+    if cached and cached[1]:
+        return cached[1]
+
+    return _get_fallback_ice_servers()
+
+
+@router.get("/api/webrtc/ice-servers")
+@router.get("/webrtc/ice-servers")
+@router.get("/api/webrtc/ice-servers/")
+@router.get("/webrtc/ice-servers/")
+async def get_webrtc_ice_servers(raw: bool = False):
+    """
+    Returns dynamic STUN and TURN server configurations.
+    Uses TURN credentials from environment / Secrets Manager, or dynamic Metered API if configured.
+    Guarantees robust Google STUN is always included to prevent ICE gathering failures.
+    """
+    raw_ice = await get_metered_ice_servers()
     
-    admin_id: Optional[str] = None
-    spectator_id: Optional[str] = None
+    # Ensure high-availability STUN is always present alongside TURN
+    ice_servers = [
+        {"urls": "stun:stun.l.google.com:19302"},
+        {"urls": "stun:stun1.l.google.com:19302"},
+    ]
+    for s in raw_ice:
+        # Don't add duplicate google stuns
+        urls = s.get("urls", "")
+        if "google.com" not in (urls if isinstance(urls, str) else " ".join(urls)):
+            ice_servers.append(s)
+
+    has_turn = any("turn:" in s.get("urls", "") or "turns:" in s.get("urls", "") for s in ice_servers)
+    logger.info(f"[/api/webrtc/ice-servers] Served {len(ice_servers)} ICE servers (TURN active: {has_turn})")
+    if raw:
+        return ice_servers
+    return {
+        "status": "success",
+        "iceServers": ice_servers,
+        "ice_servers": ice_servers,
+    }
+
+
+@router.websocket("/ws/webrtc/{role}/{link_id}")
+async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: Optional[str] = None, admin_id: Optional[str] = None, spectator_id: Optional[str] = None):
+    import os, tempfile
+    from datetime import datetime
+
+    logger.info(f"\n[{datetime.now().isoformat()}] --- New Connection ---\nRole: {role}, Link ID: {link_id}\nToken supplied: {bool(token)}")
+    
+    # Re-use admin_id and spectator_id from query parameters
 
     if role == "candidate":
         if not token:
@@ -745,9 +985,12 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
             return
         try:
             candidate_session = _validate_candidate_monitoring_token(token, link_id)
-        except HTTPException:
+        except HTTPException as e:
+            logger.info(f"Candidate validation failed: {e.detail}")
             await websocket.close(code=1008)
             return
+        # Resolve to canonical link_id so everyone joins the exact same room
+        link_id = str(candidate_session.get("link_id") or link_id)
         await manager.connect_candidate(websocket, link_id)
         # Notify watching admins immediately that candidate stream is active/ready
         try:
@@ -756,13 +999,14 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
             pass
     elif role == "admin":
         if not token:
-            with open(webrtc_log_path, "a") as f:
-                f.write("No token provided. Closing with 1008.\n")
+            logger.info("No token provided. Closing with 1008.")
             await websocket.close(code=1008)
             return
         try:
             auth_context = _decode_dashboard_websocket_admin(token)
-            _get_authorized_live_session(link_id, auth_context)
+            live_session_doc = _get_authorized_live_session(link_id, auth_context)
+            # Resolve to canonical link_id so admin and candidate always join the exact same room
+            link_id = str(live_session_doc.get("link_id") or link_id)
             # Use client-provided unique admin_id or generate unique instance identifier
             client_admin_id = websocket.query_params.get("admin_id")
             if client_admin_id and client_admin_id != "undefined":
@@ -772,26 +1016,22 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
                 admin_id = f"{base}_{uuid.uuid4().hex[:8]}"
 
             await manager.connect_admin(websocket, link_id, admin_id=admin_id)
-            with open(webrtc_log_path, "a") as f:
-                f.write(f"Admin ({admin_id}) connected successfully.\n")
+            logger.info(f"Admin ({admin_id}) connected successfully to room {link_id}.")
             # Also notify candidate that a new admin connected
             try:
                 await manager.send_to_candidate(link_id, {"type": "admin_connected", "admin_id": admin_id})
             except Exception:
                 pass
         except HTTPException as e:
-            with open(webrtc_log_path, "a") as f:
-                f.write(f"Admin authorization error: {e.detail}\n")
+            logger.info(f"Admin authorization error: {e.detail}")
             await websocket.close(code=1008)
             return
         except jwt.PyJWTError as e:
-            with open(webrtc_log_path, "a") as f:
-                f.write(f"JWT Decode Error: {str(e)}\n")
+            logger.info(f"JWT Decode Error: {str(e)}")
             await websocket.close(code=1008)
             return
         except Exception as e:
-            with open(webrtc_log_path, "a") as f:
-                f.write(f"Other Error: {str(e)}\n{traceback.format_exc()}\n")
+            logger.info(f"Other Error: {str(e)}\n{traceback.format_exc()}")
             await websocket.close(code=1011)
             return
     elif role == "spectator":
@@ -801,20 +1041,22 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
         try:
             decode_spectator_token(JWT_SECRET_KEY, ALGORITHM, token, link_id)
         except (jwt.PyJWTError, ValueError) as e:
-            with open(webrtc_log_path, "a") as f:
-                f.write(f"Spectator auth error: {str(e)}\n")
+            logger.info(f"Spectator auth error: {str(e)}")
             await websocket.close(code=1008)
             return
         # Verify session is not deactivated or cancelled
+        session_query = [{"link_id": link_id}]
+        if ObjectId.is_valid(link_id):
+            session_query.append({"_id": ObjectId(link_id)})
         session_check = interview_sessions_collection.find_one(
-            {"link_id": link_id},
-            {"status": 1, "is_deactivated": 1}
+            {"$or": session_query},
+            {"link_id": 1, "status": 1, "is_deactivated": 1}
         )
         if not session_check or session_check.get("is_deactivated") or session_check.get("status") in ("terminated", "cancelled", "expired"):
-            with open(webrtc_log_path, "a") as f:
-                f.write(f"Spectator session check failed for link_id {link_id}: {session_check}\n")
+            logger.info(f"Spectator session check failed for link_id {link_id}: {session_check}")
             await websocket.close(code=1008)
             return
+        link_id = str(session_check.get("link_id") or link_id)
         spectator_id = f"spectator_{uuid.uuid4().hex[:8]}"
         await manager.connect_spectator(websocket, link_id, spectator_id=spectator_id)
         try:
@@ -905,13 +1147,11 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
                     data["role"] = "spectator"
                     await manager.send_to_candidate(link_id, data)
     except WebSocketDisconnect:
-        webrtc_log_path = os.path.join(tempfile.gettempdir(), "webrtc_debug.log")
-        with open(webrtc_log_path, "a") as f:
-            f.write(f"WebSocketDisconnect for role {role}, link_id {link_id}\n")
+
+        logger.info(f"[{datetime.now().isoformat()}] WebSocketDisconnect for role {role}, link_id {link_id}")
     except Exception as e:
-        webrtc_log_path = os.path.join(tempfile.gettempdir(), "webrtc_debug.log")
-        with open(webrtc_log_path, "a") as f:
-            f.write(f"Exception in while loop: {str(e)}\n{traceback.format_exc()}\n")
+
+        logger.info(f"Exception in while loop: {str(e)}\n{traceback.format_exc()}")
     finally:
         if role == "candidate":
             manager.disconnect_candidate(link_id)
@@ -937,3 +1177,38 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
 # --------------------------------------------------------------------------------
 # MASTER & SUBSCRIPTION APIs
 # --------------------------------------------------------------------------------
+
+@router.post('/api/webrtc/telemetry/{link_id}')
+async def telemetry_fallback(
+    link_id: str,
+    payload: dict,
+    request: Request,
+):
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        raise HTTPException(status_code=401, detail='Missing token')
+    token = auth_header.split(' ')[1]
+    candidate_session = _validate_candidate_monitoring_token(token, link_id)
+    if not candidate_session:
+        raise HTTPException(status_code=401, detail='Invalid token')
+    data = {'type': 'telemetry', 'data': payload}
+    from app.db.redis_manager import manager
+    await manager.send_to_admins(link_id, data)
+    proctoring_status = payload.get('proctoring_status', {}) or {}
+    updates = {
+        'audio_level': _bounded_number(payload.get('audio_level'), 0, 100),
+        'current_question': _bounded_number(payload.get('current_question'), 0, 10_000, integer=True),
+        'total_questions': _bounded_number(payload.get('total_questions'), 0, 10_000, integer=True),
+        'question_text': str(payload.get('question_text') or '')[:500],
+        'round_type': _safe_round_type(payload.get('round_type')),
+        'proctoring_alerts': _bounded_number(payload.get('proctoring_alerts'), 0, 10_000, integer=True),
+        'last_alert_type': str(proctoring_status.get('lastAlertType') or '')[:64] or None,
+        'face_visible': _optional_bool(proctoring_status.get('faceVisible')),
+        'face_count': _bounded_number(proctoring_status.get('faceCount'), 0, 20, integer=True),
+        'multi_face': _optional_bool(proctoring_status.get('multiFace')),
+        'phone_detected': _optional_bool(proctoring_status.get('phoneDetected')),
+        'eye_contact_lost': _optional_bool(proctoring_status.get('eyeContactLost')),
+    }
+    await _store_live_snapshot(link_id, updates, candidate_session)
+    return {'status': 'success'}
+

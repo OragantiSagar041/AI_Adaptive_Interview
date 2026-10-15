@@ -24,14 +24,14 @@ import os
 import time
 import json
 import threading
-import requests as http_requests
-from app.ai.groq_manager import groq_key_manager
-import requests as http_requests
 from typing import List, Dict, Optional
 from dotenv import load_dotenv
 import contextvars
 
 load_dotenv()
+
+import requests as http_requests
+from app.ai.groq_manager import groq_key_manager
 
 # Context variable to track which session we are currently processing
 current_session_id = contextvars.ContextVar("current_session_id", default=None)
@@ -73,6 +73,7 @@ def _track_tokens(tokens: int):
 
 # ─── Configuration ───────────────────────────────────────────────────────────
 
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_API_Key", "")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 HF_API_KEY = os.getenv("HF_API_KEY", "")  # Optional — HF free tier works without key but with rate limits
 # HuggingFace model choices (in priority order — first available wins)
@@ -129,6 +130,91 @@ def _is_quota_error(exc: Exception) -> bool:
     """Detect if an exception signals quota/rate-limit exhaustion."""
     msg = str(exc).lower()
     return any(kw in msg for kw in ["402", "429", "quota", "rate limit", "billing", "insufficient"])
+
+
+# ─── Gemini Call ─────────────────────────────────────────────────────────────
+
+def _call_gemini(
+    messages: List[Dict[str, str]],
+    model: str = "gemini-3.6-flash",
+    temperature: float = 0.3,
+    timeout: int = 35,
+    max_tokens: int = 4096,
+) -> str:
+    """Call Google Gemini API using the REST generateContent endpoint."""
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_API_Key") or GEMINI_API_KEY
+    if not api_key or not api_key.strip() or api_key.strip() in ["YOUR_API_KEY", "your_api_key", "<your_api_key>", "your_key_here"]:
+        raise ValueError("GEMINI_API_KEY not configured or is a placeholder")
+
+    contents = []
+    system_instruction = None
+    for msg in messages:
+        role = msg.get("role")
+        content = msg.get("content", "")
+        if role == "system":
+            system_instruction = {"parts": [{"text": content}]}
+        elif role == "assistant":
+            contents.append({"role": "model", "parts": [{"text": content}]})
+        else:
+            contents.append({"role": "user", "parts": [{"text": content}]})
+
+    payload = {
+        "contents": contents,
+        "generationConfig": {
+            "temperature": temperature,
+            "maxOutputTokens": max(max_tokens, 4096),
+        }
+    }
+    if system_instruction:
+        payload["systemInstruction"] = system_instruction
+
+    candidate_models = list(dict.fromkeys([
+        model,
+        "gemini-3.6-flash",
+        "gemini-3.5-flash",
+        "gemini-3.7-flash",
+        "gemini-flash-latest"
+    ]))
+    last_err = None
+
+    for m in candidate_models:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={api_key}"
+        headers = {
+            "x-goog-api-key": api_key,
+            "Content-Type": "application/json"
+        }
+        try:
+            resp = http_requests.post(url, headers=headers, json=payload, timeout=timeout)
+            if resp.status_code == 200:
+                data = resp.json()
+                parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+                text = "".join(part.get("text", "") for part in parts)
+                tokens_used = data.get("usageMetadata", {}).get("totalTokenCount", 0)
+                if tokens_used:
+                    _track_tokens(tokens_used)
+                return text
+            elif resp.status_code in (404, 429, 503):
+                last_err = f"HTTP {resp.status_code}: {resp.text[:150]}"
+                continue
+            else:
+                resp.raise_for_status()
+        except Exception as e:
+            last_err = str(e)
+            continue
+
+    raise RuntimeError(f"All Gemini models failed. Last error: {last_err}")
+
+
+def call_gemini(
+    messages: List[Dict[str, str]],
+    model: str = "gemini-3.6-flash",
+    temperature: float = 0.3,
+    timeout: int = 35,
+    max_tokens: int = 4096,
+) -> str:
+    """Public function to call Gemini directly (strictly for Gemini-only features like Copilot)."""
+    return _call_gemini(messages, model=model, temperature=temperature, timeout=timeout, max_tokens=max_tokens)
+
 
 
 # ─── OpenRouter Call ──────────────────────────────────────────────────────────
@@ -227,50 +313,62 @@ def _call_huggingface(
 
 def _call_groq(
     messages: List[Dict[str, str]],
-    model: str = "llama-3.1-8b-instant",
+    model: Optional[str] = None,
     temperature: float = 0.1,
     timeout: int = 15,
     max_tokens: int = 1024,
 ) -> str:
-    """Call Groq API (completions)."""
+    """Call Groq API (completions) with active model and automatic fallback on decommissioned models."""
     url = "https://api.groq.com/openai/v1/chat/completions"
-    payload = {
-        "model": model,
-        "messages": messages,
-        "temperature": temperature,
-        "max_tokens": max_tokens,
-    }
+    active_model = model or os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+    fallback_models = ["openai/gpt-oss-20b", "llama-3.3-70b-versatile", "openai/gpt-oss-120b"]
     
     max_attempts = groq_key_manager.get_total_keys() or 1
     last_error_text = ""
     last_status = 500
 
-    for _ in range(max_attempts):
-        api_key = groq_key_manager.get_next_key()
-        if not api_key:
-            raise RuntimeError("No Groq API keys available")
-            
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
+    for current_model in [active_model] + [m for m in fallback_models if m != active_model]:
+        payload = {
+            "model": current_model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
         }
-        resp = http_requests.post(url, headers=headers, json=payload, timeout=timeout)
-        if resp.status_code == 200:
-            data = resp.json()
-            return data["choices"][0]["message"]["content"]
-        elif resp.status_code == 429:
-            last_status = resp.status_code
-            last_error_text = resp.text[:300]
-            continue # Try next key
-        elif resp.status_code == 401:
-            groq_key_manager.mark_invalid(api_key)
-            last_status = resp.status_code
-            last_error_text = resp.text[:300]
-            continue # Try next key
-        else:
-            raise RuntimeError(f"Groq error {resp.status_code}: {resp.text[:300]}")
-            
-    raise RuntimeError(f"Groq error {last_status} after exhausting all keys: {last_error_text}")
+        for _ in range(max_attempts):
+            api_key = groq_key_manager.get_next_key()
+            if not api_key:
+                raise RuntimeError("No Groq API keys available")
+                
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            }
+            try:
+                resp = http_requests.post(url, headers=headers, json=payload, timeout=timeout)
+            except Exception as conn_err:
+                last_error_text = str(conn_err)
+                continue
+
+            if resp.status_code == 200:
+                data = resp.json()
+                return data["choices"][0]["message"]["content"]
+            elif resp.status_code == 429:
+                last_status = resp.status_code
+                last_error_text = resp.text[:300]
+                continue # Try next key
+            elif resp.status_code == 401:
+                groq_key_manager.mark_invalid(api_key)
+                last_status = resp.status_code
+                last_error_text = resp.text[:300]
+                continue # Try next key
+            elif resp.status_code in (400, 404) and ("model" in resp.text.lower() or "decommissioned" in resp.text.lower()):
+                logger.warning(f"Groq model {current_model} unavailable ({resp.text[:120]}), trying fallback model...")
+                break # Try next fallback model
+            else:
+                last_status = resp.status_code
+                last_error_text = resp.text[:300]
+                
+    raise RuntimeError(f"Groq error {last_status} after exhausting models and keys: {last_error_text}")
 
 
 # ─── Custom Exception ────────────────────────────────────────────────────────
@@ -291,12 +389,17 @@ def chat_completion(
 ) -> str:
     """
     Send a chat completion request.
-    Provider chain: OpenRouter (primary) → HuggingFace (fallback).
-
-    NOTE: Groq is intentionally excluded here — it is reserved exclusively
-    for Whisper voice transcription (routes.py /transcribe endpoint).
+    Provider chain: Gemini (primary) → OpenRouter → Groq (fallback) → HuggingFace (tertiary).
     """
-    # 1. Primary path: try OpenRouter if not in cooldown
+    # 0. Primary Fast Path: Google Gemini (if GEMINI_API_KEY is configured)
+    active_gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_API_Key") or GEMINI_API_KEY
+    if active_gemini_key and active_gemini_key.strip():
+        try:
+            return _call_gemini(messages, model="gemini-3.6-flash", temperature=temperature, timeout=min(timeout, 30), max_tokens=max_tokens)
+        except Exception as gemini_exc:
+            print(f"Gemini API call failed ({gemini_exc}). Falling back to OpenRouter...")
+
+    # 1. Secondary path: try OpenRouter if not in cooldown
     if not _is_in_cooldown() and OPENROUTER_API_KEY:
         try:
             return _call_openrouter(messages, model, temperature, timeout, max_tokens)
@@ -304,21 +407,30 @@ def chat_completion(
             err_msg = str(openrouter_exc)
             if _is_quota_error(openrouter_exc):
                 _mark_quota_exhausted(err_msg)
-                print(f"OpenRouter quota hit: {err_msg}. Switching to HuggingFace fallback...")
+                print(f"OpenRouter quota hit: {err_msg}. Switching to Groq/HuggingFace fallback...")
             else:
-                print(f"OpenRouter failed: {openrouter_exc}. Switching to HuggingFace fallback...")
+                print(f"OpenRouter failed: {openrouter_exc}. Switching to Groq/HuggingFace fallback...")
     else:
         if _is_in_cooldown():
-            print("OpenRouter is in cooldown. Using HuggingFace fallback...")
+            print("OpenRouter is in cooldown. Using Groq/HuggingFace fallback...")
         else:
-            print("No OpenRouter API key. Using HuggingFace fallback...")
+            print("No OpenRouter API key. Using Groq/HuggingFace fallback...")
 
-    # 2. Fallback: HuggingFace (Groq is reserved for voice transcription only)
+    # 2. Fast Fallback: Groq (if key available)
+    has_groq = bool(os.getenv("GROQ_API_KEY") or groq_key_manager.get_total_keys() > 0)
+    if has_groq:
+        try:
+            print("Calling Groq LLM fallback...")
+            return _call_groq(messages, temperature=temperature, timeout=min(timeout, 20), max_tokens=max_tokens)
+        except Exception as groq_exc:
+            print(f"Groq LLM call failed: {groq_exc}. Switching to HuggingFace fallback...")
+
+    # 3. Tertiary Fallback: HuggingFace
     try:
         print("Calling HuggingFace fallback model...")
         return _call_huggingface(messages, temperature=temperature, timeout=timeout)
     except Exception as hf_exc:
-        print(f"All LLM providers failed: OpenRouter and HuggingFace.")
+        print(f"All LLM providers failed: Gemini, OpenRouter, Groq, and HuggingFace.")
         raise RuntimeError("QUOTA_EXHAUSTED_INSTANT_OFFLINE")
 
 
@@ -342,6 +454,8 @@ def chat_completion_safe(
 
 def get_active_provider() -> str:
     """Return which provider is currently being used."""
+    if GEMINI_API_KEY:
+        return "gemini"
     if _is_in_cooldown() or not OPENROUTER_API_KEY:
         return "huggingface"
     return "openrouter"
@@ -351,6 +465,7 @@ def get_status() -> Dict:
     """Return current AI client status for debugging."""
     return {
         "active_provider": get_active_provider(),
+        "gemini_key_set": bool(GEMINI_API_KEY),
         "openrouter_key_set": bool(OPENROUTER_API_KEY),
         "hf_key_set": bool(HF_API_KEY),
         "active_hf_model": _active_hf_model,

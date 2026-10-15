@@ -7,6 +7,7 @@ import ProctoringAlerts from '../../components/interview/ProctoringAlerts'
 import { API_BASE_URL } from '../../apiConfig'
 import { candidateFetch } from '../../utils/candidateAuth'
 import api from '../../utils/api'
+import Swal from 'sweetalert2'
 import '../../Interview.css'
 import { motion } from 'framer-motion'
 import AccessDeniedScreen from '../../components/interview/AccessDeniedScreen'
@@ -23,11 +24,23 @@ export const InterviewNonTechnical = () => {
     setCurrentQuestionIndex,
     setCodingRoundLoading
   }) => {
-    setCodingRoundLoading(true)
+    setCodingRoundLoading?.(true)
+    Swal.fire({
+      title: 'Preparing Case Study Round...',
+      html: 'Generating real-world business scenarios. Just a moment...',
+      allowOutsideClick: false,
+      didOpen: () => { Swal.showLoading() },
+      background: '#0f172a',
+      color: '#fff'
+    })
     try {
-      const payload = await api.post(`/case-study/start`, { interview_id: interviewId }).then(r => r.data)
+      const payload = await api.post(`/case-study/start`, { interview_id: interviewId }, { timeout: 120000 }).then(r => r.data)
 
-      const caseStudyQuestions = payload.case_study_round?.questions || []
+      const caseStudyQuestions = payload.case_study_round?.questions || payload.questions || []
+
+      if (!caseStudyQuestions || caseStudyQuestions.length === 0) {
+        throw new Error("No case study questions received from server.")
+      }
 
       const formattedQs = caseStudyQuestions.map((q, idx) => {
         const text = `📁 CASE STUDY ROUND: ${q.skill_tested || 'Scenario'}\n\n${q.scenario}\n\nQuestion: ${q.question}`
@@ -45,18 +58,23 @@ export const InterviewNonTechnical = () => {
         }
       })
 
-      setQuestions(prev => [...prev, ...formattedQs])
+      setQuestions(prev => {
+        const nonCaseStudy = prev.filter(q => q.type !== 'case_study')
+        return [...nonCaseStudy, ...formattedQs]
+      })
       
-      const targetIndex = (savedIndex !== null && savedIndex >= verbalQuestionsLength && savedIndex < verbalQuestionsLength + formattedQs.length) 
+      const targetIndex = (typeof savedIndex === 'number' && savedIndex >= verbalQuestionsLength && savedIndex < verbalQuestionsLength + formattedQs.length) 
         ? savedIndex 
         : verbalQuestionsLength
       
       setCurrentQuestionIndex(targetIndex)
+      Swal.close()
     } catch (err) {
       console.error('Case study round start failed:', err)
+      Swal.close()
       throw err
     } finally {
-      setCodingRoundLoading(false)
+      setCodingRoundLoading?.(false)
     }
   }
 
@@ -89,6 +107,7 @@ export const InterviewNonTechnical = () => {
     error,
     scheduledStart,
     isCompleted,
+    isAlreadyCompleted,
     isDisclaimerAccepted,
     agreeChecked,
     setAgreeChecked,
@@ -122,11 +141,13 @@ export const InterviewNonTechnical = () => {
     enableFullscreen,
     restartScreenShare,
     speakAIQuestion,
+    isAiSpeaking,
     showVoiceCloneSetup,
     completeVoiceCloneSetup,
     handleStartRound2Click,
     proceedToRoundTwo,
     handleNextQuestion,
+    stopAudio,
     handleSubmitInterview,
     canSubmit,
     handleFinishEarly,
@@ -139,6 +160,12 @@ export const InterviewNonTechnical = () => {
     promptScreenShare,
     isOnline
   } = session
+
+  useEffect(() => {
+    return () => {
+      stopAudio?.()
+    }
+  }, [stopAudio])
 
   // ── Voice Cloning Setup State (UI only) ──────────────────────────────────
   const [vcStep, setVcStep] = useState('idle') // 'idle' | 'recording' | 'uploading' | 'done' | 'error'
@@ -236,7 +263,14 @@ export const InterviewNonTechnical = () => {
   }
 
   if (error) {
-    return <AccessDeniedScreen error={error} scheduledStart={scheduledStart || sessionDetail?.scheduled_start} />
+    return (
+      <AccessDeniedScreen
+        error={error}
+        scheduledStart={scheduledStart || sessionDetail?.scheduled_start}
+        scheduledEnd={sessionDetail?.scheduled_end}
+        isExpired={sessionDetail?.is_expired}
+      />
+    )
   }
 
   if (isCompleted) {
@@ -247,9 +281,13 @@ export const InterviewNonTechnical = () => {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
         </div>
-        <h2 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">Interview Already Completed</h2>
+        <h2 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">
+          {isAlreadyCompleted ? 'Interview Already Completed' : 'Interview Completed'}
+        </h2>
         <p className="text-slate-600 mt-2 max-w-md text-base">
-          Thank you for your time. Your interview session has already been completed and submitted successfully.
+          {isAlreadyCompleted
+            ? 'Thank you for your time. Your interview session has already been completed and submitted successfully.'
+            : 'Thank you for your time. Your interview session has been completed and submitted successfully.'}
         </p>
         <p className="text-slate-500 mt-4 text-sm">
           Please contact the recruiter or HR via email for any further updates or questions.
@@ -475,23 +513,57 @@ export const InterviewNonTechnical = () => {
       />
 
       {fullscreenWarning && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', zIndex: 99999, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '20px', textAlign: 'center', padding: '24px' }}>
-          <ShieldAlert size={60} color="#ef4444" style={{ animation: 'pulse 2s infinite' }} />
-          <h2 style={{ fontSize: '30px', fontWeight: '800', color: '#fff' }}>⚠️ Anti-Cheating Alert</h2>
-          <p style={{ fontSize: '16px', color: '#94a3b8', maxWidth: '500px', lineHeight: '1.5' }}>Full Screen Mode is REQUIRED to take this interview. Exiting fullscreen compromises proctoring validation.</p>
-          <div style={{ display: 'flex', gap: '16px' }}>
-            <button onClick={enableFullscreen} style={{ padding: '12px 32px', borderRadius: '9999px', background: '#4f46e5', color: '#fff', fontWeight: 'bold', border: 'none', cursor: 'pointer' }}>Enable Full Screen</button>
-            <button onClick={() => handleSubmitInterview(true)} style={{ padding: '12px 32px', borderRadius: '9999px', background: 'transparent', color: '#ef4444', fontWeight: 'bold', border: '2px solid #ef4444', cursor: 'pointer' }}>Exit Interview</button>
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[99998] flex items-center justify-center p-4">
+          <div className="bg-[#161c2d] border border-white/10 rounded-2xl shadow-2xl p-6 max-w-md w-full flex flex-col items-center gap-4 text-center animate-in fade-in zoom-in duration-200">
+            <div className="w-14 h-14 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-500">
+              <ShieldAlert size={32} className="animate-pulse" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-white">Anti-Cheating Alert</h2>
+              <p className="text-slate-300 text-sm mt-2 leading-relaxed">
+                Full Screen Mode is REQUIRED to take this interview. Exiting fullscreen compromises proctoring validation.
+              </p>
+            </div>
+            <div className="flex gap-3 w-full mt-2">
+              <button
+                onClick={enableFullscreen}
+                className="flex-1 py-2.5 px-4 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm transition-colors cursor-pointer border-none outline-none"
+              >
+                Enable Full Screen
+              </button>
+              <button
+                onClick={() => handleSubmitInterview(true)}
+                className="py-2.5 px-4 rounded-full bg-transparent hover:bg-red-500/10 text-red-400 font-semibold text-sm border border-red-500/30 transition-colors cursor-pointer outline-none"
+              >
+                Exit
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {screenShareWarning && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', zIndex: 99999, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '20px', textAlign: 'center', padding: '24px' }}>
-          <ShieldAlert size={60} color="#ef4444" style={{ animation: 'pulse 2s infinite' }} />
-          <h2 style={{ fontSize: '24px', fontWeight: 'bold', color: '#fff' }}>Screen Sharing Stopped</h2>
-          <p style={{ color: '#94a3b8', fontSize: '14px', maxWidth: '400px' }}>You must share your entire screen to continue the proctored interview. Violations: {screenShareViolations} of 3</p>
-          <button onClick={restartScreenShare} style={{ padding: '10px 24px', borderRadius: '9999px', background: '#4f46e5', color: '#fff', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer', border: 'none' }}>Restart Screen Share</button>
+      {screenShareWarning && screenShareViolations < 3 && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[99998] flex items-center justify-center p-4">
+          <div className="bg-[#161c2d] border border-white/10 rounded-2xl shadow-2xl p-6 max-w-md w-full flex flex-col items-center gap-4 text-center animate-in fade-in zoom-in duration-200">
+            <div className="w-14 h-14 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-500">
+              <ShieldAlert size={32} className="animate-pulse" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-white">Screen Sharing Stopped</h2>
+              <p className="text-slate-300 text-sm mt-2 leading-relaxed">
+                You must share your entire screen to continue the proctored interview.
+              </p>
+              <div className="mt-3 inline-block px-3 py-1 rounded-full bg-red-500/20 border border-red-500/30 text-red-400 text-xs font-semibold">
+                Violation {screenShareViolations} of 3
+              </div>
+            </div>
+            <button
+              onClick={restartScreenShare}
+              className="w-full py-2.5 px-6 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm transition-colors cursor-pointer border-none outline-none shadow-lg shadow-indigo-600/30 mt-2"
+            >
+              Restart Screen Share
+            </button>
+          </div>
         </div>
       )}
 
@@ -509,7 +581,7 @@ export const InterviewNonTechnical = () => {
           </svg>
 
           <div className="ip-left flex flex-col gap-4 h-full overflow-y-auto pr-1 scrollbar-none">
-            {/* AI Analyzing Status Card */}
+            {/* AI Status Card */}
             <div className="bg-white/60 backdrop-blur-2xl border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-2xl p-5 flex items-center gap-4 transition-all duration-300 hover:shadow-lg hover:border-indigo-50">
               <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shrink-0 shadow-sm animate-pulse">
                 <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -518,14 +590,26 @@ export const InterviewNonTechnical = () => {
                 </svg>
               </div>
               <div className="flex-1">
-                <h4 className="m-0 text-sm font-bold text-slate-800">AI Analyzing</h4>
-                <p className="m-0 text-[11px] text-slate-500 font-medium">AI is Reading the Question...</p>
+                <h4 className="m-0 text-sm font-bold text-slate-800">
+                  {isRoundTwo || currentQuestion?.type === 'case_study' ? 'Case Study Analysis' : 'AI Interviewer'}
+                </h4>
+                <p className="m-0 text-[11px] text-slate-500 font-medium">
+                  {isRoundTwo || currentQuestion?.type === 'case_study'
+                    ? 'Silent prep & answer mode (TTS off)'
+                    : (isAiSpeaking ? 'AI is Reading the Question...' : 'Ready for your answer')}
+                </p>
               </div>
               <div className="flex items-end gap-0.5 h-6 shrink-0">
-                <span className="w-1 bg-emerald-500 rounded-full h-2 animate-[audioBar_0.8s_ease-in-out_infinite_alternate]"></span>
-                <span className="w-1 bg-emerald-500 rounded-full h-4 animate-[audioBar_0.8s_ease-in-out_infinite_alternate_0.15s]"></span>
-                <span className="w-1 bg-emerald-500 rounded-full h-3 animate-[audioBar_0.8s_ease-in-out_infinite_alternate_0.3s]"></span>
-                <span className="w-1 bg-emerald-500 rounded-full h-5 animate-[audioBar_0.8s_ease-in-out_infinite_alternate_0.1s]"></span>
+                {isAiSpeaking && !(isRoundTwo || currentQuestion?.type === 'case_study') ? (
+                  <>
+                    <span className="w-1 bg-emerald-500 rounded-full h-2 animate-[audioBar_0.8s_ease-in-out_infinite_alternate]"></span>
+                    <span className="w-1 bg-emerald-500 rounded-full h-4 animate-[audioBar_0.8s_ease-in-out_infinite_alternate_0.15s]"></span>
+                    <span className="w-1 bg-emerald-500 rounded-full h-3 animate-[audioBar_0.8s_ease-in-out_infinite_alternate_0.3s]"></span>
+                    <span className="w-1 bg-emerald-500 rounded-full h-5 animate-[audioBar_0.8s_ease-in-out_infinite_alternate_0.1s]"></span>
+                  </>
+                ) : (
+                  <span className="w-2 h-2 rounded-full bg-emerald-500/80"></span>
+                )}
               </div>
             </div>
 
@@ -710,11 +794,17 @@ export const InterviewNonTechnical = () => {
                       <div className="flex-1 flex flex-col gap-4">
                         <div className="bg-slate-50 p-5 rounded-[16px] border border-slate-200 shadow-sm">
                           <h4 className="font-bold text-slate-800 mb-3 text-[13px] uppercase tracking-wider flex items-center gap-2">
-                            <span className="text-lg">Q</span> Scenario Context
+                            <span className="text-lg">📋</span> Scenario Context
                           </h4>
-                          <ul className="list-disc pl-5 m-0 space-y-2 text-slate-600 text-[15px] leading-relaxed">
-                            {currentQuestion.scenario?.split(/(?<=[.?!])\s+/).map((sentence, i) => sentence.trim() ? <li key={i}>{sentence.trim()}</li> : null)}
-                          </ul>
+                          {currentQuestion?.scenario ? (
+                            <ul className="list-disc pl-5 m-0 space-y-2 text-slate-600 text-[15px] leading-relaxed">
+                              {currentQuestion.scenario.split(/(?<=[.?!])\s+/).filter(s => s && s.trim()).map((sentence, i) => (
+                                <li key={i}>{sentence.trim()}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-slate-600 text-[15px] leading-relaxed m-0 italic">No scenario context provided.</p>
+                          )}
                         </div>
                         <div className="bg-indigo-50/80 p-5 rounded-[16px] border border-indigo-100 shadow-sm">
                           <h4 className="font-bold text-indigo-800 mb-2 text-[13px] uppercase tracking-wider flex items-center gap-2">
@@ -728,15 +818,18 @@ export const InterviewNonTechnical = () => {
                     ) : (
                       <p className="flex-1 text-slate-800 text-base md:text-lg font-semibold leading-relaxed m-0">{currentQuestionText || 'Question is loading...'}</p>
                     )}
-                    <button 
-                      className="bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-indigo-600 border border-slate-200 hover:border-indigo-100 cursor-pointer p-2.5 rounded-full transition-all duration-200 shrink-0" 
-                      onClick={() => speakAIQuestion(currentQuestionText)}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M11 5L6 9H2v6h4l5 4V5z"></path>
-                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-                      </svg>
-                    </button>
+                    {!isRoundTwo && currentQuestion?.type !== 'case_study' && currentQuestion?.type !== 'coding' && (
+                      <button 
+                        className="bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-indigo-600 border border-slate-200 hover:border-indigo-100 cursor-pointer p-2.5 rounded-full transition-all duration-200 shrink-0" 
+                        onClick={() => speakAIQuestion(currentQuestionText)}
+                        title="Listen to question"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M11 5L6 9H2v6h4l5 4V5z"></path>
+                          <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                        </svg>
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -766,11 +859,12 @@ export const InterviewNonTechnical = () => {
                 <div className="flex gap-3 justify-center items-center mt-2 shrink-0">
                   {currentQuestionIndex === questions.length - 1 ? (
                     !isRoundTwo && sessionDetail?.interview_type !== 'Normal' ? (
-                      <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-100 px-4 py-2.5 rounded-xl">
-                        <span className="text-xs font-semibold text-indigo-600">
-                          Round 1 complete. Click "Start Round 2" in the sidebar to proceed.
-                        </span>
-                      </div>
+                      <button
+                        onClick={handleStartRound2Click}
+                        className="px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-600/30 hover:shadow-indigo-600/40 transition-all duration-200 cursor-pointer border-none flex items-center gap-2"
+                      >
+                        📊 Switch to Case Study (Round 2) &rarr;
+                      </button>
                     ) : (
                       <button 
                         className="px-8 py-3.5 rounded-xl font-bold text-sm text-white transition-all duration-200 border-none bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/20 hover:shadow-red-500/30 cursor-pointer"

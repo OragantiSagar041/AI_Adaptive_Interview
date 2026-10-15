@@ -124,6 +124,8 @@ class CreateSession(BaseModel):
     expected_ctc: str = ""
     current_company: str = ""
     notice_period: str = ""
+    job_id: str = ""
+    interview_title: str = ""
 
 class ForgotPasswordRequest(BaseModel):
     username: str

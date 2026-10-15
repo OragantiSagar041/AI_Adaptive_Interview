@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react'
 import { AlertTriangle, RefreshCw, LogOut, Clock, CheckCircle } from 'lucide-react'
 
-export default function AccessDeniedScreen({ error, scheduledStart }) {
+export default function AccessDeniedScreen({ error, scheduledStart, scheduledEnd, isExpired }) {
   const [currentTime, setCurrentTime] = useState(Date.now())
 
-  // Determine target scheduled timestamp
+  // Determine target scheduled start timestamp
   const targetTimestamp = React.useMemo(() => {
     if (scheduledStart) {
       const normalized = scheduledStart.endsWith('Z') || scheduledStart.includes('+')
@@ -16,23 +16,56 @@ export default function AccessDeniedScreen({ error, scheduledStart }) {
     return null
   }, [scheduledStart])
 
-  // Update current time every second if target timestamp is in the future
+  // Determine target scheduled end timestamp
+  const endTimestamp = React.useMemo(() => {
+    if (scheduledEnd) {
+      const normalized = scheduledEnd.endsWith('Z') || scheduledEnd.includes('+')
+        ? scheduledEnd
+        : scheduledEnd + 'Z'
+      const parsed = new Date(normalized).getTime()
+      if (!isNaN(parsed)) return parsed
+    }
+    return null
+  }, [scheduledEnd])
+
+  // Update current time every second if target timestamp or end timestamp exists
   useEffect(() => {
-    if (!targetTimestamp) return
+    if (!targetTimestamp && !endTimestamp) return
     const interval = setInterval(() => {
       setCurrentTime(Date.now())
     }, 1000)
     return () => clearInterval(interval)
-  }, [targetTimestamp])
+  }, [targetTimestamp, endTimestamp])
 
-  const isExpiredOrDeactivated = React.useMemo(() => {
+  // Determine if the interview is expired, timed out, deactivated, or finished
+  const isExpiredOrFinished = React.useMemo(() => {
+    if (isExpired) return true
+    if (endTimestamp && currentTime >= endTimestamp) return true
+    if (targetTimestamp && endTimestamp && endTimestamp <= targetTimestamp) return true
     if (!error) return false
     const lower = error.toLowerCase()
-    return lower.includes('expired') || lower.includes('deactivated') || lower.includes('already been completed')
-  }, [error])
+    return (
+      lower.includes('expired') ||
+      lower.includes('timeout') ||
+      lower.includes('timed out') ||
+      lower.includes('time out') ||
+      lower.includes('deactivated') ||
+      lower.includes('already been completed') ||
+      lower.includes('completed') ||
+      lower.includes('ended') ||
+      lower.includes('finished') ||
+      lower.includes('end time')
+    )
+  }, [error, isExpired, endTimestamp, targetTimestamp, currentTime])
 
-  const isScheduleError = !!targetTimestamp
-  const isTimeReached = targetTimestamp ? currentTime >= targetTimestamp : !isExpiredOrDeactivated
+  // Only consider it an upcoming schedule if the interview has NOT expired or finished
+  const isUpcomingSchedule = React.useMemo(() => {
+    if (isExpiredOrFinished) return false
+    if (!targetTimestamp) return false
+    return true
+  }, [isExpiredOrFinished, targetTimestamp])
+
+  const isTimeReached = targetTimestamp ? currentTime >= targetTimestamp : true
   const diffMs = targetTimestamp ? Math.max(0, targetTimestamp - currentTime) : 0
 
   const formatCountdown = (ms) => {
@@ -67,15 +100,16 @@ export default function AccessDeniedScreen({ error, scheduledStart }) {
         {error || "Unable to access this interview session."}
       </p>
 
-      {/* Countdown Timer if scheduled for future */}
-      {isScheduleError && !isTimeReached && (
+      {/* Countdown Timer ONLY if scheduled for future and NOT expired/timeout/finished */}
+      {isUpcomingSchedule && !isTimeReached && (
         <div className="inline-flex items-center gap-2 px-4 py-2 mt-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold shadow-sm">
           <Clock size={14} className="animate-pulse text-amber-600" />
           <span>Starts in: {formatCountdown(diffMs)}</span>
         </div>
       )}
 
-      {isScheduleError && isTimeReached && (
+      {/* Scheduled time arrived notification ONLY if valid upcoming schedule and NOT expired/timeout/finished */}
+      {isUpcomingSchedule && isTimeReached && (
         <div className="inline-flex items-center gap-2 px-4 py-2 mt-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold shadow-sm">
           <CheckCircle size={14} className="text-emerald-600" />
           <span>Scheduled time has arrived! You can now start the interview.</span>
@@ -84,23 +118,23 @@ export default function AccessDeniedScreen({ error, scheduledStart }) {
 
       {/* Action Buttons */}
       <div className="flex items-center justify-center gap-3 mt-6">
-        {/* If time is reached, show Refresh / Try Again button */}
-        {isTimeReached ? (
-          <button
-            onClick={handleRefresh}
-            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full font-semibold text-sm bg-primary hover:bg-primary-hover text-white transition-all shadow-[0_4px_14px_rgba(99,102,241,0.15)] border-0 cursor-pointer active:scale-95"
-          >
-            <RefreshCw size={16} />
-            <span>Try Again & Refresh</span>
-          </button>
-        ) : (
-          /* Rest of time (before scheduled time), show ONLY Exit button */
+        {/* If waiting for scheduled start time, show ONLY Exit button */}
+        {isUpcomingSchedule && !isTimeReached ? (
           <button
             onClick={handleExit}
             className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full font-semibold text-sm bg-slate-800 hover:bg-slate-900 text-white transition-all shadow-[0_4px_14px_rgba(15,23,42,0.15)] border-0 cursor-pointer active:scale-95"
           >
             <LogOut size={16} />
             <span>Exit</span>
+          </button>
+        ) : (
+          /* When time reached, or on expired/timeout/error screen, show Refresh / Try Again button */
+          <button
+            onClick={handleRefresh}
+            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full font-semibold text-sm bg-primary hover:bg-primary-hover text-white transition-all shadow-[0_4px_14px_rgba(99,102,241,0.15)] border-0 cursor-pointer active:scale-95"
+          >
+            <RefreshCw size={16} />
+            <span>Try Again & Refresh</span>
           </button>
         )}
       </div>

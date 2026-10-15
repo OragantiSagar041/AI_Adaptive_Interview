@@ -77,20 +77,35 @@ def requeue_delayed_answer_scoring():
                 answer_version=answer_version,
             )
             recovered += 1
-        except Exception:
-            answers_collection.update_one(
-                {
-                    "_id": answer["_id"],
-                    "scoring_status": "pending",
-                    "answer_version": answer_version,
-                },
-                {"$set": {"scoring_status": "queue_failed"}},
-            )
-            logger.exception(
-                "Failed to requeue delayed scoring for interview=%s question=%s",
-                interview_id,
-                question_id,
-            )
+        except Exception as delay_err:
+            try:
+                # Direct synchronous fallback when Celery/Redis is down
+                score_answer_task(
+                    interview_id=interview_id,
+                    question_id=question_id,
+                    question_text=answer.get("question_text", ""),
+                    answer_text=answer.get("answer_text", ""),
+                    context=context,
+                    time_spent_seconds=int(answer.get("time_spent_seconds") or 0),
+                    time_limit_seconds=int(answer.get("time_limit_seconds") or 120),
+                    language=interview.get("language") or "English",
+                    answer_version=answer_version,
+                )
+                recovered += 1
+            except Exception:
+                answers_collection.update_one(
+                    {
+                        "_id": answer["_id"],
+                        "scoring_status": "pending",
+                        "answer_version": answer_version,
+                    },
+                    {"$set": {"scoring_status": "queue_failed"}},
+                )
+                logger.exception(
+                    "Failed to requeue delayed scoring for interview=%s question=%s",
+                    interview_id,
+                    question_id,
+                )
     return {"requeued": recovered}
 
 @celery_app.task(bind=True, name="app.tasks.score_answer_task", max_retries=3)
@@ -155,7 +170,7 @@ def score_answer_task(
                     if session_doc:
                         link_id = session_doc.get("link_id")
                         if link_id:
-                            from app.routes import sync_session_to_application
+                            from app.routes.interview import sync_session_to_application
                             sync_session_to_application(link_id)
         except Exception as lang_err:
             logger.warning(f"Language detection background update failed: {lang_err}")
@@ -289,7 +304,7 @@ def score_answer_task(
                         "round2_score": round(round2_s, 1)
                     }}
                 )
-                from app.routes import sync_session_to_application
+                from app.routes.interview import sync_session_to_application
                 sync_session_to_application(session.get("link_id"))
                 
                 # If session is completed, check if all answers are now scored
@@ -415,7 +430,7 @@ def send_email_task(
     # Import here to avoid circular imports at module load time
     from app.services.services import build_default_interview_email_html
 
-    BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
+    BREVO_API_KEY = (os.getenv("BREVO_API_KEY") or "").strip().strip('"').strip("'")
     if not BREVO_API_KEY:
         logger.warning("BREVO_API_KEY not set — skipping email send")
         return {"status": "skipped", "reason": "no_api_key"}
@@ -437,8 +452,8 @@ def send_email_task(
         }
         payload = {
             "sender": {
-                "name": "HireIQ Recruiting",
-                "email": os.getenv("BREVO_SENDER_EMAIL", "no-reply@hireiq.co.in"),
+                "name": (os.getenv("BREVO_SENDER_NAME") or "Hire IQ").strip(),
+                "email": (os.getenv("BREVO_SENDER_EMAIL") or "").strip(),
             },
             "to": [{"email": candidate_email, "name": candidate_name}],
             "subject": "Invitation to your HireIQ AI Interview",
@@ -547,13 +562,13 @@ def send_recruiter_credentials_email_task(
 ):
     logger.info(f"Sending credentials email to {recruiter_email} (Attempt {self.request.retries + 1})")
 
-    BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
+    BREVO_API_KEY = (os.getenv("BREVO_API_KEY") or "").strip().strip('"').strip("'")
     if not BREVO_API_KEY:
         logger.warning("BREVO_API_KEY not set — skipping email send")
         return {"status": "skipped", "reason": "no_api_key"}
 
     try:
-        FRONTEND_URL = os.getenv("FRONTEND_URL", "https://www.hireiq.co.in")
+        FRONTEND_URL = os.getenv("FRONTEND_URL", "https://hireiq.co.in")
         login_url = f"{FRONTEND_URL}/login"
         
         settings = platform_settings_collection.find_one({"_id": "global_settings"})
@@ -596,8 +611,8 @@ def send_recruiter_credentials_email_task(
         }
         payload = {
             "sender": {
-                "name": "HireIQ Recruiting",
-                "email": os.getenv("BREVO_SENDER_EMAIL", "no-reply@hireiq.co.in"),
+                "name": (os.getenv("BREVO_SENDER_NAME") or "Hire IQ").strip(),
+                "email": (os.getenv("BREVO_SENDER_EMAIL") or "").strip(),
             },
             "to": [{"email": recruiter_email, "name": recruiter_name}],
             "subject": "Your HireIQ Recruiter Account Credentials",

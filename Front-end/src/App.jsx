@@ -76,6 +76,10 @@ const SecurityPage = React.lazy(() => import('./pages/superadmin/SecurityPage'))
 
 import ErrorBoundary from './components/ErrorBoundary'
 import { ThemeProvider, useTheme } from './context/ThemeContext'
+import { initGlobalTabTracker } from './utils/tabRegistry'
+
+// Initialize tab tracking as soon as app bundle runs
+initGlobalTabTracker()
 
 function ThemeEnforcer() {
   const { pathname } = useLocation();

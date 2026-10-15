@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Activity, AlertTriangle, Camera, Mic, RefreshCw, Maximize2 } from 'lucide-react'
 import Modal from '../../Modal'
 import { API_BASE_URL } from '../../../apiConfig'
-import { getIceServers } from '../../../utils/webrtcConfig'
+import { getIceServers, initIceServers } from '../../../utils/webrtcConfig'
 import { useSelector } from 'react-redux'
 
 const MAX_CANDIDATES = 8
@@ -50,7 +50,9 @@ function CandidateStreamCard({ session, token, onSelectCandidate }) {
       if (!mountedRef.current || ws.readyState !== WebSocket.OPEN) return
       if (pcRef.current) pcRef.current.close()
 
+      await initIceServers()
       const pc = new RTCPeerConnection({ iceServers: getIceServers() })
+      console.log('[MultiCandidateStream] RTCPeerConnection created with', getIceServers().length, 'ICE servers')
       pcRef.current = pc
 
       // Low Layer Grid Optimization:
@@ -147,8 +149,8 @@ function CandidateStreamCard({ session, token, onSelectCandidate }) {
             decoded += report.framesDecoded || 0
           }
         })
-        if (decoded > 0) {
-          frozen = lastBytesRef.current === bytes
+        if (bytes > 0) {
+          frozen = lastBytesRef.current !== null && lastBytesRef.current === bytes
           frozenSamplesRef.current = frozen ? frozenSamplesRef.current + 1 : 0
           lastBytesRef.current = bytes
         } else {
@@ -156,22 +158,25 @@ function CandidateStreamCard({ session, token, onSelectCandidate }) {
           lastBytesRef.current = null
         }
       } catch { /* ICE state and telemetry remain valid fallbacks. */ }
-      setIssue(iceDown || telemetryStale || (frozen && frozenSamplesRef.current >= 2))
+      const sustainedStall = frozenSamplesRef.current >= 8 && pc.iceConnectionState !== 'connected'
+      setIssue(iceDown || (sustainedStall && telemetryStale))
     }, HEALTH_INTERVAL_MS)
 
     return () => {
       mountedRef.current = false
       clearInterval(healthTimer)
       if (pcRef.current) pcRef.current.close()
-      if (wsRef.current) wsRef.current.close()
+      if (wsRef.current) { if (wsRef.current.readyState === WebSocket.OPEN) wsRef.current.close(); else wsRef.current.onopen = () => wsRef.current.close(); }
       setStream(null)
     }
-  }, [session, token])
+  }, [sessionLinkId(session), token])
 
   useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.srcObject = stream
-      videoRef.current.play().catch(() => {})
+    if (videoRef.current && stream) {
+      if (videoRef.current.srcObject !== stream) {
+        videoRef.current.srcObject = stream
+        videoRef.current.play().catch(() => {})
+      }
     }
   }, [stream])
 
@@ -181,7 +186,7 @@ function CandidateStreamCard({ session, token, onSelectCandidate }) {
     setNetworkIssue(false)
     setTelemetry(null)
     setStream(null)
-    if (wsRef.current) wsRef.current.close()
+    if (wsRef.current) { if (wsRef.current.readyState === WebSocket.OPEN) wsRef.current.close(); else wsRef.current.onopen = () => wsRef.current.close(); }
   }
 
   const handleCardClick = () => {

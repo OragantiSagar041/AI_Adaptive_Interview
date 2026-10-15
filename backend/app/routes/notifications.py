@@ -92,6 +92,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+@router.get("/notifications")
 @router.get("/api/notifications")
 def get_notifications(current_admin: dict = Depends(get_current_admin_details)):
     try:
@@ -147,11 +148,11 @@ def get_notifications(current_admin: dict = Depends(get_current_admin_details)):
             
         notifications = list(notifications_collection.find(query).sort("created_at", -1))
         
-        # Seed initial mock data only if completely empty for this user/role
+        # Seed initial test data only if completely empty for this user/role
         if not notifications and role == "master":
             import datetime
             now = datetime.datetime.now(datetime.timezone.utc)
-            mock_data = [
+            test_data = [
                 {
                     "title": "Welcome to Master Console",
                     "message": "Welcome to the Hire IQ Master Control Panel. Here you can monitor system status, subscription plans, and manage tenants.",
@@ -162,7 +163,7 @@ def get_notifications(current_admin: dict = Depends(get_current_admin_details)):
                     "created_at": (now - datetime.timedelta(hours=2)).isoformat()
                 }
             ]
-            notifications_collection.insert_many(mock_data)
+            notifications_collection.insert_many(test_data)
             notifications = list(notifications_collection.find(query).sort("created_at", -1))
             
         for n in notifications:
@@ -177,6 +178,7 @@ def get_notifications(current_admin: dict = Depends(get_current_admin_details)):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.put("/notifications/{notification_id}/read")
 @router.put("/api/notifications/{notification_id}/read")
 def mark_notification_read(notification_id: str, current_admin: dict = Depends(get_current_admin_details)):
     role = current_admin.get("role", "tenant")
@@ -217,6 +219,7 @@ def mark_notification_read(notification_id: str, current_admin: dict = Depends(g
     )
     return {"status": "success", "message": "Notification marked as read"}
 
+@router.post("/notifications/read-all")
 @router.post("/api/notifications/read-all")
 def mark_all_notifications_read(current_admin: dict = Depends(get_current_admin_details)):
     role = current_admin.get("role", "tenant")
@@ -270,6 +273,7 @@ def mark_all_notifications_read(current_admin: dict = Depends(get_current_admin_
     notifications_collection.update_many(query, {"$set": {"read": True}})
     return {"status": "success", "message": "All notifications marked as read"}
 
+@router.delete("/notifications/{notification_id}")
 @router.delete("/api/notifications/{notification_id}")
 def delete_notification_item(notification_id: str, current_admin: dict = Depends(get_current_admin_details)):
     role = current_admin.get("role", "tenant")

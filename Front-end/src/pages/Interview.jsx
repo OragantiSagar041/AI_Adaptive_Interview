@@ -10,6 +10,8 @@ export default function Interview() {
   const sessionId = searchParams.get('session_id') || searchParams.get('session')
   const [error, setError] = useState(null)
   const [scheduledStart, setScheduledStart] = useState(null)
+  const [scheduledEnd, setScheduledEnd] = useState(null)
+  const [isExpired, setIsExpired] = useState(false)
   const [loading, setLoading] = useState(true)
 
 
@@ -28,22 +30,20 @@ export default function Interview() {
         if (payload.status !== 'success') {
           throw new Error(payload.detail || payload.message || "Failed to load session details.")
         }
-        if (payload.scheduled_start) {
-          setScheduledStart(payload.scheduled_start)
+        if (payload.scheduled_end) {
+          setScheduledEnd(payload.scheduled_end)
         }
         if (payload.is_deactivated) {
           throw new Error("This interview link has been temporarily deactivated by the recruiter.")
         }
         if (payload.is_expired) {
+          setIsExpired(true)
           throw new Error("This interview link has expired. Please contact the recruiter for a new link.")
         }
         if (payload.is_before_schedule && payload.scheduled_start) {
           setScheduledStart(payload.scheduled_start)
           const startTime = new Date(payload.scheduled_start.endsWith('Z') || payload.scheduled_start.includes('+') ? payload.scheduled_start : payload.scheduled_start + 'Z')
           throw new Error(`This interview is scheduled to start on ${startTime.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'short', timeStyle: 'short' })}. Please try again at the scheduled time.`)
-        }
-        if (payload.session_status === 'completed') {
-          throw new Error("This interview session has already been completed.")
         }
 
         if (payload.interview_format === 'Voice') {
@@ -60,7 +60,8 @@ export default function Interview() {
           navigate(`/interview/normal?session_id=${sessionId}`, { replace: true })
         }
       } catch (err) {
-        setError(err.message || "Unable to access this interview session.")
+        const errorMsg = err.response?.data?.detail || err.response?.data?.message || err.message || "Unable to access this interview session."
+        setError(errorMsg)
         setLoading(false)
       }
     }
@@ -78,7 +79,7 @@ export default function Interview() {
   }
 
   if (error) {
-    return <AccessDeniedScreen error={error} scheduledStart={scheduledStart} />
+    return <AccessDeniedScreen error={error} scheduledStart={scheduledStart} scheduledEnd={scheduledEnd} isExpired={isExpired} />
   }
 
   return null

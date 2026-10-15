@@ -13,7 +13,7 @@ def rewrite():
         print(f"Error reading: {e}")
         return
 
-    start_str = 'def generate_mock_questions(text: str, source: str, num_questions: int = 6'
+    start_str = 'def generate_interview_questions(text: str, source: str, num_questions: int = 6'
     end_str = 'def score_answer('
     start_idx = content.find(start_str)
     end_idx = content.find(end_str)
@@ -22,7 +22,7 @@ def rewrite():
         print("Blocks not found")
         return
 
-    new_block = r'''def generate_mock_questions(text: str, source: str, num_questions: int = 6, resume_text: str = None, jd_text: str = None) -> List[Dict[str, str]]:
+    new_block = r'''def generate_interview_questions(text: str, source: str, num_questions: int = 6, resume_text: str = None, jd_text: str = None) -> List[Dict[str, str]]:
     """
     Generate structured interview questions.
     Structure: Self-Intro → Technical Middle → Closing

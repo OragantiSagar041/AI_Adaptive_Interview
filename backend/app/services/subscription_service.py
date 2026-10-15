@@ -102,8 +102,8 @@ def _build_row(company: Dict[str, Any]) -> SubscriptionRow:
     company_id = str(company["_id"])
 
     # ── Plan context (handles expiry, days_remaining, warnings) ───────────
-    mock_user = {"company_id": company_id}
-    ctx = get_admin_plan_context(mock_user)
+    test_user = {"company_id": company_id}
+    ctx = get_admin_plan_context(test_user)
     plan_key: str = ctx.get("plan_key", "trial")
     plan_def = get_plan_definition(plan_key)
 
@@ -211,8 +211,8 @@ def get_subscription_stats() -> SubscriptionStats:
 
     for company in companies:
         company_id = str(company["_id"])
-        mock_user = {"company_id": company_id}
-        ctx = get_admin_plan_context(mock_user)
+        test_user = {"company_id": company_id}
+        ctx = get_admin_plan_context(test_user)
         plan_key = ctx.get("plan_key", "trial")
         is_expired = ctx.get("is_expired", False)
 

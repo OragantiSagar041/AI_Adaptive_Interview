@@ -9,9 +9,11 @@ import {
   Mail, Phone, MapPin, Building2, IndianRupee, Clock, Download,
   Play, FileText, Sparkles, Star, Check, X, Calendar, Send,
   MessageSquare, Video, Scale, Loader2, AlertCircle, Monitor,
-  Mic, ShieldAlert, Eye, UserCheck, User, ArrowLeft
+  Mic, ShieldAlert, Eye, UserCheck, User, ArrowLeft,
+  Globe
 } from "lucide-react"
 import { jsPDF } from 'jspdf'
+import { detectNonEnglishText, translateText, translateQAPairs } from '../utils/translation'
 
 // ── Score Ring ──────────────────────────────────────────────────────────────
 function ScoreRing({ value, size = 140, strokeWidth = 12, label, tone }) {
@@ -76,6 +78,8 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
   const [error, setError] = useState(null)
   const [showResumeModal, setShowResumeModal] = useState(false)
   const [showRecordingModal, setShowRecordingModal] = useState(false)
+  const [camVideoError, setCamVideoError] = useState(false)
+  const [screenVideoError, setScreenVideoError] = useState(false)
   const [showTranscriptModal, setShowTranscriptModal] = useState(false)
 
   // New States
@@ -84,6 +88,58 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
   const [newNote, setNewNote] = useState("")
   const [notesSaving, setNotesSaving] = useState(false)
   const [showScheduleModal, setShowScheduleModal] = useState(false)
+
+  // Translation States
+  const [translations, setTranslations] = useState({})
+  const [translatingKeys, setTranslatingKeys] = useState({})
+
+  const handleTranslateSingle = async (key, text, questionText = '') => {
+    if ((!text || !text.trim()) && (!questionText || !questionText.trim())) return
+    if (translatingKeys[key]) return
+    setTranslatingKeys(prev => ({ ...prev, [key]: true }))
+    try {
+      const items = [{
+        id: key,
+        question_text: questionText || '',
+        answer_text: text || ''
+      }]
+      const results = await translateQAPairs(items, 'en', API_BASE_URL, token)
+      if (results && results[0]) {
+        const r = results[0]
+        setTranslations(prev => ({
+          ...prev,
+          [key]: {
+            id: key,
+            originalText: r.original_answer_text || text,
+            translatedText: r.answer_text,
+            originalQuestion: r.original_question_text || questionText,
+            translatedQuestion: r.question_text,
+            isTranslated: true,
+            view: 'translated',
+            sourceLangName: 'English (Translated)'
+          }
+        }))
+      }
+    } catch (e) {
+      console.error("Translation error:", e)
+    } finally {
+      setTranslatingKeys(prev => {
+        const next = { ...prev }
+        delete next[key]
+        return next
+      })
+    }
+  }
+
+  const toggleAnswerView = (key) => {
+    setTranslations(prev => {
+      if (!prev[key]) return prev
+      return {
+        ...prev,
+        [key]: { ...prev[key], view: prev[key].view === 'translated' ? 'original' : 'translated' }
+      }
+    })
+  }
 
   const token = useSelector(state => state.auth.token)
   const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
@@ -95,6 +151,10 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
     setDetail(null)
     setAtsData(null)
     setError(null)
+    setCamVideoError(false)
+    setScreenVideoError(false)
+    setTranslations({})
+    setTranslatingKeys({})
 
     const linkId = candidate.link_id || candidate.id || candidate._id
     if (!linkId || linkId.startsWith("ai_call_")) {
@@ -292,20 +352,53 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
 
   const formatMediaUrl = (url) => {
     if (!url) return null
-    if (url.startsWith('http')) return url
-    return `${API_BASE_URL}/${url.replace(/^\/+/, '')}`
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url
+    }
+    if (url.includes('recordings/') || url.startsWith('uploads/')) {
+      const fname = url.split('/').pop()
+      const apiBase = (API_BASE_URL || '').replace(/\/+$/, '')
+      return `${apiBase}/admin/recordings/stream/${fname}`
+    }
+    const base = (API_BASE_URL || '').replace(/\/api\/?$/, '').replace(/\/+$/, '')
+    return `${base}/${url.replace(/^\/+/, '')}`
   }
 
-  const recordingUrl = formatMediaUrl(c.recording_url)
-  const screenRecordingUrl = formatMediaUrl(c.screen_recording_url)
+  const rawCam = c.recording_url !== undefined ? c.recording_url : candidate?.recording_url
+  const rawScreen = c.screen_recording_url !== undefined ? c.screen_recording_url : candidate?.screen_recording_url
+  const recordingUrl = formatMediaUrl(rawCam)
+  const screenRecordingUrl = formatMediaUrl(rawScreen)
 
   const handleDecision = async (newDecision) => {
     if (!candidate) return;
     const linkId = candidate.link_id || candidate.id || candidate._id;
     if (!linkId) return;
 
+    let talentPoolStatus = null;
+    if (newDecision === 'rejected') {
+      const { isConfirmed, value: status } = await Swal.fire({
+        title: 'Reject Candidate',
+        text: 'Would you like to keep this candidate in the talent pool?',
+        icon: 'warning',
+        input: 'select',
+        inputOptions: {
+          'archived': 'Standard Rejection (Archive)',
+          'talent_pool': 'Add to Talent Pool (Silver Medalist)',
+          'future_role': 'Eligible for Future Roles (Culture Fit)',
+          'reconsideration': 'Flag for Reconsideration (Second Chance)'
+        },
+        inputValue: 'archived',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, reject candidate',
+        confirmButtonColor: '#e11d48',
+        cancelButtonText: 'Cancel'
+      });
+      if (!isConfirmed) return;
+      talentPoolStatus = status;
+    }
+
     try {
-      await dispatch(handleUpdateDecision({ linkId, decision: newDecision })).unwrap()
+      await dispatch(handleUpdateDecision({ linkId, decision: newDecision, talent_pool_status: talentPoolStatus })).unwrap()
       Swal.fire('Success', `Candidate marked as ${newDecision.toUpperCase()}`, 'success')
       onOpenChange(false)
       const basePath = window.location.pathname.startsWith('/superadmin') ? '/superadmin' : '/admin'
@@ -460,12 +553,31 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
 
   // Action handlers
   const handleReject = async () => {
-    if (!window.confirm("Are you sure you want to reject this candidate?")) return
+    const { isConfirmed, value: status } = await Swal.fire({
+      title: 'Reject Candidate',
+      text: 'Would you like to keep this candidate in the talent pool?',
+      icon: 'warning',
+      input: 'select',
+      inputOptions: {
+        'archived': 'Standard Rejection (Archive)',
+        'talent_pool': 'Add to Talent Pool (Silver Medalist)',
+        'future_role': 'Eligible for Future Roles (Culture Fit)',
+        'reconsideration': 'Flag for Reconsideration (Second Chance)'
+      },
+      inputValue: 'archived',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, reject candidate',
+      confirmButtonColor: '#e11d48',
+      cancelButtonText: 'Cancel'
+    });
+
+    if (!isConfirmed) return;
     const appId = c.link_id || candidate.link_id || c.id || candidate.id || c._id || candidate._id
     try {
       await axios.post(`${API_BASE_URL}/admin/update-decision`, {
         link_id: appId,
-        decision: "rejected"
+        decision: "rejected",
+        talent_pool_status: status
       }, { headers: { Authorization: `Bearer ${token}` } })
       onOpenChange(false)
 
@@ -680,19 +792,43 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
               </section>
 
               {/* Integrity */}
-              {c.integrity && (
-                <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
-                  <h3 className="text-sm font-black text-slate-800 mb-4 flex items-center gap-2">
-                    <ShieldAlert className="h-4 w-4 text-amber-500" /> Interview Integrity
-                  </h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <StatCard label="Tab Switches" value={c.integrity.total_tab_switches} />
-                    <StatCard label="Face Alerts" value={c.integrity.total_face_alerts} />
-                    <StatCard label="Noise Alerts" value={c.integrity.total_noise_alerts} />
-                    <StatCard label="Total Duration" value={`${c.integrity.total_time_minutes} min`} />
-                  </div>
-                </section>
-              )}
+              {c.integrity && (() => {
+                const violationsList = c.violations || c.alerts || []
+                const tabTypes = ['tab_switch', 'screen_casting', 'screen_share_detected', 'screen_recording', 'screenshare_stopped', 'multiple_displays', 'multi_monitor', 'fullscreen_exit', 'window_blur']
+                const noiseTypes = ['noise_alert', 'background_noise', 'noise']
+                
+                let tabSwitches = Number(c.integrity.total_tab_switches || 0)
+                let faceAlerts = Number(c.integrity.total_face_alerts || 0)
+                let noiseAlerts = Number(c.integrity.total_noise_alerts || 0)
+                
+                if (violationsList.length > 0) {
+                  const screenCount = violationsList.filter(v => tabTypes.includes(v.type || v.violation_type)).length
+                  const noiseCount = violationsList.filter(v => noiseTypes.includes(v.type || v.violation_type)).length
+                  const trueFaceCount = violationsList.filter(v => !tabTypes.includes(v.type || v.violation_type) && !noiseTypes.includes(v.type || v.violation_type)).length
+                  
+                  if (screenCount > 0) {
+                    tabSwitches = Math.max(tabSwitches, screenCount)
+                    faceAlerts = trueFaceCount
+                  }
+                  if (noiseCount > 0) {
+                    noiseAlerts = Math.max(noiseAlerts, noiseCount)
+                  }
+                }
+
+                return (
+                  <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
+                    <h3 className="text-sm font-black text-slate-800 mb-4 flex items-center gap-2">
+                      <ShieldAlert className="h-4 w-4 text-amber-500" /> Interview Integrity
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <StatCard label="Tab Switches" value={tabSwitches} />
+                      <StatCard label="Face Alerts" value={faceAlerts} />
+                      <StatCard label="Noise Alerts" value={noiseAlerts} />
+                      <StatCard label="Total Duration" value={`${c.integrity.total_time_minutes} min`} />
+                    </div>
+                  </section>
+                )
+              })()}
             </div>
           )}
 
@@ -797,13 +933,27 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                           <div className="text-xs text-slate-400 font-medium">Interview video feed</div>
                         </div>
                       </div>
-                      {recordingUrl ? (
-                        <video controls className="w-full rounded-lg border border-slate-200 bg-black max-h-48" src={recordingUrl}>
-                          Your browser does not support video.
-                        </video>
+                      {recordingUrl && !camVideoError ? (
+                        <div className="flex flex-col gap-2">
+                          <video 
+                            controls 
+                            preload="metadata" 
+                            playsInline 
+                            onError={() => setCamVideoError(true)}
+                            className="w-full aspect-video object-contain rounded-lg border border-slate-200 bg-black max-h-48" 
+                            src={recordingUrl}
+                          >
+                            Your browser does not support video.
+                          </video>
+                          <div className="flex justify-end">
+                            <a href={recordingUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold text-indigo-600 hover:underline">
+                              Open video in new tab ↗
+                            </a>
+                          </div>
+                        </div>
                       ) : (
                         <div className="h-28 flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
-                          No camera recording available
+                          {camVideoError ? "Camera recording currently unavailable" : "No camera recording available"}
                         </div>
                       )}
                     </div>
@@ -817,13 +967,27 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                           <div className="text-xs text-slate-400 font-medium">Screen share capture</div>
                         </div>
                       </div>
-                      {screenRecordingUrl ? (
-                        <video controls className="w-full rounded-lg border border-slate-200 bg-black max-h-48" src={screenRecordingUrl}>
-                          Your browser does not support video.
-                        </video>
+                      {screenRecordingUrl && !screenVideoError ? (
+                        <div className="flex flex-col gap-2">
+                          <video 
+                            controls 
+                            preload="metadata" 
+                            playsInline 
+                            onError={() => setScreenVideoError(true)}
+                            className="w-full aspect-video object-contain rounded-lg border border-slate-200 bg-black max-h-48" 
+                            src={screenRecordingUrl}
+                          >
+                            Your browser does not support video.
+                          </video>
+                          <div className="flex justify-end">
+                            <a href={screenRecordingUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold text-emerald-600 hover:underline">
+                              Open video in new tab ↗
+                            </a>
+                          </div>
+                        </div>
                       ) : (
                         <div className="h-28 flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
-                          No screen recording available
+                          {screenVideoError ? "Screen recording currently unavailable" : "No screen recording available"}
                         </div>
                       )}
                     </div>
@@ -848,7 +1012,11 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                     {c.answers.map((a, idx) => (
                       <div key={idx} className="rounded-lg border border-slate-100 p-4 bg-slate-50">
                         <div className="flex items-start justify-between gap-2 mb-2">
-                          <p className="text-sm font-bold text-slate-700">Q{idx + 1}. {a.question_text}</p>
+                          <p className="text-sm font-bold text-slate-700">
+                            Q{idx + 1}. {(translations[`page_ans_${idx}`]?.isTranslated && translations[`page_ans_${idx}`]?.view === 'translated' && translations[`page_ans_${idx}`]?.translatedQuestion)
+                              ? translations[`page_ans_${idx}`].translatedQuestion
+                              : a.question_text}
+                          </p>
                           <div className="flex items-center gap-2 shrink-0">
                             {Number(a.time_spent_seconds || 0) > 0 && (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
@@ -862,7 +1030,71 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                             )}
                           </div>
                         </div>
-                        <p className="text-sm text-slate-600">{a.answer_text}</p>
+                        {(() => {
+                          const ansKey = `page_ans_${idx}`
+                          const nonEnglish = detectNonEnglishText(a.answer_text, c.language || c.detected_language || '')
+                          const trans = translations[ansKey]
+                          return (
+                            <div className="mt-2">
+                              <div className="flex items-center justify-between gap-2 mb-1">
+                                <div className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                                  <MessageSquare size={10} /> Candidate Answer
+                                  {nonEnglish.isNonEnglish && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                      <Globe size={9} /> {nonEnglish.languageName} detected
+                                    </span>
+                                  )}
+                                  {trans?.isTranslated && trans.view === 'translated' && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                      <Check size={9} /> English Translated
+                                    </span>
+                                  )}
+                                </div>
+                                {a.answer_text && a.answer_text.trim() && (
+                                  <div>
+                                    {trans?.isTranslated ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleAnswerView(ansKey)}
+                                        className="text-xs font-bold text-indigo-600 hover:text-indigo-800"
+                                      >
+                                        {trans.view === 'translated' ? 'Show Original' : 'Show English'}
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleTranslateSingle(ansKey, a.answer_text, a.question_text)}
+                                        disabled={translatingKeys[ansKey]}
+                                        className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2 py-0.5 rounded transition-all"
+                                      >
+                                        {translatingKeys[ansKey] ? (
+                                          <span className="inline-flex items-center gap-1">
+                                            <Loader2 size={10} className="animate-spin" /> Translating...
+                                          </span>
+                                        ) : (
+                                          <span className="inline-flex items-center gap-1">
+                                            <Globe size={10} /> Translate
+                                          </span>
+                                        )}
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                              {trans?.isTranslated && trans.view === 'translated' ? (
+                                <div className="bg-indigo-50/50 border border-indigo-200 rounded-lg p-2.5 text-sm text-slate-800">
+                                  <div className="text-[10px] font-bold text-indigo-700 mb-1 flex items-center justify-between">
+                                    <span>Translated from {trans.sourceLangName || "Detected Language"}</span>
+                                    <button type="button" onClick={() => toggleAnswerView(ansKey)} className="text-slate-500 hover:text-indigo-700 underline font-normal">View Original</button>
+                                  </div>
+                                  <p className="text-slate-800">{trans.translatedText}</p>
+                                </div>
+                              ) : (
+                                <p className="text-sm text-slate-600">{a.answer_text}</p>
+                              )}
+                            </div>
+                          )
+                        })()}
                         {a.ai_feedback && (
                           <p className="mt-2 text-xs text-slate-500 italic border-t border-slate-200 pt-2">{a.ai_feedback}</p>
                         )}

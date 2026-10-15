@@ -98,6 +98,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.post("/api/jobs")
+@router.post("/jobs")
 def create_job(job: JobCreate, current_admin: dict = Depends(get_current_admin_details)):
     job_dict = job.dict()
     job_dict["custom_id"] = get_next_sequence_value("job", "JOB")
@@ -130,6 +131,7 @@ def create_job(job: JobCreate, current_admin: dict = Depends(get_current_admin_d
     return {"status": "success", "job": job_dict}
 
 @router.get("/api/jobs")
+@router.get("/jobs")
 def get_admin_jobs(page: int = 1, limit: int = 20, current_admin: dict = Depends(get_current_admin_details)):
     # Validate and clamp pagination parameters
     if page < 1:
@@ -164,6 +166,7 @@ def get_admin_jobs(page: int = 1, limit: int = 20, current_admin: dict = Depends
     }
 
 @router.put("/api/jobs/{job_id}")
+@router.put("/jobs/{job_id}")
 def update_job(job_id: str, job_update: JobCreate, current_admin: dict = Depends(get_current_admin_details)):
     job = jobs_collection.find_one({"job_id": job_id})
     if not job:
@@ -193,6 +196,7 @@ def update_job(job_id: str, job_update: JobCreate, current_admin: dict = Depends
     return {"status": "success", "message": "Job updated"}
 
 @router.delete("/api/jobs/{job_id}")
+@router.delete("/jobs/{job_id}")
 def delete_job(job_id: str, current_admin: dict = Depends(get_current_admin_details)):
     job = jobs_collection.find_one({"job_id": job_id})
     if not job:
@@ -214,6 +218,7 @@ def delete_job(job_id: str, current_admin: dict = Depends(get_current_admin_deta
     return {"status": "success", "message": "Job deleted"}
 
 @router.get("/api/public/jobs/{job_id}")
+@router.get("/public/jobs/{job_id}")
 def get_public_job(job_id: str):
     job = jobs_collection.find_one({"job_id": job_id})
     if not job:
@@ -226,6 +231,7 @@ def get_public_job(job_id: str):
     return {"status": "success", "job": job}
 
 @router.get("/api/public/jobs/company/{company_id}")
+@router.get("/public/jobs/company/{company_id}")
 def get_public_company_jobs(company_id: str):
     """
     Fetch all active public jobs for a specific company.
@@ -277,27 +283,40 @@ os.makedirs(UPLOAD_RESUMES_DIR, exist_ok=True)
 os.makedirs(UPLOAD_COVER_LETTERS_DIR, exist_ok=True)
 
 @router.get("/api/public/resumes/{filename}")
-def get_uploaded_resume_file(filename: str, current_admin: dict = Depends(get_current_admin_details)):
+@router.get("/public/resumes/{filename}")
+def get_uploaded_resume_file(filename: str):
     """Serve locally stored resumes if not using Cloudinary."""
     safe_filename = os.path.basename(filename)
     file_path = os.path.join(UPLOAD_RESUMES_DIR, safe_filename)
     if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="Resume file not found")
+        from fastapi.responses import HTMLResponse
+        return HTMLResponse(
+            content="""
+            <div style="font-family: ui-sans-serif, system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background-color: #f8fafc; color: #64748b; margin: 0; padding: 20px; text-align: center;">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 16px; color: #94a3b8;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+                <h3 style="margin: 0 0 8px 0; color: #334155; font-size: 1.125rem; font-weight: 600;">Resume File Not Found</h3>
+                <p style="margin: 0; font-size: 0.875rem; max-width: 300px;">The original resume document could not be located on the server. It may have been deleted or moved.</p>
+            </div>
+            """,
+            status_code=404
+        )
     media_type = "application/pdf" if safe_filename.lower().endswith(".pdf") else "application/octet-stream"
-    return FileResponse(file_path, media_type=media_type, filename=safe_filename)
+    return FileResponse(file_path, media_type=media_type)
 
 @router.get("/api/public/cover_letters/{filename}")
-def get_uploaded_cover_letter_file(filename: str, current_admin: dict = Depends(get_current_admin_details)):
+@router.get("/public/cover_letters/{filename}")
+def get_uploaded_cover_letter_file(filename: str):
     """Serve locally stored cover letters."""
     safe_filename = os.path.basename(filename)
     file_path = os.path.join(UPLOAD_COVER_LETTERS_DIR, safe_filename)
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Cover letter file not found")
     media_type = "application/pdf" if safe_filename.lower().endswith(".pdf") else "application/octet-stream"
-    return FileResponse(file_path, media_type=media_type, filename=safe_filename, content_disposition_type="inline")
+    return FileResponse(file_path, media_type=media_type)
 
 
 @router.post("/api/public/jobs/{job_id}/apply")
+@router.post("/public/jobs/{job_id}/apply")
 async def apply_for_job(
     job_id: str,
     request: Request,
@@ -519,6 +538,7 @@ async def apply_for_job(
     }
 
 @router.get("/api/jobs/{job_id}/applications")
+@router.get("/jobs/{job_id}/applications")
 def get_job_applications(job_id: str, current_admin: dict = Depends(get_current_admin_details)):
     """
     Returns all applications submitted for a given job_id.
@@ -581,6 +601,7 @@ def get_job_applications(job_id: str, current_admin: dict = Depends(get_current_
     return {"status": "success", "applications": applications, "total": len(applications)}
 
 @router.patch("/api/jobs/{job_id}/applications/{app_id}/status")
+@router.patch("/jobs/{job_id}/applications/{app_id}/status")
 def update_application_status(
     job_id: str,
     app_id: str,
@@ -667,6 +688,7 @@ import pypdf
 import io
 
 @router.post("/api/public/jobs/parse-resume")
+@router.post("/public/jobs/parse-resume")
 def parse_resume(resume: UploadFile = File(...)):
     try:
         allowed_extensions = {".pdf", ".docx", ".doc", ".txt"}

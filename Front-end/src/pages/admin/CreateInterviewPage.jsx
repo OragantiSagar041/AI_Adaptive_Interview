@@ -95,6 +95,8 @@ export default function CreateInterviewPage() {
       resumeText: '',
       jobDescription: '',
       applicationId: '',
+      jobId: '',
+      jobTitle: '',
       customQuestions: [],
       aiInstructions: [],
       industry: 'General',
@@ -142,6 +144,8 @@ export default function CreateInterviewPage() {
       if (cd.resumeText) defaultState.resumeText = cd.resumeText;
       if (cd.jobDescription) defaultState.jobDescription = cd.jobDescription;
       if (cd.applicationId) defaultState.applicationId = cd.applicationId;
+      if (cd.jobId) defaultState.jobId = cd.jobId;
+      if (cd.jobTitle) defaultState.jobTitle = cd.jobTitle;
     }
 
     return defaultState;
@@ -157,7 +161,9 @@ export default function CreateInterviewPage() {
         phone: cd.phone || prev.phone || '',
         resumeText: cd.resumeText || prev.resumeText || '',
         jobDescription: cd.jobDescription || prev.jobDescription || '',
-        applicationId: cd.applicationId || prev.applicationId || ''
+        applicationId: cd.applicationId || prev.applicationId || '',
+        jobId: cd.jobId || prev.jobId || '',
+        jobTitle: cd.jobTitle || prev.jobTitle || ''
       }));
       setCreateTab('single');
     }
@@ -385,7 +391,7 @@ export default function CreateInterviewPage() {
       const response = await axios.post(`${API_BASE_URL}/admin/parse-resume`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
-          'Authorization': `Bearer ${sessionStorage.getItem('adminToken')}`
+          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
         }
       })
       onParsed(null, response.data)
@@ -714,7 +720,9 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
         current_company: singleCandidate.current_company || "",
         notice_period: singleCandidate.notice_period || "",
         ats_score: atsScoreData ? atsScoreData.score : null,
-        jd_file_url: singleCandidate.jdFileUrl || null
+        jd_file_url: singleCandidate.jdFileUrl || null,
+        job_id: singleCandidate.jobId || "",
+        interview_title: singleCandidate.jobTitle || ""
       }, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -751,13 +759,24 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
         ...prev,
         name: '',
         email: '',
+        phone: '',
         resumeText: '',
+        resumeFileName: '',
         jobDescription: '',
         customQuestions: '',
         aiInstructions: '',
         scheduledStart: '',
         scheduledEnd: '',
-        jdFileUrl: ''
+        jdFileUrl: '',
+        jobId: '',
+        jobTitle: '',
+        applicationId: '',
+        experience: '',
+        location: '',
+        current_ctc: '',
+        expected_ctc: '',
+        current_company: '',
+        notice_period: ''
       }))
       setAtsScoreData(null)
       setCustomEmailHtml('')
@@ -1048,13 +1067,14 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
         </div>
 
         {/* Tab Switcher Capsule */}
-        <div className="flex bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl gap-1.5 max-w-md mx-auto w-full border border-slate-200 dark:border-slate-700/50 shadow-sm relative overflow-hidden">
+        <div className="flex bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-[16px] gap-1.5 max-w-md mx-auto w-full border border-slate-200 dark:border-slate-700/50 shadow-sm relative overflow-hidden">
           <button
             type="button"
             onClick={() => setCreateTab('single')}
-            className={`flex-1 py-2.5 px-4 rounded-xl font-extrabold text-xs cursor-pointer transition-all duration-300 outline-none flex items-center justify-center gap-2 z-10 ${createTab === 'single'
-              ? 'bg-indigo-600 dark:bg-indigo-500 text-white shadow-[0_4px_12px_rgba(99,102,241,0.25)]'
-              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-100 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
+            style={createTab === 'single' ? { backgroundColor: '#4f46e5', color: '#ffffff' } : {}}
+            className={`flex-1 py-2.5 px-4 rounded-[12px] font-extrabold text-xs cursor-pointer transition-all duration-300 outline-none flex items-center justify-center gap-2 z-10 ${createTab === 'single'
+              ? '!bg-indigo-600 !text-white shadow-md shadow-indigo-500/25'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
               }`}
           >
             <i className="fas fa-user text-xs"></i> Single Candidate
@@ -1062,9 +1082,10 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
           <button
             type="button"
             onClick={() => setCreateTab('bulk')}
-            className={`flex-1 py-2.5 px-4 rounded-xl font-extrabold text-xs cursor-pointer transition-all duration-300 outline-none flex items-center justify-center gap-2 z-10 ${createTab === 'bulk'
-              ? 'bg-indigo-600 dark:bg-indigo-500 text-white shadow-[0_4px_12px_rgba(99,102,241,0.25)]'
-              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-100 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
+            style={createTab === 'bulk' ? { backgroundColor: '#4f46e5', color: '#ffffff' } : {}}
+            className={`flex-1 py-2.5 px-4 rounded-[12px] font-extrabold text-xs cursor-pointer transition-all duration-300 outline-none flex items-center justify-center gap-2 z-10 ${createTab === 'bulk'
+              ? '!bg-indigo-600 !text-white shadow-md shadow-indigo-500/25'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
               }`}
           >
             <i className="fas fa-users text-xs"></i> Bulk Send
@@ -1551,9 +1572,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       </ol>
                     )}
                   </div>
-                </div>
-
-                {/* AI Instructions Section */}
+                </div>{/* AI Instructions Section */}
                 <div className="border border-slate-200 dark:border-slate-700/80 rounded-2xl overflow-hidden bg-white dark:bg-slate-800/60/82 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-slate-300">
                   <div className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-900/50/50 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2">
@@ -1769,36 +1788,36 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       onChange={(e) => handleSingleChange('industry', e.target.value)}
                       options={[
                         { value: 'General', label: 'General (No Specific)' },
-                        { value: 'Information Technology', label: 'Information Technology' },
-                        { value: 'Software & SaaS', label: 'Software & SaaS' },
-                        { value: 'Healthcare', label: 'Healthcare' },
-                        { value: 'Pharmaceuticals', label: 'Pharmaceuticals' },
-                        { value: 'Banking', label: 'Banking' },
-                        { value: 'Financial Services', label: 'Financial Services' },
-                        { value: 'Insurance', label: 'Insurance' },
-                        { value: 'FinTech', label: 'FinTech' },
-                        { value: 'Education', label: 'Education' },
-                        { value: 'Manufacturing', label: 'Manufacturing' },
-                        { value: 'Automotive', label: 'Automotive' },
-                        { value: 'Telecommunications', label: 'Telecommunications' },
-                        { value: 'Retail', label: 'Retail' },
-                        { value: 'E-commerce', label: 'E-commerce' },
-                        { value: 'Logistics & Supply Chain', label: 'Logistics & Supply Chain' },
-                        { value: 'Transportation', label: 'Transportation' },
-                        { value: 'Aviation', label: 'Aviation' },
-                        { value: 'Hospitality', label: 'Hospitality' },
-                        { value: 'Tourism', label: 'Tourism' },
-                        { value: 'Real Estate', label: 'Real Estate' },
-                        { value: 'Construction', label: 'Construction' },
-                        { value: 'Energy & Utilities', label: 'Energy & Utilities' },
-                        { value: 'Oil & Gas', label: 'Oil & Gas' },
-                        { value: 'Media & Entertainment', label: 'Media & Entertainment' },
-                        { value: 'Marketing & Advertising', label: 'Marketing & Advertising' },
-                        { value: 'Legal Services', label: 'Legal Services' },
-                        { value: 'Government & Public Sector', label: 'Government & Public Sector' },
-                        { value: 'Non-Profit Organizations', label: 'Non-Profit Organizations' },
                         { value: 'Agriculture & Food Processing', label: 'Agriculture & Food Processing' },
-                        { value: 'Human Resources & Staffing', label: 'Human Resources & Staffing' }
+                        { value: 'Automotive', label: 'Automotive' },
+                        { value: 'Aviation', label: 'Aviation' },
+                        { value: 'Banking', label: 'Banking' },
+                        { value: 'Construction', label: 'Construction' },
+                        { value: 'E-commerce', label: 'E-commerce' },
+                        { value: 'Education', label: 'Education' },
+                        { value: 'Energy & Utilities', label: 'Energy & Utilities' },
+                        { value: 'Financial Services', label: 'Financial Services' },
+                        { value: 'FinTech', label: 'FinTech' },
+                        { value: 'Government & Public Sector', label: 'Government & Public Sector' },
+                        { value: 'Healthcare', label: 'Healthcare' },
+                        { value: 'Hospitality', label: 'Hospitality' },
+                        { value: 'Human Resources & Staffing', label: 'Human Resources & Staffing' },
+                        { value: 'Information Technology', label: 'Information Technology' },
+                        { value: 'Insurance', label: 'Insurance' },
+                        { value: 'Legal Services', label: 'Legal Services' },
+                        { value: 'Logistics & Supply Chain', label: 'Logistics & Supply Chain' },
+                        { value: 'Manufacturing', label: 'Manufacturing' },
+                        { value: 'Marketing & Advertising', label: 'Marketing & Advertising' },
+                        { value: 'Media & Entertainment', label: 'Media & Entertainment' },
+                        { value: 'Non-Profit Organizations', label: 'Non-Profit Organizations' },
+                        { value: 'Oil & Gas', label: 'Oil & Gas' },
+                        { value: 'Pharmaceuticals', label: 'Pharmaceuticals' },
+                        { value: 'Real Estate', label: 'Real Estate' },
+                        { value: 'Retail', label: 'Retail' },
+                        { value: 'Software & SaaS', label: 'Software & SaaS' },
+                        { value: 'Telecommunications', label: 'Telecommunications' },
+                        { value: 'Tourism', label: 'Tourism' },
+                        { value: 'Transportation', label: 'Transportation' }
                       ]}
                     />
                   </div>
@@ -2224,9 +2243,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       </ol>
                     )}
                   </div>
-                </div>
-
-                {/* AI Instructions Section (Bulk) */}
+                </div>{/* AI Instructions Section (Bulk) */}
                 <div className="border border-slate-200 dark:border-slate-700/80 rounded-2xl overflow-hidden bg-white dark:bg-slate-800/60/82 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-slate-300">
                   <div className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-900/50/50 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2">
@@ -2559,12 +2576,12 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       onChange={(e) => handleBulkConfigChange('industry', e.target.value)}
                       options={[
                         { value: 'General', label: 'General (No Specific)' },
-                        { value: 'Information Technology', label: 'Information Technology' },
-                        { value: 'Software & SaaS', label: 'Software & SaaS' },
-                        { value: 'Healthcare', label: 'Healthcare' },
-                        { value: 'Financial Services', label: 'Financial Services' },
                         { value: 'Education', label: 'Education' },
-                        { value: 'Human Resources & Staffing', label: 'Human Resources & Staffing' }
+                        { value: 'Financial Services', label: 'Financial Services' },
+                        { value: 'Healthcare', label: 'Healthcare' },
+                        { value: 'Human Resources & Staffing', label: 'Human Resources & Staffing' },
+                        { value: 'Information Technology', label: 'Information Technology' },
+                        { value: 'Software & SaaS', label: 'Software & SaaS' }
                       ]}
                     />
                   </div>
@@ -2774,10 +2791,6 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                   </div>
                 </div>
               </Card>
-
-
-
-
             </div>
           </div>
         )}

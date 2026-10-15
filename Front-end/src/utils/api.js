@@ -8,7 +8,7 @@ const api = axios.create({
   timeout: 50000,
   headers: { "Content-Type": "application/json" },
 });
-const CANDIDATE_ROUTE_RE = /(?:\/|^)(?:transcribe|stt|tts|voice-clone-instant|save-answer|save-behavioral-data|coding-round|case-study|upload-full-recording|recording-upload-failure|complete-session|submit-feedback|proctoring\/violation|session(?:\/.*)?|api\/interview(?:\/.*)?|interview(?:\/.*)?|generate-next-question|generate-more-questions|live-heartbeat)(?:\/|\?|$)/
+const CANDIDATE_ROUTE_RE = /(?:\/|^)(?:transcribe|stt|speech-to-text-whisper|tts|voice-clone-instant|save-answer|save-behavioral-data|coding-round|case-study|upload-full-recording|recording-upload-failure|complete-session|submit-feedback|proctoring\/violation|session(?:\/.*)?|api\/interview(?:\/.*)?|interview(?:\/.*)?|generate-next-question|generate-more-questions|live-heartbeat)(?:\/|\?|$)/
 
 /* =============================================================================
    REQUEST INTERCEPTOR → attaches token from sessionStorage
@@ -17,14 +17,14 @@ api.interceptors.request.use(
   (config) => {
     const requestPath = String(config.url || "");
     const candidateRequest = CANDIDATE_ROUTE_RE.test(requestPath);
-    let token = candidateRequest ? getCandidateSessionToken() : sessionStorage.getItem("masterToken");
+    let token = candidateRequest ? getCandidateSessionToken() : localStorage.getItem('masterToken');
 
     if (!candidateRequest) {
-      if (!token) token = sessionStorage.getItem("adminToken");
-      if (!token) token = sessionStorage.getItem("token");
+      if (!token) token = localStorage.getItem('adminToken');
+      if (!token) token = localStorage.getItem('token');
 
       if (!token) {
-        const adminUserStr = sessionStorage.getItem("adminUser");
+        const adminUserStr = localStorage.getItem('adminUser');
         if (adminUserStr) {
           try {
             const parsed = JSON.parse(adminUserStr);
@@ -64,7 +64,7 @@ let _refreshPromise = null; // deduplicate simultaneous refresh calls
 
 async function proactiveTokenRefresh() {
   // Only refresh admin tokens, not candidate tokens
-  const token = sessionStorage.getItem('adminToken') || sessionStorage.getItem('masterToken') || sessionStorage.getItem('token');
+  const token = localStorage.getItem('adminToken') || localStorage.getItem('masterToken') || localStorage.getItem('token');
   if (!token) return;
 
   const expiry = getTokenExpiry(token);
@@ -87,15 +87,15 @@ async function proactiveTokenRefresh() {
     const newToken = res.data?.token;
     if (newToken) {
       // Update all storage keys so every subsequent request uses the new token
-      if (sessionStorage.getItem('adminToken')) sessionStorage.setItem('adminToken', newToken);
-      if (sessionStorage.getItem('masterToken')) sessionStorage.setItem('masterToken', newToken);
-      if (sessionStorage.getItem('token')) sessionStorage.setItem('token', newToken);
+      if (localStorage.getItem('adminToken')) localStorage.setItem('adminToken', newToken);
+      if (localStorage.getItem('masterToken')) localStorage.setItem('masterToken', newToken);
+      if (localStorage.getItem('token')) localStorage.setItem('token', newToken);
       // Also update the token embedded in adminUser JSON
       try {
-        const adminUser = JSON.parse(sessionStorage.getItem('adminUser') || '{}');
+        const adminUser = JSON.parse(localStorage.getItem('adminUser') || '{}');
         if (adminUser.token) {
           adminUser.token = newToken;
-          sessionStorage.setItem('adminUser', JSON.stringify(adminUser));
+          localStorage.setItem('adminUser', JSON.stringify(adminUser));
         }
       } catch (_) {}
     }
@@ -139,10 +139,10 @@ api.interceptors.response.use(
         }
       } else if (!isLoginRoute && !window.__hireIqAuthRedirecting) {
         window.__hireIqAuthRedirecting = true
-        sessionStorage.removeItem("auth")
-        sessionStorage.removeItem("masterToken")
-        sessionStorage.removeItem("adminToken")
-        sessionStorage.removeItem("token")
+        localStorage.removeItem('auth')
+        localStorage.removeItem('masterToken')
+        localStorage.removeItem('adminToken')
+        localStorage.removeItem('token')
         window.location.assign("/login")
       }
     }
@@ -436,21 +436,35 @@ export const liveHeartbeat = async (data, monitoringToken) => {
 /* =============================================================================
    ADMIN GENERAL & AUTH
 ============================================================================= */
-export const adminLogin = async (data) => {
-  try {
-    const response = await api.post("/admin/login", data);
-    return response.data;
-  } catch (error) {
-    throw error.response?.data?.detail || error.response?.data?.message || "Admin login failed";
-  }
-};
 
-export const firebaseAuth = async (data) => {
+export const firebaseAuth = async (data = {}) => {
   try {
-    const response = await api.post("/admin/firebase-auth", data);
+    const user = auth.currentUser;
+
+    if (!user) {
+      throw new Error("No Firebase user is currently signed in");
+    }
+
+    const idToken = await user.getIdToken(true);
+
+    const response = await api.post(
+      "/admin/firebase-auth",
+      data,
+      {
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      }
+    );
+
     return response.data;
   } catch (error) {
-    throw error.response?.data?.detail || error.response?.data?.message || "Firebase login failed";
+    throw (
+      error.response?.data?.detail ||
+      error.response?.data?.message ||
+      error.message ||
+      "Firebase login failed"
+    );
   }
 };
 
@@ -505,7 +519,7 @@ export const uploadProfileImage = async (formData) => {
 
 export const getDashboardStats = async (params) => {
   try {
-    const response = await api.get("/admin/dashboard-stats", { params });
+    const response = await api.get("/api/admin/dashboard-stats", { params });
     return response.data;
   } catch (error) {
     throw error.response?.data?.detail || error.response?.data?.message || "Failed to fetch dashboard stats";
@@ -759,7 +773,7 @@ export const getInterviewDetails = async (linkId) => {
 ============================================================================= */
 export const getSuperAdminDashboardStats = async (params) => {
   try {
-    const response = await api.get("/super-admin/dashboard-stats", { params });
+    const response = await api.get("/api/super-admin/dashboard-stats", { params });
     return response.data;
   } catch (error) {
     throw error.response?.data?.detail || error.response?.data?.message || "Failed to fetch dashboard stats";
@@ -804,7 +818,7 @@ export const updateCreditRequest = async (requestId, data) => {
 
 export const getSuperAdminDashboard = async (params) => {
   try {
-    const response = await api.get("/superadmin/dashboard", { params });
+    const response = await api.get("/api/superadmin/dashboard", { params });
     return response.data;
   } catch (error) {
     throw error.response?.data?.detail || error.response?.data?.message || "Failed to retrieve superadmin dashboard telemetry";
@@ -874,17 +888,7 @@ export const superadminPatchCreditRequest = async (requestId, data) => {
   }
 };
 
-/* =============================================================================
-   MASTER ADMIN
-============================================================================= */
-export const masterLogin = async (data) => {
-  try {
-    const response = await api.post("/master/login", data);
-    return response.data;
-  } catch (error) {
-    throw error.response?.data?.detail || error.response?.data?.message || "Master login failed";
-  }
-};
+
 
 /* ===== MASTER & USER NOTIFICATIONS ===== */
 export const getNotifications = async () => {
@@ -1097,7 +1101,7 @@ export const stripeWebhook = async (data) => {
 ============================================================================= */
 export const getAggregatedDashboardData = async (params) => {
   try {
-    const response = await api.get("/dashboard", { params });
+    const response = await api.get("/api/dashboard", { params });
     return response.data;
   } catch (error) {
     throw error.response?.data?.detail || error.response?.data?.message || "Failed to fetch aggregated dashboard data";

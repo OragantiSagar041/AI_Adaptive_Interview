@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { API_BASE_URL } from '../apiConfig'
-import { getIceServers } from '../utils/webrtcConfig'
+import { getIceServers, initIceServers } from '../utils/webrtcConfig'
 import { Video, MicOff, MonitorOff, Code, MessageSquare, Briefcase, RefreshCw, Eye, Monitor, Camera, Volume2, ShieldAlert } from 'lucide-react'
 
 // Maps violation_type values to a human-readable label
@@ -108,12 +108,14 @@ export default function SpectatorPage() {
 
     const targetStream = activeView === 'screen' && screenStream ? screenStream : cameraStream
     if (targetStream) {
-      if (video.srcObject !== targetStream) {
+      const currentTrackId = video.srcObject?.getVideoTracks()?.[0]?.id
+      const targetTrackId = targetStream?.getVideoTracks()?.[0]?.id
+      if (currentTrackId !== targetTrackId || !video.srcObject) {
         video.srcObject = targetStream
+        video.play().catch(err => {
+          console.warn('[SpectatorWebRTC] Autoplay prevented:', err)
+        })
       }
-      video.play().catch(err => {
-        console.warn('[SpectatorWebRTC] Autoplay prevented:', err)
-      })
     } else {
       video.srcObject = null
     }
@@ -148,7 +150,9 @@ export default function SpectatorPage() {
     if (!ws || ws.readyState !== WebSocket.OPEN) return
 
     try {
-      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
+      await initIceServers()
+      const pc = new RTCPeerConnection({ iceServers: getIceServers() })
+      console.log('[SpectatorPage] RTCPeerConnection created with', getIceServers().length, 'ICE servers')
       pcRef.current = pc
 
       pc.onicecandidate = (e) => {
@@ -221,7 +225,7 @@ export default function SpectatorPage() {
             sendOfferRef.current(wsRef.current)
           }
         }
-      }, 8000)
+      }, 15000)
     } catch (err) {
       console.error('[SpectatorWebRTC] Error in sendOffer:', err)
       if (mountedRef.current) setStatus('error')
@@ -267,9 +271,6 @@ export default function SpectatorPage() {
         if (msg.type === 'spectator_connected' || msg.type === 'admin_connected') {
           if (msg.spectator_id) {
             spectatorIdRef.current = msg.spectator_id
-          }
-          if (wsRef.current?.readyState === WebSocket.OPEN) {
-            await sendOffer(wsRef.current)
           }
           return
         }

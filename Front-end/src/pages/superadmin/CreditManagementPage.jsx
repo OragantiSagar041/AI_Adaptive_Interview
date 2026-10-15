@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Gift, Plus, Loader2, CreditCard, RefreshCw, Activity, Coins, Check, X } from "lucide-react";
+import { Gift, Plus, Loader2, CreditCard, RefreshCw, Activity, Coins, Check, X, Flame, Rocket } from "lucide-react";
 import { toast } from "sonner";
 import Swal from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
@@ -25,6 +25,8 @@ export default function CreditManagementPage() {
   const [open, setOpen] = useState(false);
   const [creditRequests, setCreditRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(false);
+  const [selectedAdminFilter, setSelectedAdminFilter] = useState("all");
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState("all");
   
   const token = useSelector((state) => state.auth.token);
   const dispatch = useDispatch();
@@ -89,10 +91,16 @@ export default function CreditManagementPage() {
           const sessionsCreated = a.sessions_created || 0;
           const remaining = a.credits || 0;
           
-          // Use the exact ledger history (total_allocated_credits) if available, otherwise fallback to legacy approximation
-          const allocated = a.total_allocated_credits !== undefined 
+          // Base allocated from backend history
+          let allocated = a.total_allocated_credits !== undefined 
             ? a.total_allocated_credits 
             : (sessionsCreated + remaining);
+            
+          // FIX: If remaining credits exceed the tracked allocation (e.g., due to initial credits 
+          // given at creation that weren't logged in total_allocated_credits), adjust it.
+          if (allocated < remaining + sessionsCreated) {
+              allocated = remaining + sessionsCreated;
+          }
             
           // True utilization based on total gifted credits minus what they have left
           const used = allocated - remaining;
@@ -102,7 +110,8 @@ export default function CreditManagementPage() {
             org: a.name || a.username,
             allocated,
             used,
-            remaining
+            remaining,
+            refillCount: a.refill_count || 0
           };
         }));
       }
@@ -123,13 +132,13 @@ export default function CreditManagementPage() {
 
   const handleGiftClick = async (adminId, orgName) => {
     const { value: amount } = await Swal.fire({
-      title: `Transfer credits`,
-      text: `How many credits do you want to transfer to ${orgName}?`,
+      title: `Add credits`,
+      text: `How many credits do you want to add to ${orgName}?`,
       input: "number",
       inputLabel: "Amount",
       inputPlaceholder: "e.g., 10000",
       showCancelButton: true,
-      confirmButtonText: "Transfer",
+      confirmButtonText: "Add Credits",
       confirmButtonColor: "#4f46e5",
       inputValidator: (value) => {
         if (!value || parseInt(value) <= 0) {
@@ -163,6 +172,26 @@ export default function CreditManagementPage() {
     }
   }
 
+  const adminOptions = Array.from(
+    new Set(
+      creditRequests
+        .map((r) => r.admin_name || r.admin_username)
+        .filter(Boolean)
+    )
+  ).sort();
+
+  const filteredCreditRequests = creditRequests.filter((r) => {
+    const adminName = (r.admin_name || r.admin_username || "").toLowerCase();
+    const matchesAdmin =
+      selectedAdminFilter === "all" || adminName === selectedAdminFilter.toLowerCase();
+
+    const status = (r.status || "pending").toLowerCase();
+    const matchesStatus =
+      selectedStatusFilter === "all" || status === selectedStatusFilter.toLowerCase();
+
+    return matchesAdmin && matchesStatus;
+  });
+
   if (loading) {
     return (
       <AdminShell title="Credit Management" description="Allocate AI credits, monitor usage and audit consumption per recruiter.">
@@ -174,16 +203,41 @@ export default function CreditManagementPage() {
   }
 
   return (
-    <AdminShell title="Credit Management" description="Allocate AI credits, monitor usage and audit consumption per recruiter." actions={
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger asChild><Button><Plus className="h-4 w-4" /> Allocate Credits</Button></DialogTrigger>
-        {rows.length > 0 && <AllocateForm rows={rows} onAllocate={allocate} />}
-      </Dialog>
-    }>
+    <AdminShell title="Credit Management" description="Allocate AI credits, monitor usage and audit consumption per recruiter.">
       <div className="grid gap-3 md:grid-cols-3">
-        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Total system credits</div><div className="mt-1 text-2xl font-semibold">{kpis.total_credits_system.toLocaleString()}</div></CardContent></Card>
-        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Consumed this month</div><div className="mt-1 text-2xl font-semibold">{kpis.credits_consumed_month.toLocaleString()}</div></CardContent></Card>
-        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Active top-ups</div><div className="mt-1 text-2xl font-semibold text-emerald-600">{kpis.active_topups}</div></CardContent></Card>
+        <Card>
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <div className="text-xs text-muted-foreground">Total system credits</div>
+              <div className="mt-1 text-2xl font-semibold">{kpis.total_credits_system.toLocaleString()}</div>
+            </div>
+            <div className="w-12 h-12 rounded-full flex items-center justify-center bg-gradient-to-b from-blue-400 to-blue-700 shadow-[0_6px_12px_rgba(37,99,235,0.4),inset_0_2px_0_rgba(255,255,255,0.4),inset_0_-3px_0_rgba(0,0,0,0.2)] text-white">
+              <Coins size={22} strokeWidth={2.5} className="drop-shadow-md" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <div className="text-xs text-muted-foreground">Consumed this month</div>
+              <div className="mt-1 text-2xl font-semibold">{kpis.credits_consumed_month.toLocaleString()}</div>
+            </div>
+            <div className="w-12 h-12 rounded-full flex items-center justify-center bg-gradient-to-b from-orange-400 to-red-600 shadow-[0_6px_12px_rgba(239,68,68,0.4),inset_0_2px_0_rgba(255,255,255,0.4),inset_0_-3px_0_rgba(0,0,0,0.2)] text-white">
+              <Flame size={22} strokeWidth={2.5} className="drop-shadow-md" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <div className="text-xs text-muted-foreground">Active top-ups</div>
+              <div className="mt-1 text-2xl font-semibold text-emerald-600">{kpis.active_topups}</div>
+            </div>
+            <div className="w-12 h-12 rounded-full flex items-center justify-center bg-gradient-to-b from-emerald-400 to-teal-600 shadow-[0_6px_12px_rgba(16,185,129,0.4),inset_0_2px_0_rgba(255,255,255,0.4),inset_0_-3px_0_rgba(0,0,0,0.2)] text-white">
+              <Rocket size={22} strokeWidth={2.5} className="drop-shadow-md" />
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <Card><CardHeader className="pb-2"><CardTitle className="text-base">Per-recruiter usage</CardTitle></CardHeader>
@@ -194,6 +248,7 @@ export default function CreditManagementPage() {
             <TableHead className="text-right">Used</TableHead>
             <TableHead className="text-right">Remaining</TableHead>
             <TableHead className="w-[220px]">Utilization</TableHead>
+            <TableHead className="text-center">Top-ups</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow></TableHeader>
           <TableBody>
@@ -206,9 +261,16 @@ export default function CreditManagementPage() {
                   <TableCell className="text-right tabular-nums">{r.used.toLocaleString()}</TableCell>
                   <TableCell className={`text-right tabular-nums font-medium ${low ? "text-rose-600" : "text-emerald-600"}`}>{r.remaining.toLocaleString()}</TableCell>
                   <TableCell><div className="flex items-center gap-2"><Progress value={pct} className="h-1.5" /><span className="w-9 text-right text-xs tabular-nums">{pct}%</span></div></TableCell>
+                  <TableCell>
+                    <div className="flex justify-center">
+                      <div className="inline-flex items-center justify-center min-w-[28px] px-2 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-600 text-xs font-semibold shadow-sm" title={`${r.refillCount} total top-ups received`}>
+                        {r.refillCount}
+                      </div>
+                    </div>
+                  </TableCell>
                   <TableCell className="text-right">
                     <Button size="sm" variant="outline" onClick={() => handleGiftClick(r.id, r.org)}>
-                      <Gift className="h-4 w-4" /> Transfer
+                      <Gift className="h-4 w-4" /> Add Credits
                     </Button>
                   </TableCell>
                 </TableRow>;
@@ -244,9 +306,33 @@ export default function CreditManagementPage() {
             <thead>
               <tr className="border-b border-border">
                 <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider">Date</th>
-                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider">Admin</th>
+                <th className="p-2 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider">
+                  <select
+                    value={selectedAdminFilter}
+                    onChange={(e) => setSelectedAdminFilter(e.target.value)}
+                    className="bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-200 font-extrabold uppercase text-[0.75rem] tracking-wider py-1.5 px-2 rounded-lg border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 cursor-pointer transition-colors"
+                  >
+                    <option value="all">Admin (All)</option>
+                    {adminOptions.map((admin) => (
+                      <option key={admin} value={admin} className="bg-white dark:bg-slate-900 normal-case font-medium text-sm text-slate-800 dark:text-slate-100">
+                        {admin}
+                      </option>
+                    ))}
+                  </select>
+                </th>
                 <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider">Requested</th>
-                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider text-center">Status</th>
+                <th className="p-2 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider text-center">
+                  <select
+                    value={selectedStatusFilter}
+                    onChange={(e) => setSelectedStatusFilter(e.target.value)}
+                    className="bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-200 font-extrabold uppercase text-[0.75rem] tracking-wider py-1.5 px-2 rounded-lg border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 cursor-pointer transition-colors"
+                  >
+                    <option value="all">Status (All)</option>
+                    <option value="pending" className="bg-white dark:bg-slate-900 normal-case font-medium text-sm text-slate-800 dark:text-slate-100">Pending</option>
+                    <option value="approved" className="bg-white dark:bg-slate-900 normal-case font-medium text-sm text-slate-800 dark:text-slate-100">Approved</option>
+                    <option value="rejected" className="bg-white dark:bg-slate-900 normal-case font-medium text-sm text-slate-800 dark:text-slate-100">Rejected</option>
+                  </select>
+                </th>
                 <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider text-right">Actions</th>
               </tr>
             </thead>
@@ -257,20 +343,22 @@ export default function CreditManagementPage() {
                     <RefreshCw className="animate-spin text-amber-500 inline mr-2 w-6 h-6" /> Syncing requests...
                   </td>
                 </tr>
-              ) : creditRequests.length === 0 ? (
+              ) : filteredCreditRequests.length === 0 ? (
                 <tr>
                   <td colSpan="5" className="p-16 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800/50 flex items-center justify-center mb-4">
                         <Activity size={32} className="text-slate-400" />
                       </div>
-                      <p className="text-slate-500 dark:text-slate-400 font-medium text-base">No pending credit requests.</p>
-                      <p className="text-slate-400 text-sm mt-1">You're all caught up!</p>
+                      <p className="text-slate-500 dark:text-slate-400 font-medium text-base">No credit requests found.</p>
+                      <p className="text-slate-400 text-sm mt-1">
+                        {creditRequests.length > 0 ? "Try adjusting your filters." : "You're all caught up!"}
+                      </p>
                     </div>
                   </td>
                 </tr>
               ) : (
-                creditRequests.map(r => (
+                filteredCreditRequests.map(r => (
                   <tr key={r.id || r._id} className="hover:bg-amber-50/30 transition-colors">
                     <td className="p-4 text-sm text-slate-500 dark:text-slate-400 font-medium">
                       {r.created_at ? new Date(r.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '-'}

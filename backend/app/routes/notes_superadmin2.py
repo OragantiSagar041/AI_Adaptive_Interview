@@ -137,12 +137,13 @@ import random
 from datetime import timedelta
 
 @router.get("/api/superadmin/organizations/stats")
+@router.get("/superadmin/organizations/stats")
 def get_superadmin_org_stats(current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["master", "super_admin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
-    # Mock data aggregation mixed with DB
+    # Test data aggregation mixed with DB
     total_companies = companies_collection.count_documents({})
-    # Mock some data for the UI
+    # Test some data for the UI
     months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
     growth_data = [{"name": m, "signups": random.randint(10, 50)} for m in months]
     plans_data = [
@@ -163,6 +164,9 @@ def get_superadmin_org_stats(current_admin: dict = Depends(get_current_admin_det
     }
 
 @router.get("/api/superadmin/recruiters/stats")
+@router.get("/superadmin/recruiters/stats")
+@router.get("/api/superadmin/recruiters/stats/")
+@router.get("/superadmin/recruiters/stats/")
 def get_superadmin_recruiter_stats(current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["master", "super_admin", "superadmin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
@@ -269,6 +273,7 @@ def get_superadmin_recruiter_stats(current_admin: dict = Depends(get_current_adm
     }
 
 @router.get("/api/superadmin/credits/stats")
+@router.get("/superadmin/credits/stats")
 def get_superadmin_credit_stats(current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["master", "super_admin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
@@ -286,29 +291,91 @@ def get_superadmin_credit_stats(current_admin: dict = Depends(get_current_admin_
         for d in history_docs
     ]
     
-    total_company_credits = 0
-    for c in companies_collection.find({}, {"credits": 1}):
-        total_company_credits += int(c.get("credits") or 0)
+    company_id = current_admin.get("company_id")
+    admin_id = current_admin.get("admin_id") or str(current_admin.get("_id", ""))
+    role = current_admin.get("role")
+    
+    if role == "master" and not company_id:
+        # Global stats logic for system master
+        total_company_credits = 0
+        for c in companies_collection.find({}, {"credits": 1}):
+            total_company_credits += int(c.get("credits") or 0)
+            
+        total_admin_credits = 0
+        for a in admins_collection.find({"company_id": {"$exists": False}}, {"credits": 1}):
+            total_admin_credits += int(a.get("credits") or 0)
+            
+        total_credits = total_company_credits + total_admin_credits
+        consumed_credits = interview_sessions_collection.count_documents({"created_at": {"$gte": thirty_days_ago}})
         
-    total_admin_credits = 0
-    for a in admins_collection.find({"company_id": {"$exists": False}}, {"credits": 1}):
-        total_admin_credits += int(a.get("credits") or 0)
+        # 2nd Approach: Global Recruiter Refills
+        active_topups = credit_ledger_collection.count_documents({"date": {"$gte": thirty_days_ago}})
+    else:
+        # Scoped logic for specific company super-admins
+        total_credits = 0
+        active_topups = 0
         
-    total_credits = total_company_credits + total_admin_credits
-    consumed_credits = interview_sessions_collection.count_documents({"created_at": {"$gte": thirty_days_ago}})
+        if company_id:
+            try:
+                c = companies_collection.find_one({"_id": ObjectId(company_id)})
+            except Exception:
+                c = companies_collection.find_one({"_id": company_id})
+                
+            if c:
+                total_credits = int(c.get("credits") or 0)
+                
+            # Filter consumed credits strictly to this company's recruiters
+            company_admin_ids = [str(a["_id"]) for a in admins_collection.find({"company_id": company_id}, {"_id": 1})]
+            if admin_id not in company_admin_ids:
+                company_admin_ids.append(admin_id)
+                
+            consumed_credits = interview_sessions_collection.count_documents({
+                "created_at": {"$gte": thirty_days_ago},
+                "$or": [
+                    {"admin_id": {"$in": company_admin_ids}}, 
+                    {"created_by": {"$in": company_admin_ids}}
+                ]
+            })
+            
+            # 2nd Approach: Recruiter Refills for this company
+            active_topups = credit_ledger_collection.count_documents({
+                "company_id": company_id, 
+                "date": {"$gte": thirty_days_ago}
+            })
+        else:
+            # Standalone admin fallback
+            try:
+                a = admins_collection.find_one({"_id": ObjectId(admin_id)})
+            except Exception:
+                a = admins_collection.find_one({"_id": admin_id})
+                
+            if a:
+                total_credits = int(a.get("credits") or 0)
+                
+            consumed_credits = interview_sessions_collection.count_documents({
+                "created_at": {"$gte": thirty_days_ago},
+                "$or": [{"admin_id": admin_id}, {"created_by": admin_id}]
+            })
+            
+            # 2nd Approach: Recruiter Refills for standalone admin
+            active_topups = credit_ledger_collection.count_documents({
+                "super_admin_id": admin_id, 
+                "date": {"$gte": thirty_days_ago}
+            })
     
     return {
         "status": "success",
         "kpis": {
             "total_credits_system": total_credits,
             "credits_consumed_month": consumed_credits,
-            "active_topups": 12
+            "active_topups": active_topups
         },
         "usage_chart": usage_data,
         "history": history
     }
 
 @router.get("/api/superadmin/subscriptions/stats")
+@router.get("/superadmin/subscriptions/stats")
 def get_superadmin_subscription_stats(current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["master", "super_admin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
@@ -349,6 +416,7 @@ INTEGRATION_CATALOG = [
 
 
 @router.get("/api/superadmin/integrations")
+@router.get("/superadmin/integrations")
 def get_superadmin_integrations(current_admin: dict = Depends(get_current_admin_details)):
     """Return integration catalog merged with company-specific saved config from MongoDB."""
     if current_admin.get("role") not in ["master", "super_admin", "superadmin", "admin"]:
@@ -386,6 +454,7 @@ def get_superadmin_integrations(current_admin: dict = Depends(get_current_admin_
 
 
 @router.put("/api/superadmin/integrations/{integration_id}")
+@router.put("/superadmin/integrations/{integration_id}")
 def configure_superadmin_integration(
     integration_id: str,
     body: dict,
@@ -454,6 +523,7 @@ def configure_superadmin_integration(
 
 
 @router.patch("/api/superadmin/integrations/{integration_id}/toggle")
+@router.patch("/superadmin/integrations/{integration_id}/toggle")
 def toggle_superadmin_integration(
     integration_id: str,
     body: dict,
@@ -500,6 +570,7 @@ def toggle_superadmin_integration(
 
 
 @router.get("/api/superadmin/integrations/status")
+@router.get("/superadmin/integrations/status")
 def get_superadmin_integration_status(current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["master", "superadmin", "super_admin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
@@ -510,6 +581,7 @@ def get_superadmin_integration_status(current_admin: dict = Depends(get_current_
 
 
 @router.get("/api/superadmin/audit-logs")
+@router.get("/superadmin/audit-logs")
 def get_superadmin_audit_logs(current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["master", "superadmin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
@@ -533,7 +605,9 @@ def get_superadmin_audit_logs(current_admin: dict = Depends(get_current_admin_de
     }
 
 @router.post("/api/superadmin/security/stats")
+@router.post("/superadmin/security/stats")
 @router.get("/api/superadmin/security/stats")
+@router.get("/superadmin/security/stats")
 def get_superadmin_security_stats(role_filter: Optional[str] = None, current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["master", "super_admin", "superadmin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
@@ -816,6 +890,7 @@ class SecurityPoliciesUpdate(BaseModel):
     allowed_ips: Optional[List[str]] = None
 
 @router.get("/api/superadmin/security/policies")
+@router.get("/superadmin/security/policies")
 def get_security_policies(current_admin: dict = Depends(get_current_admin_details)):
     # ── Issue 2 Fix ──
     # Master is the platform owner. Global security policies only govern
@@ -857,6 +932,7 @@ def get_security_policies(current_admin: dict = Depends(get_current_admin_detail
     return {"status": "success", "policies": policies}
 
 @router.put("/api/superadmin/security/policies")
+@router.put("/superadmin/security/policies")
 def update_security_policies(data: SecurityPoliciesUpdate, request: Request, current_admin: dict = Depends(get_current_admin_details)):
     # ── Issue 2 Fix ──
     # Security policies only govern SuperAdmin and below — never master.
@@ -935,6 +1011,7 @@ class RecruiterMessage(BaseModel):
     body: str
 
 @router.put("/api/superadmin/recruiters/{admin_id}")
+@router.put("/superadmin/recruiters/{admin_id}")
 def update_recruiter(admin_id: str, data: RecruiterUpdate, current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["master", "super_admin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
@@ -961,6 +1038,7 @@ def update_recruiter(admin_id: str, data: RecruiterUpdate, current_admin: dict =
     return {"status": "success", "message": "Recruiter updated successfully"}
 
 @router.post("/api/superadmin/recruiters/{admin_id}/message")
+@router.post("/superadmin/recruiters/{admin_id}/message")
 def send_recruiter_message(admin_id: str, data: RecruiterMessage, current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["master", "super_admin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
@@ -1003,6 +1081,7 @@ def send_recruiter_message(admin_id: str, data: RecruiterMessage, current_admin:
     return {"status": "success", "message": "Message sent successfully"}
 
 @router.put("/api/superadmin/recruiters/{admin_id}/toggle-status")
+@router.put("/superadmin/recruiters/{admin_id}/toggle-status")
 def toggle_recruiter_status(admin_id: str, current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["master", "super_admin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
@@ -1024,6 +1103,7 @@ def toggle_recruiter_status(admin_id: str, current_admin: dict = Depends(get_cur
         {"_id": obj_id},
         {"$set": {
             "is_active": new_status,
+            "login_enabled": new_status,
             "updated_at": datetime.now(timezone.utc).isoformat()
         }}
     )

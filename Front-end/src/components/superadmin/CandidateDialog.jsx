@@ -9,9 +9,11 @@ import {
   Mail, Phone, MapPin, Building2, IndianRupee, Clock, Download,
   Play, FileText, Sparkles, Star, Check, X, Calendar, Send,
   MessageSquare, Video, Scale, Loader2, AlertCircle, Monitor,
-  Mic, ShieldAlert, Eye, ChevronRight, Code, UserCheck, User, ExternalLink, ArrowLeft
+  Mic, ShieldAlert, Eye, ChevronRight, Code, UserCheck, User, ExternalLink, ArrowLeft,
+  Globe, RotateCcw
 } from "lucide-react"
 import { jsPDF } from 'jspdf'
+import { detectNonEnglishText, translateText, translateQAPairs } from '../../utils/translation'
 
 // ── Score Ring ──────────────────────────────────────────────────────────────
 function ScoreRing({ value, size = 140, strokeWidth = 12, label, tone }) {
@@ -78,6 +80,8 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   const [resumeSubTab, setResumeSubTab] = useState('document')
   const [showResumeContent, setShowResumeContent] = useState(false)
   const [showRecordingModal, setShowRecordingModal] = useState(false)
+  const [camVideoError, setCamVideoError] = useState(false)
+  const [screenVideoError, setScreenVideoError] = useState(false)
   const [showTranscriptModal, setShowTranscriptModal] = useState(false)
   const [transcriptTab, setTranscriptTab] = useState('verbal')
   const [showAllTests, setShowAllTests] = useState(false)
@@ -88,8 +92,157 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   const [notesSaving, setNotesSaving] = useState(false)
   const [showScheduleModal, setShowScheduleModal] = useState(false)
 
+  // Translation States for Candidate Answers
+  const [translations, setTranslations] = useState({})
+  const [translatingKeys, setTranslatingKeys] = useState({})
+  const [translatingAll, setTranslatingAll] = useState(false)
+  const [allTranslated, setAllTranslated] = useState(false)
+
+  const handleTranslateSingle = async (key, text, questionText = '') => {
+    if ((!text || !text.trim()) && (!questionText || !questionText.trim())) return
+    if (translatingKeys[key]) return
+    setTranslatingKeys(prev => ({ ...prev, [key]: true }))
+    try {
+      const items = [{
+        id: key,
+        question_text: questionText || '',
+        answer_text: text || ''
+      }]
+      const results = await translateQAPairs(items, 'en', API_BASE_URL, token)
+      if (results && results[0]) {
+        const r = results[0]
+        setTranslations(prev => ({
+          ...prev,
+          [key]: {
+            id: key,
+            originalText: r.original_answer_text || text,
+            translatedText: r.answer_text,
+            originalQuestion: r.original_question_text || questionText,
+            translatedQuestion: r.question_text,
+            isTranslated: true,
+            view: 'translated',
+            sourceLangName: 'English (Translated)'
+          }
+        }))
+      }
+    } catch (e) {
+      console.error("Translation error:", e)
+    } finally {
+      setTranslatingKeys(prev => {
+        const next = { ...prev }
+        delete next[key]
+        return next
+      })
+    }
+  }
+
+  const toggleAnswerView = (key, view) => {
+    setTranslations(prev => {
+      if (!prev[key]) return prev
+      return {
+        ...prev,
+        [key]: {
+          ...prev[key],
+          view: view || (prev[key].view === 'translated' ? 'original' : 'translated')
+        }
+      }
+    })
+  }
+
+  const handleToggleTranslateAll = async () => {
+    if (translatingAll) return
+
+    if (allTranslated) {
+      setTranslations(prev => {
+        const updated = { ...prev }
+        Object.keys(updated).forEach(k => {
+          updated[k] = { ...updated[k], view: 'original' }
+        })
+        return updated
+      })
+      setAllTranslated(false)
+      return
+    }
+
+    const currentCandidate = detail || candidate || {}
+    const itemsToTranslate = []
+    const currentAnswers = (currentCandidate.answers || []).filter(a =>
+      transcriptTab === 'coding'
+        ? a.question_text?.toLowerCase().includes('coding round') || a.question_text?.toLowerCase().includes('case study')
+        : !a.question_text?.toLowerCase().includes('coding round') && !a.question_text?.toLowerCase().includes('case study')
+    )
+
+    currentAnswers.forEach((a, idx) => {
+      const key = `ans_${idx}`
+      itemsToTranslate.push({
+        id: key,
+        question_text: a.question_text || '',
+        answer_text: a.answer_text || ''
+      })
+    })
+
+    if (transcriptTab === 'coding' && currentCandidate.case_study_round?.questions?.length > 0) {
+      currentCandidate.case_study_round.questions.forEach((q, idx) => {
+        const qText = typeof q === 'object' ? (q.scenario || q.question || q.text || q.title || JSON.stringify(q)) : q
+        const ansObj = currentCandidate.case_study_round.answers?.[idx]
+        const aText = typeof ansObj === 'object' ? ansObj?.answer_text : ansObj
+        itemsToTranslate.push({
+          id: `cs_${idx}`,
+          question_text: qText || '',
+          answer_text: aText || ''
+        })
+      })
+    }
+
+    if (itemsToTranslate.length === 0) return
+
+    // If already all translated in state, simply toggle view to 'translated'
+    const allCached = itemsToTranslate.every(it => translations[it.id]?.isTranslated)
+    if (allCached) {
+      setTranslations(prev => {
+        const next = { ...prev }
+        itemsToTranslate.forEach(it => {
+          if (next[it.id]) {
+            next[it.id] = { ...next[it.id], view: 'translated' }
+          }
+        })
+        return next
+      })
+      setAllTranslated(true)
+      return
+    }
+
+    setTranslatingAll(true)
+    try {
+      const results = await translateQAPairs(itemsToTranslate, 'en', API_BASE_URL, token)
+      setTranslations(prev => {
+        const next = { ...prev }
+        results.forEach(r => {
+          next[r.id] = {
+            id: r.id,
+            originalText: r.original_answer_text,
+            translatedText: r.answer_text,
+            originalQuestion: r.original_question_text,
+            translatedQuestion: r.question_text,
+            isTranslated: true,
+            view: 'translated',
+            sourceLangName: 'English (Translated)'
+          }
+        })
+        return next
+      })
+      setAllTranslated(true)
+    } catch (err) {
+      console.error("Error translating all questions and answers:", err)
+    } finally {
+      setTranslatingAll(false)
+    }
+  }
+
   const token = useSelector(state => state.auth.token)
   const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
+  const adminUser = useSelector(state => state.auth.adminUser)
+  const userFeatures = adminUser?.plan_features || []
 
   // Fetch full candidate details when dialog opens
   useEffect(() => {
@@ -99,6 +252,12 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
     setAtsData(null)
     setError(null)
     setShowResumeContent(false)
+    setCamVideoError(false)
+    setScreenVideoError(false)
+    setTranslations({})
+    setTranslatingKeys({})
+    setTranslatingAll(false)
+    setAllTranslated(false)
 
     const linkId = candidate.link_id || candidate.id || candidate._id
     if (!linkId || linkId.startsWith("ai_call_")) {
@@ -329,12 +488,22 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
 
   const formatMediaUrl = (url) => {
     if (!url) return null
-    if (url.startsWith('http')) return url
-    return `${API_BASE_URL}/${url.replace(/^\/+/, '')}`
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url
+    }
+    if (url.includes('recordings/') || url.startsWith('uploads/')) {
+      const fname = url.split('/').pop()
+      const apiBase = (API_BASE_URL || '').replace(/\/+$/, '')
+      return `${apiBase}/admin/recordings/stream/${fname}`
+    }
+    const base = (API_BASE_URL || '').replace(/\/api\/?$/, '').replace(/\/+$/, '')
+    return `${base}/${url.replace(/^\/+/, '')}`
   }
 
-  const recordingUrl = formatMediaUrl(c.recording_url)
-  const screenRecordingUrl = formatMediaUrl(c.screen_recording_url)
+  const rawCam = c.recording_url !== undefined ? c.recording_url : candidate?.recording_url
+  const rawScreen = c.screen_recording_url !== undefined ? c.screen_recording_url : candidate?.screen_recording_url
+  const recordingUrl = formatMediaUrl(rawCam)
+  const screenRecordingUrl = formatMediaUrl(rawScreen)
 
   const handleDownloadRecording = async () => {
     const urlsToDownload = [];
@@ -410,8 +579,11 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
     c.answers.forEach((a, index) => {
       checkPageBreak(10);
       doc.setFont("helvetica", "bold");
-      const qText = `Q${index + 1}: ${a.question_text || 'No question recorded'}`;
-      const qLines = doc.splitTextToSize(qText, pageWidth - 2 * margin);
+      const transItem = translations[`ans_${index}`];
+      const qDisplay = (transItem?.isTranslated && transItem.view === 'translated' && transItem.translatedQuestion)
+        ? `Q${index + 1}: ${transItem.translatedQuestion}`
+        : `Q${index + 1}: ${a.question_text || 'No question recorded'}`;
+      const qLines = doc.splitTextToSize(qDisplay, pageWidth - 2 * margin);
       checkPageBreak(qLines.length * 5 + 30);
       doc.text(qLines, margin, y);
       y += qLines.length * 5 + 3;
@@ -435,11 +607,30 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
       doc.setFontSize(11);
       y += 4;
 
-      doc.setFont("helvetica", "normal");
-      const ansLabel = "Candidate's Answer/Code:";
-      checkPageBreak(5);
-      doc.text(ansLabel, margin, y);
-      y += 5;
+      if (transItem?.isTranslated && transItem.translatedText) {
+        checkPageBreak(5);
+        doc.setFont("helvetica", "bold");
+        doc.text(`Candidate's Answer (English Translation from ${transItem.sourceLangName || 'Original'}):`, margin, y);
+        y += 5;
+        doc.setFont("helvetica", "normal");
+        const tLines = doc.splitTextToSize(transItem.translatedText, pageWidth - 2 * margin);
+        for (let i = 0; i < tLines.length; i++) {
+          checkPageBreak(5);
+          doc.text(tLines[i], margin, y);
+          y += 5;
+        }
+        y += 3;
+        checkPageBreak(5);
+        doc.setFont("helvetica", "italic");
+        doc.text("Original Candidate Answer:", margin, y);
+        y += 5;
+      } else {
+        doc.setFont("helvetica", "normal");
+        const ansLabel = "Candidate's Answer/Code:";
+        checkPageBreak(5);
+        doc.text(ansLabel, margin, y);
+        y += 5;
+      }
 
       doc.setFont("helvetica", "normal");
       const aText = a.answer_text || c.coding_round?.latest_code || 'No answer provided';
@@ -481,15 +672,126 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
     const linkId = candidate.link_id || candidate.id || candidate._id;
     if (!linkId) return;
 
+    if (newDecision === 'selected' && !userFeatures.includes('Qualified Candidates')) {
+      Swal.fire({
+        title: 'Feature Locked',
+        text: 'Upgrade your plan to unlock Qualified Candidates.',
+        icon: 'info',
+        showCancelButton: true,
+        confirmButtonColor: '#6366f1',
+        cancelButtonColor: '#94a3b8',
+        confirmButtonText: '<i class="fas fa-crown mr-1 text-amber-300"></i> View Plans',
+        cancelButtonText: 'Close'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          window.location.href = '/superadmin/subscription';
+        }
+      })
+      return;
+    }
+    if (newDecision === 'rejected' && !userFeatures.includes('Rejected Candidates')) {
+      Swal.fire({
+        title: 'Feature Locked',
+        text: 'Upgrade your plan to unlock Rejected Candidates.',
+        icon: 'info',
+        showCancelButton: true,
+        confirmButtonColor: '#6366f1',
+        cancelButtonColor: '#94a3b8',
+        confirmButtonText: '<i class="fas fa-crown mr-1 text-amber-300"></i> View Plans',
+        cancelButtonText: 'Close'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          window.location.href = '/superadmin/subscription';
+        }
+      })
+      return;
+    }
+
+    const candidateName = candidate.candidate_name || candidate.name || 'this candidate';
+
+    // ── Reject confirmation & reason prompt ──
+    if (newDecision === 'rejected') {
+      const result = await Swal.fire({
+        title: 'Reject Candidate?',
+        html: `<p style="font-size: 14px; color: #64748b; margin-bottom: 12px;">Are you sure you want to mark <strong>${candidateName}</strong> as rejected? An official notification email will be sent.</p>`,
+        input: 'textarea',
+        inputPlaceholder: 'Enter reason for rejection (optional)...',
+        inputAttributes: {
+          'aria-label': 'Enter rejection reason',
+          rows: 3
+        },
+        showCancelButton: true,
+        confirmButtonText: 'Confirm Reject',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#f43f5e',
+        cancelButtonColor: '#94a3b8',
+      });
+
+      if (!result.isConfirmed) return;
+
+      const rejection_reason = (result.value || '').trim();
+
+      try {
+        await dispatch(handleUpdateDecision({ linkId, decision: 'rejected', rejection_reason })).unwrap();
+        Swal.fire({
+          title: 'Marked as Rejected',
+          text: `${candidateName} has been marked as rejected.`,
+          icon: 'success',
+          confirmButtonColor: '#4f46e5'
+        });
+        if (onStatusUpdate) onStatusUpdate('rejected');
+        onOpenChange(false);
+        const basePath = window.location.pathname.startsWith('/superadmin') ? '/superadmin' : '/admin';
+        navigate(`${basePath}/rejected-candidates`);
+      } catch (err) {
+        Swal.fire('Error', 'Failed to update decision', 'error');
+      }
+      return;
+    }
+
+    // ── Reconsider / Undo rejection ──
+    if (newDecision === 'pending') {
+      const result = await Swal.fire({
+        title: 'Reconsider Candidate?',
+        text: `Do you want to restore ${candidateName} to the active review pool?`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, Restore Candidate',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#6366f1',
+        cancelButtonColor: '#94a3b8',
+      });
+
+      if (!result.isConfirmed) return;
+
+      try {
+        await dispatch(handleUpdateDecision({ linkId, decision: 'pending', rejection_reason: '' })).unwrap();
+        Swal.fire({
+          title: 'Candidate Restored',
+          text: `${candidateName} has been moved back to the active review pool.`,
+          icon: 'success',
+          confirmButtonColor: '#4f46e5'
+        });
+        if (onStatusUpdate) onStatusUpdate('pending');
+        onOpenChange(false);
+        const basePath = window.location.pathname.startsWith('/superadmin') ? '/superadmin' : '/admin';
+        navigate(`${basePath}/interviews`);
+      } catch (err) {
+        Swal.fire('Error', 'Failed to restore candidate', 'error');
+      }
+      return;
+    }
+
+    // ── Select / Shortlist ──
     try {
-      await dispatch(handleUpdateDecision({ linkId, decision: newDecision })).unwrap()
+      await dispatch(handleUpdateDecision({ linkId, decision: newDecision, talent_pool_status: talentPoolStatus })).unwrap()
       Swal.fire('Success', `Candidate marked as ${newDecision.toUpperCase()}`, 'success')
       if (onStatusUpdate) onStatusUpdate(newDecision)
       onOpenChange(false)
       const basePath = window.location.pathname.startsWith('/superadmin') ? '/superadmin' : '/admin'
       navigate(`${basePath}/${newDecision === 'selected' ? 'qualified-candidates' : 'rejected-candidates'}`)
     } catch (err) {
-      Swal.fire('Error', 'Failed to update decision', 'error')
+      Swal.fire('Error', 'Failed to update decision', 'error');
     }
   }
 
@@ -541,12 +843,31 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
 
   // Action handlers
   const handleReject = async () => {
-    if (!window.confirm("Are you sure you want to reject this candidate?")) return
+    const { isConfirmed, value: status } = await Swal.fire({
+      title: 'Reject Candidate',
+      text: 'Would you like to keep this candidate in the talent pool?',
+      icon: 'warning',
+      input: 'select',
+      inputOptions: {
+        'archived': 'Standard Rejection (Archive)',
+        'talent_pool': 'Add to Talent Pool (Silver Medalist)',
+        'future_role': 'Eligible for Future Roles (Culture Fit)',
+        'reconsideration': 'Flag for Reconsideration (Second Chance)'
+      },
+      inputValue: 'archived',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, reject candidate',
+      confirmButtonColor: '#e11d48',
+      cancelButtonText: 'Cancel'
+    });
+
+    if (!isConfirmed) return;
     const appId = c.link_id || candidate.link_id || c.id || candidate.id || c._id || candidate._id
     try {
       await axios.post(`${API_BASE_URL}/admin/update-decision`, {
         link_id: appId,
-        decision: "rejected"
+        decision: "rejected",
+        talent_pool_status: status
       }, { headers: { Authorization: `Bearer ${token}` } })
       onOpenChange(false)
 
@@ -690,7 +1011,8 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
               {/* ─ Overview Tab ─ */}
               {activeTab === 'overview' && (
                 <div className="space-y-6">
-                  <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
+                  {userFeatures.includes('Resume Parsing') ? (
+<section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
                     <h3 className="text-sm font-black text-slate-800 mb-4">Candidate Information</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-5">
                       <InfoRow icon={Mail} label="Email" value={email} />
@@ -709,6 +1031,41 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                       <InfoRow icon={MapPin} label="Location" value={c.location} />
                     </div>
                   </section>
+) : (
+  <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm relative overflow-hidden">
+    <div className="filter blur-[6px] opacity-40 pointer-events-none select-none">
+      <h3 className="text-sm font-black text-slate-800 mb-4">Candidate Information</h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-5">
+        <InfoRow icon={Mail} label="Email" value="hidden@example.com" />
+        <InfoRow icon={Phone} label="Mobile" value="+91 XXXXX XXXXX" />
+        <InfoRow icon={Clock} label="Experience" value="Locked" />
+        <InfoRow icon={Building2} label="Current Company" value="Locked" />
+        <InfoRow icon={IndianRupee} label="Current CTC" value="Locked" />
+        <InfoRow icon={IndianRupee} label="Expected CTC" value="Locked" />
+        <InfoRow icon={Clock} label="Notice Period" value="Locked" />
+        <InfoRow icon={MapPin} label="Location" value="Locked" />
+      </div>
+    </div>
+    <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/30 backdrop-blur-[1px] z-10 p-4 text-center">
+      <div className="bg-indigo-100 text-indigo-600 w-12 h-12 flex items-center justify-center rounded-full mb-3 shadow-sm border border-indigo-200">
+        <i className="fas fa-lock text-xl"></i>
+      </div>
+      <h3 className="text-[15px] font-extrabold text-slate-800 mb-1">Resume Parsing Locked</h3>
+      <p className="text-xs font-medium text-slate-500 mb-4 max-w-[200px] leading-relaxed">Upgrade your plan to automatically extract candidate details.</p>
+                          <button 
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              window.location.href = '/superadmin/subscription';
+                            }}
+                            className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-800/60 text-indigo-600 dark:text-indigo-400 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors font-bold text-xs shadow-sm cursor-pointer"
+                          >
+                            <i className="fas fa-crown text-amber-500"></i> View Plans
+                          </button>
+    </div>
+  </section>
+)}
 
                   <section className="bg-card rounded-xl border border-border p-5 shadow-sm">
                     <h3 className="text-sm font-black text-foreground mb-3 flex items-center gap-2">
@@ -723,6 +1080,65 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                           {isQualified ? 'Ready for Technical Round / Hiring' : 'Does not meet required threshold'}
                         </span>
                       </div>
+                        {/* TALENT POOL INJECTION */}
+                        {c?.decision === 'rejected' && (
+                          <div className="mb-4 p-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 rounded-xl">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Talent Pool Management</span>
+                              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                                {c?.talent_pool_status || 'archived'}
+                              </span>
+                            </div>
+                            <div className="flex gap-2">
+                              {['archived', 'talent_pool', 'eligible', 'reconsider'].map(status => (
+                                <button 
+                                  key={status}
+                                  onClick={async () => {
+                                    try {
+                                      const appId = candidate.link_id || candidate.id || candidate._id || c.link_id || c.id || c._id;
+                                      await axios.post(`${API_BASE_URL}/admin/update-talent-pool`, {
+                                        link_id: appId,
+                                        status: status
+                                      }, { headers: { Authorization: `Bearer ${token}` } });
+                                      if (c) c.talent_pool_status = status;
+                                      Swal.fire('Updated', `Candidate moved to ${status}`, 'success').then(() => window.location.reload());
+                                    } catch(e) {
+                                      Swal.fire('Error', 'Failed to update talent pool status', 'error');
+                                    }
+                                  }}
+                                  className="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors border bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm"
+                                  style={{}}
+                                >
+                                  {status.replace('_', ' ').toUpperCase()}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {c?.decision === 'rejected' && (
+                          <div className="mb-3 p-3 bg-rose-500/10 dark:bg-rose-500/15 border border-rose-200 dark:border-rose-900/60 rounded-xl flex items-start gap-2.5">
+                          <AlertCircle className="h-4 w-4 text-rose-500 shrink-0 mt-0.5" />
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs font-bold text-rose-700 dark:text-rose-400">Rejection Details:</span>
+                              {(c.rejected_at || c.decision_at) && (
+                                <span className="text-[11px] font-semibold text-rose-600/80 dark:text-rose-300">
+                                  {new Date(c.rejected_at || c.decision_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-rose-800 dark:text-rose-200 font-medium mt-1">
+                              <span className="font-semibold">Reason:</span> {(c.rejection_reason && c.rejection_reason.trim() !== 'Low Score / Did not meet criteria') ? c.rejection_reason.trim() : "Not specified"}
+                            </p>
+                            {(c.rejected_by || c.decision_by_name) && (
+                              <p className="text-[11px] text-rose-700/80 dark:text-rose-300 font-medium mt-0.5">
+                                <span className="font-semibold">Rejected by:</span> {c.rejected_by || c.decision_by_name}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
                       {c.strengths_summary && (
                         <div className="mb-3">
                           <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Strengths</div>
@@ -741,19 +1157,43 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                     </div>
                   </section>
                   {/* Integrity */}
-                  {c.integrity && (
-                    <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
-                      <h3 className="text-sm font-black text-slate-800 mb-4 flex items-center gap-2">
-                        <ShieldAlert className="h-4 w-4 text-amber-500" /> Interview Integrity
-                      </h3>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <StatCard label="Tab Switches" value={c.integrity.total_tab_switches} />
-                        <StatCard label="Face Alerts" value={c.integrity.total_face_alerts} />
-                        <StatCard label="Noise Alerts" value={c.integrity.total_noise_alerts} />
-                        <StatCard label="Total Duration" value={`${c.integrity.total_time_minutes} min`} />
-                      </div>
-                    </section>
-                  )}
+                  {c.integrity && (() => {
+                    const violationsList = c.violations || c.alerts || []
+                    const tabTypes = ['tab_switch', 'screen_casting', 'screen_share_detected', 'screen_recording', 'screenshare_stopped', 'multiple_displays', 'multi_monitor', 'fullscreen_exit', 'window_blur']
+                    const noiseTypes = ['noise_alert', 'background_noise', 'noise']
+                    
+                    let tabSwitches = Number(c.integrity.total_tab_switches || 0)
+                    let faceAlerts = Number(c.integrity.total_face_alerts || 0)
+                    let noiseAlerts = Number(c.integrity.total_noise_alerts || 0)
+                    
+                    if (violationsList.length > 0) {
+                      const screenCount = violationsList.filter(v => tabTypes.includes(v.type || v.violation_type)).length
+                      const noiseCount = violationsList.filter(v => noiseTypes.includes(v.type || v.violation_type)).length
+                      const trueFaceCount = violationsList.filter(v => !tabTypes.includes(v.type || v.violation_type) && !noiseTypes.includes(v.type || v.violation_type)).length
+                      
+                      if (screenCount > 0) {
+                        tabSwitches = Math.max(tabSwitches, screenCount)
+                        faceAlerts = trueFaceCount
+                      }
+                      if (noiseCount > 0) {
+                        noiseAlerts = Math.max(noiseAlerts, noiseCount)
+                      }
+                    }
+
+                    return (
+                      <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
+                        <h3 className="text-sm font-black text-slate-800 mb-4 flex items-center gap-2">
+                          <ShieldAlert className="h-4 w-4 text-amber-500" /> Interview Integrity
+                        </h3>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <StatCard label="Tab Switches" value={tabSwitches} />
+                          <StatCard label="Face Alerts" value={faceAlerts} />
+                          <StatCard label="Noise Alerts" value={noiseAlerts} />
+                          <StatCard label="Total Duration" value={`${c.integrity.total_time_minutes} min`} />
+                        </div>
+                      </section>
+                    )
+                  })()}
                 </div>
               )}
 
@@ -820,7 +1260,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                             <div>
                               {resumeFullUrl && isPdf ? (
                                 <iframe
-                                  src={resumeFullUrl}
+                                  src={`${resumeFullUrl}#toolbar=0&navpanes=0&view=FitH`}
                                   title="Candidate Resume"
                                   className="w-full h-[600px] border-none bg-white dark:bg-slate-900"
                                 />
@@ -945,21 +1385,27 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
-                          {(recordingUrl || screenRecordingUrl) && (
-                            <button
-                              onClick={handleDownloadRecording}
-                              className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors shadow-sm"
-                              title="Download Recording"
-                            >
-                              <Download size={16} /> Download
-                            </button>
+                          {recordingUrl || screenRecordingUrl ? (
+                            <>
+                              <button
+                                onClick={handleDownloadRecording}
+                                className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors shadow-sm"
+                                title="Download Recording"
+                              >
+                                <Download size={16} /> Download
+                              </button>
+                              <button
+                                onClick={() => setShowRecordingModal(true)}
+                                className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl hover:bg-emerald-100 transition-colors shadow-sm"
+                              >
+                                <Video size={16} /> Recording <ChevronRight size={14} />
+                              </button>
+                            </>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-400 bg-slate-50 border border-slate-200/60 rounded-xl">
+                              <Video size={14} className="opacity-40" /> Unavailable
+                            </span>
                           )}
-                          <button
-                            onClick={() => setShowRecordingModal(true)}
-                            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl hover:bg-emerald-100 transition-colors shadow-sm"
-                          >
-                            <Video size={16} /> Recording <ChevronRight size={14} />
-                          </button>
                         </div>
                       </div>
                     </section>
@@ -1146,13 +1592,17 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
               <Eye size={16} /> View Profile
             </button>
             <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1" />
-            {c.decision !== 'rejected' && (
-              <button onClick={() => handleDecision('rejected')} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 dark:bg-rose-500/20 border border-rose-200 dark:border-rose-500/40 rounded-xl hover:bg-rose-500/20 dark:hover:bg-rose-500/30 transition-all shadow-xs">
+            {c?.decision === 'rejected' ? (
+              <button onClick={() => handleDecision('pending')} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 dark:bg-amber-500/20 border border-amber-200 dark:border-amber-500/40 rounded-xl hover:bg-amber-500/20 dark:hover:bg-amber-500/30 transition-all shadow-xs cursor-pointer">
+                <RotateCcw size={16} /> Reconsider / Undo
+              </button>
+            ) : (
+              <button onClick={() => handleDecision('rejected')} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 dark:bg-rose-500/20 border border-rose-200 dark:border-rose-500/40 rounded-xl hover:bg-rose-500/20 dark:hover:bg-rose-500/30 transition-all shadow-xs cursor-pointer">
                 <X size={16} strokeWidth={3} /> Reject
               </button>
             )}
-            {c.decision !== 'selected' && c.decision !== 'hired' && (
-              <button onClick={() => handleDecision('selected')} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/20 border border-emerald-200 dark:border-emerald-500/40 rounded-xl hover:bg-emerald-500/20 dark:hover:bg-emerald-500/30 transition-all shadow-xs">
+            {c?.decision !== 'selected' && c?.decision !== 'hired' && (
+              <button onClick={() => handleDecision('selected')} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/20 border border-emerald-200 dark:border-emerald-500/40 rounded-xl hover:bg-emerald-500/20 dark:hover:bg-emerald-500/30 transition-all shadow-xs cursor-pointer">
                 <Check size={16} strokeWidth={3} /> Select
               </button>
             )}
@@ -1230,13 +1680,27 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                         <div className="text-xs text-slate-400 font-medium">Interview video feed</div>
                       </div>
                     </div>
-                    {recordingUrl ? (
-                      <video controls className="w-full rounded-lg border border-slate-200 bg-black" src={recordingUrl}>
-                        Your browser does not support video.
-                      </video>
+                    {recordingUrl && !camVideoError ? (
+                      <div className="flex flex-col gap-2">
+                        <video 
+                          controls 
+                          preload="metadata" 
+                          playsInline 
+                          onError={() => setCamVideoError(true)}
+                          className="w-full aspect-video object-contain rounded-lg border border-slate-200 bg-black" 
+                          src={recordingUrl}
+                        >
+                          Your browser does not support video.
+                        </video>
+                        <div className="flex justify-end">
+                          <a href={recordingUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold text-indigo-600 hover:underline">
+                            Open video in new tab ↗
+                          </a>
+                        </div>
+                      </div>
                     ) : (
-                      <div className="h-32 flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
-                        No camera recording available
+                      <div className="w-full aspect-video flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
+                        {camVideoError ? "Camera recording currently unavailable" : "No camera recording available"}
                       </div>
                     )}
                   </div>
@@ -1249,13 +1713,27 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                         <div className="text-xs text-slate-400 font-medium">Screen share capture</div>
                       </div>
                     </div>
-                    {screenRecordingUrl ? (
-                      <video controls className="w-full rounded-lg border border-slate-200 bg-black" src={screenRecordingUrl}>
-                        Your browser does not support video.
-                      </video>
+                    {screenRecordingUrl && !screenVideoError ? (
+                      <div className="flex flex-col gap-2">
+                        <video 
+                          controls 
+                          preload="metadata" 
+                          playsInline 
+                          onError={() => setScreenVideoError(true)}
+                          className="w-full aspect-video object-contain rounded-lg border border-slate-200 bg-black" 
+                          src={screenRecordingUrl}
+                        >
+                          Your browser does not support video.
+                        </video>
+                        <div className="flex justify-end">
+                          <a href={screenRecordingUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold text-emerald-600 hover:underline">
+                            Open video in new tab ↗
+                          </a>
+                        </div>
+                      </div>
                     ) : (
-                      <div className="h-32 flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
-                        No screen recording available
+                      <div className="w-full aspect-video flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
+                        {screenVideoError ? "Screen recording currently unavailable" : "No screen recording available"}
                       </div>
                     )}
                   </div>
@@ -1350,6 +1828,28 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                 >
                   Coding or Case Study
                 </button>
+
+                <div className="ml-auto flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleToggleTranslateAll}
+                    disabled={translatingAll}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border transition-all bg-white hover:bg-indigo-50 text-indigo-600 border-indigo-200 shadow-xs active:scale-95 disabled:opacity-50"
+                    title={allTranslated ? "Translate / View Original" : "Translate questions and answers to English"}
+                  >
+                    {translatingAll ? (
+                      <>
+                        <Loader2 size={13} className="animate-spin text-indigo-600" />
+                        <span>Translating...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Globe size={13} className="text-indigo-600" />
+                        <span>Translate</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
 
@@ -1366,21 +1866,38 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                     return (
                       <div key={idx} className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
                         {/* Question Header */}
-                        <div className="flex items-start justify-between gap-3 p-4 bg-slate-50 border-b border-slate-100">
-                          <div className="flex items-start gap-2 flex-1 min-w-0">
-                            <span className="mt-0.5 shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-indigo-600 text-white text-[10px] font-black">Q{idx + 1}</span>
-                            <p className="text-sm font-bold text-slate-800 leading-snug whitespace-pre-wrap">
-                              {a.question_text?.toLowerCase().includes('coding round')
-                                ? (a.question_text || '').replace(/(Input:)/gi, '\n\n$1').replace(/(Output:)/gi, '\n$1').replace(/(Constraints:)/gi, '\n\n$1').replace(/(Example:)/gi, '\n\n$1').trim()
-                                : (a.question_text || 'No question recorded')}
-                            </p>
-                          </div>
-                          {a.ai_score !== null && a.ai_score !== undefined && (
-                            <span className={`shrink-0 text-xs font-black px-2.5 py-1 rounded-full ${scoreBg}`}>
-                              AI Score: {score.toFixed(0)}%
-                            </span>
-                          )}
-                        </div>
+                        {(() => {
+                          const ansKey = `ans_${idx}`
+                          const transState = translations[ansKey]
+                          const isQTranslated = transState?.isTranslated && transState.view === 'translated' && transState.translatedQuestion
+                          const rawQText = isQTranslated ? transState.translatedQuestion : (a.question_text || 'No question recorded')
+                          const formattedQText = a.question_text?.toLowerCase().includes('coding round')
+                            ? rawQText.replace(/(Input:)/gi, '\n\n$1').replace(/(Output:)/gi, '\n$1').replace(/(Constraints:)/gi, '\n\n$1').replace(/(Example:)/gi, '\n\n$1').trim()
+                            : rawQText
+
+                          return (
+                            <div className="flex items-start justify-between gap-3 p-4 bg-slate-50 border-b border-slate-100">
+                              <div className="flex items-start gap-2 flex-1 min-w-0">
+                                <span className="mt-0.5 shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-indigo-600 text-white text-[10px] font-black">Q{idx + 1}</span>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-bold text-slate-800 leading-snug whitespace-pre-wrap">
+                                    {formattedQText}
+                                  </p>
+                                  {isQTranslated && transState.originalQuestion && transState.originalQuestion !== transState.translatedQuestion && (
+                                    <p className="text-[11px] text-slate-400 mt-1 italic line-clamp-2" title={transState.originalQuestion}>
+                                      Original: {transState.originalQuestion}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                              {a.ai_score !== null && a.ai_score !== undefined && (
+                                <span className={`shrink-0 text-xs font-black px-2.5 py-1 rounded-full ${scoreBg}`}>
+                                  AI Score: {score.toFixed(0)}%
+                                </span>
+                              )}
+                            </div>
+                          )
+                        })()}
 
                         <div className="p-4 space-y-4">
                           {/* Stats row: WPM + alerts */}
@@ -1511,14 +2028,100 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                           ) : (
                             <>
                               {/* Candidate Answer */}
-                              <div>
-                                <div className="text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                                  <MessageSquare size={10} /> Candidate Answer
-                                </div>
-                                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
-                                  {a.answer_text || <span className="italic text-slate-400">No answer recorded</span>}
-                                </div>
-                              </div>
+                              {(() => {
+                                const ansKey = `ans_${idx}`
+                                const nonEnglishInfo = detectNonEnglishText(a.answer_text, c.language || c.detected_language || '')
+                                const transState = translations[ansKey]
+                                return (
+                                  <div>
+                                    <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
+                                      <div className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                                        <MessageSquare size={10} /> Candidate Answer
+                                        {nonEnglishInfo.isNonEnglish && (
+                                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                            <Globe size={9} /> {nonEnglishInfo.languageName} detected
+                                          </span>
+                                        )}
+                                        {transState?.isTranslated && transState.view === 'translated' && (
+                                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                            <Check size={9} /> English Translated
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      {/* Translation Action Button */}
+                                      {a.answer_text && a.answer_text.trim() && (
+                                        <div className="flex items-center gap-2">
+                                          {transState?.isTranslated ? (
+                                            <div className="inline-flex items-center bg-slate-200/80 p-0.5 rounded-lg text-[10px] font-bold">
+                                              <button
+                                                type="button"
+                                                onClick={() => toggleAnswerView(ansKey, 'original')}
+                                                className={`px-2 py-0.5 rounded-md transition-all ${transState.view === 'original' ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
+                                              >
+                                                Original
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={() => toggleAnswerView(ansKey, 'translated')}
+                                                className={`px-2 py-0.5 rounded-md transition-all ${transState.view === 'translated' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
+                                              >
+                                                English
+                                              </button>
+                                            </div>
+                                          ) : (
+                                            <button
+                                              type="button"
+                                              onClick={() => handleTranslateSingle(ansKey, a.answer_text, a.question_text)}
+                                              disabled={translatingKeys[ansKey]}
+                                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                                                nonEnglishInfo.isNonEnglish
+                                                  ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-xs hover:from-indigo-500 hover:to-violet-500 ring-2 ring-indigo-300/40'
+                                                  : 'bg-white hover:bg-slate-100 text-slate-600 hover:text-indigo-600 border border-slate-200 shadow-xs'
+                                              }`}
+                                              title="Translate candidate answer to English"
+                                            >
+                                              {translatingKeys[ansKey] ? (
+                                                <>
+                                                  <Loader2 size={11} className="animate-spin text-indigo-500" />
+                                                  <span>Translating...</span>
+                                                </>
+                                              ) : (
+                                                <>
+                                                  <Globe size={11} />
+                                                  <span>Translate</span>
+                                                </>
+                                              )}
+                                            </button>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {transState?.isTranslated && transState.view === 'translated' ? (
+                                      <div className="bg-indigo-50/50 border border-indigo-200 rounded-xl p-3.5 text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
+                                        <div className="flex items-center justify-between text-[10px] font-bold text-indigo-700 pb-1.5 mb-1.5 border-b border-indigo-100/80">
+                                          <span className="flex items-center gap-1">
+                                            <Globe size={10} /> English Translation (from {transState.sourceLangName || "original"})
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={() => toggleAnswerView(ansKey, 'original')}
+                                            className="text-slate-500 hover:text-indigo-700 hover:underline font-semibold"
+                                          >
+                                            View Original
+                                          </button>
+                                        </div>
+                                        <p className="text-slate-800 leading-relaxed">{transState.translatedText}</p>
+                                      </div>
+                                    ) : (
+                                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                                        {a.answer_text || <span className="italic text-slate-400">No answer recorded</span>}
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              })()}
 
                               {/* Corrected Answer */}
                               {a.corrected_answer && a.corrected_answer !== 'N/A' && a.corrected_answer !== 'Scoring in progress...' && (
@@ -1591,18 +2194,109 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                                       <div className="p-4 space-y-4">
                                         <div>
                                           <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Scenario / Question</div>
-                                          <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{qText}</div>
-                                        </div>
-                                        {aText && (
-                                          <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                                              <Mic size={10} /> Candidate Response
-                                            </div>
-                                            <div className="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
-                                              {aText}
-                                            </div>
+                                          <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                                            {translations[`cs_${idx}`]?.isTranslated && translations[`cs_${idx}`]?.view === 'translated' && translations[`cs_${idx}`]?.translatedQuestion
+                                              ? translations[`cs_${idx}`].translatedQuestion
+                                              : qText}
                                           </div>
-                                        )}
+                                          {translations[`cs_${idx}`]?.isTranslated && translations[`cs_${idx}`]?.view === 'translated' && translations[`cs_${idx}`]?.originalQuestion && translations[`cs_${idx}`]?.originalQuestion !== translations[`cs_${idx}`]?.translatedQuestion && (
+                                            <p className="text-[11px] text-slate-400 mt-1 italic" title={translations[`cs_${idx}`].originalQuestion}>
+                                              Original: {translations[`cs_${idx}`].originalQuestion}
+                                            </p>
+                                          )}
+                                        </div>
+                                        {aText && (() => {
+                                          const csKey = `cs_${idx}`
+                                          const csNonEnglish = detectNonEnglishText(aText, c.language || c.detected_language || '')
+                                          const csTransState = translations[csKey]
+                                          return (
+                                            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                                              <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
+                                                <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                                                  <Mic size={10} /> Candidate Response
+                                                  {csNonEnglish.isNonEnglish && (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                                      <Globe size={9} /> {csNonEnglish.languageName} detected
+                                                    </span>
+                                                  )}
+                                                  {csTransState?.isTranslated && csTransState.view === 'translated' && (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                      <Check size={9} /> English Translated
+                                                    </span>
+                                                  )}
+                                                </div>
+
+                                                {/* Case Study Translation Action Button */}
+                                                {aText.trim() && (
+                                                  <div className="flex items-center gap-2">
+                                                    {csTransState?.isTranslated ? (
+                                                      <div className="inline-flex items-center bg-slate-200/80 p-0.5 rounded-lg text-[10px] font-bold">
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => toggleAnswerView(csKey, 'original')}
+                                                          className={`px-2 py-0.5 rounded-md transition-all ${csTransState.view === 'original' ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
+                                                        >
+                                                          Original
+                                                        </button>
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => toggleAnswerView(csKey, 'translated')}
+                                                          className={`px-2 py-0.5 rounded-md transition-all ${csTransState.view === 'translated' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
+                                                        >
+                                                          English
+                                                        </button>
+                                                      </div>
+                                                    ) : (
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => handleTranslateSingle(csKey, aText, qText)}
+                                                        disabled={translatingKeys[csKey]}
+                                                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                                                          csNonEnglish.isNonEnglish
+                                                            ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-xs hover:from-indigo-500 hover:to-violet-500 ring-2 ring-indigo-300/40'
+                                                            : 'bg-white hover:bg-slate-100 text-slate-600 hover:text-indigo-600 border border-slate-200 shadow-xs'
+                                                        }`}
+                                                        title="Translate candidate response and question to English"
+                                                      >
+                                                        {translatingKeys[csKey] ? (
+                                                          <>
+                                                            <Loader2 size={11} className="animate-spin text-indigo-500" />
+                                                            <span>Translating...</span>
+                                                          </>
+                                                        ) : (
+                                                          <>
+                                                            <Globe size={11} />
+                                                            <span>Translate</span>
+                                                          </>
+                                                        )}
+                                                      </button>
+                                                    )}
+                                                  </div>
+                                                )}
+                                              </div>
+
+                                              {csTransState?.isTranslated && csTransState.view === 'translated' ? (
+                                                <div className="bg-indigo-50/50 border border-indigo-200 rounded-lg p-3 text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
+                                                  <div className="flex items-center justify-between text-[10px] font-bold text-indigo-700 pb-1 mb-1 border-b border-indigo-100">
+                                                    <span>Translated to English ({csTransState.sourceLangName || "Detected Language"})</span>
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => toggleAnswerView(csKey, 'original')}
+                                                      className="text-slate-500 hover:text-indigo-700 hover:underline font-semibold"
+                                                    >
+                                                      View Original
+                                                    </button>
+                                                  </div>
+                                                  <p className="text-slate-800">{csTransState.translatedText}</p>
+                                                </div>
+                                              ) : (
+                                                <div className="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
+                                                  {aText}
+                                                </div>
+                                              )}
+                                            </div>
+                                          )
+                                        })()}
                                         {ansObj?.ai_feedback && (
                                           <div>
                                             <div className="text-[10px] font-black text-indigo-500 uppercase tracking-wider mb-1.5 flex items-center gap-1 mt-4">

@@ -21,6 +21,16 @@ To run Celery worker:
     celery -A app.celery_app.celery_app worker --loglevel=info
 """
 
+import os
+from dotenv import load_dotenv
+
+# Ensure .env is loaded before importing application routers & modules
+_env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+if os.path.exists(_env_path):
+    load_dotenv(dotenv_path=_env_path)
+else:
+    load_dotenv()
+
 from app.main import app  # noqa: F401
 
 if __name__ == "__main__":

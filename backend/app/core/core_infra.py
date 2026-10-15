@@ -33,14 +33,17 @@ class AsyncPubSub:
             if self.redis or time.monotonic() < self.next_retry_at:
                 return
             try:
-                # Configure socket timeouts to fail fast if Redis is down
-                self.redis = aioredis.from_url(
-                    REDIS_URL, 
-                    decode_responses=True,
-                    socket_connect_timeout=2.0,
-                    socket_timeout=2.0,
-                    protocol=2,
-                )
+                import ssl as _ssl
+                redis_kwargs = {
+                    "decode_responses": True,
+                    "socket_connect_timeout": 2.0,
+                    "socket_timeout": 2.0,
+                    "protocol": 2,
+                }
+                if REDIS_URL.startswith("rediss://"):
+                    redis_kwargs["ssl_cert_reqs"] = _ssl.CERT_NONE
+
+                self.redis = aioredis.from_url(REDIS_URL, **redis_kwargs)
                 await self.redis.ping()
                 self.pubsub = self.redis.pubsub()
                 if self.subscribers:

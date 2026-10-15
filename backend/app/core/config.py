@@ -16,7 +16,7 @@ from fastapi.security import HTTPBearer
 sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
 
-load_dotenv(override=True)
+load_dotenv(override=False)
 
 # ---------------------------------------------------------------------------
 # Third-party client setup
@@ -35,17 +35,17 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+psycopg2://user:password@lo
 
 def get_omni_dimension_api_key() -> str:
     load_dotenv(override=True)
-    return (os.getenv("OMNI_DIMENSION_API_KEY") or "").strip()
+    return (os.getenv("OMNI_DIMENSION_API_KEY") or os.getenv("OMNIDIMENSION_API_KEY") or "").strip()
 
 
 def get_omni_voice_id() -> str:
     load_dotenv(override=True)
-    return (os.getenv("OMNI_DIMENSION_VOICE_ID") or "").strip()
+    return (os.getenv("OMNI_DIMENSION_VOICE_ID") or os.getenv("OMNIDIMENSION_VOICE_ID") or "").strip()
 
 
 def get_omni_agent_id() -> str:
     load_dotenv(override=True)
-    return (os.getenv("OMNI_DIMENSION_AGENT_ID") or "").strip()
+    return (os.getenv("OMNI_DIMENSION_AGENT_ID") or os.getenv("OMNIDIMENSION_AGENT_ID") or "").strip()
 
 # ---------------------------------------------------------------------------
 # Global feature flags / mutable state
@@ -54,10 +54,14 @@ def get_omni_agent_id() -> str:
 CLOUDINARY_CLEANUP_STARTED = False
 RECORDING_RETENTION_DAYS = max(3, int(os.getenv("RECORDING_RETENTION_DAYS", "3")))
 
-UPLOAD_FOLDER = "uploads"
+_backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+UPLOAD_FOLDER = os.path.join(_backend_dir, "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(os.path.join(UPLOAD_FOLDER, "recordings"), exist_ok=True)
 
-FRONTEND_URL = "https://www.hireiq.co.in"
+_ENV = os.getenv("ENV", "local").lower()
+_DEFAULT_FRONTEND = "https://hireiq.co.in" if _ENV == "production" else "http://localhost:5173"
+FRONTEND_URL = os.getenv("FRONTEND_URL", _DEFAULT_FRONTEND).rstrip("/")
 
 # ---------------------------------------------------------------------------
 # Plan definitions
@@ -117,21 +121,41 @@ PLAN_DEFINITIONS = {
         "summary": "Unlocks the full hiring workflow including bulk send and live monitoring.",
         "features": [
             "Super Admin Dashboard",
-            "Team Management",
             "Dashboard",
             "Interviews",
             "Qualified Candidates",
+            "Export CSV",
             "Rejected Candidates",
+            "Talent Pool Management",
             "Create Interview",
+            "Single Candidate",
+            "Bulk Send",
+            "Select Candidate from AI Calls",
+            "Resume Parsing",
+            "ATS Score",
+            "Email Preview",
+            "Custom Screening Questions",
+            "Custom AI Interviewer Instructions",
+            "Language",
+            "Industry Type",
+            "Interview Schedule",
+            "Record Interview Video",
+            "Voice Cloning",
+            "HR Screening Questions",
+            "Standard (Text/Form Based)",
+            "Voice AI (Real-time Speech)",
+            "Technical (+ Coding)",
+            "Normal (Standard AI)",
+            "Non-Tech (Case Studies)",
             "AI Calling Agent",
             "Conversational Flow",
             "Jobs",
-            "Organizations",
             "Recruiters",
             "Credit Management",
             "Subscription Management",
             "Integrations",
             "Security",
+            "Active Security Alerts",
             "Settings"
         ],
         "capabilities": {
@@ -151,7 +175,6 @@ PLAN_DEFINITIONS = {
         "summary": "Internal owner access.",
         "features": [
             "Super Admin Dashboard",
-            "Team Management",
             "Dashboard",
             "Interviews",
             "Qualified Candidates",
@@ -160,7 +183,6 @@ PLAN_DEFINITIONS = {
             "AI Calling Agent",
             "Conversational Flow",
             "Jobs",
-            "Organizations",
             "Recruiters",
             "Credit Management",
             "Subscription Management",
@@ -259,3 +281,108 @@ security = HTTPBearer()
 
 EMAIL_SCHEDULER_STARTED = False
 JOB_DESCRIPTION_PDF_THRESHOLD = 900
+
+# ---------------------------------------------------------------------------
+# Firebase Admin SDK initialization
+# ---------------------------------------------------------------------------
+import json as _json
+import logging as _logging
+import firebase_admin
+from firebase_admin import credentials
+
+_fb_logger = _logging.getLogger(__name__)
+
+def init_firebase_admin():
+    """
+    Initialize Firebase Admin SDK once.
+    Supports:
+    1. Environment variable with raw JSON string (FIREBASE_CREDENTIALS_JSON or GOOGLE_APPLICATION_CREDENTIALS)
+    2. Environment variable with Base64 encoded JSON string (FIREBASE_CREDENTIALS_BASE64)
+    3. Individual environment variables in .env (FIREBASE_PRIVATE_KEY, FIREBASE_CLIENT_EMAIL, FIREBASE_PROJECT_ID)
+    4. File path in GOOGLE_APPLICATION_CREDENTIALS or local firebase_credentials.json
+    5. Default Google Application Credentials fallback
+    """
+    if firebase_admin._apps:
+        return firebase_admin.get_app()
+
+    # 1. Base64 encoded JSON string from .env
+    b64_val = os.environ.get("FIREBASE_CREDENTIALS_BASE64", "").strip()
+    if b64_val:
+        try:
+            import base64
+            decoded_json = base64.b64decode(b64_val).decode("utf-8").strip()
+            cred_dict = _json.loads(decoded_json)
+            cred = credentials.Certificate(cred_dict)
+            app = firebase_admin.initialize_app(cred)
+            _fb_logger.info("Firebase Admin SDK initialized successfully from Base64 .env variable.")
+            return app
+        except Exception as e:
+            _fb_logger.error(f"Failed to initialize Firebase Admin SDK from Base64 string: {e}")
+
+    # 2. Raw JSON string from .env or AWS Secrets Manager
+    raw_env_val = os.environ.get("FIREBASE_CREDENTIALS_JSON") or os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") or ""
+    raw_env_val_stripped = raw_env_val.strip()
+    if raw_env_val_stripped.startswith("{") and raw_env_val_stripped.endswith("}"):
+        try:
+            cred_dict = _json.loads(raw_env_val_stripped)
+            cred = credentials.Certificate(cred_dict)
+            app = firebase_admin.initialize_app(cred)
+            _fb_logger.info("Firebase Admin SDK initialized successfully from JSON environment variable.")
+            return app
+        except Exception as e:
+            _fb_logger.error(f"Failed to initialize Firebase Admin SDK from JSON string: {e}")
+
+    # 3. Individual .env variables
+    priv_key = os.environ.get("FIREBASE_PRIVATE_KEY", "").strip()
+    client_email = os.environ.get("FIREBASE_CLIENT_EMAIL", "").strip()
+    if priv_key and client_email:
+        try:
+            formatted_key = priv_key.replace("\\n", "\n")
+            cred_dict = {
+                "type": "service_account",
+                "project_id": os.environ.get("FIREBASE_PROJECT_ID", "ai-adaptive-interview"),
+                "private_key_id": os.environ.get("FIREBASE_PRIVATE_KEY_ID", ""),
+                "private_key": formatted_key,
+                "client_email": client_email,
+                "client_id": os.environ.get("FIREBASE_CLIENT_ID", ""),
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+                "client_x509_cert_url": f"https://www.googleapis.com/robot/v1/metadata/x509/{client_email.replace('@', '%40')}",
+            }
+            cred = credentials.Certificate(cred_dict)
+            app = firebase_admin.initialize_app(cred)
+            _fb_logger.info("Firebase Admin SDK initialized successfully from individual .env fields.")
+            return app
+        except Exception as e:
+            _fb_logger.error(f"Failed to initialize Firebase Admin SDK from individual .env fields: {e}")
+
+    # 4. File path fallback (e.g. firebase_credentials.json or custom path)
+    google_creds_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") or "firebase_credentials.json"
+    if google_creds_path and not google_creds_path.strip().startswith("{"):
+        candidate_paths = [
+            google_creds_path if os.path.isabs(google_creds_path) else os.path.abspath(google_creds_path),
+            os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), google_creds_path),
+            os.path.join(os.getcwd(), google_creds_path),
+            os.path.join("/app", os.path.basename(google_creds_path)),
+        ]
+        for path in candidate_paths:
+            if os.path.exists(path):
+                try:
+                    cred = credentials.Certificate(path)
+                    app = firebase_admin.initialize_app(cred)
+                    _fb_logger.info(f"Firebase Admin SDK initialized successfully from file: {path}")
+                    return app
+                except Exception as e:
+                    _fb_logger.error(f"Failed to initialize Firebase Admin SDK from file {path}: {e}")
+                    break
+
+    # 5. Default application credentials fallback
+    try:
+        app = firebase_admin.initialize_app()
+        _fb_logger.info("Firebase Admin SDK initialized with default application credentials.")
+        return app
+    except Exception as e:
+        _fb_logger.warning(f"Could not initialize Firebase Admin SDK with default credentials: {e}")
+        return None
+

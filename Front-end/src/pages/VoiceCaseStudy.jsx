@@ -62,7 +62,7 @@ function CaseStudyVideoAvatar({ status, size = 200 }) {
         ref={videoRef}
         src={aiVideoUrl}
         loop
-        muted={false}
+        muted={true}
         playsInline
         preload="auto"
         style={{
@@ -219,6 +219,10 @@ export default function VoiceCaseStudy({
   const submittingRef    = useRef(false)
   const isTransitioningRef = useRef(false)
   const playingAudioRef  = useRef(null)
+  const speechQueueRef   = useRef([])      // serialised TTS queue — prevents overlapping audio
+  const speechGenIdRef   = useRef(0)       // incremented on every new speak() to cancel stale onEnd callbacks
+  const isSpeakingRef    = useRef(false)   // true while a TTS audio item is actively playing
+
   const langMap = { 'Hindi':'hi-IN','Telugu':'te-IN','Tamil':'ta-IN','Malayalam':'ml-IN','Kannada':'kn-IN','English':'en-IN' }
 
   const scenarios = allQuestions?.length ? allQuestions : [question]
@@ -291,75 +295,31 @@ export default function VoiceCaseStudy({
   }, [])
 
   // ── TTS / STT ──────────────────────────────────────────────────────────────
-  const speak = useCallback(async (text, onEnd) => {
-    try {
-      setAiStatus('speaking')
-      if (playingAudioRef.current) {
-        playingAudioRef.current.pause()
-        playingAudioRef.current = null
-      }
-      
-      const useCustomVoice = !!(sessionDetail?.voice_clone || sessionDetail?.voice_cloning_enabled || sessionDetail?.custom_voice_id || sessionDetail?.cloned_voice_id);
-      const languageMap = {
-        Hindi: 'hi-IN',
-        Telugu: 'te-IN',
-        Tamil: 'ta-IN',
-        Malayalam: 'ml-IN',
-        Kannada: 'kn-IN',
-        English: 'en-US',
-      };
-      const ttsLang = languageMap[(sessionLang || sessionDetail?.language || 'English').toLowerCase().replace(/^\w/, c => c.toUpperCase())] || 'en-US';
-      const res = await candidateFetch(`${API_BASE_URL}/tts`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          text, 
-          voice: 'shimmer', 
-          language: ttsLang, 
-          use_custom_voice: useCustomVoice,
-        })
-      })
-      if (!res.ok) throw new Error('TTS Failed')
-      const blob = await res.blob()
-      if (blob.size === 0) {
-        // Fallback to browser SpeechSynthesis if no audio returned
-        const utterance = new SpeechSynthesisUtterance(text)
-        utterance.lang = ttsLang
-        utterance.onend = () => {
-          setAiStatus('idle')
-          onEnd?.()
-        }
-        speechSynthesis.speak(utterance)
-        setAiStatus('speaking')
-        return
-      }
-      const url = URL.createObjectURL(blob)
-      const audio = new Audio(url)
-      playingAudioRef.current = audio
-      
-      audio.onended = () => {
-        if (playingAudioRef.current === audio) playingAudioRef.current = null
-        setAiStatus('idle')
-        URL.revokeObjectURL(url)
-        setTimeout(() => onEnd?.(), 200) // Race condition guard
-      }
-      audio.onerror = () => {
-        if (playingAudioRef.current === audio) playingAudioRef.current = null
-        setAiStatus('idle')
-        onEnd?.()
-      }
-      audio.play().catch(e => {
-        console.error('Audio play error:', e)
-        if (playingAudioRef.current === audio) playingAudioRef.current = null
-        setAiStatus('idle')
-        onEnd?.()
-      })
-    } catch (e) {
-      console.error('TTS error:', e)
-      setAiStatus('idle')
-      onEnd?.()
+
+  // ── TTS: Completely disabled in Case Study Round across all languages ─────
+  const stopAllSpeech = useCallback(() => {
+    speechGenIdRef.current += 1          // invalidate all pending callbacks
+    speechQueueRef.current = []          // flush queue
+    isSpeakingRef.current = false
+    if (playingAudioRef.current) {
+      playingAudioRef.current.onended = null
+      playingAudioRef.current.onerror = null
+      playingAudioRef.current.pause()
+      playingAudioRef.current.src = ''
+      playingAudioRef.current = null
     }
-  }, [sessionLang])
+    if (window.speechSynthesis) window.speechSynthesis.cancel()
+    setAiStatus('idle')
+  }, [])
+
+  // speak(): Silent callback executor. No TTS request is sent, no audio is played in any language.
+  const speak = useCallback((text, onEnd) => {
+    stopAllSpeech()
+    setAiStatus('idle')
+    if (onEnd) {
+      setTimeout(onEnd, 50)
+    }
+  }, [stopAllSpeech])
 
   const addMsg = useCallback((role, text) => setChatMessages(p => [...p, { role, text, ts: Date.now() }]), [])
 
@@ -367,6 +327,8 @@ export default function VoiceCaseStudy({
     addMsg('ai', text)
     speak(text, onEnd)
   }, [addMsg, speak])
+
+
 
   const stopListening = useCallback(() => {
     isListeningRef.current = false
@@ -476,7 +438,7 @@ export default function VoiceCaseStudy({
   const handleAnswer = useCallback((answer, currentIdx) => {
     if (isTransitioningRef.current) return
     const t = VOICE_TRANSLATIONS[sessionLang] || VOICE_TRANSLATIONS['English']
-    
+
     // Check intent
     const lowerAns = answer?.toLowerCase() || ''
     const isSkip = /(skip|next question|move to next|move on|next scenario)/.test(lowerAns)
@@ -485,18 +447,16 @@ export default function VoiceCaseStudy({
     if (isSkip) {
       isTransitioningRef.current = true
       addMsg('user', answer || 'Skip Scenario')
-      if (playingAudioRef.current) playingAudioRef.current.pause()
-      
+      stopAllSpeech()  // cancel any currently playing audio immediately
+
       const nextIdx = currentIdx + 1
       if (nextIdx < scenarios.length) {
         setCurrentScenarioIdx(nextIdx)
         setQuestionCount(0)
         const transList = t.csTransitions
         const transition = transList[Math.floor(Math.random() * transList.length)]
-        setTimeout(() => {
-          isTransitioningRef.current = false
-          presentScenario(nextIdx, transition)
-        }, 100)
+        // isTransitioningRef stays true until presentScenario's aiSay onEnd fires
+        presentScenario(nextIdx, transition)
       } else {
         handleComplete()
       }
@@ -505,10 +465,8 @@ export default function VoiceCaseStudy({
 
     if (isRepeat) {
       addMsg('user', answer)
-      const sc = scenarios[currentIdx]
-      const scenarioPrefix = currentIdx === 0 ? t.csScenarioPrefix : t.csScenarioNextPrefix
-      const scenarioText = `${scenarioPrefix}${sc.text}`
-      const prompt = currentIdx === 0 ? `${scenarioText}. ${t.csPromptFirst}` : `${scenarioText}. ${t.csPromptNext}`
+      const prompt = currentIdx === 0 ? t.csPromptFirst : t.csPromptNext
+      stopAllSpeech()
       aiSay(prompt, () => startListening(ans => handleAnswer(ans, currentIdx)))
       return
     }
@@ -525,8 +483,7 @@ export default function VoiceCaseStudy({
         question_index: currentIdx,
         answer_text: answer
       }
-      
-      // If WebSocket is open, send a state change so admins see we submitted something, but we still use API for the actual save
+
       if (wsRef?.current?.readyState === WebSocket.OPEN) {
          wsRef.current.send(JSON.stringify({
             action: "ai_state_change",
@@ -547,11 +504,10 @@ export default function VoiceCaseStudy({
       usedFollowups.add(followup)
       const ackList = t.csAck
       const transition = ackList[Math.floor(Math.random() * ackList.length)]
-      setTimeout(() => {
-        aiSay(`${transition} ${followup}`, () => {
-          startListening(ans => handleAnswer(ans, currentIdx))
-        })
-      }, 400)
+      // No setTimeout — speak() is now queued and fires only after current audio ends
+      aiSay(`${transition} ${followup}`, () => {
+        startListening(ans => handleAnswer(ans, currentIdx))
+      })
     } else {
       // Move to next scenario or finish
       isTransitioningRef.current = true
@@ -561,54 +517,54 @@ export default function VoiceCaseStudy({
         setQuestionCount(0)
         const transList = t.csTransitions
         const transition = transList[Math.floor(Math.random() * transList.length)]
-        setTimeout(() => {
-          isTransitioningRef.current = false
-          presentScenario(nextIdx, transition)
-        }, 100)
+        stopAllSpeech()  // stop follow-up audio before presenting next scenario
+        // isTransitioningRef stays true until presentScenario's aiSay onEnd fires
+        presentScenario(nextIdx, transition)
       } else {
         handleComplete()
       }
     }
-  }, [questionCount, scenarios, interviewId, sessionDetail, addMsg, aiSay, startListening, usedFollowups, sessionLang])
+  }, [questionCount, scenarios, interviewId, sessionDetail, addMsg, aiSay, startListening, usedFollowups, sessionLang, stopAllSpeech])
 
   const handleComplete = useCallback(async () => {
     if (submittingRef.current) return
     submittingRef.current = true
-    
+
     stopListening()
-    window.speechSynthesis?.cancel()
-    if (playingAudioRef.current) {
-      playingAudioRef.current.pause()
-      playingAudioRef.current = null
-    }
-    
+    stopAllSpeech()
+
     try { await candidateFetch(`${API_BASE_URL}/complete-session/${linkId}`, { method: 'POST' }) } catch(_) {}
     onComplete?.()
-  }, [stopListening, onComplete, linkId])
+  }, [stopListening, stopAllSpeech, onComplete, linkId])
 
   // ── Present scenario ───────────────────────────────────────────────────────
   const presentScenario = useCallback((idx, prefix = '') => {
     const sc = scenarios[idx]
     if (!sc) { handleComplete(); return }
     const t = VOICE_TRANSLATIONS[sessionLang] || VOICE_TRANSLATIONS['English']
-    const scenarioPrefix = idx === 0 ? t.csScenarioPrefix : t.csScenarioNextPrefix
-    const scenarioText = `${prefix ? prefix + ' ' : ''}${scenarioPrefix}${sc.text}`
-    const prompt = idx === 0
-      ? `${scenarioText}. ${t.csPromptFirst}`
-      : `${scenarioText}. ${t.csPromptNext}`
 
-    setTimeout(() => {
-      aiSay(prompt, () => {
-        setPhase('discussing')
-        startListening(ans => handleAnswer(ans, idx))
-      })
-    }, 400)
+    // The scenario text is presented in the Scenario Card UI.
+    // Voice AI does NOT read the scenario text aloud.
+    // Instead, speak only the guidance prompt so the candidate can read and respond.
+    const prompt = idx === 0
+      ? (prefix ? `${prefix} ${t.csPromptFirst}` : t.csPromptFirst)
+      : (prefix ? `${prefix} ${t.csPromptNext}` : t.csPromptNext)
+
+    // No outer setTimeout — speak() is queued; onEnd fires only after audio finishes
+    aiSay(prompt, () => {
+      isTransitioningRef.current = false  // ← cleared AFTER audio finishes, not before
+      setPhase('discussing')
+      startListening(ans => handleAnswer(ans, idx))
+    })
   }, [scenarios, aiSay, startListening, handleAnswer, sessionLang, handleComplete])
+
+
 
   // ── Start ─────────────────────────────────────────────────────────────────
   const hasStartedRef = useRef(false)
   
   useEffect(() => {
+    stopAllSpeech()
     if (hasStartedRef.current) return
     hasStartedRef.current = true
     
@@ -627,10 +583,10 @@ export default function VoiceCaseStudy({
   useEffect(() => {
     return () => {
       stopListening()
-      window.speechSynthesis?.cancel()
-      if (playingAudioRef.current) playingAudioRef.current.pause()
+      stopAllSpeech()
     }
-  }, [stopListening])
+  }, [stopListening, stopAllSpeech])
+
 
   // ── Render ─────────────────────────────────────────────────────────────────
   const currentScenario = scenarios[currentScenarioIdx]
@@ -788,8 +744,9 @@ export default function VoiceCaseStudy({
                   {aiStatus === 'listening' ? 'Done Speaking' : 'Speak Your Answer'}
                 </button>
                 <button onClick={() => {
+                  stopListening()
+                  stopAllSpeech()
                   if (currentScenarioIdx < scenarios.length - 1) {
-                    stopListening()
                     handleAnswer('skip', currentScenarioIdx)
                   } else {
                     handleComplete()
