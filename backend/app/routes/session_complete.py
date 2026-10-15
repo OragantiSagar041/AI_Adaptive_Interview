@@ -875,7 +875,7 @@ async def get_metered_ice_servers() -> list:
         os.getenv("METERED_DOMAIN")
         or os.getenv("metered_domain")
         or "hireiq.metered.live"
-    ).strip()
+    ).strip().replace("https://", "").replace("http://", "").strip("/")
 
     # Support raw JSON secret strings from AWS Secrets Manager
     if not metered_api_key:
@@ -897,7 +897,7 @@ async def get_metered_ice_servers() -> list:
                             parsed.get("METERED_DOMAIN")
                             or parsed.get("metered_domain")
                             or metered_domain
-                        ).strip()
+                        ).strip().replace("https://", "").replace("http://", "").strip("/")
                         if metered_api_key:
                             break
                 except Exception:
@@ -944,8 +944,21 @@ async def get_webrtc_ice_servers(raw: bool = False):
     """
     Returns dynamic STUN and TURN server configurations.
     Uses TURN credentials from environment / Secrets Manager, or dynamic Metered API if configured.
+    Guarantees robust Google STUN is always included to prevent ICE gathering failures.
     """
-    ice_servers = await get_metered_ice_servers()
+    raw_ice = await get_metered_ice_servers()
+    
+    # Ensure high-availability STUN is always present alongside TURN
+    ice_servers = [
+        {"urls": "stun:stun.l.google.com:19302"},
+        {"urls": "stun:stun1.l.google.com:19302"},
+    ]
+    for s in raw_ice:
+        # Don't add duplicate google stuns
+        urls = s.get("urls", "")
+        if "google.com" not in (urls if isinstance(urls, str) else " ".join(urls)):
+            ice_servers.append(s)
+
     has_turn = any("turn:" in s.get("urls", "") or "turns:" in s.get("urls", "") for s in ice_servers)
     logger.info(f"[/api/webrtc/ice-servers] Served {len(ice_servers)} ICE servers (TURN active: {has_turn})")
     if raw:
@@ -976,6 +989,8 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
             logger.info(f"Candidate validation failed: {e.detail}")
             await websocket.close(code=1008)
             return
+        # Resolve to canonical link_id so everyone joins the exact same room
+        link_id = str(candidate_session.get("link_id") or link_id)
         await manager.connect_candidate(websocket, link_id)
         # Notify watching admins immediately that candidate stream is active/ready
         try:
@@ -989,7 +1004,9 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
             return
         try:
             auth_context = _decode_dashboard_websocket_admin(token)
-            _get_authorized_live_session(link_id, auth_context)
+            live_session_doc = _get_authorized_live_session(link_id, auth_context)
+            # Resolve to canonical link_id so admin and candidate always join the exact same room
+            link_id = str(live_session_doc.get("link_id") or link_id)
             # Use client-provided unique admin_id or generate unique instance identifier
             client_admin_id = websocket.query_params.get("admin_id")
             if client_admin_id and client_admin_id != "undefined":
@@ -999,7 +1016,7 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
                 admin_id = f"{base}_{uuid.uuid4().hex[:8]}"
 
             await manager.connect_admin(websocket, link_id, admin_id=admin_id)
-            logger.info(f"Admin ({admin_id}) connected successfully.")
+            logger.info(f"Admin ({admin_id}) connected successfully to room {link_id}.")
             # Also notify candidate that a new admin connected
             try:
                 await manager.send_to_candidate(link_id, {"type": "admin_connected", "admin_id": admin_id})
@@ -1028,14 +1045,18 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
             await websocket.close(code=1008)
             return
         # Verify session is not deactivated or cancelled
+        session_query = [{"link_id": link_id}]
+        if ObjectId.is_valid(link_id):
+            session_query.append({"_id": ObjectId(link_id)})
         session_check = interview_sessions_collection.find_one(
-            {"link_id": link_id},
-            {"status": 1, "is_deactivated": 1}
+            {"$or": session_query},
+            {"link_id": 1, "status": 1, "is_deactivated": 1}
         )
         if not session_check or session_check.get("is_deactivated") or session_check.get("status") in ("terminated", "cancelled", "expired"):
             logger.info(f"Spectator session check failed for link_id {link_id}: {session_check}")
             await websocket.close(code=1008)
             return
+        link_id = str(session_check.get("link_id") or link_id)
         spectator_id = f"spectator_{uuid.uuid4().hex[:8]}"
         await manager.connect_spectator(websocket, link_id, spectator_id=spectator_id)
         try:

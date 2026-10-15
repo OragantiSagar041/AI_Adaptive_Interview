@@ -46,8 +46,8 @@ function getTrackType(track) {
 
 const buildRemoteViewStream = (stream, mode) => {
   if (!stream) return null
-  const videoTracks = [...stream.getVideoTracks()]
-  const audioTracks = [...stream.getAudioTracks()]
+  const videoTracks = [...stream.getVideoTracks()].filter(t => t.readyState === 'live')
+  const audioTracks = [...stream.getAudioTracks()].filter(t => t.readyState === 'live')
   if (videoTracks.length === 0) return stream
 
   let selectedVideoTrack = null
@@ -55,9 +55,10 @@ const buildRemoteViewStream = (stream, mode) => {
   if (mode === 'camera') {
     selectedVideoTrack = videoTracks.find(track => getTrackType(track) === 'camera') || videoTracks[0]
   } else {
-    // Candidate publishers add camera to transceiver 0 and screen to transceiver 1.
-    // If track labels are obfuscated by the browser, fallback to the expected transceiver index order.
-    selectedVideoTrack = videoTracks.find(track => getTrackType(track) === 'screen') || (videoTracks.length > 1 ? videoTracks[1] : videoTracks[0])
+    // If admin requested screen, check if screen track exists
+    const screenTrack = videoTracks.find(track => getTrackType(track) === 'screen') || (videoTracks.length > 1 ? videoTracks[1] : null)
+    // If screen track is present and live, use it; otherwise seamlessly fall back to camera
+    selectedVideoTrack = screenTrack || videoTracks[0]
   }
 
   if (!selectedVideoTrack) {
@@ -72,7 +73,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
   const [telemetry, setTelemetry] = useState(null)
   const [violations, setViolations] = useState([])
   const [retryCount, setRetryCount] = useState(0)
-  const [viewMode, setViewMode] = useState('screen')
+  const [viewMode, setViewMode] = useState('camera')
   const [remoteStream, setRemoteStream] = useState(null)
   const [trackAvailability, setTrackAvailability] = useState({ camera: false, screen: false })
   const [shareLink, setShareLink] = useState('')
@@ -651,15 +652,15 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
 
   useEffect(() => {
     if (isOpen && session) {
-      setViewMode('screen')
+      setViewMode('camera')
     }
   }, [isOpen, session])
 
   useEffect(() => {
-    if (viewMode === 'camera' && !hasCameraTrack) {
-      setViewMode('screen')
+    if (viewMode === 'screen' && !hasScreenTrack) {
+      setViewMode('camera')
     }
-  }, [viewMode, hasCameraTrack])
+  }, [viewMode, hasScreenTrack])
 
   const getRoundIcon = (type) => {
     if (type === 'coding') return <Code size={16} />
@@ -837,6 +838,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
             ref={videoRef}
             autoPlay
             playsInline
+            muted
             controls
             className={`w-full h-full object-contain ${remoteStream ? 'opacity-100' : 'opacity-0'}`}
           />

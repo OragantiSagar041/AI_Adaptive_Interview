@@ -27,14 +27,26 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
     latestTelemetryRef.current = telemetryData
   }, [telemetryData])
 
-  // Broadcast streams update when screen stream changes so all watching admins renegotiate
+  // Broadcast streams update when camera or screen stream becomes ready so watching admins renegotiate
   useEffect(() => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && secondaryMediaStreamRef?.current) {
-      console.log('[CandidateWebRTC] Screen stream active/updated — notifying watching admins')
-      try {
-        wsRef.current.send(JSON.stringify({ type: 'candidate_connected' }))
-      } catch (_) {}
+    let notified = false
+    const notifyAdminsIfReady = () => {
+      const hasCam = mediaStreamRef.current?.getVideoTracks()?.some(t => t.readyState === 'live')
+      const hasScr = secondaryMediaStreamRef?.current?.getVideoTracks()?.some(t => t.readyState === 'live')
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && (hasCam || hasScr)) {
+        if (!notified) {
+          console.log('[CandidateWebRTC] Live video tracks confirmed — notifying watching admins')
+          notified = true
+        }
+        try {
+          wsRef.current.send(JSON.stringify({ type: 'candidate_connected' }))
+        } catch (_) {}
+      }
     }
+
+    notifyAdminsIfReady()
+    const pollId = setInterval(notifyAdminsIfReady, 4000)
+    return () => clearInterval(pollId)
   }, [secondaryMediaStreamRef?.current])
 
   // ─── WebSocket factory with auto-reconnect ──────────────────────────────────
@@ -111,19 +123,43 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
           if (msg.type === 'webrtc_offer') {
             console.log(`[CandidateWebRTC] Received offer from ${msg.role === 'spectator' ? 'spectator' : 'admin'}: ${adminId}`)
 
-            // Await dynamic ICE servers from backend — ensures TURN credentials are fetched
-            // before RTCPeerConnection is created, not just fired as a background hint
             ;(async () => {
-            const cameraStream = mediaStreamRef.current
-            const screenStream = secondaryMediaStreamRef?.current
+            // Await dynamic ICE servers from backend — ensures TURN credentials are fetched
+            // before RTCPeerConnection is created
+            await initIceServers()
 
-            const cameraVideoTrack = cameraStream?.getVideoTracks()?.find(t => t.readyState === 'live')
-            const screenVideoTrack = screenStream?.getVideoTracks()?.find(t => t.readyState === 'live')
+            // Wait up to 3 seconds if tracks are in the process of initializing
+            let cameraStream = mediaStreamRef.current
+            let screenStream = secondaryMediaStreamRef?.current
+            let cameraVideoTrack = cameraStream?.getVideoTracks()?.find(t => t.readyState === 'live')
+            let screenVideoTrack = screenStream?.getVideoTracks()?.find(t => t.readyState === 'live')
+
+            if (!cameraVideoTrack && !screenVideoTrack) {
+              console.log('[CandidateWebRTC] Waiting for camera/screen tracks to become live...')
+              for (let i = 0; i < 10; i++) {
+                await new Promise(r => setTimeout(r, 300))
+                cameraStream = mediaStreamRef.current
+                screenStream = secondaryMediaStreamRef?.current
+                cameraVideoTrack = cameraStream?.getVideoTracks()?.find(t => t.readyState === 'live')
+                screenVideoTrack = screenStream?.getVideoTracks()?.find(t => t.readyState === 'live')
+                if (cameraVideoTrack || screenVideoTrack) break
+              }
+            }
+
             const audioTrack = (screenStream?.getAudioTracks()?.find(t => t.readyState === 'live')) ||
                                (cameraStream?.getAudioTracks()?.find(t => t.readyState === 'live'))
 
             if (!cameraVideoTrack && !screenVideoTrack) {
-              console.warn('[CandidateWebRTC] No live video tracks available — cannot answer offer yet.')
+              console.warn('[CandidateWebRTC] No live video tracks available after waiting — sending notice.')
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                  type: 'candidate_not_ready',
+                  target_admin_id: adminId,
+                  viewer_id: adminId,
+                  spectator_id: adminId,
+                  reason: 'tracks_initializing'
+                }))
+              }
               return
             }
 
@@ -132,8 +168,6 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
               try { pcsRef.current[adminId].close() } catch (_) {}
             }
 
-            // Always await fresh ICE servers before creating RTCPeerConnection
-            await initIceServers()
             const pc = new RTCPeerConnection({
               iceServers: getIceServers(),
             })
@@ -219,6 +253,16 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
 
             pc.onconnectionstatechange = () => {
               console.log(`[CandidateWebRTC] PC state [${adminId}]: ${pc.connectionState}`)
+              if (pc.connectionState === 'connected') {
+                try {
+                  if (cameraSender && typeof cameraSender.generateKeyFrame === 'function') {
+                    cameraSender.generateKeyFrame().catch(() => {})
+                  }
+                  if (screenSender && typeof screenSender.generateKeyFrame === 'function') {
+                    screenSender.generateKeyFrame().catch(() => {})
+                  }
+                } catch (_) {}
+              }
             }
 
             await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp))

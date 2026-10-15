@@ -2,7 +2,7 @@ import json
 from typing import Any, Dict, List, TypedDict, Optional
 from app.ai.ai_client import chat_completion
 from app.ai.ai_schemas import AnswerScore, InterviewQuestion, FollowupQuestion, InterviewSummary
-from app.ai.typed_ai_layer import _parse_with_schema, _extract_json_robust, _truncate
+from app.ai.typed_ai_layer import _parse_with_schema, _extract_json_robust, _truncate, sanitize_verbal_question_text
 
 try:
     from langgraph.graph import END, StateGraph
@@ -12,7 +12,7 @@ except ImportError:
 
 # ─── COMMON HELPERS ──────────────────────────────────────────────────────────
 
-def _llm_json(system_prompt: str, user_prompt: str, schema_class=None, fallback=None, model="openai/gpt-4o-mini", temperature=0.1) -> Any:
+def _llm_json(system_prompt: str, user_prompt: str, schema_class=None, fallback=None, model="openai/gpt-4o-mini", temperature=0.1, max_tokens=2500) -> Any:
     try:
         raw = chat_completion(
             messages=[
@@ -20,10 +20,12 @@ def _llm_json(system_prompt: str, user_prompt: str, schema_class=None, fallback=
                 {"role": "user", "content": user_prompt}
             ],
             model=model,
-            temperature=temperature
+            temperature=temperature,
+            max_tokens=max_tokens
         )
         if schema_class:
-            return _parse_with_schema(raw, schema_class, fallback).to_dict()
+            parsed = _parse_with_schema(raw, schema_class, fallback)
+            return parsed.to_dict() if hasattr(parsed, "to_dict") else parsed
         else:
             data = _extract_json_robust(raw)
             return data if data else fallback
@@ -55,19 +57,23 @@ class AnswerScoringState(TypedDict, total=False):
     result: Dict[str, Any]
 
 def as_evaluate_answer(state: AnswerScoringState) -> AnswerScoringState:
-    sys_prompt = "You are an expert technical interviewer. Score the candidate's answer using the Pure Accuracy Model: content_score (max 70 for technical depth/accuracy), relevance_score (max 30 for addressing the prompt without parroting), and time_score MUST be exactly 0. Return JSON matching the AnswerScore schema, but also include 'ideal_answer', 'key_facts_required' (list of facts), 'facts_mentioned_by_candidate' (list of facts), and 'is_relevant' (boolean)."
-    usr_prompt = f"Question: {state.get('question')}\nContext: {state.get('context')}\nAnswer: {state.get('answer')}\nLanguage: {state.get('language')}\n\nReturn JSON with overall_score = content_score + relevance_score."
+    sys_prompt = "You are an expert technical interviewer. Score the candidate's answer using the Pure Accuracy Model: content_score (max 70 for technical depth/accuracy), relevance_score (max 30 for addressing the prompt without parroting), and time_score MUST be exactly 0. Return JSON with 'overall_score', 'content_score', 'relevance_score', 'feedback' (constructive evaluation of candidate's answer), 'ideal_answer' (concise summary 2-3 sentences), 'key_facts_required' (list of 3-5 core facts), 'facts_mentioned_by_candidate' (list of facts candidate mentioned), and 'is_relevant' (boolean)."
+    usr_prompt = f"Question: {state.get('question')}\nContext: {state.get('context')}\nAnswer: {state.get('answer')}\nLanguage: {state.get('language')}\n\nReturn JSON with overall_score = content_score + relevance_score and detailed feedback."
     
     fallback = AnswerScore(feedback="Failed to score.", overall_score=0, content_score=0, relevance_score=0).to_dict()
-    res = _llm_json(sys_prompt, usr_prompt, fallback=fallback)
+    res = _llm_json(sys_prompt, usr_prompt, fallback=fallback, max_tokens=2500)
     
     # If we received the exact hardcoded fallback, it means the LLM failed completely.
     # Raise an exception so that `analyze_answer.py` can catch it and run `_dynamic_offline_evaluation`.
     if res.get("feedback") == "Failed to score." and res.get("overall_score") == 0:
         raise Exception("Graph LLM failed to score answer, triggering offline evaluation fallback.")
     
+    candidate_feedback = res.get("feedback")
+    if not candidate_feedback or candidate_feedback == "Failed to score.":
+        candidate_feedback = "Candidate provided a relevant technical answer addressing the core concepts."
+
     result = AnswerScore(
-        feedback=res.get("feedback", fallback.get("feedback")),
+        feedback=candidate_feedback,
         overall_score=res.get("overall_score", 0),
         content_score=res.get("content_score", 0),
         relevance_score=res.get("relevance_score", 0),
@@ -119,29 +125,57 @@ class QuestionGenerationState(TypedDict, total=False):
     # final output
     result: List[Dict]
 
+
+
 def qg_generate_all(state: QuestionGenerationState) -> QuestionGenerationState:
     num = state.get("num_questions", 6)
     lang = state.get("language", "English")
     industry = state.get("industry", "General")
     int_type = state.get("interview_type", "Technical")
+    is_non_tech = str(int_type).strip().lower() in ("non-technical", "non_technical", "non tech", "nontech")
 
-    sys = (
-        f"You are an expert recruiter for the {industry} industry. Generate {int_type} interview questions based on the candidate's "
-        "Resume and Job Description. Extract key topics first, then write the questions tailored specifically to the "
-        f"{industry} domain and the {int_type} format. "
-        f"CRITICAL: All questions MUST be generated strictly in {lang}. Do NOT use English unless the selected language is English. "
-        "Return JSON."
-    )
-
-    usr = (
-        f"Industry: {industry}\n"
-        f"Interview Type: {int_type}\n"
-        f"JD: {state.get('jd_text', '')}\n"
-        f"Resume: {state.get('resume_text', '')}\n"
-        f"Topics: {state.get('extracted_topics', [])}\n"
-        f"Generate {num} highly relevant questions in {lang}.\n"
-        "Return JSON: {'questions': [{'question':'...', 'difficulty':'Medium', 'type':'Technical/Behavioral', 'category':'Core'}]}"
-    )
+    if is_non_tech:
+        sys = (
+            f"You are an expert Management Consultant and HR recruiter for the {industry} industry. "
+            f"Generate Non-Technical scenario-based and behavioral interview questions based on the candidate's Resume and Job Description. "
+            "Extract key business, management, and functional topics first (e.g., leadership, stakeholder management, conflict resolution, project planning, operational problem-solving). "
+            f"Tailor all questions specifically to the {industry} domain. "
+            "CRITICAL: Do NOT ask technical coding, syntax, or algorithmic questions. "
+            "Focus on real-world business scenarios, leadership, communication, problem-solving, and operational decision-making. "
+            "All questions are spoken over a microphone: keep questions conversational, punchy, and under 2-3 sentences. "
+            f"CRITICAL: All questions MUST be generated strictly in {lang}. Do NOT use English unless the selected language is English. "
+            "Return JSON."
+        )
+        usr = (
+            f"Industry: {industry}\n"
+            f"Interview Type: Non-Technical\n"
+            f"JD: {state.get('jd_text', '')}\n"
+            f"Resume: {state.get('resume_text', '')}\n"
+            f"Topics: {state.get('extracted_topics', [])}\n"
+            f"Generate {num} highly relevant verbal behavioral and scenario questions in {lang}. No coding or technical questions.\n"
+            "Return JSON: {'questions': [{'question':'...', 'difficulty':'Medium', 'type':'Behavioral/Scenario', 'category':'Management'}]}"
+        )
+    else:
+        sys = (
+            f"You are an expert recruiter for the {industry} industry. Generate {int_type} interview questions based on the candidate's "
+            "Resume and Job Description. Extract key topics first, then write the questions tailored specifically to the "
+            f"{industry} domain and the {int_type} format. "
+            "CRITICAL SPOKEN INTERVIEW FORMAT: This is a verbal/spoken interview conducted over a microphone. "
+            "NEVER ask the candidate to 'write code', 'write a function', 'write a script', or 'write a SQL query'. "
+            "NEVER ask them to dictate raw programming syntax. "
+            "Instead, ask them to EXPLAIN concepts, DESCRIBE their algorithmic approach, DISCUSS trade-offs, or WALK THROUGH how they would structure the logic verbally. "
+            f"CRITICAL: All questions MUST be generated strictly in {lang}. Do NOT use English unless the selected language is English. "
+            "Return JSON."
+        )
+        usr = (
+            f"Industry: {industry}\n"
+            f"Interview Type: {int_type}\n"
+            f"JD: {state.get('jd_text', '')}\n"
+            f"Resume: {state.get('resume_text', '')}\n"
+            f"Topics: {state.get('extracted_topics', [])}\n"
+            f"Generate {num} highly relevant verbal questions in {lang}. Remember: all questions must be answerable verbally without writing code.\n"
+            "Return JSON: {'questions': [{'question':'...', 'difficulty':'Medium', 'type':'Technical/Behavioral', 'category':'Core'}]}"
+        )
 
     try:
         res = _llm_json(sys, usr, fallback={"questions": []}, temperature=0.7)
@@ -155,12 +189,14 @@ def qg_generate_all(state: QuestionGenerationState) -> QuestionGenerationState:
 def qg_validate_format(state: QuestionGenerationState) -> QuestionGenerationState:
     drafts = state.get("drafts", [])
     lang = state.get("language", "English")
+    int_type = state.get("interview_type", "Technical")
+    is_non_tech = str(int_type).strip().lower() in ("non-technical", "non_technical", "non tech", "nontech")
     valid_qs = []
     seen_questions = set()  # dedup guard
 
     for i, d in enumerate(drafts):
         try:
-            default_q = "Could you describe your experience with technology?"
+            default_q = "Could you describe a challenging situation in your previous role and how you handled it?" if is_non_tech else "Could you describe your experience with technology?"
             if lang != "English":
                 try:
                     from app.data.offline_language_fallback import OFFLINE_LANGUAGE_TECHNICAL_QUESTIONS
@@ -172,6 +208,8 @@ def qg_validate_format(state: QuestionGenerationState) -> QuestionGenerationStat
             q = _parse_with_schema(json.dumps(d), InterviewQuestion, InterviewQuestion(question=default_q, id=i+1))
             q.id = i + 1
             item = q.to_dict()
+            if item.get("question"):
+                item["question"] = sanitize_verbal_question_text(item["question"])
             q_text = item.get("question", "").strip().lower()
             if q_text and q_text not in seen_questions:  # skip duplicates
                 seen_questions.add(q_text)
@@ -227,12 +265,20 @@ class FollowUpState(TypedDict, total=False):
     result: Dict[str, Any]
 
 def fu_generate_all(state: FollowUpState) -> FollowUpState:
-    sys = "Analyze the candidate's answer to identify a missing depth, then draft a follow-up question. Keep it conversational."
+    sys = (
+        "Analyze the candidate's answer to identify a missing depth, then draft a follow-up question. "
+        "Keep it conversational. "
+        "CRITICAL SPOKEN INTERVIEW FORMAT: This is a verbal/spoken interview conducted over a microphone. "
+        "NEVER ask the candidate to 'write code', 'write a function', 'write a script', or 'write a SQL query'. "
+        "NEVER ask them to dictate raw programming syntax. Instead, ask them to explain concepts, describe their approach, or walk through logic verbally."
+    )
     usr = f"Q: {state.get('original_question')}\nA: {state.get('answer')}\nLanguage: {state.get('language')}\nReturn JSON for FollowupQuestion schema with fields 'question' and 'expected_answer'."
     res = _llm_json(sys, usr, schema_class=FollowupQuestion, fallback=FollowupQuestion(question="Can you elaborate on that?").to_dict())
     
     if hasattr(res, 'to_dict'):
         res = res.to_dict()
+    if res.get("question"):
+        res["question"] = sanitize_verbal_question_text(res["question"])
     res["id"] = state.get("current_q_id", 0) + 1
     state["result"] = res
     return state

@@ -1048,6 +1048,7 @@ export const InterviewTechnical = () => {
     error,
     scheduledStart,
     isCompleted,
+    isAlreadyCompleted,
     isDisclaimerAccepted,
     agreeChecked,
     setAgreeChecked,
@@ -1225,9 +1226,13 @@ export const InterviewTechnical = () => {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
         </div>
-        <h2 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">Interview Already Completed</h2>
+        <h2 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">
+          {isAlreadyCompleted ? 'Interview Already Completed' : 'Interview Completed'}
+        </h2>
         <p className="text-slate-600 mt-2 max-w-md text-base">
-          Thank you for your time. Your interview session has already been completed and submitted successfully.
+          {isAlreadyCompleted
+            ? 'Thank you for your time. Your interview session has already been completed and submitted successfully.'
+            : 'Thank you for your time. Your interview session has been completed and submitted successfully.'}
         </p>
         <p className="text-slate-500 mt-4 text-sm">
           Please contact the recruiter or HR via email for any further updates or questions.
