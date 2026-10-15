@@ -261,12 +261,15 @@ export const useInterviewSecurity = ({
     enabled: isDisclaimerAccepted && !showAllSet && !loading,
     maxAlerts: 999,
     onViolation: async (v) => {
-      const recorded = await recordAlertMetric(v.type, v.message, v.count)
-      if (!recorded) return
-
       setProctoringAlert(v.message)
       if (proctoringAlertTimeoutRef.current) clearTimeout(proctoringAlertTimeoutRef.current)
-      proctoringAlertTimeoutRef.current = setTimeout(() => setProctoringAlert(''), 3000)
+      proctoringAlertTimeoutRef.current = setTimeout(() => setProctoringAlert(''), 3500)
+
+      try {
+        await recordAlertMetric(v.type, v.message, v.count)
+      } catch (err) {
+        console.warn('[useInterviewSecurity] metric record error:', err)
+      }
     },
     onTerminate: (v) => {
       setScreenShareWarning(false)
