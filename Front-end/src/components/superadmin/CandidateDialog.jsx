@@ -481,9 +481,64 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   const jobTitle = c.interview_title || candidate.interview_title || c.job_applied || candidate.job_applied || "Position"
   const email = c.candidate_email || c.email || candidate.candidate_email || candidate.email || "No email provided"
   const phone = c.candidate_phone || c.phone || candidate.candidate_phone || "N/A"
-  const aiScore = Number(c.avg_score || c.score || candidate.score || 0)
+  const overallScoreValue = c.avg_score ?? c.score ?? candidate.score
+  const aiScore = Number(overallScoreValue ?? 0)
   const isQualified = (c.decision || candidate.decision) === 'selected'
   const status = c.status || candidate.status || ''
+  const interviewAnswers = Array.isArray(c.answers) ? c.answers : []
+  const answeredInterviewCount = interviewAnswers.filter(answer =>
+    typeof answer.answer_text === 'string' &&
+    answer.answer_text.trim() !== '' &&
+    answer.answer_text.trim() !== '(No answer yet)'
+  ).length
+  const scoredInterviewCount = interviewAnswers.filter(answer =>
+    answer.ai_score !== null &&
+    answer.ai_score !== undefined &&
+    answer.ai_score !== '' &&
+    Number.isFinite(Number(answer.ai_score))
+  ).length
+  const interviewDuration = Number(c.integrity?.total_time_minutes)
+  const interviewDateValue = c.started_at || c.date || candidate.date
+  const interviewDate = interviewDateValue && !Number.isNaN(new Date(interviewDateValue).getTime())
+    ? new Date(interviewDateValue).toLocaleString()
+    : ''
+  const interviewType = c.interview_type || candidate.interview_type
+  const experience = c.experience || candidate.experience
+  const currentCompany = c.current_company || candidate.current_company
+  const location = c.location || candidate.location
+  const strengths = c.strengths_summary || candidate.strengths_summary
+  const areasToImprove = c.weaknesses_summary || candidate.weaknesses_summary
+  const recruiterDecision = c.decision || candidate.decision
+  const recommendation = c.overall_recommendation || candidate.overall_recommendation
+  const summarySections = [
+    ['Candidate', [
+      name,
+      email !== 'No email provided' ? email : null,
+      phone !== 'N/A' ? phone : null,
+    ].filter(Boolean).join('; ')],
+    ['Professional background', [
+      experience ? `${experience} experience` : null,
+      currentCompany ? `currently at ${currentCompany}` : null,
+      location ? `based in ${location}` : null,
+    ].filter(Boolean).join('; ')],
+    ['Role applied for', jobTitle !== 'Position' ? jobTitle : null],
+    ['Interview', [
+      interviewType,
+      interviewDate,
+      status ? `Status: ${String(status).replaceAll('_', ' ')}` : null,
+      interviewDuration > 0 ? `Duration: ${interviewDuration} minutes` : null,
+    ].filter(Boolean).join('; ')],
+    ['Participation', interviewAnswers.length > 0
+      ? `${answeredInterviewCount} of ${interviewAnswers.length} recorded questions answered${scoredInterviewCount ? `; ${scoredInterviewCount} responses scored` : ''}`
+      : 'No interview responses recorded'],
+    ['Overall interview score',
+      overallScoreValue !== null && overallScoreValue !== undefined && overallScoreValue !== '' && Number.isFinite(Number(overallScoreValue))
+        ? `${aiScore.toFixed(1)} out of 100` : null],
+    ['AI recommendation', recommendation ? `${recommendation} (automated assessment of interview responses)` : null],
+    ['Strengths', strengths && !/^(no answers provided|n\/a|unable to generate\.?)$/i.test(String(strengths).trim()) ? strengths : null],
+    ['Areas to improve', areasToImprove && !/^(no answers provided|n\/a|unable to generate\.?)$/i.test(String(areasToImprove).trim()) ? areasToImprove : null],
+    ['Recruiter decision', recruiterDecision ? String(recruiterDecision).replaceAll('_', ' ') : null],
+  ].filter(([, value]) => value)
   // Resume/profile text from any field available
   const resumeText = c.profile_text || c.resume_text || ''
   const resumeUrl = c.resume_url || ''
@@ -1137,6 +1192,18 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
     </div>
   </section>
 )}
+
+                  <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <h3 className="mb-2 text-sm font-black text-slate-800">Summary</h3>
+                    <p className="text-sm leading-7 text-slate-600">
+                      {summarySections.map(([label, value], index) => (
+                        <React.Fragment key={label}>
+                          {index > 0 && <span className="mx-1.5 text-slate-300">|</span>}
+                          <strong className="font-semibold text-slate-800">{label}:</strong> {value}
+                        </React.Fragment>
+                      ))}
+                    </p>
+                  </section>
 
                   <section className="bg-card rounded-xl border border-border p-5 shadow-sm">
                     <h3 className="text-sm font-black text-foreground mb-3 flex items-center gap-2">
@@ -2729,5 +2796,3 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
       </>
     )
   }
-
-
