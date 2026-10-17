@@ -295,15 +295,25 @@ async def get_dashboard_aggregated_data(
         super_admin = next((a for a in admins_in_company if a.get("role") == "super_admin"), None)
         sa_prefix = (super_admin.get("name") or super_admin.get("username") or "SA")[:2].upper() if super_admin else "SA"
         
+        # Precompute session counts by candidate email
+        email_counts = defaultdict(int)
+        for cand_item in candidates_cursor:
+            em = (cand_item.get("candidate_email") or cand_item.get("email") or "").strip().lower()
+            if em:
+                email_counts[em] += 1
+
         seen_emails = set()
         candidates_list = []
         now = datetime.now(timezone.utc)
         for c in candidates_cursor:
             email = c.get("candidate_email") or c.get("email")
-            if email:
-                seen_emails.add(email.strip().lower())
+            clean_em = email.strip().lower() if email else ""
+            if clean_em:
+                seen_emails.add(clean_em)
             
             c["status"] = sync_session_status(c, now)
+            c["interview_count"] = email_counts.get(clean_em, 1) if clean_em else 1
+            c["interviews_count"] = c["interview_count"]
             
             creator_id = c.get("created_by")
             creator = admin_map.get(str(creator_id)) if creator_id else None
