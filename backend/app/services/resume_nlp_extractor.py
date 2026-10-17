@@ -436,16 +436,47 @@ def extract_info_offline(text: str) -> Dict[str, Any]:
 
     # 10. SKILLS EXTRACTION
     skills: List[str] = []
-    skills_sec = re.search(r'(?:Skills|Technical Skills|Core Competencies|Technologies)[:\s]+([\s\S]{1,600}?)(?:Experience|Education|Projects|Certifications|$)', normalized_text, re.IGNORECASE)
+    skills_sec = re.search(r'(?:Technical\s+Skills|Key\s+Skills|Core\s+Competencies|Skills\s+&\s+Tools|Technologies|Skills)[:\s]+([\s\S]{1,1200}?)(?:Professional\s+Experience|Work\s+Experience|Experience|Education|Academic|Projects|Certifications|Achievements|Publications|$)', normalized_text, re.IGNORECASE)
     if skills_sec:
         raw_skills = skills_sec.group(1).strip()
-        tokens = re.split(r'[,•|\n\t/]+', raw_skills)
-        for t in tokens:
-            cleaned_t = t.strip()
-            if 2 <= len(cleaned_t) <= 30 and not re.search(r'[:()]', cleaned_t):
-                if cleaned_t not in skills:
-                    skills.append(cleaned_t)
+        lines = raw_skills.split('\n')
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            if ':' in line:
+                line = line.split(':', 1)[1]
+            tokens = re.split(r'[,•|\t/]+', line)
+            for t in tokens:
+                cleaned_t = re.sub(r'^[-\*•\s]+', '', t).strip()
+                cleaned_t = re.sub(r'[\(\)]', '', cleaned_t).strip()
+                if 2 <= len(cleaned_t) <= 35:
+                    cl_lower = cleaned_t.lower()
+                    if cl_lower not in [s.lower() for s in skills] and cl_lower not in ["general", "technical", "skills", "tools", "libraries", "frameworks", "core", "languages"]:
+                        skills.append(cleaned_t)
+                if len(skills) >= 12:
+                    break
             if len(skills) >= 12:
+                break
+
+    if len(skills) < 3:
+        COMMON_TECH_SKILLS = [
+            "Python", "Java", "JavaScript", "TypeScript", "C++", "C#", "C", "Go", "Rust", "PHP", "Ruby",
+            "SQL", "MySQL", "PostgreSQL", "MongoDB", "Redis", "Cassandra", "Oracle",
+            "HTML", "CSS", "React", "Next.js", "Vue", "Angular", "Node.js", "Express",
+            "Django", "Flask", "FastAPI", "Spring Boot", ".NET",
+            "Machine Learning", "Deep Learning", "Data Science", "Artificial Intelligence", "AI", "ML", "Computer Vision", "NLP",
+            "Generative AI", "LLMs", "RAG", "LangChain", "Hugging Face", "Transformers",
+            "TensorFlow", "PyTorch", "Keras", "Scikit-Learn", "Pandas", "NumPy", "OpenCV",
+            "AWS", "Azure", "GCP", "Docker", "Kubernetes", "Git", "Linux",
+            "Regression", "Classification", "Neural Networks", "CNN", "RNN", "LSTM"
+        ]
+        for skill in COMMON_TECH_SKILLS:
+            pattern = r'\b' + re.escape(skill) + r'\b'
+            if re.search(pattern, normalized_text, re.IGNORECASE):
+                if skill.lower() not in [s.lower() for s in skills]:
+                    skills.append(skill)
+            if len(skills) >= 10:
                 break
 
     return {
@@ -539,3 +570,14 @@ Return valid JSON only. Do not include markdown code blocks or explanations."""
         print(f"⚠️ LLM Resume NLP parsing error ({err}), falling back to deterministic offline NLP.")
 
     return fallback
+
+
+def extract_skills_from_resume_text(text: str) -> str:
+    """Convenience helper to extract top skills as a comma-separated string from resume text."""
+    if not text or not isinstance(text, str):
+        return ""
+    info = extract_info_offline(text)
+    skills = info.get("skills", [])
+    if isinstance(skills, list) and skills:
+        return ", ".join(skills[:10])
+    return ""

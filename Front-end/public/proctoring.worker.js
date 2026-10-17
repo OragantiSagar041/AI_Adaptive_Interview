@@ -97,8 +97,19 @@ function extractPhoneCandidates(detections) {
   for (const d of detections) {
     for (const cat of d.categories ?? []) {
       const label = `${cat.categoryName ?? ''} ${cat.displayName ?? ''}`.toLowerCase();
-      if (label.includes('phone') || label.includes('mobile') || label.includes('cell') || label.includes('tablet')) {
-        candidates.push({ score: cat.score ?? 0 });
+      if (
+        label.includes('phone') ||
+        label.includes('mobile') ||
+        label.includes('cell') ||
+        label.includes('camera') ||
+        label.includes('remote') ||
+        label.includes('tablet')
+      ) {
+        candidates.push({
+          score: cat.score ?? 0,
+          label: cat.categoryName || 'phone',
+          boundingBox: d.boundingBox,
+        });
       }
     }
   }

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 // ── Tunable thresholds (Production Calibrated to eliminate false alarms) ──
-const DETECT_INTERVAL_MS = Number(import.meta.env?.VITE_PROCTORING_INTERVAL_MS) || 400          // frame cadence (~2.5 FPS)
-const PHONE_ALERT_CONFIDENCE = Number(import.meta.env?.VITE_PROCTORING_PHONE_CONFIDENCE) || 0.68 // strict high-confidence threshold to stop mug/mouse/remote hallucinations
-const PHONE_CONSECUTIVE_FRAMES = 6      // 6 consecutive frames (~2.4s) of sustained phone visibility
-const PHONE_COOLDOWN_MS = 10000         // 10 seconds cooldown between phone alerts
+const DETECT_INTERVAL_MS = Number(import.meta.env?.VITE_PROCTORING_INTERVAL_MS) || 250          // frame cadence (4 FPS, detects within sub-second)
+const PHONE_ALERT_CONFIDENCE = Number(import.meta.env?.VITE_PROCTORING_PHONE_CONFIDENCE) || 0.22 // high-sensitivity threshold to catch half-visible phones & camera lenses
+const PHONE_CONSECUTIVE_FRAMES = 2      // 2 frames (~0.5s) for faint detections; instant on frame 1 for score >= 0.28
+const PHONE_COOLDOWN_MS = 6000          // 6 seconds cooldown between phone alerts
 
 const MULTI_FACE_CONSECUTIVE_FRAMES = 6 // 6 consecutive frames (~2.4s) to ignore background posters/glitches
 const NO_FACE_CONSECUTIVE_FRAMES = 12   // 12 consecutive frames (~4.8s) allows sneezing / natural posture shifts
@@ -435,13 +435,23 @@ export function useProctoring({
       streak.eyeAway = 0
     }
 
-    // 4. Mobile / phone detection
-    const isPhone = phoneCandidates?.length > 0 && phoneCandidates[0].score >= PHONE_ALERT_CONFIDENCE
-    streak.phone = isPhone ? streak.phone + 1 : 0
-    if (streak.phone >= PHONE_CONSECUTIVE_FRAMES) {
+    // 4. Mobile / phone detection (Instant sub-second detection)
+    const topPhone = phoneCandidates?.length > 0 ? phoneCandidates[0] : null
+    const isPhone = Boolean(topPhone && topPhone.score >= PHONE_ALERT_CONFIDENCE)
+
+    if (topPhone && topPhone.score >= 0.18) {
+      console.log(`[useProctoring] 📱 Object detected: ${topPhone.label || 'phone'} (score: ${topPhone.score.toFixed(2)}, threshold: ${PHONE_ALERT_CONFIDENCE}, streak: ${streak.phone})`)
+    }
+
+    // Instant Fast-Path: If confidence is clear (>= 0.28), 1 frame triggers immediately in ~250ms.
+    // If confidence is faint (0.22 - 0.28), require 2 consecutive frames (~500ms).
+    const requiredFrames = (topPhone && topPhone.score >= 0.28) ? 1 : PHONE_CONSECUTIVE_FRAMES
+
+    streak.phone = isPhone ? streak.phone + 1 : Math.max(0, streak.phone - 1)
+    if (streak.phone >= requiredFrames) {
       const now = Date.now()
       if (now - lastPhoneAlertTimeRef.current >= PHONE_COOLDOWN_MS) {
-        raiseViolation('phone', 'Mobile phone detected in frame')
+        raiseViolation('phone', 'Mobile phone / camera detected in frame')
         lastPhoneAlertTimeRef.current = now
       }
       streak.phone = 0
@@ -511,7 +521,14 @@ export function useProctoring({
       if (inFlightRef.current) return
 
       try {
-        const bitmap = await createImageBitmap(video, { resizeWidth: 480, resizeHeight: 360, resizeQuality: 'low' })
+        let targetWidth = 640
+        let targetHeight = 480
+        if (video.videoWidth && video.videoHeight) {
+          const aspect = video.videoWidth / video.videoHeight
+          targetWidth = 640
+          targetHeight = Math.round(640 / aspect)
+        }
+        const bitmap = await createImageBitmap(video, { resizeWidth: targetWidth, resizeHeight: targetHeight, resizeQuality: 'medium' })
           .catch(() => createImageBitmap(video))
 
         inFlightRef.current = true
