@@ -1,5 +1,6 @@
 import json
 from app.ai.ai_client import chat_completion, extract_json
+from app.ai.typed_ai_layer import normalize_stt_technical_terms
 
 # Route AI scoring through LangGraph workflows
 try:
@@ -9,21 +10,36 @@ except ImportError:
     _GRAPH_LAYER_AVAILABLE = False
 
 # STATIC SYSTEM PROMPT — extracted so OpenRouter can cache it between calls.
-# This saves ~400 tokens on every answer scored.
-_SCORING_SYSTEM_PROMPT = """You are a senior technical interview evaluator calibrated to the same standards as HireVue, Karat, and Google hiring panels.
+# Calibrated for spoken verbal interviews transcribed via Speech-to-Text.
+_SCORING_SYSTEM_PROMPT = """You are a senior technical interview evaluator calibrated to real-world spoken interview standards.
 
-SCORING RUBRIC:
-1. CONTENT QUALITY (0-50 pts): depth, accuracy, examples, STAR structure.
-   40-50=Exceptional, 28-39=Good, 15-27=Weak, 0-14=Poor
-2. RELEVANCE (0-30 pts): how directly the answer addresses the question.
-   25-30=Direct, 17-24=Mostly, 8-16=Partial, 0-7=Irrelevant
-3. TIME EFFICIENCY (0-20 pts): optimal use of allotted time.
+SPOKEN INTERVIEW CONTEXT & PHONETIC TOLERANCE:
+1. This is a verbal/spoken response delivered in ~30-90 seconds over a microphone, NOT a written exam or academic thesis.
+2. Candidates speak into a microphone transcribed via Speech-to-Text (STT). Accommodate phonetic transcription errors and homophones (e.g., 'ELBO' for 'Elbow', 'Sihlhout' for 'Silhouette', 'sequel' for 'SQL', 'jason' for 'JSON'). NEVER penalize STT misspellings as technical inaccuracies.
+3. Do NOT penalize the candidate for omitting mathematical formulas, proofs, or textbook definitions unless the question explicitly asked for them.
+
+POSITIVE MILESTONE RUBRIC (Pure Accuracy Model - Total Max 100):
+1. CONTENT QUALITY (0-70 pts):
+   - Core Understanding & Definition: 20-25 pts if they correctly define the concept/algorithm.
+   - Mechanism / Step-by-Step Flow: 20-25 pts if they explain how it works or how they would approach it.
+   - Techniques / Practical Application: 15-20 pts if they address methods, trade-offs, or solutions asked in the prompt.
+   - Benchmark: A clear, accurate verbal explanation covering the main concept, steps, and techniques MUST receive at least 50-60/70 for content.
+2. RELEVANCE (0-30 pts):
+   - 25-30 = Direct & thorough, addressing all parts of prompt without repeating the question.
+   - 17-24 = Mostly on point, minor gaps.
+   - 8-16 = Partial coverage.
+   - 0-7 = Irrelevant or off-topic.
+3. TIME EFFICIENCY (0 pts):
+   - time_score MUST be strictly 0 (disabled in Pure Accuracy Model).
 
 RULES:
 - Score the CANDIDATE'S ANSWER only, not the suggested answer.
-- overall_score = content_score + relevance_score + time_score (max 100).
+- overall_score = content_score + relevance_score (max 100).
+- time_score MUST be strictly 0.
 - Also score clarity_score, technical_depth_score, confidence_score (each 0-100).
+- Acknowledge what the candidate correctly articulated first in the feedback; provide constructive suggestions for depth.
 - Return VALID JSON ONLY."""
+
 
 
 def _dynamic_offline_evaluation(
@@ -50,6 +66,7 @@ def _dynamic_offline_evaluation(
         words = re.findall(r'\b[a-zA-Z0-9_+#\.-]+\b', (text or "").lower())
         return [w for w in words if w not in stop_words and len(w) > 1]
 
+    answer = normalize_stt_technical_terms(answer or "")
     q_tokens = set(tokenize(question))
     c_tokens = set(tokenize(context))
     words_list = (answer or "").split()
@@ -93,10 +110,12 @@ def _dynamic_offline_evaluation(
         "testing", "deploy", "pipeline", "async", "sync", "thread", "process", "logic",
         "model", "schema", "query", "index", "cache", "frontend", "backend", "fullstack",
         "design", "management", "lead", "team", "project", "strategy", "deliver", "scale",
-        # Modern Tech / ML / AI
+        # Modern Tech / ML / AI / Data Science
         "python", "java", "javascript", "react", "node", "aws", "cloud", "azure", "sql",
         "nosql", "machine", "learning", "deep", "ai", "ml", "llm", "llms", "rag", "nlp",
-        "pandas", "numpy", "docker", "kubernetes", "git", "ci/cd", "agile", "scrum", "vision"
+        "pandas", "numpy", "docker", "kubernetes", "git", "ci/cd", "agile", "scrum", "vision",
+        "cluster", "clustering", "kmeans", "centroid", "unsupervised", "supervised", "elbow",
+        "silhouette", "partition", "iteration", "assignment", "inertia", "distance", "metric"
     }
     
     matched_domain_terms = set()
@@ -250,22 +269,29 @@ def analyze_answer(
             "feedback": "No answer was recorded for this question.",
         }
 
+    # Normalize Speech-to-Text acoustic mishearings before scoring
+    answer = normalize_stt_technical_terms(answer)
+
     # TOKEN SAVE: Cap answer at 600 words - adequate for full scoring
     answer_words = answer.split()
     if len(answer_words) > 600:
         answer = " ".join(answer_words[:600]) + " ...[truncated]"
 
     # USER message - concise, variable data only (system prompt is cached above)
-    prompt = f"""Score this interview answer. Language for feedback: {language}.
+    prompt = f"""Score this spoken interview answer. Language for feedback: {language}.
+
+SPOKEN INTERVIEW CONTEXT:
+This is a live verbal response transcribed via Speech-to-Text (STT). Be tolerant of phonetic STT artifacts.
+Reward core concepts, mechanism steps, and practical methods clearly articulated.
 
 Context: {context[:500] if context else 'N/A'}
 Question: "{question[:300]}"
-Answer: "{answer}"
+Candidate Spoken Answer: "{answer}"
 
 RULES:
 - Score the CANDIDATE'S ANSWER only, not the suggested answer.
 - overall_score = content_score + relevance_score (max 100).
-- content_score is max 70.
+- content_score is max 70 (Core definition 20-25, Mechanism flow 20-25, Practical methods 15-20).
 - relevance_score is max 30.
 - time_score MUST be strictly 0.
 - Also score clarity_score, technical_depth_score, confidence_score (each 0-100).
