@@ -387,7 +387,21 @@ Return VALID JSON ONLY:
     # STRICT OVERRIDE: overall_score MUST be the mathematical sum
     result_dict["overall_score"] = content_s + relevance_s
 
-    # Final constraints for secondary components
+    # Sanitize feedback and ideal answer to prevent unmapped Unicode characters
+    for str_key in ["feedback", "corrected_answer"]:
+        if str_key in result_dict and isinstance(result_dict[str_key], str):
+            result_dict[str_key] = (
+                result_dict[str_key]
+                .replace("\u2011", "-")
+                .replace("\u2010", "-")
+                .replace("\u2012", "-")
+                .replace("\u2013", "-")
+                .replace("\u2014", "-")
+                .replace("\u2018", "'")
+                .replace("\u2019", "'")
+                .replace("\u201c", '"')
+                .replace("\u201d", '"')
+            )
     for k in ["clarity_score", "technical_depth_score", "confidence_score"]:
         result_dict[k] = max(0, min(100, int(result_dict.get(k, 0))))
     

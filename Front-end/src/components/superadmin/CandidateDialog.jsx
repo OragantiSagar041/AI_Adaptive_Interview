@@ -583,6 +583,17 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
     return minutes > 0 ? `${minutes}m ${remainingSeconds}s` : `${Math.floor(duration)}s`;
   };
 
+  const cleanForPdf = (text) => {
+    if (!text) return '';
+    return String(text)
+      .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015]/g, '-')
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/[\u201C\u201D]/g, '"')
+      .replace(/\u2026/g, '...')
+      .replace(/\u2022/g, '*')
+      .replace(/[^\x00-\x7F]/g, '');
+  };
+
   const handleDownloadTranscript = () => {
     if (!c.answers || c.answers.length === 0) return;
 
@@ -602,12 +613,12 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
 
     doc.setFontSize(16);
     doc.setFont("helvetica", "bold");
-    doc.text(`Interview Transcript: ${c.candidate_name || 'Unknown Candidate'}`, margin, y);
+    doc.text(`Interview Transcript: ${cleanForPdf(c.candidate_name) || 'Unknown Candidate'}`, margin, y);
     y += 10;
 
     doc.setFontSize(11);
     doc.setFont("helvetica", "normal");
-    doc.text(`Status: ${c.status || "Completed"}`, margin, y);
+    doc.text(`Status: ${cleanForPdf(c.status) || "Completed"}`, margin, y);
     y += 6;
     if (c.created_at) {
       doc.text(`Date: ${new Date(c.created_at).toLocaleString()}`, margin, y);
@@ -627,7 +638,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
       const qDisplay = (transItem?.isTranslated && transItem.view === 'translated' && transItem.translatedQuestion)
         ? `Q${index + 1}: ${transItem.translatedQuestion}`
         : `Q${index + 1}: ${a.question_text || 'No question recorded'}`;
-      const qLines = doc.splitTextToSize(qDisplay, pageWidth - 2 * margin);
+      const qLines = doc.splitTextToSize(cleanForPdf(qDisplay), pageWidth - 2 * margin);
       checkPageBreak(qLines.length * 5 + 30);
       doc.text(qLines, margin, y);
       y += qLines.length * 5 + 3;
@@ -657,7 +668,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
         doc.text(`Candidate's Answer (English Translation from ${transItem.sourceLangName || 'Original'}):`, margin, y);
         y += 5;
         doc.setFont("helvetica", "normal");
-        const tLines = doc.splitTextToSize(transItem.translatedText, pageWidth - 2 * margin);
+        const tLines = doc.splitTextToSize(cleanForPdf(transItem.translatedText), pageWidth - 2 * margin);
         for (let i = 0; i < tLines.length; i++) {
           checkPageBreak(5);
           doc.text(tLines[i], margin, y);
@@ -678,7 +689,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
 
       doc.setFont("helvetica", "normal");
       const aText = a.answer_text || c.coding_round?.latest_code || 'No answer provided';
-      const aLines = doc.splitTextToSize(aText, pageWidth - 2 * margin);
+      const aLines = doc.splitTextToSize(cleanForPdf(aText), pageWidth - 2 * margin);
 
       for (let i = 0; i < aLines.length; i++) {
         checkPageBreak(5);
@@ -693,7 +704,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
         doc.text("AI Feedback:", margin, y);
         y += 5;
         doc.setFont("helvetica", "normal");
-        const fLines = doc.splitTextToSize(a.ai_feedback, pageWidth - 2 * margin);
+        const fLines = doc.splitTextToSize(cleanForPdf(a.ai_feedback), pageWidth - 2 * margin);
         for (let i = 0; i < fLines.length; i++) {
           checkPageBreak(5);
           doc.text(fLines[i], margin, y);
@@ -708,7 +719,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
       y += 10;
     });
 
-    doc.save(`${c.candidate_name?.replace(/\s+/g, '_') || 'Candidate'}_transcript.pdf`);
+    doc.save(`${cleanForPdf(c.candidate_name)?.replace(/\s+/g, '_') || 'Candidate'}_transcript.pdf`);
   };
 
   const handleDecision = async (newDecision) => {

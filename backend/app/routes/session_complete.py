@@ -246,6 +246,40 @@ def complete_session(
                     answers = list(answers_collection.find({"interview_id": interview_id}))
                     all_scored = all(a.get("scoring_status") in ("complete", "failed") for a in answers)
                     
+                    if not all_scored:
+                        # Auto-catchup: Score any answers that are still pending
+                        pending_answers = [a for a in answers if a.get("scoring_status") not in ("complete", "failed")]
+                        if pending_answers:
+                            logger.info(f"Auto-completing {len(pending_answers)} pending answers for session {link_id}")
+                            from app import tasks
+                            interview_doc = interviews_collection.find_one({"id": interview_id}) or {}
+                            ctx = f"Candidate's {interview_doc.get('source', 'Resume')}: {interview_doc.get('profile_text', '')}"
+                            lang = interview_doc.get("language") or session.get("language") or "English"
+
+                            from concurrent.futures import ThreadPoolExecutor
+                            def _score_one(ans_doc):
+                                try:
+                                    tasks.score_answer_task(
+                                        interview_id=str(ans_doc.get("interview_id")),
+                                        question_id=str(ans_doc.get("question_id")),
+                                        question_text=ans_doc.get("question_text", ""),
+                                        answer_text=ans_doc.get("answer_text", ""),
+                                        context=ctx,
+                                        time_spent_seconds=int(ans_doc.get("time_spent_seconds") or 0),
+                                        time_limit_seconds=int(ans_doc.get("time_limit_seconds") or 120),
+                                        language=lang,
+                                        answer_version=str(ans_doc.get("answer_version") or "")
+                                    )
+                                except Exception as sc_err:
+                                    logger.error(f"Error auto-scoring Q{ans_doc.get('question_id')}: {sc_err}")
+
+                            with ThreadPoolExecutor(max_workers=min(5, len(pending_answers))) as executor:
+                                list(executor.map(_score_one, pending_answers))
+
+                            # Reload answers after auto-scoring
+                            answers = list(answers_collection.find({"interview_id": interview_id}))
+                            all_scored = all(a.get("scoring_status") in ("complete", "failed") for a in answers)
+
                     if all_scored and not session.get("notification_sent"):
                         # ALWAYS recalculate the final score to include the coding/case-study round
                         avg_score = session.get("avg_score") or 0.0
