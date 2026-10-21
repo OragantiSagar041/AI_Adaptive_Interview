@@ -403,11 +403,6 @@ def check_candidate(email: str, current_admin: dict = Depends(get_current_admin_
             skills_extracted = extract_skills_from_resume_text(r_text) if r_text else ""
             return {
                 "exists": True,
-<<<<<<< HEAD
-                "resume_text": first_s.get("resume_text", ""),
-                "candidate_name": first_s.get("candidate_name", ""),
-                "job_description": first_s.get("job_description", "")
-=======
                 "resume_text": r_text,
                 "candidate_name": first_s.get("candidate_name", ""),
                 "candidate_phone": first_s.get("candidate_phone") or first_s.get("phone", ""),
@@ -419,7 +414,6 @@ def check_candidate(email: str, current_admin: dict = Depends(get_current_admin_
                 "decision": first_s.get("decision", "pending"),
                 "rejection_reason": first_s.get("rejection_reason"),
                 "is_ignored": bool(first_s.get("is_ignored") or first_s.get("status") == "ignored" or first_s.get("decision") == "ignored")
->>>>>>> b837307d2e44f9e80ccbfdb2d8033753e14f80d5
             }
 
         return {"exists": False}
