@@ -295,17 +295,11 @@ def check_candidate(email: str, current_admin: dict = Depends(get_current_admin_
             resume_text = (s.get("resume_text") or "").strip()
             cand_name = (s.get("candidate_name") or "").strip()
             if resume_text:
-<<<<<<< HEAD
-=======
                 skills_extracted = extract_skills_from_resume_text(resume_text)
->>>>>>> b837307d2e44f9e80ccbfdb2d8033753e14f80d5
                 return {
                     "exists": True,
                     "resume_text": resume_text,
                     "candidate_name": cand_name,
-<<<<<<< HEAD
-                    "job_description": s.get("job_description", "")
-=======
                     "candidate_phone": s.get("candidate_phone") or s.get("phone", ""),
                     "candidate_id": s.get("candidate_id") or s.get("candidate_code", "CAND-0001"),
                     "skills": skills_extracted or s.get("skills") or s.get("mandatory_skills") or "",
@@ -315,7 +309,6 @@ def check_candidate(email: str, current_admin: dict = Depends(get_current_admin_
                     "decision": s.get("decision", "pending"),
                     "rejection_reason": s.get("rejection_reason"),
                     "is_ignored": bool(s.get("is_ignored") or s.get("status") == "ignored" or s.get("decision") == "ignored")
->>>>>>> b837307d2e44f9e80ccbfdb2d8033753e14f80d5
                 }
 
         # 2. Search in job_applications_collection
@@ -353,22 +346,15 @@ def check_candidate(email: str, current_admin: dict = Depends(get_current_admin_
         if call_doc:
             r_text = (call_doc.get("resume_text") or call_doc.get("parsed_resume") or "").strip()
             if r_text:
-<<<<<<< HEAD
-=======
                 skills_extracted = extract_skills_from_resume_text(r_text)
->>>>>>> b837307d2e44f9e80ccbfdb2d8033753e14f80d5
-                return {
+                     {
                     "exists": True,
                     "resume_text": r_text,
                     "candidate_name": call_doc.get("candidate_name") or call_doc.get("name", ""),
-<<<<<<< HEAD
-                    "candidate_phone": call_doc.get("phone_number") or call_doc.get("phone", "")
-=======
                     "candidate_phone": call_doc.get("phone_number") or call_doc.get("phone", ""),
                     "candidate_id": call_doc.get("candidate_id") or "CAND-0001",
                     "skills": skills_extracted or call_doc.get("skills") or "",
                     "job_role": call_doc.get("role") or call_doc.get("interview_title", "")
->>>>>>> b837307d2e44f9e80ccbfdb2d8033753e14f80d5
                 }
 
         # 4. Search candidates_collection
@@ -377,12 +363,6 @@ def check_candidate(email: str, current_admin: dict = Depends(get_current_admin_
             sort=[("created_at", -1)]
         )
         if cand_doc and (cand_doc.get("resume_text") or "").strip():
-<<<<<<< HEAD
-            return {
-                "exists": True,
-                "resume_text": cand_doc.get("resume_text", "").strip(),
-                "candidate_name": cand_doc.get("name", "") or cand_doc.get("candidate_name", "")
-=======
             r_text = cand_doc.get("resume_text", "").strip()
             skills_extracted = extract_skills_from_resume_text(r_text)
             return {
@@ -393,7 +373,6 @@ def check_candidate(email: str, current_admin: dict = Depends(get_current_admin_
                 "candidate_id": cand_doc.get("candidate_code") or str(cand_doc.get("_id", "CAND-0001")),
                 "skills": skills_extracted or cand_doc.get("skills") or "",
                 "job_role": cand_doc.get("interview_title") or cand_doc.get("job_applied", "")
->>>>>>> b837307d2e44f9e80ccbfdb2d8033753e14f80d5
             }
 
         # 5. If sessions found with candidate name even if resume_text is blank
