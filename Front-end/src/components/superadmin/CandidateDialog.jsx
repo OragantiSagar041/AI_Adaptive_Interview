@@ -5,11 +5,12 @@ import Swal from 'sweetalert2'
 import axios from 'axios'
 import { handleUpdateDecision } from '../../store/slices/interviewSlice'
 import ScheduleModal from './ScheduleModal'
+import InterviewHistorySection from './InterviewHistorySection'
 import {
   Mail, Phone, MapPin, Building2, IndianRupee, Clock, Download,
   Play, FileText, Sparkles, Star, Check, X, Calendar, Send,
   MessageSquare, Video, Scale, Loader2, AlertCircle, Monitor,
-  Mic, ShieldAlert, Eye, ChevronRight, Code, UserCheck, User, ExternalLink, ArrowLeft,
+  Mic, ShieldAlert, Eye, ChevronRight, Code, UserCheck, User, ExternalLink, ArrowLeft, ArrowRight,
   Globe, RotateCcw
 } from "lucide-react"
 import { jsPDF } from 'jspdf'
@@ -89,8 +90,12 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   const [extractingInfo, setExtractingInfo] = useState(false)
   const [showNotes, setShowNotes] = useState(false)
   const [newNote, setNewNote] = useState("")
-  const [notesSaving, setNotesSaving] = useState(false)
   const [showScheduleModal, setShowScheduleModal] = useState(false)
+  const [previousInterviews, setPreviousInterviews] = useState([])
+  const [previousSummary, setPreviousSummary] = useState(null)
+  const [previousLoading, setPreviousLoading] = useState(false)
+  const [previousError, setPreviousError] = useState(null)
+
 
   // Translation States for Candidate Answers
   const [translations, setTranslations] = useState({})
@@ -258,8 +263,47 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
     setTranslatingKeys({})
     setTranslatingAll(false)
     setAllTranslated(false)
+    setPreviousInterviews([])
+    setPreviousSummary(null)
+    setPreviousLoading(false)
+    setPreviousError(null)
 
     const linkId = candidate.link_id || candidate.id || candidate._id
+
+    // Fetch previous interview details if candidate email exists
+    const candidateEmail = candidate.candidate_email || candidate.email
+    if (candidateEmail) {
+      const fetchPreviousHistory = async () => {
+        setPreviousLoading(true)
+        setPreviousError(null)
+        try {
+          const res = await axios.get(`${API_BASE_URL}/admin/candidate/previous-interviews`, {
+            params: {
+              email: candidateEmail,
+              current_link_id: linkId || "",
+              include_current: true
+            },
+            headers: { Authorization: `Bearer ${token}` }
+          })
+          if (res.data && Array.isArray(res.data.history)) {
+            setPreviousInterviews(res.data.history)
+            setPreviousSummary(res.data.summary || null)
+          } else {
+            setPreviousInterviews([])
+            setPreviousSummary(null)
+          }
+        } catch (histErr) {
+          console.error("Error fetching candidate previous interviews:", histErr)
+          setPreviousError("Could not load previous interview history.")
+          setPreviousInterviews([])
+          setPreviousSummary(null)
+        } finally {
+          setPreviousLoading(false)
+        }
+      }
+      fetchPreviousHistory()
+    }
+
     if (!linkId || linkId.startsWith("ai_call_")) {
       // AI Calling candidates don't have a session - use candidate data as-is
       setDetail({ ...candidate })
@@ -437,9 +481,64 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   const jobTitle = c.interview_title || candidate.interview_title || c.job_applied || candidate.job_applied || "Position"
   const email = c.candidate_email || c.email || candidate.candidate_email || candidate.email || "No email provided"
   const phone = c.candidate_phone || c.phone || candidate.candidate_phone || "N/A"
-  const aiScore = Number(c.avg_score || c.score || candidate.score || 0)
+  const overallScoreValue = c.avg_score ?? c.score ?? candidate.score
+  const aiScore = Number(overallScoreValue ?? 0)
   const isQualified = (c.decision || candidate.decision) === 'selected'
   const status = c.status || candidate.status || ''
+  const interviewAnswers = Array.isArray(c.answers) ? c.answers : []
+  const answeredInterviewCount = interviewAnswers.filter(answer =>
+    typeof answer.answer_text === 'string' &&
+    answer.answer_text.trim() !== '' &&
+    answer.answer_text.trim() !== '(No answer yet)'
+  ).length
+  const scoredInterviewCount = interviewAnswers.filter(answer =>
+    answer.ai_score !== null &&
+    answer.ai_score !== undefined &&
+    answer.ai_score !== '' &&
+    Number.isFinite(Number(answer.ai_score))
+  ).length
+  const interviewDuration = Number(c.integrity?.total_time_minutes)
+  const interviewDateValue = c.started_at || c.date || candidate.date
+  const interviewDate = interviewDateValue && !Number.isNaN(new Date(interviewDateValue).getTime())
+    ? new Date(interviewDateValue).toLocaleString()
+    : ''
+  const interviewType = c.interview_type || candidate.interview_type
+  const experience = c.experience || candidate.experience
+  const currentCompany = c.current_company || candidate.current_company
+  const location = c.location || candidate.location
+  const strengths = c.strengths_summary || candidate.strengths_summary
+  const areasToImprove = c.weaknesses_summary || candidate.weaknesses_summary
+  const recruiterDecision = c.decision || candidate.decision
+  const recommendation = c.overall_recommendation || candidate.overall_recommendation
+  const summarySections = [
+    ['Candidate', [
+      name,
+      email !== 'No email provided' ? email : null,
+      phone !== 'N/A' ? phone : null,
+    ].filter(Boolean).join('; ')],
+    ['Professional background', [
+      experience ? `${experience} experience` : null,
+      currentCompany ? `currently at ${currentCompany}` : null,
+      location ? `based in ${location}` : null,
+    ].filter(Boolean).join('; ')],
+    ['Role applied for', jobTitle !== 'Position' ? jobTitle : null],
+    ['Interview', [
+      interviewType,
+      interviewDate,
+      status ? `Status: ${String(status).replaceAll('_', ' ')}` : null,
+      interviewDuration > 0 ? `Duration: ${interviewDuration} minutes` : null,
+    ].filter(Boolean).join('; ')],
+    ['Participation', interviewAnswers.length > 0
+      ? `${answeredInterviewCount} of ${interviewAnswers.length} recorded questions answered${scoredInterviewCount ? `; ${scoredInterviewCount} responses scored` : ''}`
+      : 'No interview responses recorded'],
+    ['Overall interview score',
+      overallScoreValue !== null && overallScoreValue !== undefined && overallScoreValue !== '' && Number.isFinite(Number(overallScoreValue))
+        ? `${aiScore.toFixed(1)} out of 100` : null],
+    ['AI recommendation', recommendation ? `${recommendation} (automated assessment of interview responses)` : null],
+    ['Strengths', strengths && !/^(no answers provided|n\/a|unable to generate\.?)$/i.test(String(strengths).trim()) ? strengths : null],
+    ['Areas to improve', areasToImprove && !/^(no answers provided|n\/a|unable to generate\.?)$/i.test(String(areasToImprove).trim()) ? areasToImprove : null],
+    ['Recruiter decision', recruiterDecision ? String(recruiterDecision).replaceAll('_', ' ') : null],
+  ].filter(([, value]) => value)
   // Resume/profile text from any field available
   const resumeText = c.profile_text || c.resume_text || ''
   const resumeUrl = c.resume_url || ''
@@ -839,7 +938,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   }
 
 
-  const tabs = ["overview", "resume", "interview", "evaluation", "timeline"]
+  const tabs = ["overview", "resume", "interview", "evaluation", "previous_history", "timeline"]
 
   // Action handlers
   const handleReject = async () => {
@@ -981,6 +1080,17 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                         <Calendar size={13} className="text-slate-400" /> Attended: {new Date(c.started_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
                       </span>
                     )}
+                    {previousInterviews.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("previous_history")}
+                        className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-md border border-indigo-200 transition-colors shadow-xs cursor-pointer"
+                        title="Click to view candidate's interview history"
+                      >
+                        <RotateCcw size={13} className="text-indigo-600" />
+                        Interview History ({previousInterviews.length})
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="hidden sm:flex flex-col items-center justify-center mr-16">
@@ -999,8 +1109,24 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
             {/* ── Tabs ── */}
             <div className="flex items-center gap-4 px-6 border-b border-slate-100 bg-white overflow-x-auto shrink-0">
               {tabs.map(t => (
-                <button key={t} onClick={() => setActiveTab(t)} className={`capitalize whitespace-nowrap px-1 py-4 text-sm font-bold border-b-2 transition-colors ${activeTab === t ? "border-indigo-600 text-indigo-600" : "border-transparent text-slate-500 hover:text-slate-800"}`}>
-                  {t}
+                <button
+                  key={t}
+                  onClick={() => setActiveTab(t)}
+                  className={`capitalize whitespace-nowrap px-1 py-4 text-sm font-bold border-b-2 transition-colors ${
+                    activeTab === t ? "border-indigo-600 text-indigo-600" : "border-transparent text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  {t === "previous_history" ? (
+                    <span className="flex items-center gap-1.5">
+                      <RotateCcw size={14} className="text-indigo-500" />
+                      Interview History
+                      {previousInterviews.length > 0 && (
+                        <span className="px-1.5 py-0.5 text-[10px] bg-indigo-100 text-indigo-700 rounded-full font-black">
+                          {previousInterviews.length}
+                        </span>
+                      )}
+                    </span>
+                  ) : t}
                 </button>
               ))}
             </div>
@@ -1066,6 +1192,18 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
     </div>
   </section>
 )}
+
+                  <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <h3 className="mb-2 text-sm font-black text-slate-800">Summary</h3>
+                    <p className="text-sm leading-7 text-slate-600">
+                      {summarySections.map(([label, value], index) => (
+                        <React.Fragment key={label}>
+                          {index > 0 && <span className="mx-1.5 text-slate-300">|</span>}
+                          <strong className="font-semibold text-slate-800">{label}:</strong> {value}
+                        </React.Fragment>
+                      ))}
+                    </p>
+                  </section>
 
                   <section className="bg-card rounded-xl border border-border p-5 shadow-sm">
                     <h3 className="text-sm font-black text-foreground mb-3 flex items-center gap-2">
@@ -1194,6 +1332,47 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                       </section>
                     )
                   })()}
+
+                  {/* Interview History Overview Card */}
+                  {previousInterviews.length > 0 && (
+                    <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                        <div className="flex items-center gap-2">
+                          <RotateCcw className="h-4 w-4 text-indigo-600" />
+                          <h3 className="text-sm font-black text-slate-800">Interview History Track Record</h3>
+                          <span className="px-2 py-0.5 text-[11px] font-bold bg-indigo-50 text-indigo-700 rounded-md border border-indigo-200">
+                            {previousInterviews.length} Total Sessions
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('previous_history')}
+                          className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+                        >
+                          View Full Interview History <ArrowRight size={13} />
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                          <div className="text-[10px] font-bold text-slate-400 uppercase">Total Interviews</div>
+                          <div className="text-lg font-black text-slate-800 mt-0.5">{previousSummary?.total ?? previousInterviews.length}</div>
+                        </div>
+                        <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-100">
+                          <div className="text-[10px] font-bold text-emerald-600 uppercase">Attended</div>
+                          <div className="text-lg font-black text-emerald-700 mt-0.5">{previousSummary?.attended ?? 0}</div>
+                        </div>
+                        <div className="p-3 bg-rose-50/60 rounded-xl border border-rose-100">
+                          <div className="text-[10px] font-bold text-rose-600 uppercase">Rejected</div>
+                          <div className="text-lg font-black text-rose-700 mt-0.5">{previousSummary?.rejected ?? 0}</div>
+                        </div>
+                        <div className="p-3 bg-amber-50/60 rounded-xl border border-amber-100">
+                          <div className="text-[10px] font-bold text-amber-600 uppercase">Ignored / No-show</div>
+                          <div className="text-lg font-black text-amber-700 mt-0.5">{previousSummary?.ignored_noshow ?? 0}</div>
+                        </div>
+                      </div>
+                    </section>
+                  )}
                 </div>
               )}
 
@@ -1507,6 +1686,52 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                     );
                   })()}
                 </div>
+              )}
+
+              {/* ─ Interview History Tab ─ */}
+              {activeTab === 'previous_history' && (
+                <InterviewHistorySection
+                  history={previousInterviews}
+                  summary={previousSummary}
+                  loading={previousLoading}
+                  error={previousError}
+                  candidateEmail={email}
+                  candidateName={name}
+                  onIgnoreCandidate={() => {
+                    onOpenChange(false)
+                    const targetRoute = window.location.pathname.startsWith('/admin') && !window.location.pathname.startsWith('/superadmin')
+                      ? '/admin/interviews'
+                      : '/superadmin/interviews'
+                    Swal.fire({
+                      toast: true,
+                      position: 'top-end',
+                      icon: 'info',
+                      title: `Candidate ${email} ignored. Redirecting to interviews.`,
+                      showConfirmButton: false,
+                      timer: 2000,
+                      timerProgressBar: true
+                    })
+                    navigate(targetRoute)
+                  }}
+                  onProceedInterview={() => {
+                    onOpenChange(false)
+                    const targetRoute = window.location.pathname.startsWith('/admin') && !window.location.pathname.startsWith('/superadmin')
+                      ? '/admin/create-interview'
+                      : '/superadmin/create-interview'
+                    const latestHistory = previousInterviews[0] || {}
+                    const latestDet = latestHistory.candidate_details || {}
+                    navigate(targetRoute, {
+                      state: {
+                        candidateData: {
+                          name: latestDet.name || name || '',
+                          email: latestDet.email || email || '',
+                          phone: latestDet.phone || c.candidate_phone || c.phone || '',
+                          resumeText: latestHistory.resume_text || c.resume_text || ''
+                        }
+                      }
+                    })
+                  }}
+                />
               )}
 
               {/* ─ Timeline Tab ─ */}
@@ -2571,5 +2796,3 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
       </>
     )
   }
-
-

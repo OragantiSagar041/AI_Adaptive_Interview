@@ -28,17 +28,15 @@ _RESUME_SYSTEM = (
 )
 
 _SCORING_SYSTEM = (
-    "You are a senior technical interview evaluator calibrated to HireVue, Karat, and Google standards.\n"
-    "You MUST use the Machine Reading Inference (MRI) workflow:\n"
-    "1. GENERATE the perfect, ideal answer to the question (output as 'corrected_answer').\n"
-    "2. EXTRACT 3 to 5 core factual concepts required from your ideal answer (output as 'key_facts_required').\n"
-    "3. ANALYZE the candidate's transcript and strictly list which of those exact facts they successfully mentioned (output as 'facts_mentioned_by_candidate').\n"
-    "4. CALCULATE the score STRICTLY based on the ratio of facts hit vs facts required.\n"
-    "SCORING RUBRIC:\n"
-    "1. CONTENT QUALITY (0-50 pts): 40-50=Hit all facts, 28-39=Missed 1-2 minor facts, 15-27=Missed major facts, 0-14=Hit 0 facts or factually incorrect.\n"
-    "2. RELEVANCE (0-30 pts): 25-30=Direct, 17-24=Mostly, 8-16=Partial, 0-7=Irrelevant.\n"
-    "3. TIME EFFICIENCY (0-20 pts): optimal use of allotted time.\n"
-    "CRITICAL RULE: You MUST evaluate if the candidate actually answered the question. Set 'is_relevant' to false if they talked about something else, gave a nonsense answer, or said they don't know.\n"
+    "You are a senior technical interview evaluator calibrated to real-world spoken interview standards.\n"
+    "SPOKEN INTERVIEW CONTEXT & PHONETIC TOLERANCE:\n"
+    "1. This is a conversational verbal response (~30-90s) delivered over a microphone, NOT a written exam.\n"
+    "2. Transcribed via Speech-to-Text (STT): accommodate phonetic transcription artifacts and homophones (e.g. 'ELBO' for 'Elbow', 'Sihlhout' for 'Silhouette', 'sequel' for 'SQL'). Never penalize STT misspellings.\n"
+    "3. Positive milestone scoring: reward core definition (20-25), mechanism flow (20-25), and practical techniques (15-20). Do not demand formulas unless specifically requested.\n"
+    "SCORING RUBRIC (Pure Accuracy Model):\n"
+    "1. CONTENT QUALITY (0-70 pts): 50-70=Solid verbal explanation of concepts & steps, 30-49=Partial explanation, 0-29=Major conceptual errors.\n"
+    "2. RELEVANCE (0-30 pts): 25-30=Directly answers question, 15-24=Mostly on point, 0-14=Off-topic.\n"
+    "3. TIME SCORE: Strictly 0 (disabled).\n"
     "Return VALID JSON ONLY. No markdown."
 )
 
@@ -108,6 +106,71 @@ def sanitize_verbal_question_text(text: str) -> str:
         elif cleaned.endswith('?'):
             cleaned = cleaned[:-1] + ', and walk me through your approach?'
     return cleaned
+
+
+# ── Phonetic & Acoustic Normalizer for Spoken Tech Interviews ─────────────
+
+_PHONETIC_REPLACEMENTS: List[Tuple[re.Pattern, str]] = [
+    # Clustering & ML
+    (re.compile(r'\b(?:the\s+)?elbo\s+method\b', re.IGNORECASE), 'elbow method'),
+    (re.compile(r'\belbo\s+(curve|graph|plot|point|technique|rule)\b', re.IGNORECASE), r'elbow \1'),
+    (re.compile(r'\b(?:sihlhout|silhoute|silhoutte|silhoutee|silhouete|silhuette|silhuet|silhout)\s*(?:method|score|analysis|technique)?\b', re.IGNORECASE), 'silhouette method'),
+    (re.compile(r'\b(?:k\s*means|k\s*mean)\b', re.IGNORECASE), 'K-Means'),
+    (re.compile(r'\b(?:k\s*n\s*n)\b', re.IGNORECASE), 'KNN'),
+    (re.compile(r'\b(?:s\s*v\s*m)\b', re.IGNORECASE), 'SVM'),
+    (re.compile(r'\b(?:p\s*c\s*a)\b', re.IGNORECASE), 'PCA'),
+    (re.compile(r'\b(?:x\s*g\s*boost|xg\s*boost)\b', re.IGNORECASE), 'XGBoost'),
+    (re.compile(r'\b(?:circuit\s+learn|scikit\s+learn|sci\s*kit\s*learn)\b', re.IGNORECASE), 'Scikit-Learn'),
+    (re.compile(r'\b(?:pie\s*torch|py\s*torch)\b', re.IGNORECASE), 'PyTorch'),
+    (re.compile(r'\b(?:tensor\s*flow)\b', re.IGNORECASE), 'TensorFlow'),
+    (re.compile(r'\b(?:gradient\s+descent|stochastic\s+gradient\s+descent)\b', re.IGNORECASE), 'Gradient Descent'),
+    (re.compile(r'\b(?:over\s*fitting)\b', re.IGNORECASE), 'overfitting'),
+    (re.compile(r'\b(?:under\s*fitting)\b', re.IGNORECASE), 'underfitting'),
+    (re.compile(r'\b(?:hyper\s*parameter|hyper\s*parameters)\b', re.IGNORECASE), 'hyperparameter'),
+
+    # Databases & Backend
+    (re.compile(r'\b(?:sequel|cquel)\b', re.IGNORECASE), 'SQL'),
+    (re.compile(r'\b(?:no\s*sequel|no\s*sql)\b', re.IGNORECASE), 'NoSQL'),
+    (re.compile(r'\b(?:postgres\s*sequel|postgre\s*sql|postgres)\b', re.IGNORECASE), 'PostgreSQL'),
+    (re.compile(r'\b(?:mongo\s*db|mongo)\b', re.IGNORECASE), 'MongoDB'),
+    (re.compile(r'\b(?:reddis|red-is)\b', re.IGNORECASE), 'Redis'),
+    (re.compile(r'\b(?:elastic\s*search)\b', re.IGNORECASE), 'Elasticsearch'),
+
+    # Web & DevOps
+    (re.compile(r'\b(?:jason|j\s*son)\b', re.IGNORECASE), 'JSON'),
+    (re.compile(r'\b(?:rest\s*full|rest\s*api|rest\s*apis)\b', re.IGNORECASE), 'REST API'),
+    (re.compile(r'\b(?:graph\s*q\s*l|graph\s*ql)\b', re.IGNORECASE), 'GraphQL'),
+    (re.compile(r'\b(?:kubernets|k\s*8\s*s|k8s)\b', re.IGNORECASE), 'Kubernetes'),
+    (re.compile(r'\b(?:dockers)\b', re.IGNORECASE), 'Docker'),
+    (re.compile(r'\b(?:git\s*hub)\b', re.IGNORECASE), 'GitHub'),
+    (re.compile(r'\b(?:git\s*lab)\b', re.IGNORECASE), 'GitLab'),
+    (re.compile(r'\b(?:c\s*i\s*c\s*d|ci\s*cd)\b', re.IGNORECASE), 'CI/CD'),
+
+    # Programming & Architecture
+    (re.compile(r'\b(?:a\s*sync|a-sync)\b', re.IGNORECASE), 'async'),
+    (re.compile(r'\b(?:a\s*sync\s*await|async\s*a\s*wait)\b', re.IGNORECASE), 'async/await'),
+    (re.compile(r'\b(?:oops|oops\s*concepts?)\b', re.IGNORECASE), 'OOP'),
+    (re.compile(r'\b(?:micro\s*services?|micro\s*service)\b', re.IGNORECASE), 'microservices'),
+    (re.compile(r'\b(?:multi\s*threading|multi\s*threaded)\b', re.IGNORECASE), 'multithreading'),
+    (re.compile(r'\b(?:data\s*base|data\s*bases)\b', re.IGNORECASE), 'database'),
+]
+
+
+def normalize_stt_technical_terms(text: str) -> str:
+    """
+    Clean and normalize common phonetic Speech-to-Text misspellings of tech terms.
+    Preserves original meaning while fixing acoustic recognition errors.
+    """
+    if not text or not isinstance(text, str):
+        return text or ""
+
+    normalized = text
+    for pattern, replacement in _PHONETIC_REPLACEMENTS:
+        normalized = pattern.sub(replacement, normalized)
+
+    normalized = re.sub(r'\s+', ' ', normalized).strip()
+    return normalized
+
 
 def _truncate(text: str, limit: int) -> str:
     text = (text or "").strip()
@@ -217,6 +280,9 @@ def score_answer(
     Score a candidate answer. Returns validated AnswerScore dict.
     Token-optimized: answer capped at 600 words, context at 500 chars.
     """
+    # Normalize Speech-to-Text acoustic mishearings before scoring
+    answer = normalize_stt_technical_terms(answer)
+
     # Cap answer length
     words = answer.split()
     if len(words) > 600:
@@ -267,21 +333,18 @@ Return VALID JSON ONLY:
         )
         result = _parse_with_schema(raw, AnswerScore, fallback)
         
-        # Enforce strict zero-tolerance for irrelevant or nonsense answers
+        # Enforce strict zero-tolerance for truly empty, nonsense, or trivial answers
         word_count = len(answer.split())
-        facts_hit = len(result.facts_mentioned_by_candidate)
         
-        # Aggressive Hallucination Filters:
+        # Guardrails:
         # 1. If it's physically too short to be a valid technical answer (< 5 words).
         # 2. If it's short (< 15 words) but somehow got a high score (hallucinated).
-        # 3. If AI explicitly flagged it as irrelevant or gave it a failing rubric score.
-        # 4. If the AI generated facts, but the candidate hit 0 of them.
+        # 3. If explicitly marked as completely irrelevant and relevance <= 5.
         is_too_short = word_count < 5
         is_short_hallucination = (word_count < 15 and result.overall_score > 40)
-        is_rubric_fail = not result.is_relevant or (result.relevance_score <= 10) or (result.content_score <= 14)
-        is_zero_facts = (len(result.key_facts_required) > 0 and facts_hit == 0)
+        is_rubric_fail = (not result.is_relevant and result.relevance_score <= 5)
         
-        if is_too_short or is_short_hallucination or is_rubric_fail or is_zero_facts:
+        if is_too_short or is_short_hallucination or is_rubric_fail:
             result.overall_score = 0
             result.content_score = 0
             result.relevance_score = 0
