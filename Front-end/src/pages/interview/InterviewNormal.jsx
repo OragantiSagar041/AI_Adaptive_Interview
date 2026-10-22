@@ -7,7 +7,6 @@ import ProctoringAlerts from '../../components/interview/ProctoringAlerts'
 import { API_BASE_URL } from '../../apiConfig'
 import { candidateFetch } from '../../utils/candidateAuth'
 import '../../Interview.css'
-import { motion } from 'framer-motion'
 import AccessDeniedScreen from '../../components/interview/AccessDeniedScreen'
 
 // ── VoiceCloneSetup — extracted to module level so it is never re-created

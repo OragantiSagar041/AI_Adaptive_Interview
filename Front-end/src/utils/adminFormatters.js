@@ -58,3 +58,64 @@ export function formatDateTimeMedium(value) {
 export function formatScore(score) {
   return `${Number(score || 0).toFixed(1)}/100`
 }
+
+/**
+ * Returns human-readable relative time (e.g. "Just now", "2 hrs ago", "3 days ago").
+ * Handles ISO timestamps as well as extracting timestamp from MongoDB ObjectId fallback.
+ */
+export function formatRelativeTime(dateValue, fallbackId) {
+  let date = null
+
+  if (dateValue) {
+    date = parseDateStringToUtc(dateValue)
+  }
+
+  // Fallback to MongoDB ObjectId (first 8 hex chars represent creation timestamp in seconds)
+  if ((!date || Number.isNaN(date.getTime())) && fallbackId && typeof fallbackId === 'string' && /^[0-9a-fA-F]{24}$/.test(fallbackId)) {
+    try {
+      const timestamp = parseInt(fallbackId.substring(0, 8), 16) * 1000
+      date = new Date(timestamp)
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  if (!date || Number.isNaN(date.getTime())) {
+    return 'Recently'
+  }
+
+  const now = Date.now()
+  const diffMs = now - date.getTime()
+
+  // Handle small clock skew
+  if (diffMs < 60000) {
+    return 'Just now'
+  }
+
+  const diffSec = Math.floor(diffMs / 1000)
+  const diffMin = Math.floor(diffSec / 60)
+  if (diffMin < 60) {
+    return `${diffMin} min${diffMin === 1 ? '' : 's'} ago`
+  }
+
+  const diffHrs = Math.floor(diffMin / 60)
+  if (diffHrs < 24) {
+    return `${diffHrs} hr${diffHrs === 1 ? '' : 's'} ago`
+  }
+
+  const diffDays = Math.floor(diffHrs / 24)
+  if (diffDays === 1) {
+    return '1 day ago'
+  }
+  if (diffDays < 30) {
+    return `${diffDays} days ago`
+  }
+
+  const diffMonths = Math.floor(diffDays / 30)
+  if (diffMonths < 12) {
+    return `${diffMonths} month${diffMonths === 1 ? '' : 's'} ago`
+  }
+
+  const diffYears = Math.floor(diffDays / 365)
+  return `${diffYears} yr${diffYears === 1 ? '' : 's'} ago`
+}
