@@ -369,7 +369,7 @@ def score_answer_task(
                                 except Exception: pass
                             
                             if candidate_email:
-                                from app.routes import send_submission_notification
+                                from app.routes.admin_dashboard import send_submission_notification
                                 send_submission_notification(
                                     candidate_email=candidate_email,
                                     candidate_name=candidate_name,
@@ -501,7 +501,7 @@ def generate_report_task(self, interview_id: str):
     logger.info(f"Generating PDF report for {interview_id} (Attempt {self.request.retries + 1})")
 
     # Import here to avoid circular imports at module load time
-    from app.routes import generate_report
+    from app.routes.admin_dashboard import generate_report
 
     try:
         file_path = generate_report(interview_id)

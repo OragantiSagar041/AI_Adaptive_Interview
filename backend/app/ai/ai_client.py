@@ -27,8 +27,11 @@ import threading
 from typing import List, Dict, Optional
 from dotenv import load_dotenv
 import contextvars
+import logging
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 import requests as http_requests
 from app.ai.groq_manager import groq_key_manager
