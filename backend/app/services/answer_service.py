@@ -4,6 +4,7 @@ Both HTTP and realtime transports call this module so an answer always has the
 same validation, idempotent upsert, version guard, and scoring behavior.
 """
 
+import os
 from datetime import datetime, timezone
 import logging
 from typing import Any, Dict
