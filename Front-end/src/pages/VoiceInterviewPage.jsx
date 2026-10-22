@@ -352,6 +352,8 @@ export default function VoiceInterviewPage() {
   const voiceNoiseFrameCountRef = useRef(0)
   const voiceNoiseCooldownRef = useRef(0)
   const lastCandidateVoiceTimeRef = useRef(0)
+  const inactivityAlertCountRef = useRef(0)
+  const lastCandidateActiveTimeRef = useRef(Date.now())
 
   // ── Browser online/offline detection ────────────────────────────
   const [isOnline, setIsOnline] = useState(() => navigator.onLine)
@@ -1291,6 +1293,13 @@ export default function VoiceInterviewPage() {
           const previous = whisperTxRef.current.trim()
           const merged = mergeWhisperChunks(previous, freshWhisper)
           whisperTxRef.current = merged
+          if (freshWhisper.trim()) {
+            lastCandidateActiveTimeRef.current = Date.now()
+            if (inactivityAlertCountRef.current > 0 && inactivityAlertCountRef.current < 3) {
+              inactivityAlertCountRef.current = 0
+              Swal.close()
+            }
+          }
           accumulatedTranscriptRef.current = merged
           currentTxRef.current = merged
           setTranscript(merged)
@@ -1779,6 +1788,14 @@ export default function VoiceInterviewPage() {
 
     if (rec) rec.onresult = ev => {
       if (!isListeningRef.current || isTTSPlayingRef.current) return
+      
+      // Candidate is actually producing words
+      lastCandidateActiveTimeRef.current = Date.now()
+      if (inactivityAlertCountRef.current > 0 && inactivityAlertCountRef.current < 3) {
+        inactivityAlertCountRef.current = 0
+        Swal.close()
+      }
+
       let finalStr = '', interimStr = ''
       for (let i = 0; i < ev.results.length; i++) {
         if (ev.results[i].isFinal) {
@@ -2130,6 +2147,127 @@ export default function VoiceInterviewPage() {
 
     checkAndGenerateFollowUp()
   }, [addMsg, aiSay, startListening])
+  // ── Inactivity / No Response Tracking ────────────────────────────────
+  useEffect(() => {
+    if (round !== 'verbal' && round !== 'coding' && round !== 'case_study') return
+
+    // Pause inactivity timer if AI is speaking, system is saving, or TTS is playing
+    if (aiStatus === 'speaking' || isTTSPlayingRef.current || isSaving) {
+      lastCandidateActiveTimeRef.current = Date.now()
+      return
+    }
+
+    const idleTime = Date.now() - lastCandidateActiveTimeRef.current
+    // 2 minutes = 120000 ms
+    if (idleTime > 120000) {
+      if (inactivityAlertCountRef.current === 0) {
+        inactivityAlertCountRef.current = 1
+        lastCandidateActiveTimeRef.current = Date.now() // reset timer for the next alert window
+
+        // Speak the warning
+        speak("Are you there? Can I continue the interview?")
+        
+        Swal.fire({
+          title: 'Not Responding',
+          text: 'Are you there? Can I continue the interview?',
+          icon: 'warning',
+          confirmButtonText: 'Yes, continue',
+          background: '#161c2d',
+          color: '#fff',
+          allowOutsideClick: false
+        }).then((result) => {
+          if (result.isConfirmed) {
+            lastCandidateActiveTimeRef.current = Date.now()
+            // Sequence only resets when candidate actually resumes responding via microphone
+          }
+        })
+      } else if (inactivityAlertCountRef.current === 1) {
+        inactivityAlertCountRef.current = 2
+        lastCandidateActiveTimeRef.current = Date.now()
+        speak("Still not responding. Please answer or the interview will be terminated.")
+        
+        Swal.fire({
+          title: 'Still Not Responding',
+          text: 'Please respond or the interview will be terminated.',
+          icon: 'warning',
+          confirmButtonText: 'Yes, continue',
+          background: '#161c2d',
+          color: '#fff',
+          allowOutsideClick: false
+        }).then((result) => {
+          if (result.isConfirmed) {
+            lastCandidateActiveTimeRef.current = Date.now()
+            // Sequence only resets when candidate actually resumes responding via microphone
+          }
+        })
+      } else if (inactivityAlertCountRef.current === 2) {
+        inactivityAlertCountRef.current = 3
+        speak("No response detected. Terminating interview.")
+
+        Swal.fire({
+          title: 'Interview Terminated',
+          html: `
+            <div style="display:flex; flex-direction:column; align-items:center; gap:16px; margin-top:8px;">
+              <p style="color:#94a3b8; font-size:14px; margin:0; line-height:1.5; text-align:center;">
+                No response detected after multiple warnings.<br/>
+                <span style="color:#f87171; font-weight:600;">The interview is terminating.</span>
+              </p>
+              <div style="display:flex; align-items:center; justify-content:center; gap:16px; margin:12px 0; min-height:56px;">
+                <div id="term-chip-1" style="width:52px; height:52px; border-radius:50%; background:#ef4444; color:#ffffff; display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:800; box-shadow:0 0 24px rgba(239,68,68,0.7); transform:scale(1.15); transition:all 0.35s ease-out; opacity:1;">1</div>
+                <div id="term-chip-2" style="width:52px; height:52px; border-radius:50%; background:#ef4444; color:#ffffff; display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:800; box-shadow:0 0 24px rgba(239,68,68,0.7); transform:scale(0.5); transition:all 0.35s ease-out; opacity:0;">2</div>
+                <div id="term-chip-3" style="width:52px; height:52px; border-radius:50%; background:#ef4444; color:#ffffff; display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:800; box-shadow:0 0 24px rgba(239,68,68,0.7); transform:scale(0.5); transition:all 0.35s ease-out; opacity:0;">3</div>
+              </div>
+              <div style="font-size:14px; color:#cbd5e1; font-weight:600; letter-spacing:0.02em;">
+                Terminating in: <span id="term-sequence-text" style="color:#f87171; font-weight:800; font-size:18px;">1</span>
+              </div>
+            </div>
+          `,
+          icon: 'error',
+          background: '#161c2d',
+          color: '#fff',
+          allowOutsideClick: false,
+          allowEscapeKey: false,
+          showConfirmButton: false,
+          customClass: {
+            popup: 'border border-white/10 rounded-2xl shadow-2xl',
+            title: 'text-xl font-bold text-white'
+          },
+          didOpen: (popup) => {
+            let step = 1
+            const chip1 = popup.querySelector('#term-chip-1')
+            const chip2 = popup.querySelector('#term-chip-2')
+            const chip3 = popup.querySelector('#term-chip-3')
+            const seqText = popup.querySelector('#term-sequence-text')
+
+            const intervalId = setInterval(() => {
+              step += 1
+              if (step === 2) {
+                if (chip1) chip1.style.transform = 'scale(1)'
+                if (chip2) {
+                  chip2.style.opacity = '1'
+                  chip2.style.transform = 'scale(1.15)'
+                }
+                if (seqText) seqText.innerText = '1, 2'
+              } else if (step === 3) {
+                if (chip2) chip2.style.transform = 'scale(1)'
+                if (chip3) {
+                  chip3.style.opacity = '1'
+                  chip3.style.transform = 'scale(1.15)'
+                }
+                if (seqText) seqText.innerText = '1, 2, 3'
+              }
+            }, 1000)
+
+            setTimeout(() => {
+              clearInterval(intervalId)
+              Swal.close()
+              completeInterview({ isTimeout: true, reason: 'Terminated due to lack of response from candidate (3 alerts).' })
+            }, 3000)
+          }
+        })
+      }
+    }
+  }, [countdown])
 
   // ── Complete interview ────────────────────────────────────────────────────
   const completeInterview = useCallback(async (options = {}) => {
@@ -2244,6 +2382,12 @@ export default function VoiceInterviewPage() {
 
     setRound('done')
     setIsSaving(false)
+    
+    speak("Thank you for your time. If you are shortlisted, our HR team will get back to you regarding the next steps.")
+    setTimeout(() => {
+      window.close()
+      window.location.href = '/' // Fallback if close is blocked
+    }, 8000)
   }, [stopListening, linkId, stopAndUploadRecording, warningsCount, stopAudio, aiSay])
 
   // ── Load coding/case study round questions ────────────────────────────────
@@ -2516,15 +2660,16 @@ export default function VoiceInterviewPage() {
 
     if (count >= 3) {
       Swal.fire({
-        icon: 'error',
-        title: 'Interview Terminated',
-        html: `<p>You stopped screen sharing <strong>${count} times</strong>. This interview has been automatically terminated and the incident has been reported.</p>`,
-        confirmButtonColor: '#ef4444',
-        confirmButtonText: 'Close Interview',
+        icon: 'info',
+        title: 'Thank You',
+        text: 'Thank you for your time. If you are shortlisted, our HR team will get back to you regarding the next steps.',
+        showConfirmButton: false,
+        timer: 8000,
         width: '460px',
         allowOutsideClick: false,
         allowEscapeKey: false,
-      }).then(() => completeInterview({ isTimeout: true, reason: 'Terminated due to screen sharing violations.' }))
+      })
+      completeInterview({ isTimeout: true, reason: 'Terminated due to screen sharing violations.' })
     } else {
       Swal.fire({
         icon: 'warning',
@@ -2565,13 +2710,14 @@ export default function VoiceInterviewPage() {
         if (focusLossCount > MAX_FOCUS_LOSSES) {
           // Auto-end interview after too many violations
           Swal.fire({
-            icon: 'error',
-            title: '🚨 Interview Terminated!',
-            text: `You have exceeded the maximum allowed background activity violations. The interview has been automatically ended and saved.`,
-            confirmButtonColor: '#ef4444',
-            confirmButtonText: 'OK',
+            icon: 'info',
+            title: 'Thank You',
+            text: 'Thank you for your time. If you are shortlisted, our HR team will get back to you regarding the next steps.',
+            showConfirmButton: false,
+            timer: 8000,
             allowOutsideClick: false,
-          }).then(() => completeInterview({ isTimeout: true, reason: 'Terminated due to multiple tab switching or background app usage.' }))
+          })
+          completeInterview({ isTimeout: true, reason: 'Terminated due to multiple tab switching or background app usage.' })
         } else {
           Swal.fire({
             icon: 'warning',
