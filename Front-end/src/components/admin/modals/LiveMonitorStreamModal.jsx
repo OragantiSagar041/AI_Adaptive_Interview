@@ -419,15 +419,15 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
 
       if (mountedRef.current) setStatus('negotiating')
 
-      // If no video track arrives within 15 s, retry the offer automatically.
+      // If no video track arrives within 25 s, retry the offer automatically (or wait if candidate is initializing)
       streamTimeoutRef.current = setTimeout(() => {
-        if (mountedRef.current && statusRef.current !== 'streaming') {
-          console.warn('[AdminWebRTC] No stream in 15 s — retrying offer...')
+        if (mountedRef.current && statusRef.current !== 'streaming' && statusRef.current !== 'waiting_tracks') {
+          console.warn('[AdminWebRTC] No stream in 25 s — retrying offer...')
           if (sendOfferRef.current && wsRef.current?.readyState === WebSocket.OPEN) {
             sendOfferRef.current(wsRef.current)
           }
         }
-      }, 15000)
+      }, 25000)
 
     } catch (err) {
       console.error('[AdminWebRTC] sendOffer error:', err)
@@ -495,6 +495,14 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
           console.log('[AdminWebRTC] Candidate reconnected/ready. Sending fresh offer...')
           if (mountedRef.current && wsRef.current?.readyState === WebSocket.OPEN) {
             sendOffer(wsRef.current)
+          }
+          return
+        }
+
+        if (msg.type === 'candidate_not_ready') {
+          console.log('[AdminWebRTC] Candidate media tracks initializing (device check or permissions). Waiting for candidate...')
+          if (mountedRef.current && statusRef.current !== 'streaming') {
+            setStatus('waiting_tracks')
           }
           return
         }
@@ -758,9 +766,10 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col justify-center">
             <span className="text-[0.65rem] font-bold text-slate-500 uppercase tracking-wider mb-1">Status</span>
             <div className="flex items-center gap-1.5 font-bold text-sm">
-              {status === 'streaming'   ? <span className="text-emerald-600">LIVE</span> :
-               status === 'connecting'  ? <span className="text-amber-500">Connecting...</span> :
-               status === 'negotiating' ? <span className="text-indigo-500">Establishing...</span> :
+              {status === 'streaming'      ? <span className="text-emerald-600">LIVE</span> :
+               status === 'connecting'     ? <span className="text-amber-500">Connecting...</span> :
+               status === 'waiting_tracks' ? <span className="text-amber-500">Candidate Setup...</span> :
+               status === 'negotiating'    ? <span className="text-indigo-500">Establishing...</span> :
                <span className="text-red-500 uppercase">{status}</span>}
             </div>
           </div>
@@ -853,12 +862,19 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
 
           {!remoteStream && (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 bg-slate-900/90 z-10">
-              {status === 'connecting' || status === 'negotiating' ? (
+              {status === 'connecting' || status === 'negotiating' || status === 'waiting_tracks' ? (
                 <div className="flex flex-col items-center gap-3">
                   <Activity size={40} className="animate-pulse text-indigo-500" />
                   <p className="text-sm font-semibold tracking-wide">
-                    {status === 'connecting' ? 'Connecting to Candidate Stream...' : 'Negotiating WebRTC connection...'}
+                    {status === 'connecting' ? 'Connecting to Candidate Stream...' :
+                     status === 'waiting_tracks' ? 'Candidate device initializing (permissions/setup)...' :
+                     'Negotiating WebRTC connection...'}
                   </p>
+                  <span className="text-xs text-slate-400 text-center max-w-sm">
+                    {status === 'waiting_tracks'
+                      ? 'Stream will start automatically once camera check is completed by candidate.'
+                      : 'Establishing direct media channel...'}
+                  </span>
                   <button
                     onClick={() => sendOffer(wsRef.current)}
                     className="mt-2 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 transition-colors text-white text-xs font-bold rounded shadow-md"

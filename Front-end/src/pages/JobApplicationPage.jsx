@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 
 import { API_BASE_URL } from "../apiConfig";
+import { formatRelativeTime } from '../utils/adminFormatters';
 
 const WORK_MODE_STYLES = {
   Remote: 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -287,6 +288,9 @@ export default function JobApplicationPage() {
                   <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border ${WORK_MODE_STYLES[job.workMode] || 'bg-slate-50 text-slate-600 border-slate-200'}`}>
                     <Clock size={12} /> {job.workMode}
                   </span>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                    <Clock size={12} className="text-indigo-600" /> Posted {formatRelativeTime(job.created_at, job._id)}
+                  </span>
                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
                     <Target size={12} /> {job.experience}
                   </span>
@@ -302,7 +306,9 @@ export default function JobApplicationPage() {
                     <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2 mb-3">
                       <FileText size={16} className="text-indigo-500" /> About the Role
                     </h3>
-                    <p className="text-slate-600 leading-relaxed text-sm whitespace-pre-wrap">{job.description}</p>
+                    <p className="text-slate-600 leading-relaxed text-sm whitespace-pre-wrap">
+                      {job.description ? job.description.replace(/How to Apply[\s\S]*$/gi, '').trim() : ''}
+                    </p>
                   </div>
 
                   {job.bond && (

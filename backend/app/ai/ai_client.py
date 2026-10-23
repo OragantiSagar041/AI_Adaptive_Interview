@@ -27,8 +27,11 @@ import threading
 from typing import List, Dict, Optional
 from dotenv import load_dotenv
 import contextvars
+import logging
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 import requests as http_requests
 from app.ai.groq_manager import groq_key_manager
@@ -320,8 +323,15 @@ def _call_groq(
 ) -> str:
     """Call Groq API (completions) with active model and automatic fallback on decommissioned models."""
     url = "https://api.groq.com/openai/v1/chat/completions"
-    active_model = model or os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
-    fallback_models = ["openai/gpt-oss-20b", "llama-3.3-70b-versatile", "openai/gpt-oss-120b"]
+    
+    # If the requested model is a known Groq model family, use it; otherwise default to GROQ_MODEL or gpt-oss-20b
+    valid_groq_prefix = ("openai/gpt-oss", "llama", "mixtral", "gemma", "deepseek", "qwen")
+    if model and any(model.lower().startswith(p) or p in model.lower() for p in valid_groq_prefix):
+        active_model = model
+    else:
+        active_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+
+    fallback_models = ["openai/gpt-oss-20b", "openai/gpt-oss-120b"]
     
     max_attempts = groq_key_manager.get_total_keys() or 1
     last_error_text = ""
@@ -351,19 +361,22 @@ def _call_groq(
 
             if resp.status_code == 200:
                 data = resp.json()
+                usage = data.get("usage", {})
+                if usage and "total_tokens" in usage:
+                    _track_tokens(usage["total_tokens"])
                 return data["choices"][0]["message"]["content"]
             elif resp.status_code == 429:
                 last_status = resp.status_code
                 last_error_text = resp.text[:300]
-                continue # Try next key
+                continue  # Try next key
             elif resp.status_code == 401:
                 groq_key_manager.mark_invalid(api_key)
                 last_status = resp.status_code
                 last_error_text = resp.text[:300]
-                continue # Try next key
+                continue  # Try next key
             elif resp.status_code in (400, 404) and ("model" in resp.text.lower() or "decommissioned" in resp.text.lower()):
                 logger.warning(f"Groq model {current_model} unavailable ({resp.text[:120]}), trying fallback model...")
-                break # Try next fallback model
+                break  # Try next fallback model
             else:
                 last_status = resp.status_code
                 last_error_text = resp.text[:300]
@@ -389,49 +402,61 @@ def chat_completion(
 ) -> str:
     """
     Send a chat completion request.
-    Provider chain: Gemini (primary) → OpenRouter → Groq (fallback) → HuggingFace (tertiary).
+    Honors AI_PROVIDER env var to select primary provider (defaulting to groq if keys exist, then gemini).
+    Provides automatic fallback across: Groq, Gemini, OpenRouter, and HuggingFace.
     """
-    # 0. Primary Fast Path: Google Gemini (if GEMINI_API_KEY is configured)
-    active_gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_API_Key") or GEMINI_API_KEY
-    if active_gemini_key and active_gemini_key.strip():
-        try:
-            return _call_gemini(messages, model="gemini-3.6-flash", temperature=temperature, timeout=min(timeout, 30), max_tokens=max_tokens)
-        except Exception as gemini_exc:
-            print(f"Gemini API call failed ({gemini_exc}). Falling back to OpenRouter...")
-
-    # 1. Secondary path: try OpenRouter if not in cooldown
-    if not _is_in_cooldown() and OPENROUTER_API_KEY:
-        try:
-            return _call_openrouter(messages, model, temperature, timeout, max_tokens)
-        except Exception as openrouter_exc:
-            err_msg = str(openrouter_exc)
-            if _is_quota_error(openrouter_exc):
-                _mark_quota_exhausted(err_msg)
-                print(f"OpenRouter quota hit: {err_msg}. Switching to Groq/HuggingFace fallback...")
-            else:
-                print(f"OpenRouter failed: {openrouter_exc}. Switching to Groq/HuggingFace fallback...")
+    primary = get_active_provider()
+    all_providers = ["groq", "gemini", "openrouter", "huggingface"]
+    if primary in all_providers:
+        provider_order = [primary] + [p for p in all_providers if p != primary]
     else:
-        if _is_in_cooldown():
-            print("OpenRouter is in cooldown. Using Groq/HuggingFace fallback...")
-        else:
-            print("No OpenRouter API key. Using Groq/HuggingFace fallback...")
+        provider_order = ["groq", "gemini", "openrouter", "huggingface"]
 
-    # 2. Fast Fallback: Groq (if key available)
+    active_gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_API_Key") or GEMINI_API_KEY
     has_groq = bool(os.getenv("GROQ_API_KEY") or groq_key_manager.get_total_keys() > 0)
-    if has_groq:
-        try:
-            print("Calling Groq LLM fallback...")
-            return _call_groq(messages, temperature=temperature, timeout=min(timeout, 20), max_tokens=max_tokens)
-        except Exception as groq_exc:
-            print(f"Groq LLM call failed: {groq_exc}. Switching to HuggingFace fallback...")
+    has_openrouter = bool(OPENROUTER_API_KEY and not _is_in_cooldown())
 
-    # 3. Tertiary Fallback: HuggingFace
-    try:
-        print("Calling HuggingFace fallback model...")
-        return _call_huggingface(messages, temperature=temperature, timeout=timeout)
-    except Exception as hf_exc:
-        print(f"All LLM providers failed: Gemini, OpenRouter, Groq, and HuggingFace.")
-        raise RuntimeError("QUOTA_EXHAUSTED_INSTANT_OFFLINE")
+    last_error = None
+
+    for provider in provider_order:
+        if provider == "groq":
+            if not has_groq:
+                continue
+            try:
+                return _call_groq(messages, model=model, temperature=temperature, timeout=min(timeout, 25), max_tokens=max_tokens)
+            except Exception as groq_exc:
+                logger.warning("Groq call failed (%s). Attempting fallback provider...", groq_exc)
+                last_error = groq_exc
+
+        elif provider == "gemini":
+            if not (active_gemini_key and active_gemini_key.strip()):
+                continue
+            try:
+                return _call_gemini(messages, model="gemini-3.6-flash", temperature=temperature, timeout=min(timeout, 30), max_tokens=max_tokens)
+            except Exception as gemini_exc:
+                logger.warning("Gemini call failed (%s). Attempting fallback provider...", gemini_exc)
+                last_error = gemini_exc
+
+        elif provider == "openrouter":
+            if not has_openrouter:
+                continue
+            try:
+                return _call_openrouter(messages, model=model, temperature=temperature, timeout=timeout, max_tokens=max_tokens)
+            except Exception as openrouter_exc:
+                if _is_quota_error(openrouter_exc):
+                    _mark_quota_exhausted(str(openrouter_exc))
+                logger.warning("OpenRouter call failed (%s). Attempting fallback provider...", openrouter_exc)
+                last_error = openrouter_exc
+
+        elif provider == "huggingface":
+            try:
+                return _call_huggingface(messages, temperature=temperature, timeout=timeout)
+            except Exception as hf_exc:
+                logger.warning("HuggingFace call failed (%s).", hf_exc)
+                last_error = hf_exc
+
+    logger.error("All AI providers in fallback chain failed. Last error: %s", last_error)
+    raise RuntimeError(f"All LLM providers failed: {last_error}")
 
 
 def chat_completion_safe(
@@ -442,7 +467,7 @@ def chat_completion_safe(
     fallback_text: str = '{"error": "AI service unavailable"}',
 ) -> str:
     """
-    Like chat_completion() but never raises — returns fallback_text on any error.
+    Like chat_completion() but never raises -- returns fallback_text on any error.
     Useful for non-critical paths.
     """
     try:
@@ -453,19 +478,28 @@ def chat_completion_safe(
 
 
 def get_active_provider() -> str:
-    """Return which provider is currently being used."""
-    if GEMINI_API_KEY:
+    """Return which provider is currently active/primary."""
+    configured = os.getenv("AI_PROVIDER", "").lower().strip()
+    if configured:
+        return configured
+    if groq_key_manager.get_total_keys() > 0 or os.getenv("GROQ_API_KEY"):
+        return "groq"
+    active_gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_API_Key") or GEMINI_API_KEY
+    if active_gemini_key and active_gemini_key.strip():
         return "gemini"
-    if _is_in_cooldown() or not OPENROUTER_API_KEY:
-        return "huggingface"
-    return "openrouter"
+    if not _is_in_cooldown() and OPENROUTER_API_KEY:
+        return "openrouter"
+    return "huggingface"
 
 
 def get_status() -> Dict:
     """Return current AI client status for debugging."""
     return {
         "active_provider": get_active_provider(),
-        "gemini_key_set": bool(GEMINI_API_KEY),
+        "configured_ai_provider": os.getenv("AI_PROVIDER", ""),
+        "groq_keys_available": groq_key_manager.get_total_keys(),
+        "groq_model": os.getenv("GROQ_MODEL", "openai/gpt-oss-20b"),
+        "gemini_key_set": bool(os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_API_Key") or GEMINI_API_KEY),
         "openrouter_key_set": bool(OPENROUTER_API_KEY),
         "hf_key_set": bool(HF_API_KEY),
         "active_hf_model": _active_hf_model,
@@ -515,4 +549,7 @@ def extract_json(text: str) -> Optional[Dict]:
     return None
 
 
-print(f"[OK] ai_client.py loaded | Provider: {get_active_provider()}, HF model: {_active_hf_model}")
+active_prov = get_active_provider()
+groq_keys_count = groq_key_manager.get_total_keys()
+active_model_name = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b") if active_prov == "groq" else (_active_hf_model if active_prov == "huggingface" else "gemini-3.6-flash")
+print(f"[OK] ai_client.py loaded | Provider: {active_prov}, Active Model: {active_model_name}, Groq keys: {groq_keys_count}")

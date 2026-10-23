@@ -112,6 +112,8 @@ function CandidateStreamCard({ session, token, onSelectCandidate }) {
           setIssue(false)
         } else if (message.type === 'candidate_connected') {
           sendOffer()
+        } else if (message.type === 'candidate_not_ready') {
+          setStatus('waiting_tracks')
         } else if (message.type === 'candidate_disconnected') {
           setStatus('disconnected')
           setIssue(true)

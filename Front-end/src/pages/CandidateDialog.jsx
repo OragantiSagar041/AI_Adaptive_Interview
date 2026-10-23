@@ -459,6 +459,17 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
     return minutes > 0 ? `${minutes}m ${remainingSeconds}s` : `${Math.floor(duration)}s`
   }
 
+  const cleanForPdf = (text) => {
+    if (!text) return ''
+    return String(text)
+      .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015]/g, '-')
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/[\u201C\u201D]/g, '"')
+      .replace(/\u2026/g, '...')
+      .replace(/\u2022/g, '*')
+      .replace(/[^\x00-\x7F]/g, '')
+  }
+
   const handleDownloadTranscript = () => {
     if (!c.answers || c.answers.length === 0) return
 
@@ -477,11 +488,11 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
 
     doc.setFontSize(16)
     doc.setFont('helvetica', 'bold')
-    doc.text(`Interview Q&A: ${c.candidate_name || 'Unknown Candidate'}`, margin, y)
+    doc.text(`Interview Q&A: ${cleanForPdf(c.candidate_name) || 'Unknown Candidate'}`, margin, y)
     y += 10
     doc.setFontSize(11)
     doc.setFont('helvetica', 'normal')
-    doc.text(`Status: ${c.status || 'Completed'}`, margin, y)
+    doc.text(`Status: ${cleanForPdf(c.status) || 'Completed'}`, margin, y)
     y += 6
     doc.text(`Total Score: ${c.score || c.avg_score || 0}/100`, margin, y)
     y += 10
@@ -490,7 +501,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
     y += 10
 
     c.answers.forEach((a, index) => {
-      const questionLines = doc.splitTextToSize(`Q${index + 1}: ${a.question_text || 'No question recorded'}`, pageWidth - 2 * margin)
+      const questionLines = doc.splitTextToSize(cleanForPdf(`Q${index + 1}: ${a.question_text || 'No question recorded'}`), pageWidth - 2 * margin)
       checkPageBreak(questionLines.length * 5 + 30)
       doc.setFont('helvetica', 'bold')
       doc.text(questionLines, margin, y)
@@ -517,7 +528,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
       doc.text("Candidate's Answer:", margin, y)
       y += 5
       checkPageBreak(5)
-      const answerLines = doc.splitTextToSize(a.answer_text || 'No answer provided', pageWidth - 2 * margin)
+      const answerLines = doc.splitTextToSize(cleanForPdf(a.answer_text || 'No answer provided'), pageWidth - 2 * margin)
       answerLines.forEach((line) => {
         checkPageBreak(5)
         doc.text(line, margin, y)
@@ -530,7 +541,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
         doc.text('AI Feedback:', margin, y)
         y += 5
         doc.setFont('helvetica', 'normal')
-        const feedbackLines = doc.splitTextToSize(a.ai_feedback, pageWidth - 2 * margin)
+        const feedbackLines = doc.splitTextToSize(cleanForPdf(a.ai_feedback), pageWidth - 2 * margin)
         feedbackLines.forEach((line) => {
           checkPageBreak(5)
           doc.text(line, margin, y)
@@ -545,7 +556,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
       y += 10
     })
 
-    doc.save(`${c.candidate_name?.replace(/\s+/g, '_') || 'Candidate'}_interview_qa.pdf`)
+    doc.save(`${cleanForPdf(c.candidate_name)?.replace(/\s+/g, '_') || 'Candidate'}_interview_qa.pdf`)
   }
 
 
