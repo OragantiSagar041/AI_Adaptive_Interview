@@ -439,11 +439,15 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
     sendOfferRef.current = sendOffer
   }, [sendOffer])
 
+  const sessionId = typeof session === 'string'
+    ? session
+    : (session?.link_id || session?.session_id || session?.id || session?._id || session?.interview_id)
+
   useEffect(() => {
     if (!isOpen || !session) return
+    let disposed = false
     mountedRef.current = true
 
-    const sessionId = typeof session === 'string' ? session : (session?.link_id || session?.session_id || session?.id || session?._id || session?.interview_id)
     if (!sessionId || sessionId === 'undefined') {
       console.warn('[AdminWebRTC] No valid session ID provided to LiveMonitorStreamModal:', session)
       setStatus('error')
@@ -565,6 +569,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
     ws.onclose = (e) => {
       console.log(`[AdminWebRTC] WS closed (${e.code})`)
       clearInterval(heartbeatTimerRef.current)
+      if (disposed) return
       if (mountedRef.current) {
         if (sessionId && sessionId !== 'undefined') {
           // Auto-reconnect on drop with exponential backoff
@@ -599,12 +604,14 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
     window.addEventListener('focus', handleVisibilityChange)
 
     return () => {
+      disposed = true
+      ws.onclose = null
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('focus', handleVisibilityChange)
       mountedRef.current = false
       cleanup()
     }
-  }, [isOpen, session, token, retryCount])  // retryCount forces full reconnect
+  }, [isOpen, sessionId, token, retryCount])  // sessionId, not session object
 
   const handleManualRetry = () => {
     cleanup()
