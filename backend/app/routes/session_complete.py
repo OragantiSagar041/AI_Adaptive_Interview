@@ -1004,6 +1004,7 @@ async def get_webrtc_ice_servers(raw: bool = False):
     }
 
 
+@router.websocket("/api/ws/webrtc/{role}/{link_id}")
 @router.websocket("/ws/webrtc/{role}/{link_id}")
 async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: Optional[str] = None, admin_id: Optional[str] = None, spectator_id: Optional[str] = None):
     import os, tempfile
@@ -1213,6 +1214,7 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
 # --------------------------------------------------------------------------------
 
 @router.post('/api/webrtc/telemetry/{link_id}')
+@router.post('/webrtc/telemetry/{link_id}')
 async def telemetry_fallback(
     link_id: str,
     payload: dict,

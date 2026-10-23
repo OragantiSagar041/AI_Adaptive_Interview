@@ -219,7 +219,7 @@ PLAN_ALIASES = {
 LAST_422_ERROR = None
 
 request_counts = defaultdict(list)
-RATE_LIMIT = 120  # general requests per minute per IP
+RATE_LIMIT = int(os.getenv("RATE_LIMIT", "600"))  # general requests per minute per IP (configurable)
 EXPENSIVE_RATE_LIMIT = 20
 PUBLIC_RESUME_RATE_LIMIT = 5
 RATE_LIMIT_WINDOW = 60
@@ -244,7 +244,9 @@ RATE_LIMIT_EXEMPT_PATHS = {
 }
 RATE_LIMIT_EXEMPT_PREFIXES = (
     "/superadmin/profile",
-    "/api/notifications",
+    "/notifications",
+    "/webrtc/",
+    "/admin/interview/",
 )
 
 # ---------------------------------------------------------------------------
