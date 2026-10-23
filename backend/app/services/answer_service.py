@@ -4,6 +4,7 @@ Both HTTP and realtime transports call this module so an answer always has the
 same validation, idempotent upsert, version guard, and scoring behavior.
 """
 
+import os
 from datetime import datetime, timezone
 import logging
 from typing import Any, Dict
@@ -209,25 +210,61 @@ def persist_answer_and_enqueue_scoring(
             )
         except Exception as score_err:
             logger.exception(
-                "Background scoring failed for interview=%s question=%s: %s",
+                "Background scoring failed for interview=%s question=%s: %s. Invoking dynamic offline fallback.",
                 normalized_interview_id,
                 normalized_question_id,
                 score_err,
             )
-            answers_collection.update_one(
-                {
-                    "interview_id": normalized_interview_id,
-                    "question_id": normalized_question_id,
-                    "answer_version": answer_version,
-                },
-                {
-                    "$set": {
-                        "scoring_status": "failed",
-                        "ai_feedback": "AI scoring encountered an issue. Will recalculate upon review.",
-                        "queue_failed_at": datetime.now(timezone.utc).isoformat(),
-                    }
-                },
-            )
+            try:
+                from app.ai.analyze_answer import _dynamic_offline_evaluation
+                offline_res = _dynamic_offline_evaluation(
+                    question=normalized_question_text,
+                    answer=normalized_answer_text,
+                    context=context,
+                    time_spent_seconds=spent,
+                    time_limit_seconds=limit,
+                )
+                kw = offline_res.get("keywords", [])
+                kw_str = ",".join(kw) if isinstance(kw, list) else str(kw)
+                answers_collection.update_one(
+                    {
+                        "interview_id": normalized_interview_id,
+                        "question_id": normalized_question_id,
+                        "answer_version": answer_version,
+                    },
+                    {
+                        "$set": {
+                            "ai_score": offline_res.get("overall_score", 0),
+                            "content_score": offline_res.get("content_score", 0),
+                            "relevance_score": offline_res.get("relevance_score", 0),
+                            "time_score": offline_res.get("time_score", 0),
+                            "clarity_score": offline_res.get("clarity_score", 50),
+                            "technical_depth_score": offline_res.get("technical_depth_score", 50),
+                            "confidence_score": offline_res.get("confidence_score", 50),
+                            "ai_feedback": offline_res.get("feedback", "Offline rubric evaluation complete."),
+                            "ai_keywords": kw_str,
+                            "corrected_answer": offline_res.get("corrected_answer", "N/A"),
+                            "scoring_status": "complete",
+                        }
+                    },
+                )
+                logger.info("Recovered answer scoring via offline evaluation for interview=%s Q=%s", normalized_interview_id, normalized_question_id)
+            except Exception as fallback_err:
+                logger.exception("Offline evaluation also failed: %s", fallback_err)
+                answers_collection.update_one(
+                    {
+                        "interview_id": normalized_interview_id,
+                        "question_id": normalized_question_id,
+                        "answer_version": answer_version,
+                    },
+                    {
+                        "$set": {
+                            "scoring_status": "failed",
+                            "ai_feedback": "AI scoring encountered an issue. Will recalculate upon review.",
+                            "queue_failed_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                    },
+                )
 
     threading.Thread(target=_execute_scoring, daemon=True).start()
 
