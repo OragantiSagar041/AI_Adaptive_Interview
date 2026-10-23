@@ -98,6 +98,7 @@ _LOCAL_DASH_AGG_CACHE: Dict[str, tuple[float, Dict[str, Any]]] = {}
 _LOCAL_DASH_AGG_CACHE_TTL = 5.0
 
 
+@router.websocket("/api/ws/dashboard")
 @router.websocket("/ws/dashboard")
 async def dashboard_websocket(websocket: WebSocket, token: Optional[str] = None):
     from app.db.redis_manager import manager

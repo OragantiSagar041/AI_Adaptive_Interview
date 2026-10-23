@@ -442,8 +442,8 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
       } else {
         // Fallback to HTTP if WebRTC signaling socket is blocked or reconnecting
         try {
-          const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL
-          await fetch(`${baseUrl}/api/webrtc/telemetry/${linkId}`, {
+          const baseUrl = (API_BASE_URL || '').replace(/\/+$/, '')
+          await fetch(`${baseUrl}/webrtc/telemetry/${linkId}`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
