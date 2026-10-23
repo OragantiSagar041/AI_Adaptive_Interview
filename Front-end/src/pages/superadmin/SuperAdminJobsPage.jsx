@@ -5,17 +5,19 @@ import {
   Wallet, Users, LayoutGrid, LayoutList, ArrowRight, ChevronRight, Zap,
   Building2, BookOpen, CheckCircle2, Mail, Phone, ExternalLink, RefreshCw,
   ChevronDown, Copy, Calendar, Eye, Download, FileCheck, Check, Sparkles,
-  User, UserCheck, History, ShieldCheck, Share2
+  User, UserCheck, History, ShieldCheck, Share2, Award
 } from 'lucide-react';
 import Card from '../../components/Card';
 import Button from '../../components/Button';
 import JobApplicationModal from '../../components/JobApplicationModal';
 import { useSelector, useDispatch } from 'react-redux';
 import { loadSuperAdminDashboard } from '../../store/slices/dashboardSlice';
-import { getComputedStatus } from '../../utils/adminFormatters';
+import { getComputedStatus, formatRelativeTime } from '../../utils/adminFormatters';
 import axios from 'axios';
 import { API_BASE_URL } from '../../apiConfig';
 import Swal from 'sweetalert2';
+
+const AiJobPostModal = React.lazy(() => import('../../components/superadmin/AiJobPostModal'));
 const WORK_MODE_STYLES = {
   Remote: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   Hybrid: 'bg-blue-50 text-blue-700 border-blue-200',
@@ -41,6 +43,25 @@ const parseSkills = (skills) => {
   if (Array.isArray(skills)) return skills.map(s => String(s).trim()).filter(Boolean);
   if (typeof skills === 'string') return skills.split(',').map(s => s.trim()).filter(Boolean);
   return [String(skills).trim()].filter(Boolean);
+};
+
+// Extracts a clean, readable snippet from a structured job description
+const getDescriptionSnippet = (description, maxLen = 150) => {
+  if (!description) return '';
+  // Try to extract just the Job Summary paragraph
+  const summaryMatch = description.match(/Job Summary[\s\S]*?\n([\s\S]*?)(?:\n\n|\nKey Responsibilities|\nRequired Skills|\nRoles and Responsibilities|$)/i);
+  let text = summaryMatch ? summaryMatch[1] : description;
+  // Strip markdown bold/italic markers, bullet points, section headers
+  text = text
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/\*(.*?)\*/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^[•\-*>]+\s*/gm, '')
+    .replace(/^(Job Summary|Key Responsibilities|Required Skills|Roles and Responsibilities|Employment Details|About the Role)[:\s]*/gim, '')
+    .replace(/\n+/g, ' ')
+    .trim();
+  if (text.length <= maxLen) return text;
+  return text.slice(0, maxLen).replace(/\s+\S*$/, '') + '…';
 };
 
 export default function SuperAdminJobsPage() {
@@ -72,6 +93,7 @@ export default function SuperAdminJobsPage() {
   const [viewMode, setViewMode] = useState('grid');
   const [jobsLoading, setJobsLoading] = useState(true);
   const [showSchedulePanel, setShowSchedulePanel] = useState(false);
+  const [showAiJobModal, setShowAiJobModal] = useState(false);
 
   // ── Application viewer state ──────────────────────────────────────────────
   const [applicationData, setApplicationData] = useState({
@@ -520,6 +542,15 @@ export default function SuperAdminJobsPage() {
             </button>
 
             <button
+              onClick={() => setShowAiJobModal(true)}
+              className="flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-sm cursor-pointer border border-indigo-500/50 shadow-md shadow-indigo-500/20 transition-all hover:scale-[1.02] active:scale-95"
+              title="Generate and post job openings using natural language AI"
+            >
+              <Sparkles size={18} className="text-amber-300 animate-pulse" />
+              AI Job Description
+            </button>
+
+            <button
               onClick={() => { resetForm(); setShowModal(true); }}
               style={{ backgroundColor: '#4f46e5', color: '#ffffff' }}
               className="group flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm cursor-pointer border border-indigo-600 shadow-md hover:opacity-90 transition-all"
@@ -613,14 +644,17 @@ export default function SuperAdminJobsPage() {
                   </div>
                 </div>
 
-                {/* Work mode + description */}
-                <div className="flex items-center gap-2">
+                {/* Work mode + posted time */}
+                <div className="flex items-center justify-between gap-2 flex-wrap">
                   <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[0.68rem] font-bold border ${WORK_MODE_STYLES[job.workMode] || 'bg-slate-50 dark:bg-slate-900/50 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}>
                     <Clock size={11} /> {job.workMode}
                   </span>
+                  <span className="inline-flex items-center gap-1 text-[0.72rem] font-bold text-slate-500 dark:text-slate-400">
+                    <Clock size={11} className="text-indigo-500" /> Posted {formatRelativeTime(job.created_at, job._id)}
+                  </span>
                 </div>
 
-                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed line-clamp-2 flex-1">{job.description}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed line-clamp-2 flex-1">{getDescriptionSnippet(job.description)}</p>
 
                 {/* Stats row */}
                 <div className="grid grid-cols-3 gap-2">
@@ -638,16 +672,24 @@ export default function SuperAdminJobsPage() {
                   </div>
                 </div>
 
+                {/* Certifications Badge — only shown when certifications are explicitly specified */}
+                {((Array.isArray(job.certifications) && job.certifications.length > 0) || (typeof job.certifications === 'string' && job.certifications.trim())) && (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 text-amber-800 dark:text-amber-300 text-[0.68rem] font-bold">
+                    <Award size={12} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                    <span>Certification Required</span>
+                  </div>
+                )}
+
                 {/* Skills */}
-                <div className="flex flex-wrap gap-1.5">
-                  {parseSkills(job.skills).slice(0, 3).map((skill, i) => (
+                <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
+                  {parseSkills(job.skills).slice(0, 10).map((skill, i) => (
                     <span key={i} className="px-2.5 py-1 bg-indigo-50 text-indigo-700 text-[0.68rem] font-bold rounded-lg border border-indigo-100/60">
                       {skill}
                     </span>
                   ))}
-                  {parseSkills(job.skills).length > 3 && (
+                  {parseSkills(job.skills).length > 10 && (
                     <span className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 text-[0.68rem] font-bold rounded-lg">
-                      +{parseSkills(job.skills).length - 3}
+                      +{parseSkills(job.skills).length - 10}
                     </span>
                   )}
                 </div>
@@ -713,10 +755,13 @@ export default function SuperAdminJobsPage() {
                             <p className="font-black text-slate-800 dark:text-slate-100 text-sm">{job.title}</p>
                             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider bg-slate-100 dark:bg-slate-800/50 px-1.5 py-0.5 rounded">{job.custom_id || job.job_id || 'JOB'}</span>
                           </div>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <p className="text-xs text-slate-400 line-clamp-1 max-w-[180px]">{job.description}</p>
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                            <p className="text-xs text-slate-400 line-clamp-1 max-w-[180px]">{getDescriptionSnippet(job.description, 80)}</p>
                             <span className="text-[0.65rem] text-slate-500 dark:text-slate-400 font-semibold flex items-center gap-1 bg-slate-100 dark:bg-slate-800/50/80 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700/60" title={`Created by ${job.created_by_name || job.created_by || 'Admin'}`}>
                               <User size={10} className="text-indigo-500" /> {job.created_by_name || job.created_by || 'Admin'}
+                            </span>
+                            <span className="text-[0.65rem] text-indigo-600 dark:text-indigo-400 font-bold flex items-center gap-1 bg-indigo-50 dark:bg-indigo-950/40 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-800">
+                              <Clock size={10} /> Posted {formatRelativeTime(job.created_at, job._id)}
                             </span>
                           </div>
                         </div>
@@ -1350,6 +1395,9 @@ export default function SuperAdminJobsPage() {
                       Created by <strong className="text-slate-700 dark:text-slate-200">{selectedJobDetails.created_by_name || selectedJobDetails.created_by || 'Admin'}</strong>
                       {selectedJobDetails.created_by_role && <span className="text-[0.62rem] text-slate-400 uppercase">({selectedJobDetails.created_by_role})</span>}
                     </span>
+                    <span className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-lg border border-indigo-100 dark:border-indigo-800">
+                      <Clock size={11} /> Posted {formatRelativeTime(selectedJobDetails.created_at, selectedJobDetails._id)}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1387,9 +1435,7 @@ export default function SuperAdminJobsPage() {
                 <h4 className="text-sm font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2 mb-3">
                   <FileText size={15} className="text-indigo-500" /> Job Description
                 </h4>
-                <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-100 dark:border-slate-800">
-                  {selectedJobDetails.description}
-                </p>
+                <NeatJobDescription description={selectedJobDetails.description} />
               </div>
 
               <div>
@@ -1476,6 +1522,23 @@ export default function SuperAdminJobsPage() {
           }}
           API_BASE_URL={API_BASE_URL}
         />
+      )}
+
+      {/* ── AI Job Description & Post Modal ──────────────── */}
+      {showAiJobModal && (
+        <React.Suspense fallback={null}>
+          <AiJobPostModal
+            isOpen={showAiJobModal}
+            onClose={() => setShowAiJobModal(false)}
+            onJobPosted={async () => {
+              setCurrentPage(1);
+              await fetchJobs(1);
+            }}
+            API_BASE_URL={API_BASE_URL}
+            authHeaders={authHeaders}
+            adminUser={adminUser}
+          />
+        </React.Suspense>
       )}
     </div>
   );
@@ -1885,3 +1948,222 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
   );
 }
 
+
+// ─── Component: NeatJobDescription ─────────────────────────────────────────
+function NeatJobDescription({ description }) {
+  if (!description) return null;
+
+  // Completely strip out any "How to Apply" section and trailing text
+  let cleanDesc = description
+    .replace(/(?:^|\n)#*\s*How to Apply[\s\S]*$/gi, '')
+    .trim();
+
+  // If text doesn't contain standard sections, render with whitespace-pre-line
+  if (!cleanDesc.includes('Job Summary') && !cleanDesc.includes('Key Responsibilities')) {
+    return (
+      <div className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-5 border border-slate-100 dark:border-slate-800">
+        {cleanDesc}
+      </div>
+    );
+  }
+
+  // Parse structured sections
+  const sections = [];
+  const lines = cleanDesc.split('\n');
+  let currentSection = { title: '', content: [] };
+
+  const SECTION_TITLES = [
+    'Job Summary',
+    'Key Responsibilities',
+    'Mandatory Certification Requirement',
+    'Certification Requirement',
+    'Certifications',
+    'Certifications & Accreditations',
+    'Required Technical Skills',
+    'Qualifications & Soft Skills',
+    'Qualifications & Requirements',
+    'Qualifications'
+  ];
+
+  const isSectionHeader = (line) => {
+    const trimmed = line.trim();
+    return SECTION_TITLES.find(st => trimmed.toLowerCase() === st.toLowerCase() || trimmed.toLowerCase().startsWith(st.toLowerCase() + ':'));
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    // Filter out redundant metadata header lines already visible in modal header & stat cards
+    if (trimmed.startsWith('Role:') || 
+        trimmed.startsWith('Experience:') || 
+        trimmed.startsWith('Fixed Salary') || 
+        trimmed.startsWith('Service Agreement:') || 
+        trimmed.startsWith('Employment Type:') || 
+        trimmed.startsWith('Location:') || 
+        trimmed.startsWith('Job Description:')) {
+      continue;
+    }
+
+    // Stop parsing if any How to Apply section appears
+    if (trimmed.toLowerCase().includes('how to apply')) {
+      break;
+    }
+
+    const matchedSection = isSectionHeader(trimmed);
+    if (matchedSection) {
+      if (currentSection.title || currentSection.content.length > 0) {
+        sections.push(currentSection);
+      }
+      currentSection = { title: matchedSection, content: [] };
+      continue;
+    }
+
+    currentSection.content.push(trimmed);
+  }
+
+  if (currentSection.title || currentSection.content.length > 0) {
+    sections.push(currentSection);
+  }
+
+  // Check if this is a Python job to filter out mismatched legacy Java skills
+  const isPythonJob = cleanDesc.toLowerCase().includes('python');
+
+  return (
+    <div className="space-y-4">
+      {/* Sections rendering: Job Summary, Key Responsibilities, Technical Skills (matching), Qualifications */}
+      {sections.map((sec, idx) => {
+        // Skip duplicate Employment Terms or How to Apply if present
+        if (sec.title.toLowerCase().includes('employment terms') || sec.title.toLowerCase().includes('how to apply')) {
+          return null;
+        }
+
+        if (sec.title.toLowerCase().includes('certification')) {
+          return (
+            <div key={idx} className="bg-amber-500/10 dark:bg-amber-500/15 p-5 rounded-2xl border border-amber-500/30 shadow-xs">
+              <h5 className="text-xs font-black uppercase tracking-wider text-amber-700 dark:text-amber-400 mb-3 flex items-center gap-1.5">
+                <Award size={15} /> {sec.title}
+              </h5>
+              <ul className="space-y-2">
+                {sec.content.map((item, cIdx) => (
+                  <li key={cIdx} className="text-xs sm:text-sm text-slate-700 dark:text-slate-200 leading-relaxed flex items-start gap-2">
+                    <span className="text-amber-500 font-bold shrink-0 mt-0.5">•</span>
+                    <span>{item.replace(/^[•\-\*]\s*/, '')}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        }
+
+        if (sec.title === 'Job Summary') {
+          return (
+            <div key={idx} className="bg-white dark:bg-slate-800/80 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
+              <h5 className="text-xs font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400 mb-2 flex items-center gap-1.5">
+                <FileText size={14} /> Job Summary
+              </h5>
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
+                {sec.content.join(' ')}
+              </p>
+            </div>
+          );
+        }
+
+        if (sec.title === 'Key Responsibilities') {
+          return (
+            <div key={idx} className="bg-white dark:bg-slate-800/80 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
+              <h5 className="text-xs font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400 mb-3 flex items-center gap-1.5">
+                <Target size={14} /> Key Responsibilities
+              </h5>
+              <ul className="space-y-2.5">
+                {sec.content.map((item, cIdx) => {
+                  const cleanItem = item.replace(/^[•\-\*]\s*/, '');
+                  const colonIdx = cleanItem.indexOf(':');
+                  if (colonIdx > 0 && colonIdx < 35) {
+                    const tag = cleanItem.substring(0, colonIdx);
+                    const desc = cleanItem.substring(colonIdx + 1);
+                    return (
+                      <li key={cIdx} className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed flex items-start gap-2.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-2 shrink-0" />
+                        <span><strong className="text-slate-900 dark:text-slate-100 font-bold">{tag}:</strong>{desc}</span>
+                      </li>
+                    );
+                  }
+                  return (
+                    <li key={cIdx} className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed flex items-start gap-2.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-2 shrink-0" />
+                      <span>{cleanItem}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          );
+        }
+
+        if (sec.title === 'Required Technical Skills') {
+          // If a python job has legacy mismatched Java technical skills, skip it to avoid confusing the user
+          const hasMismatchedJava = isPythonJob && sec.content.some(c => c.toLowerCase().includes('java 8') || c.toLowerCase().includes('spring boot'));
+          if (hasMismatchedJava) {
+            return null;
+          }
+
+          return (
+            <div key={idx} className="bg-white dark:bg-slate-800/80 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
+              <h5 className="text-xs font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400 mb-3 flex items-center gap-1.5">
+                <Zap size={14} /> Technical Competencies
+              </h5>
+              <div className="space-y-2">
+                {sec.content.map((item, cIdx) => {
+                  const cleanItem = item.replace(/^[•\-\*]\s*/, '');
+                  const [domain, ...rest] = cleanItem.split(':');
+                  if (rest.length > 0) {
+                    return (
+                      <div key={cIdx} className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 text-xs gap-1.5">
+                        <span className="font-bold text-slate-800 dark:text-slate-200 sm:w-1/3">{domain.trim()}</span>
+                        <span className="text-slate-600 dark:text-slate-400 sm:w-2/3 font-medium">{rest.join(':').trim()}</span>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div key={cIdx} className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/50 text-xs text-slate-600 dark:text-slate-300 font-medium">
+                      {cleanItem}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        }
+
+        if (sec.title.includes('Qualifications')) {
+          return (
+            <div key={idx} className="bg-white dark:bg-slate-800/80 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
+              <h5 className="text-xs font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400 mb-2.5 flex items-center gap-1.5">
+                <BookOpen size={14} /> {sec.title}
+              </h5>
+              <ul className="space-y-2">
+                {sec.content.map((item, cIdx) => (
+                  <li key={cIdx} className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 flex items-start gap-2">
+                    <span className="text-indigo-500 font-bold">•</span>
+                    <span>{item.replace(/^[•\-\*]\s*/, '')}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        }
+
+        return (
+          <div key={idx} className="bg-white dark:bg-slate-800/80 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
+            {sec.title && <h5 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-200 mb-2">{sec.title}</h5>}
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line font-medium">
+              {sec.content.join('\n')}
+            </p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
