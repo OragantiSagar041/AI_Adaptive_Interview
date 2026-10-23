@@ -3669,7 +3669,7 @@ export default function VoiceInterviewPage() {
 
         {/* Question number badge */}
         <div className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 shrink-0">
-          {currentQ?.type || 'Interview'} &nbsp;·&nbsp; Question {currentQIdx + 1} of {questions.length}
+          Question {currentQIdx + 1} of {questions.length}
         </div>
 
         <div className="flex-1" />
