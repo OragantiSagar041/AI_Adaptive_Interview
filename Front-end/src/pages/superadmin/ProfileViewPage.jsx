@@ -7,6 +7,7 @@ import {
   MapPin, Award, CheckCircle2, XCircle, Clock, Calendar, 
   BarChart3, TrendingUp, Sparkles, Briefcase, Zap
 } from 'lucide-react'
+import InterviewHistorySection from '../../components/superadmin/InterviewHistorySection'
 
 const ScoreBar = ({ label, score }) => {
   const numScore = Number(score) || 0
@@ -37,6 +38,10 @@ export default function ProfileViewPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [candidate, setCandidate] = useState(null)
+  const [history, setHistory] = useState([])
+  const [historySummary, setHistorySummary] = useState(null)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState(null)
 
   useEffect(() => {
     const passedCandidate = location.state?.candidate
@@ -70,6 +75,41 @@ export default function ProfileViewPage() {
     }
     fetchCandidate()
   }, [id, token, API_BASE_URL, location.state])
+
+  // Fetch complete interview history and breakdown when candidate email is resolved
+  useEffect(() => {
+    if (!candidate) return
+    const email = candidate.candidate_email || candidate.email
+    if (!email) return
+
+    const fetchHistory = async () => {
+      setHistoryLoading(true)
+      setHistoryError(null)
+      try {
+        const res = await axios.get(`${API_BASE_URL}/admin/candidate/previous-interviews`, {
+          params: {
+            email: email,
+            current_link_id: id || '',
+            include_current: true
+          },
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        if (res.data && Array.isArray(res.data.history)) {
+          setHistory(res.data.history)
+          setHistorySummary(res.data.summary || null)
+        } else {
+          setHistory([])
+          setHistorySummary(null)
+        }
+      } catch (err) {
+        console.error("Error fetching history in ProfileViewPage:", err)
+        setHistoryError("Failed to load interview history.")
+      } finally {
+        setHistoryLoading(false)
+      }
+    }
+    fetchHistory()
+  }, [candidate, id, API_BASE_URL, token])
 
   if (loading) {
     return (
@@ -241,6 +281,19 @@ export default function ProfileViewPage() {
             </div>
           </div>
           
+        </div>
+
+        {/* ── Interview History Section ── */}
+        <div className="pt-2">
+          <InterviewHistorySection
+            history={history}
+            summary={historySummary}
+            loading={historyLoading}
+            error={historyError}
+            candidateEmail={cEmail}
+            candidateName={cName}
+            hideActionButtons={true}
+          />
         </div>
       </main>
     </div>

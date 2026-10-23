@@ -170,66 +170,69 @@ def persist_answer_and_enqueue_scoring(
         }
 
     from app import tasks
+    import threading
 
-    scoring_status = "pending"
-    try:
-        tasks.score_answer_task.delay(
-            interview_id=normalized_interview_id,
-            question_id=normalized_question_id,
-            question_text=normalized_question_text,
-            answer_text=normalized_answer_text,
-            context=context,
-            time_spent_seconds=spent,
-            time_limit_seconds=limit,
-            language=language,
-            answer_version=answer_version,
-        )
-    except Exception as queue_err:
-        logger.warning(
-            "Celery queueing failed (Redis unavailable?), falling back to background thread scoring: %s",
-            queue_err,
-        )
-        import threading
-        def _run_scoring_fallback():
-            try:
-                tasks.score_answer_task(
-                    None,
-                    interview_id=normalized_interview_id,
-                    question_id=normalized_question_id,
-                    question_text=normalized_question_text,
-                    answer_text=normalized_answer_text,
-                    context=context,
-                    time_spent_seconds=spent,
-                    time_limit_seconds=limit,
-                    language=language,
-                    answer_version=answer_version,
-                )
-            except Exception as score_err:
-                logger.exception(
-                    "Background thread scoring failed for interview=%s question=%s: %s",
-                    normalized_interview_id,
-                    normalized_question_id,
-                    score_err,
-                )
-                answers_collection.update_one(
-                    {
-                        "interview_id": normalized_interview_id,
-                        "question_id": normalized_question_id,
-                        "answer_version": answer_version,
-                    },
-                    {
-                        "$set": {
-                            "scoring_status": "queue_failed",
-                            "ai_feedback": "Scoring is delayed and will retry automatically.",
-                            "queue_failed_at": datetime.now(timezone.utc).isoformat(),
-                        }
-                    },
-                )
+    def _execute_scoring():
+        try:
+            is_production = os.getenv("ENV", "local").lower() == "production"
+            if is_production:
+                try:
+                    tasks.score_answer_task.delay(
+                        interview_id=normalized_interview_id,
+                        question_id=normalized_question_id,
+                        question_text=normalized_question_text,
+                        answer_text=normalized_answer_text,
+                        context=context,
+                        time_spent_seconds=spent,
+                        time_limit_seconds=limit,
+                        language=language,
+                        answer_version=answer_version,
+                    )
+                    return
+                except Exception as celery_err:
+                    logger.warning(
+                        "Celery dispatch failed in production (%s), falling back to in-process scoring",
+                        celery_err,
+                    )
 
-        threading.Thread(target=_run_scoring_fallback, daemon=True).start()
+            # Local dev or Celery worker absent: Score in background thread directly
+            tasks.score_answer_task(
+                interview_id=normalized_interview_id,
+                question_id=normalized_question_id,
+                question_text=normalized_question_text,
+                answer_text=normalized_answer_text,
+                context=context,
+                time_spent_seconds=spent,
+                time_limit_seconds=limit,
+                language=language,
+                answer_version=answer_version,
+            )
+        except Exception as score_err:
+            logger.exception(
+                "Background scoring failed for interview=%s question=%s: %s",
+                normalized_interview_id,
+                normalized_question_id,
+                score_err,
+            )
+            answers_collection.update_one(
+                {
+                    "interview_id": normalized_interview_id,
+                    "question_id": normalized_question_id,
+                    "answer_version": answer_version,
+                },
+                {
+                    "$set": {
+                        "scoring_status": "failed",
+                        "ai_feedback": "AI scoring encountered an issue. Will recalculate upon review.",
+                        "queue_failed_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                },
+            )
+
+    threading.Thread(target=_execute_scoring, daemon=True).start()
 
     return {
         "status": "saved",
-        "scoring_status": scoring_status,
+        "scoring_status": "pending",
         "answer_version": answer_version,
     }

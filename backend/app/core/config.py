@@ -54,8 +54,10 @@ def get_omni_agent_id() -> str:
 CLOUDINARY_CLEANUP_STARTED = False
 RECORDING_RETENTION_DAYS = max(3, int(os.getenv("RECORDING_RETENTION_DAYS", "3")))
 
-UPLOAD_FOLDER = "uploads"
+_backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+UPLOAD_FOLDER = os.path.join(_backend_dir, "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(os.path.join(UPLOAD_FOLDER, "recordings"), exist_ok=True)
 
 _ENV = os.getenv("ENV", "local").lower()
 _DEFAULT_FRONTEND = "https://hireiq.co.in" if _ENV == "production" else "http://localhost:5173"

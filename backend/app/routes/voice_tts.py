@@ -417,13 +417,60 @@ async def generate_tts(
                 print(f"[TTS] Cartesia: OK ({len(audio_bytes)} bytes) | voice={target_voice_id} | lang={cartesia_lang}")
                 return StreamingResponse(io.BytesIO(audio_bytes), media_type="audio/mpeg")
             else:
-                print(f"[TTS] Cartesia error: No audio returned. Falling back to Edge TTS.")
+                print(f"[TTS] Cartesia error: No audio returned. Falling back to next TTS provider.")
 
         except Exception as err:
-            print(f"[TTS] Cartesia exception: {err}. Falling back to Edge TTS.")
+            print(f"[TTS] Cartesia exception: {err}. Falling back to next TTS provider.")
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 3. Edge TTS fallback 
+    # 2. Microsoft Azure Speech (Cognitive Services) — official, cloud-safe
+    # ──────────────────────────────────────────────────────────────────────────
+    azure_speech_key = os.getenv("AZURE_SPEECH_KEY", "").strip()
+    azure_speech_region = os.getenv("AZURE_SPEECH_REGION", "centralindia").strip()
+
+    if azure_speech_key:
+        try:
+            lang_bcp47_map = {
+                "Hindi": "hi-IN",
+                "Telugu": "te-IN",
+                "Tamil": "ta-IN",
+                "Malayalam": "ml-IN",
+                "Kannada": "kn-IN",
+                "English": "en-US",
+            }
+            azure_lang_code = lang_bcp47_map.get(requested_lang, "en-US")
+            azure_voice_name = edge_voice  # Identical neural voice identifiers
+
+            azure_url = f"https://{azure_speech_region}.tts.speech.microsoft.com/cognitiveservices/v1"
+            azure_headers = {
+                "Ocp-Apim-Subscription-Key": azure_speech_key,
+                "Content-Type": "application/ssml+xml",
+                "X-Microsoft-OutputFormat": "audio-16khz-128kbitrate-mono-mp3",
+                "User-Agent": "AIAdaptiveInterviewBackend",
+            }
+            escaped_text = html.escape(req.text)
+            ssml_body = (
+                f"<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='{azure_lang_code}'>"
+                f"<voice name='{azure_voice_name}'>{escaped_text}</voice>"
+                f"</speak>"
+            )
+
+            import aiohttp
+            async with aiohttp.ClientSession() as session:
+                async with session.post(azure_url, headers=azure_headers, data=ssml_body.encode("utf-8"), timeout=aiohttp.ClientTimeout(total=12)) as resp:
+                    if resp.status == 200:
+                        audio_data = await resp.read()
+                        if audio_data:
+                            print(f"[TTS] Azure Speech: OK ({len(audio_data)} bytes) | voice={azure_voice_name} | lang={requested_lang}")
+                            return StreamingResponse(io.BytesIO(audio_data), media_type="audio/mpeg")
+                    else:
+                        resp_text = await resp.text()
+                        logger.warning(f"[TTS] Azure Speech returned HTTP {resp.status}: {resp_text[:150]}")
+        except Exception as az_err:
+            logger.warning(f"[TTS] Azure Speech Error: {az_err}. Falling back to Edge TTS.")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # 3. Edge TTS fallback (Free Microsoft Edge read-aloud)
     # ──────────────────────────────────────────────────────────────────────────
     try:
         print(f"[TTS] Using Microsoft Edge TTS | voice={edge_voice} | lang={requested_lang}")
@@ -435,10 +482,19 @@ async def generate_tts(
             if chunk["type"] == "audio":
                 audio_chunks.append(chunk["data"])
         audio_bytes = b"".join(audio_chunks)
-        return StreamingResponse(io.BytesIO(audio_bytes), media_type="audio/mpeg")
+        if audio_bytes:
+            return StreamingResponse(io.BytesIO(audio_bytes), media_type="audio/mpeg")
     except Exception as edge_err:
-        print(f"[TTS] Edge TTS Error: {edge_err}")
-        raise HTTPException(status_code=500, detail=f"TTS generation failed: {edge_err}")
+        logger.warning(f"[TTS] Edge TTS Error: {edge_err}. Falling back to client-side Web Speech API.")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # 4. Graceful Fallback: Signal frontend to use browser Web Speech API
+    # ──────────────────────────────────────────────────────────────────────────
+    raise HTTPException(
+        status_code=503,
+        detail="TTS_CLIENT_FALLBACK: All backend TTS providers unavailable. Use client-side Web Speech API.",
+        headers={"X-TTS-Fallback": "browser"}
+    )
 
 
 
@@ -485,10 +541,12 @@ def fix_candidate_name(text: str, candidate_name: str) -> str:
 stt_inflight_counter = 0
 
 @router.post("/stt")
+@router.post("/speech-to-text-whisper")
 async def stt_endpoint(
     file: UploadFile = File(...),
     language: Optional[str] = None,
     known_terms: Optional[str] = Form(None),
+    prompt: Optional[str] = Form(None),
     candidate_session: dict = Depends(require_active_candidate),
 ):
     """Transcribe audio via Groq Whisper with concurrency & rate limit tracking"""
@@ -504,7 +562,7 @@ async def stt_endpoint(
         if file_size > 25 * 1024 * 1024:
             raise HTTPException(status_code=413, detail="Audio upload exceeds 25 MB")
         if file_size < 3000:
-            return {"transcript": ""}
+            return {"transcript": "", "text": ""}
         header_hex = audio_content[:16].hex() if file_size >= 16 else ""
         print(f"📊 [STT CONCURRENCY TRACE - REQ #{req_id}] Started | In-Flight Requests: {current_inflight} | File: {file.filename} ({file_size} bytes)")
         
@@ -523,9 +581,10 @@ async def stt_endpoint(
             
             candidate_name = str(candidate_session.get("candidate_name") or "").strip()
 
+            effective_terms = known_terms or prompt
             known_terms_hint = ""
-            if known_terms:
-                clean_terms = [t.strip() for t in (known_terms.split(",") if isinstance(known_terms, str) else known_terms) if t.strip()]
+            if effective_terms:
+                clean_terms = [t.strip() for t in (effective_terms.split(",") if isinstance(effective_terms, str) else effective_terms) if t.strip()]
                 if clean_terms:
                     known_terms_hint = ", ".join(clean_terms)
 
@@ -694,7 +753,7 @@ async def stt_endpoint(
             if dropped_segment_texts:
                 print(f"🚫 [STT HALLUCINATION FILTER] Rejected {len(dropped_segment_texts)} segments: {dropped_segment_texts[:3]}")
             print(f"✅ [STT CONCURRENCY TRACE - REQ #{req_id}] HTTP 200 OK | Latency: {dur}s | Transcript: {transcript_text[:50]}...")
-            return {"transcript": transcript_text}
+            return {"transcript": transcript_text, "text": transcript_text}
         finally:
             if os.path.exists(temp_filename):
                 os.remove(temp_filename)

@@ -24,14 +24,17 @@ import os
 import time
 import json
 import threading
-import requests as http_requests
-from app.ai.groq_manager import groq_key_manager
-import requests as http_requests
 from typing import List, Dict, Optional
 from dotenv import load_dotenv
 import contextvars
+import logging
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
+
+import requests as http_requests
+from app.ai.groq_manager import groq_key_manager
 
 # Context variable to track which session we are currently processing
 current_session_id = contextvars.ContextVar("current_session_id", default=None)
@@ -320,8 +323,8 @@ def _call_groq(
 ) -> str:
     """Call Groq API (completions) with active model and automatic fallback on decommissioned models."""
     url = "https://api.groq.com/openai/v1/chat/completions"
-    active_model = model or os.getenv("GROQ_MODEL", "llama3-8b-8192")
-    fallback_models = ["llama3-8b-8192", "llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+    active_model = model or os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+    fallback_models = ["openai/gpt-oss-20b", "llama-3.3-70b-versatile", "openai/gpt-oss-120b"]
     
     max_attempts = groq_key_manager.get_total_keys() or 1
     last_error_text = ""
@@ -389,10 +392,7 @@ def chat_completion(
 ) -> str:
     """
     Send a chat completion request.
-    Provider chain: Gemini (primary if configured) → OpenRouter → HuggingFace (fallback).
-
-    NOTE: Groq is intentionally excluded here — it is reserved exclusively
-    for Whisper voice transcription (routes.py /transcribe endpoint).
+    Provider chain: Gemini (primary) → OpenRouter → Groq (fallback) → HuggingFace (tertiary).
     """
     # 0. Primary Fast Path: Google Gemini (if GEMINI_API_KEY is configured)
     active_gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_API_Key") or GEMINI_API_KEY
@@ -410,21 +410,30 @@ def chat_completion(
             err_msg = str(openrouter_exc)
             if _is_quota_error(openrouter_exc):
                 _mark_quota_exhausted(err_msg)
-                print(f"OpenRouter quota hit: {err_msg}. Switching to HuggingFace fallback...")
+                print(f"OpenRouter quota hit: {err_msg}. Switching to Groq/HuggingFace fallback...")
             else:
-                print(f"OpenRouter failed: {openrouter_exc}. Switching to HuggingFace fallback...")
+                print(f"OpenRouter failed: {openrouter_exc}. Switching to Groq/HuggingFace fallback...")
     else:
         if _is_in_cooldown():
-            print("OpenRouter is in cooldown. Using HuggingFace fallback...")
+            print("OpenRouter is in cooldown. Using Groq/HuggingFace fallback...")
         else:
-            print("No OpenRouter API key. Using HuggingFace fallback...")
+            print("No OpenRouter API key. Using Groq/HuggingFace fallback...")
 
-    # 2. Fallback: HuggingFace (Groq is reserved for voice transcription only)
+    # 2. Fast Fallback: Groq (if key available)
+    has_groq = bool(os.getenv("GROQ_API_KEY") or groq_key_manager.get_total_keys() > 0)
+    if has_groq:
+        try:
+            print("Calling Groq LLM fallback...")
+            return _call_groq(messages, temperature=temperature, timeout=min(timeout, 20), max_tokens=max_tokens)
+        except Exception as groq_exc:
+            print(f"Groq LLM call failed: {groq_exc}. Switching to HuggingFace fallback...")
+
+    # 3. Tertiary Fallback: HuggingFace
     try:
         print("Calling HuggingFace fallback model...")
         return _call_huggingface(messages, temperature=temperature, timeout=timeout)
     except Exception as hf_exc:
-        print(f"All LLM providers failed: Gemini, OpenRouter and HuggingFace.")
+        print(f"All LLM providers failed: Gemini, OpenRouter, Groq, and HuggingFace.")
         raise RuntimeError("QUOTA_EXHAUSTED_INSTANT_OFFLINE")
 
 

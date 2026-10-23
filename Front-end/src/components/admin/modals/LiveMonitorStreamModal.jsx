@@ -46,8 +46,8 @@ function getTrackType(track) {
 
 const buildRemoteViewStream = (stream, mode) => {
   if (!stream) return null
-  const videoTracks = [...stream.getVideoTracks()]
-  const audioTracks = [...stream.getAudioTracks()]
+  const videoTracks = [...stream.getVideoTracks()].filter(t => t.readyState === 'live')
+  const audioTracks = [...stream.getAudioTracks()].filter(t => t.readyState === 'live')
   if (videoTracks.length === 0) return stream
 
   let selectedVideoTrack = null
@@ -55,9 +55,10 @@ const buildRemoteViewStream = (stream, mode) => {
   if (mode === 'camera') {
     selectedVideoTrack = videoTracks.find(track => getTrackType(track) === 'camera') || videoTracks[0]
   } else {
-    // Candidate publishers add camera to transceiver 0 and screen to transceiver 1.
-    // If track labels are obfuscated by the browser, fallback to the expected transceiver index order.
-    selectedVideoTrack = videoTracks.find(track => getTrackType(track) === 'screen') || (videoTracks.length > 1 ? videoTracks[1] : videoTracks[0])
+    // If admin requested screen, check if screen track exists
+    const screenTrack = videoTracks.find(track => getTrackType(track) === 'screen') || (videoTracks.length > 1 ? videoTracks[1] : null)
+    // If screen track is present and live, use it; otherwise seamlessly fall back to camera
+    selectedVideoTrack = screenTrack || videoTracks[0]
   }
 
   if (!selectedVideoTrack) {
@@ -72,7 +73,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
   const [telemetry, setTelemetry] = useState(null)
   const [violations, setViolations] = useState([])
   const [retryCount, setRetryCount] = useState(0)
-  const [viewMode, setViewMode] = useState('screen')
+  const [viewMode, setViewMode] = useState('camera')
   const [remoteStream, setRemoteStream] = useState(null)
   const [trackAvailability, setTrackAvailability] = useState({ camera: false, screen: false })
   const [shareLink, setShareLink] = useState('')
@@ -216,19 +217,23 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
     const pc = pcRef.current
     if (!pc) return
 
+    // addTransceiver creates receivers immediately. Only consider them active if the PC is connected
+    // or if the tracks are unmuted (meaning media is flowing).
+    const isConnected = pc.connectionState === 'connected'
+    
     const receiverTracks = pc.getReceivers()
       .map(receiver => receiver.track)
-      .filter(Boolean)
+      .filter(track => track && (!track.muted || isConnected))
 
     if (receiverTracks.length === 0) return
 
     const receiverStream = new MediaStream(receiverTracks)
     setRemoteStream(receiverStream)
-    if (mountedRef.current) setStatus('streaming')
+    if (mountedRef.current && isConnected) setStatus('streaming')
   }, [])
 
   // Detect a media-path outage even when the signaling WebSocket remains open.
-  // Two unchanged inbound-RTP samples avoid flagging normal short stalls.
+  // Avoid flagging normal static screens (e.g. reading code or questions) as outages.
   useEffect(() => {
     if (!isOpen || !session) return
 
@@ -237,7 +242,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       if (!pc || !mountedRef.current) return
 
       const iceDown = ['disconnected', 'failed', 'closed'].includes(pc.iceConnectionState)
-      const telemetryStale = lastTelemetryAtRef.current > 0 && Date.now() - lastTelemetryAtRef.current > 15000
+      const telemetryStale = lastTelemetryAtRef.current > 0 && Date.now() - lastTelemetryAtRef.current > 20000
 
       let mediaFrozen = false
       try {
@@ -254,8 +259,8 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
           }
         })
 
-        if (hasVideoReport && decodedFrames > 0) {
-          mediaFrozen = lastBytesReceivedRef.current === bytesReceived
+        if (hasVideoReport) {
+          mediaFrozen = lastBytesReceivedRef.current !== null && lastBytesReceivedRef.current === bytesReceived
           frozenCountRef.current = mediaFrozen ? frozenCountRef.current + 1 : 0
           lastBytesReceivedRef.current = bytesReceived
         } else {
@@ -266,7 +271,10 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
         // ICE and telemetry signals still provide a useful fallback.
       }
 
-      const networkDown = iceDown || telemetryStale || (mediaFrozen && frozenCountRef.current >= 2)
+      // Only flag network issue if ICE actually disconnected, telemetry is dead,
+      // or media is stalled for at least 8 samples (16 seconds) while ICE is not connected
+      const sustainedStall = frozenCountRef.current >= 8 && pc.iceConnectionState !== 'connected'
+      const networkDown = iceDown || (sustainedStall && telemetryStale)
       if (networkDown !== networkDownRef.current) {
         networkDownRef.current = networkDown
         setIsCandidateNetworkDown(networkDown)
@@ -411,15 +419,15 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
 
       if (mountedRef.current) setStatus('negotiating')
 
-      // If no video track arrives within 8 s, retry the offer automatically.
+      // If no video track arrives within 25 s, retry the offer automatically (or wait if candidate is initializing)
       streamTimeoutRef.current = setTimeout(() => {
-        if (mountedRef.current && statusRef.current !== 'streaming') {
-          console.warn('[AdminWebRTC] No stream in 8 s — retrying offer...')
+        if (mountedRef.current && statusRef.current !== 'streaming' && statusRef.current !== 'waiting_tracks') {
+          console.warn('[AdminWebRTC] No stream in 25 s — retrying offer...')
           if (sendOfferRef.current && wsRef.current?.readyState === WebSocket.OPEN) {
             sendOfferRef.current(wsRef.current)
           }
         }
-      }, 8000)
+      }, 25000)
 
     } catch (err) {
       console.error('[AdminWebRTC] sendOffer error:', err)
@@ -487,6 +495,14 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
           console.log('[AdminWebRTC] Candidate reconnected/ready. Sending fresh offer...')
           if (mountedRef.current && wsRef.current?.readyState === WebSocket.OPEN) {
             sendOffer(wsRef.current)
+          }
+          return
+        }
+
+        if (msg.type === 'candidate_not_ready') {
+          console.log('[AdminWebRTC] Candidate media tracks initializing (device check or permissions). Waiting for candidate...')
+          if (mountedRef.current && statusRef.current !== 'streaming') {
+            setStatus('waiting_tracks')
           }
           return
         }
@@ -617,12 +633,21 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       videoRef.current.srcObject = null
       return
     }
-    const stream = buildRemoteViewStream(remoteStream, viewMode)
-    videoRef.current.srcObject = stream
-    videoRef.current.muted = true
-    videoRef.current.play().catch(() => {
-      // Autoplay may be blocked, but the video source is attached.
-    })
+    const targetStream = buildRemoteViewStream(remoteStream, viewMode)
+    if (!targetStream) return
+
+    const currentStream = videoRef.current.srcObject
+    const currentVideoTrack = currentStream?.getVideoTracks()?.[0]
+    const targetVideoTrack = targetStream?.getVideoTracks()?.[0]
+
+    // Only update srcObject if the track actually changed to prevent decoder buffer flushes
+    if (!currentStream || currentVideoTrack?.id !== targetVideoTrack?.id) {
+      videoRef.current.srcObject = targetStream
+      videoRef.current.muted = true
+      videoRef.current.play().catch(() => {
+        // Autoplay may be blocked, but the video source is attached.
+      })
+    }
   }, [remoteStream, viewMode])
 
   useEffect(() => {
@@ -635,15 +660,15 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
 
   useEffect(() => {
     if (isOpen && session) {
-      setViewMode('screen')
+      setViewMode('camera')
     }
   }, [isOpen, session])
 
   useEffect(() => {
-    if (viewMode === 'camera' && !hasCameraTrack) {
-      setViewMode('screen')
+    if (viewMode === 'screen' && !hasScreenTrack) {
+      setViewMode('camera')
     }
-  }, [viewMode, hasCameraTrack])
+  }, [viewMode, hasScreenTrack])
 
   const getRoundIcon = (type) => {
     if (type === 'coding') return <Code size={16} />
@@ -741,9 +766,10 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col justify-center">
             <span className="text-[0.65rem] font-bold text-slate-500 uppercase tracking-wider mb-1">Status</span>
             <div className="flex items-center gap-1.5 font-bold text-sm">
-              {status === 'streaming'   ? <span className="text-emerald-600">LIVE</span> :
-               status === 'connecting'  ? <span className="text-amber-500">Connecting...</span> :
-               status === 'negotiating' ? <span className="text-indigo-500">Establishing...</span> :
+              {status === 'streaming'      ? <span className="text-emerald-600">LIVE</span> :
+               status === 'connecting'     ? <span className="text-amber-500">Connecting...</span> :
+               status === 'waiting_tracks' ? <span className="text-amber-500">Candidate Setup...</span> :
+               status === 'negotiating'    ? <span className="text-indigo-500">Establishing...</span> :
                <span className="text-red-500 uppercase">{status}</span>}
             </div>
           </div>
@@ -821,6 +847,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
             ref={videoRef}
             autoPlay
             playsInline
+            muted
             controls
             className={`w-full h-full object-contain ${remoteStream ? 'opacity-100' : 'opacity-0'}`}
           />
@@ -835,12 +862,19 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
 
           {!remoteStream && (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 bg-slate-900/90 z-10">
-              {status === 'connecting' || status === 'negotiating' ? (
+              {status === 'connecting' || status === 'negotiating' || status === 'waiting_tracks' ? (
                 <div className="flex flex-col items-center gap-3">
                   <Activity size={40} className="animate-pulse text-indigo-500" />
                   <p className="text-sm font-semibold tracking-wide">
-                    {status === 'connecting' ? 'Connecting to Candidate Stream...' : 'Negotiating WebRTC connection...'}
+                    {status === 'connecting' ? 'Connecting to Candidate Stream...' :
+                     status === 'waiting_tracks' ? 'Candidate device initializing (permissions/setup)...' :
+                     'Negotiating WebRTC connection...'}
                   </p>
+                  <span className="text-xs text-slate-400 text-center max-w-sm">
+                    {status === 'waiting_tracks'
+                      ? 'Stream will start automatically once camera check is completed by candidate.'
+                      : 'Establishing direct media channel...'}
+                  </span>
                   <button
                     onClick={() => sendOffer(wsRef.current)}
                     className="mt-2 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 transition-colors text-white text-xs font-bold rounded shadow-md"

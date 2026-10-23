@@ -15,6 +15,15 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
   const [volLevel, setVolLevel] = useState(0);
   const [isReady, setIsReady] = useState(false);
   const [hasAudioVerified, setHasAudioVerified] = useState(false);
+  const [selectedOS, setSelectedOS] = useState(() => {
+    if (typeof window === 'undefined') return 'windows';
+    const ua = (window.navigator?.userAgent || '').toLowerCase();
+    const platform = (window.navigator?.userAgentData?.platform || window.navigator?.platform || '').toLowerCase();
+    if (platform.includes('mac') || ua.includes('mac') || ua.includes('darwin')) return 'mac';
+    if (platform.includes('linux') || ua.includes('linux') || ua.includes('x11')) return 'linux';
+    return 'windows';
+  });
+  const [copiedCmd, setCopiedCmd] = useState(false);
 
   const env = useEnvironmentIsolation({
     enabled: true,
@@ -36,7 +45,7 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
 
   const hasFaceVerified = proctoring.faceVisible && proctoring.faceCount === 1 && !proctoring.multiFace;
   const hasEnvironmentVerified = env.isIsolated;
-  const canProceed = isReady && !error && hasAudioVerified && hasFaceVerified && hasEnvironmentVerified && hasScreenShareVerified && !env.hasMultipleTabs;
+  const canProceed = isReady && !error && hasAudioVerified && hasFaceVerified && hasEnvironmentVerified && hasScreenShareVerified && !env.hasMultipleTabs && proctoring.agentConnected;
 
   useEffect(() => {
     let active = true;
@@ -362,10 +371,10 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
                 <button
                   type="button"
                   onClick={env.startIsolationTest}
-                  disabled={env.isTesting || env.hasMultipleTabs}
+                  disabled={env.isTesting || env.hasMultipleTabs || !proctoring.agentConnected}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 shrink-0 ${env.isTesting
                       ? 'bg-indigo-600/50 text-indigo-200 cursor-wait'
-                      : env.hasMultipleTabs
+                      : env.hasMultipleTabs || !proctoring.agentConnected
                         ? 'bg-red-500/20 text-red-300 cursor-not-allowed border border-red-500/30'
                         : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/30 hover:-translate-y-0.5 cursor-pointer'
                     }`}
@@ -374,6 +383,11 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
                     <>
                       <i className="fas fa-spinner fa-spin text-xs"></i>
                       <span>Testing Fullscreen ({env.countdown}s)...</span>
+                    </>
+                  ) : !proctoring.agentConnected ? (
+                    <>
+                      <i className="fas fa-shield-alt"></i>
+                      <span>Agent Required First</span>
                     </>
                   ) : env.hasMultipleTabs ? (
                     <>
@@ -422,7 +436,11 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
             <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
               <i className="fas fa-desktop text-indigo-400 text-xs"></i> Screen Sharing & Display Security
             </span>
-            {hasScreenShareVerified ? (
+            {!proctoring.agentConnected ? (
+              <span className="text-[11px] font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded animate-pulse">
+                Agent Not Connected
+              </span>
+            ) : hasScreenShareVerified ? (
               <span className="text-[11px] font-bold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded">
                 No Screen Share Active ✓
               </span>
@@ -433,9 +451,166 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
             )}
           </div>
 
-          {isScreenCastDetected ? (
+          {!proctoring.agentConnected ? (
             <div
-              className="rounded-lg p-2.5 border"
+              className="rounded-lg p-2.5 border mt-2"
+              style={{ backgroundColor: 'rgba(245, 158, 11, 0.12)', borderColor: 'rgba(245, 158, 11, 0.35)', color: '#fcd34d' }}
+            >
+              <div className="flex items-start gap-2">
+                <i className="fas fa-shield-alt text-amber-400 text-xs mt-0.5 flex-shrink-0 animate-bounce"></i>
+                <div className="flex-1 text-[11px]">
+                  <p className="font-bold text-amber-100 text-xs">
+                    HireIQ Security Agent Required
+                  </p>
+                  <p className="mt-0.5 text-slate-200 leading-snug">
+                    To ensure a secure environment, you must download and run the HireIQ Security Agent. This detects unauthorized background apps and mirroring tools (e.g. SpaceDesk, AnyDesk).
+                  </p>
+                  {/* Primary Download Button */}
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <a
+                      href={
+                        selectedOS === 'mac'
+                          ? '/downloads/hireiq-agent-mac'
+                          : selectedOS === 'linux'
+                            ? '/downloads/hireiq-agent-linux'
+                            : '/downloads/hireiq-agent.exe'
+                      }
+                      download={
+                        selectedOS === 'mac'
+                          ? 'hireiq-agent-mac'
+                          : selectedOS === 'linux'
+                            ? 'hireiq-agent-linux'
+                            : 'hireiq-agent.exe'
+                      }
+                      className="inline-flex items-center gap-1.5 bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded text-xs font-bold transition-all shadow shadow-amber-600/30"
+                    >
+                      <i className={
+                        selectedOS === 'mac'
+                          ? 'fab fa-apple text-sm'
+                          : selectedOS === 'linux'
+                            ? 'fab fa-linux text-sm'
+                            : 'fab fa-windows text-sm'
+                      }></i>
+                      <span>
+                        {selectedOS === 'mac'
+                          ? 'Download for macOS'
+                          : selectedOS === 'linux'
+                            ? 'Download for Linux'
+                            : 'Download for Windows (.exe)'}
+                      </span>
+                    </a>
+                  </div>
+
+                  {/* Manual Platform Switcher */}
+                  <div className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-300">
+                    <span className="text-amber-300/80 font-medium">Platform:</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedOS('windows')}
+                      className={`px-2 py-0.5 rounded text-[10px] transition-all cursor-pointer ${
+                        selectedOS === 'windows'
+                          ? 'bg-amber-500/30 text-amber-200 font-bold border border-amber-400/50'
+                          : 'bg-black/30 hover:bg-black/50 text-slate-300 hover:text-white border border-white/10'
+                      }`}
+                    >
+                      <i className="fab fa-windows mr-1"></i>Windows
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedOS('linux')}
+                      className={`px-2 py-0.5 rounded text-[10px] transition-all cursor-pointer ${
+                        selectedOS === 'linux'
+                          ? 'bg-amber-500/30 text-amber-200 font-bold border border-amber-400/50'
+                          : 'bg-black/30 hover:bg-black/50 text-slate-300 hover:text-white border border-white/10'
+                      }`}
+                    >
+                      <i className="fab fa-linux mr-1"></i>Linux
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedOS('mac')}
+                      className={`px-2 py-0.5 rounded text-[10px] transition-all cursor-pointer ${
+                        selectedOS === 'mac'
+                          ? 'bg-amber-500/30 text-amber-200 font-bold border border-amber-400/50'
+                          : 'bg-black/30 hover:bg-black/50 text-slate-300 hover:text-white border border-white/10'
+                      }`}
+                    >
+                      <i className="fab fa-apple mr-1"></i>macOS
+                    </button>
+                  </div>
+
+                  {/* Platform-Specific Step-by-Step Run Guidance */}
+                  {selectedOS === 'windows' ? (
+                    <div className="mt-2.5 p-2 rounded-lg bg-black/40 border border-amber-500/25 text-[10px]">
+                      <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-amber-100 font-medium font-sans">
+                        <span className="bg-amber-500/30 text-amber-200 font-bold px-1.5 py-0.5 rounded text-[9px] border border-amber-400/30">Step 1</span>
+                        <span>Click download above</span>
+                        <span className="text-amber-400 font-bold">→</span>
+                        <span className="bg-amber-500/30 text-amber-200 font-bold px-1.5 py-0.5 rounded text-[9px] border border-amber-400/30">Step 2</span>
+                        <span>Open & double-click <code className="text-amber-300 font-mono font-bold bg-black/60 px-1 py-0.5 rounded">hireiq-agent.exe</code></span>
+                      </div>
+                      <p className="mt-1 text-[9px] text-amber-300/70 font-sans">
+                        💡 If Chrome warns "Suspicious download blocked": Click download details (arrow) → select "Download suspicious file" / "Keep anyway"
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="mt-2.5 p-2 rounded-lg bg-black/40 border border-amber-500/25 text-[10px]">
+                      {/* Explicit 2-Step Visual Flow */}
+                      <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-amber-100 font-medium mb-2 pb-1.5 border-b border-amber-500/20 font-sans">
+                        <span className="bg-amber-500/30 text-amber-200 font-bold px-1.5 py-0.5 rounded text-[9px] border border-amber-400/30">Step 1</span>
+                        <span>Click download above</span>
+                        <span className="text-amber-400 font-bold">→</span>
+                        <span className="bg-amber-500/30 text-amber-200 font-bold px-1.5 py-0.5 rounded text-[9px] border border-amber-400/30">Step 2</span>
+                        <span>{selectedOS === 'linux' ? 'Open Terminal (Ctrl+Alt+T) & paste command:' : 'Open Terminal & paste command:'}</span>
+                      </div>
+
+                      <div className="flex items-center justify-between text-amber-200/90 mb-1 font-sans">
+                        <span className="font-semibold flex items-center gap-1 text-[10px]">
+                          <i className="fas fa-terminal text-[9px] text-amber-400"></i> Command to run:
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const cmd = `cd ~/Downloads && chmod +x hireiq-agent-${selectedOS} && ./hireiq-agent-${selectedOS}`;
+                            if (navigator?.clipboard?.writeText) {
+                              navigator.clipboard.writeText(cmd);
+                              setCopiedCmd(true);
+                              setTimeout(() => setCopiedCmd(false), 2000);
+                            }
+                          }}
+                          className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-sans text-[10px] shrink-0 cursor-pointer font-bold transition-all"
+                          title="Copy command"
+                        >
+                          {copiedCmd ? (
+                            <span className="flex items-center gap-1 text-emerald-400"><i className="fas fa-check"></i> Copied</span>
+                          ) : (
+                            <span className="flex items-center gap-1"><i className="fas fa-copy"></i> Copy</span>
+                          )}
+                        </button>
+                      </div>
+                      <div className="bg-black/60 px-2 py-1.5 rounded font-mono text-[10px] text-amber-200 break-all select-all">
+                        cd ~/Downloads && chmod +x hireiq-agent-{selectedOS} && ./hireiq-agent-{selectedOS}
+                      </div>
+                      {selectedOS === 'linux' ? (
+                        <p className="mt-1 text-[9px] text-amber-300/70 font-sans">
+                          💡 Or right-click file in Downloads → Properties → Allow executing as program
+                        </p>
+                      ) : (
+                        <p className="mt-1 text-[9px] text-amber-300/70 font-sans">
+                          💡 If prompted: System Settings → Privacy & Security → Click "Open Anyway"
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  <p className="mt-1.5 text-amber-300/80 font-semibold text-[10px]">
+                    Once running, this check will verify automatically.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : isScreenCastDetected ? (
+            <div
+              className="rounded-lg p-2.5 border mt-2"
               style={{ backgroundColor: 'rgba(239, 68, 68, 0.12)', borderColor: 'rgba(239, 68, 68, 0.35)', color: '#fecaca' }}
             >
               <div className="flex items-start gap-2">
@@ -460,7 +635,7 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
               </div>
             </div>
           ) : (
-            <p className="text-[11px] text-slate-400 leading-tight">
+            <p className="text-[11px] text-slate-400 leading-tight mt-2">
               Single monitor verified. No screen mirroring, casting, or remote display software detected.
             </p>
           )}
@@ -483,7 +658,9 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
           >
             {isReady && !error && !canProceed
               ? (
-                isScreenCastDetected
+                !proctoring.agentConnected
+                  ? 'Security Agent Required to Continue'
+                  : isScreenCastDetected
                   ? `Stop Screen Sharing (${proctoring.detectedPlatforms?.[0] || 'SpaceDesk/AnyDesk'}) to Continue`
                   : env.hasMultipleTabs
                     ? 'Close Other Tabs to Continue'

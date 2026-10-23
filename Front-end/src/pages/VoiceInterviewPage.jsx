@@ -826,6 +826,39 @@ export default function VoiceInterviewPage() {
         onEnd?.()
       })
     } catch (e) {
+      console.warn("Backend TTS unavailable, falling back to browser speech synthesis:", e)
+      if (window.speechSynthesis) {
+        try {
+          window.speechSynthesis.cancel()
+          const utterance = new SpeechSynthesisUtterance(text)
+          const bcp47Map = {
+            'Hindi': 'hi-IN', 'Telugu': 'te-IN', 'Tamil': 'ta-IN',
+            'Malayalam': 'ml-IN', 'Kannada': 'kn-IN', 'English': 'en-IN'
+          }
+          const targetLang = bcp47Map[languageRef.current] || 'en-IN'
+          utterance.lang = targetLang
+          const prefix = targetLang.split('-')[0]
+          const voices = window.speechSynthesis.getVoices()
+          const preferred = voices.find(v => v.lang.startsWith(prefix) && (v.name.includes("Female") || v.name.includes("Google")))
+          if (preferred) utterance.voice = preferred
+          
+          utterance.onend = () => {
+            isTTSPlayingRef.current = false
+            setAiStatus('listening')
+            onEnd?.()
+          }
+          utterance.onerror = () => {
+            isTTSPlayingRef.current = false
+            setAiStatus('idle')
+            onEnd?.()
+          }
+          setAiStatus('speaking')
+          window.speechSynthesis.speak(utterance)
+          return
+        } catch (synthErr) {
+          console.error("Browser speech synthesis failed:", synthErr)
+        }
+      }
       isTTSPlayingRef.current = false
       setAiStatus('idle')
       onEnd?.()

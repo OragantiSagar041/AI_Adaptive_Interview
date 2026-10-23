@@ -166,7 +166,7 @@ export default function ProctoringAlerts({
           </span>
           <span className="alert-label">Noise Alert</span>
           Background noise detected — please ensure a quiet environment
-          <span className="alert-count">{noiseAlertCount}/10</span>
+          <span className="alert-count">{noiseAlertCount}/25</span>
         </div>
       )}
 

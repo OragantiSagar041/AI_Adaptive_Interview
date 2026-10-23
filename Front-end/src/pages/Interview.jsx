@@ -45,9 +45,6 @@ export default function Interview() {
           const startTime = new Date(payload.scheduled_start.endsWith('Z') || payload.scheduled_start.includes('+') ? payload.scheduled_start : payload.scheduled_start + 'Z')
           throw new Error(`This interview is scheduled to start on ${startTime.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'short', timeStyle: 'short' })}. Please try again at the scheduled time.`)
         }
-        if (payload.session_status === 'completed') {
-          throw new Error("This interview session has already been completed.")
-        }
 
         if (payload.interview_format === 'Voice') {
           navigate(`/voice-interview/${sessionId}`, { replace: true })

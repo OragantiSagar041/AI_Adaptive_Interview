@@ -50,6 +50,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const [error, setError] = useState(null)
   const [scheduledStart, setScheduledStart] = useState(null)
   const [isCompleted, setIsCompleted] = useState(false)
+  const [isAlreadyCompleted, setIsAlreadyCompleted] = useState(false)
   const _sessionKey = sessionId ? `interview_session_${sessionId}` : null
   const _savedSession = _sessionKey ? (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || 'null') } catch { return null } })() : null
 
@@ -729,6 +730,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       // completed screen immediately without waiting for the API round-trip.
       try {
         if (sessionStorage.getItem(`interview_done_${sessionId}`) === '1') {
+          setIsAlreadyCompleted(true)
           setIsCompleted(true)
           setLoading(false)
           return
@@ -762,6 +764,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           throw new Error(`This interview is scheduled to start on ${startTime.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'short', timeStyle: 'short' })}. Please try again at the scheduled time.`)
         }
         if (payload.session_status === 'completed') {
+          setIsAlreadyCompleted(true)
           setIsCompleted(true)
           setLoading(false)
           return
@@ -785,6 +788,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           throw new Error("This interview session is scheduled for a future time window.")
         }
         if (startPayload.session_status === 'completed') {
+          setIsAlreadyCompleted(true)
           setIsCompleted(true)
           setLoading(false)
           return
@@ -1134,7 +1138,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
         // Web Speech is display-only "ghost" text for the *current* in-progress segment.
         // Gate: ignore Web Speech hallucination if no real acoustic energy occurred
-        if (segmentPeakRmsRef.current < 0.04 && audioRmsRef.current < 0.04) {
+        if (segmentPeakRmsRef.current < 0.012 && audioRmsRef.current < 0.012) {
           return
         }
 
@@ -1239,6 +1243,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       const AudioCtx = window.AudioContext || window.webkitAudioContext
       const actx = new AudioCtx()
       noiseAudioContextRef.current = actx
+      if (actx.state === 'suspended') {
+        actx.resume().catch(e => console.log("Noise AudioContext resume failed:", e))
+      }
       const source = actx.createMediaStreamSource(stream)
       const analyser = actx.createAnalyser()
       analyser.fftSize = 256
@@ -1247,6 +1254,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
       const tick = () => {
         if (!noiseAudioContextRef.current) return
+        if (noiseAudioContextRef.current.state === 'suspended') {
+          noiseAudioContextRef.current.resume().catch(() => {})
+        }
         noiseMonitorFrameRef.current = requestAnimationFrame(tick)
         analyser.getByteTimeDomainData(dataArray)
 
@@ -2746,6 +2756,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     isSpeechRecordingRef,
     interimTranscriptText,
     isCompleted,
+    isAlreadyCompleted,
     scheduledStart,
     isOnline
   }

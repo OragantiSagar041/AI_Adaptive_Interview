@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
 import axios from 'axios'
 import Swal from 'sweetalert2'
@@ -11,6 +11,7 @@ import Select from '../../components/Select'
 import { EmailPreviewModal, BulkResultsModal, convertHtmlToPlainText, convertPlainTextToHtml } from '../../components/admin/modals/AdminModals'
 import { loadSuperAdminDashboard } from '../../store/slices/dashboardSlice'
 import { createSuperAdminInterview } from '../../store/slices/interviewSlice'
+import PreviousInterviewsModal, { getInterviewStatusBadge } from '../../components/superadmin/PreviousInterviewsModal'
 
 import { CustomToggleSwitch, FeatureLockOverlay } from './CreateInterviewShared'
 export { CustomToggleSwitch, FeatureLockOverlay } from './CreateInterviewShared'
@@ -20,6 +21,7 @@ const CreateInterviewBulkTab = React.lazy(() => import('./CreateInterviewBulkTab
 
 export default function CreateInterviewPage() {
   const dispatch = useDispatch()
+  const navigate = useNavigate()
   const location = useLocation()
   const token = useSelector(state => state.auth.token)
   const adminUser = useSelector(state => state.auth.adminUser)
@@ -308,22 +310,202 @@ export default function CreateInterviewPage() {
   }
 
   const lastCheckedEmailRef = useRef('')
+  const isCheckingCandidateRef = useRef(false)
   const emailDebounceRef = useRef(null)
+  const [ignoredCandidateEmail, setIgnoredCandidateEmail] = useState('')
+  const [candidateStatusInfo, setCandidateStatusInfo] = useState(null)
+  const [previousInterviewsModal, setPreviousInterviewsModal] = useState({
+    isOpen: false,
+    candidate: null,
+    history: [],
+    summary: null,
+    loading: false,
+    error: null
+  })
+
+  const escapeHtml = (str) => {
+    if (!str) return ''
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+  }
+
+  const applyAutofill = (autofillData, targetEmail) => {
+    const cleanEmail = (targetEmail || autofillData.email || autofillData.candidate_email || singleCandidate.email || '').trim().toLowerCase()
+    const hasResume = Boolean(autofillData.resume_text && autofillData.resume_text.trim().length > 10)
+    setSingleCandidate(prev => ({
+      ...prev,
+      name: autofillData.candidate_name || prev.name,
+      email: cleanEmail || prev.email,
+      resumeText: autofillData.resume_text || prev.resumeText,
+      resumeFileName: hasResume ? 'Existing candidate resume profile' : prev.resumeFileName,
+      phone: autofillData.candidate_phone || prev.phone
+    }))
+
+    Swal.fire({
+      toast: true,
+      position: 'top-end',
+      icon: 'success',
+      title: hasResume ? 'Profile & resume autofilled!' : 'Candidate details autofilled!',
+      showConfirmButton: false,
+      timer: 2500,
+      timerProgressBar: true
+    })
+
+    const effectiveResume = autofillData.resume_text || singleCandidate.resumeText
+    const effectiveJd = singleCandidate.jobDescription
+    if (effectiveResume && effectiveJd) {
+      handleCalculateAts(effectiveResume, effectiveJd)
+    }
+  }
+
+  // Fetch and display actual historical interview details for a candidate
+  const handleViewPreviousInterviews = async (email, candidateData = null) => {
+    if (!email || !email.includes('@')) {
+      Swal.fire({
+        title: 'Valid Email Required',
+        text: 'Please enter a valid candidate email address to check previous interview details.',
+        icon: 'warning',
+        confirmButtonColor: '#6366f1'
+      })
+      return
+    }
+
+    const cleanEmail = email.trim().toLowerCase()
+    const authToken = token || localStorage.getItem('superadminToken') || localStorage.getItem('adminToken')
+
+    // Close any active SweetAlert (like Candidate Profile Found popup) so it doesn't collide
+    Swal.close()
+
+    setPreviousInterviewsModal({
+      isOpen: true,
+      candidate: candidateData || { email: cleanEmail, candidate_email: cleanEmail, candidate_name: singleCandidate.name, candidate_phone: singleCandidate.phone },
+      history: [],
+      summary: null,
+      loading: true,
+      error: null
+    })
+
+    try {
+      const response = await axios.get(`${API_BASE_URL}/admin/candidate/previous-interviews?email=${encodeURIComponent(cleanEmail)}`, {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      })
+
+      const history = response.data?.history || []
+      const summary = response.data?.summary || null
+
+      const latest = history[0]
+      if (latest) {
+        const badge = getInterviewStatusBadge(latest)
+        const stKey = badge.label === 'Selected' ? 'selected' : badge.label === 'Rejected' ? 'rejected' : badge.label === 'Ignored / No-show' ? 'ignored' : 'pending'
+        if (stKey === 'ignored') {
+          setIgnoredCandidateEmail(cleanEmail)
+        } else {
+          setIgnoredCandidateEmail('')
+        }
+        setCandidateStatusInfo({ email: cleanEmail, status: stKey, label: badge.label })
+      } else {
+        setIgnoredCandidateEmail('')
+        setCandidateStatusInfo(null)
+      }
+
+      if (history.length === 0) {
+        setPreviousInterviewsModal(prev => ({ ...prev, isOpen: false, loading: false }))
+        await Swal.fire({
+          title: 'No Previous Interviews Found',
+          html: `
+            <div class="flex flex-col items-center text-center p-3 gap-2">
+              <div class="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mb-1">
+                <i class="fas fa-history text-xl"></i>
+              </div>
+              <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                No previous interviews recorded for <strong class="text-indigo-600">${escapeHtml(cleanEmail)}</strong>.
+              </p>
+              <p class="text-xs text-slate-500 dark:text-slate-400">
+                This appears to be the candidate's first interview session in the system.
+              </p>
+            </div>
+          `,
+          icon: 'info',
+          confirmButtonText: 'OK',
+          confirmButtonColor: '#6366f1',
+          customClass: {
+            popup: 'rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl p-6 bg-white dark:bg-[#161c2d]',
+            confirmButton: 'px-6 py-2.5 rounded-xl font-bold text-xs text-white shadow-md'
+          }
+        })
+        return
+      }
+
+      const serverCand = response.data?.candidate || {}
+      setPreviousInterviewsModal({
+        isOpen: true,
+        candidate: {
+          ...(candidateData || {}),
+          ...serverCand,
+          email: cleanEmail,
+          candidate_email: cleanEmail,
+          candidate_name: serverCand.candidate_name || response.data.candidate_name || candidateData?.candidate_name || singleCandidate.name,
+          candidate_phone: serverCand.candidate_phone || response.data.candidate_phone || candidateData?.candidate_phone || singleCandidate.phone,
+          candidate_id: serverCand.candidate_id || response.data.candidate_id || candidateData?.candidate_id || (history[0]?.candidate_id) || '',
+          skills: serverCand.skills || response.data.skills || candidateData?.skills || (history[0]?.mandatory_skills) || '',
+          job_role: serverCand.job_role || response.data.job_role || candidateData?.job_role || (history[0]?.job_role) || '',
+          job_description: serverCand.job_description || response.data.job_description || candidateData?.job_description || (history[0]?.job_description) || '',
+          resume_text: serverCand.resume_text || response.data.resume_text || candidateData?.resume_text || singleCandidate.resumeText
+        },
+        history,
+        summary,
+        loading: false,
+        error: null
+      })
+    } catch (err) {
+      console.error('Failed to fetch previous interviews:', err)
+      setPreviousInterviewsModal(prev => ({ ...prev, isOpen: false, loading: false, error: err.message }))
+      const detailMsg = err.response?.data?.detail || err.message || 'Failed to fetch previous interview history.'
+      Swal.fire({
+        title: 'Error Fetching History',
+        text: detailMsg,
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      })
+    }
+  }
 
   // Check if candidate already has a profile/resume on file
   const handleCheckCandidate = async (email, force = false) => {
-    if (!email || !email.includes('@')) return
+    if (!email || !email.includes('@')) {
+      if (!email) lastCheckedEmailRef.current = ''
+      return
+    }
     const cleanEmail = email.trim().toLowerCase()
     if (!force && lastCheckedEmailRef.current === cleanEmail) return
+    if (isCheckingCandidateRef.current || Swal.isVisible()) return
 
+    if (emailDebounceRef.current) {
+      clearTimeout(emailDebounceRef.current)
+      emailDebounceRef.current = null
+    }
+
+    isCheckingCandidateRef.current = true
     try {
       const response = await axios.get(`${API_BASE_URL}/admin/candidate/check?email=${encodeURIComponent(cleanEmail)}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       const data = response.data
       if (data.exists) {
-        lastCheckedEmailRef.current = cleanEmail
+        const badge = getInterviewStatusBadge(data)
+        const stKey = badge.label === 'Selected' ? 'selected' : badge.label === 'Rejected' ? 'rejected' : badge.label === 'Ignored / No-show' ? 'ignored' : 'pending'
+        if (stKey === 'ignored') {
+          setIgnoredCandidateEmail(cleanEmail)
+        } else {
+          setIgnoredCandidateEmail('')
+        }
+        setCandidateStatusInfo({ email: cleanEmail, status: stKey, label: badge.label })
         const hasResume = Boolean(data.resume_text && data.resume_text.trim().length > 10)
+
         const result = await Swal.fire({
           title: 'Candidate Profile Found',
           html: `
@@ -340,47 +522,38 @@ export default function CreateInterviewPage() {
             </div>
           `,
           showCancelButton: true,
+          showDenyButton: true,
           confirmButtonText: hasResume ? 'Yes, Autofill Profile & Resume' : 'Yes, Autofill Details',
+          denyButtonText: '<i class="fas fa-history mr-1"></i> View Previous Interview Details',
           cancelButtonText: 'No, Keep Blank',
           confirmButtonColor: '#6366f1',
+          denyButtonColor: '#4f46e5',
           cancelButtonColor: '#1e293b',
+          allowOutsideClick: false,
+          allowEscapeKey: false,
+          returnFocus: false,
           customClass: {
             popup: 'rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl p-6 bg-white dark:bg-[#161c2d]',
             title: 'text-lg font-bold text-slate-800 dark:text-slate-100 font-sans tracking-tight pt-2',
-            confirmButton: 'px-5 py-2.5 rounded-xl font-bold text-xs !border-2 !border-indigo-400 dark:!border-indigo-400 text-white shadow-md transition-all hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 mr-2',
-            cancelButton: 'px-5 py-2.5 rounded-xl font-bold text-xs !border-2 !border-slate-400 dark:!border-slate-500 text-slate-800 dark:text-slate-200 shadow-sm transition-all hover:bg-slate-200 dark:hover:bg-slate-800 focus:outline-none'
+            confirmButton: 'px-4 py-2.5 rounded-xl font-bold text-xs !border-2 !border-indigo-400 dark:!border-indigo-400 text-white shadow-md transition-all hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 mr-2',
+            denyButton: 'px-4 py-2.5 rounded-xl font-bold text-xs bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 shadow-sm transition-all hover:bg-indigo-100 dark:hover:bg-indigo-900 focus:outline-none mr-2',
+            cancelButton: 'px-4 py-2.5 rounded-xl font-bold text-xs !border-2 !border-slate-400 dark:!border-slate-500 text-slate-800 dark:text-slate-200 shadow-sm transition-all hover:bg-slate-200 dark:hover:bg-slate-800 focus:outline-none'
           },
           buttonsStyling: true
         })
+
         if (result.isConfirmed) {
-          setSingleCandidate(prev => ({
-            ...prev,
-            name: data.candidate_name || prev.name,
-            email: cleanEmail,
-            resumeText: data.resume_text || prev.resumeText,
-            resumeFileName: hasResume ? 'Existing candidate resume profile' : prev.resumeFileName,
-            phone: data.candidate_phone || prev.phone
-          }))
-
-          Swal.fire({
-            toast: true,
-            position: 'top-end',
-            icon: 'success',
-            title: hasResume ? 'Profile & resume autofilled!' : 'Candidate details autofilled!',
-            showConfirmButton: false,
-            timer: 2500,
-            timerProgressBar: true
-          })
-
-          const effectiveResume = data.resume_text || singleCandidate.resumeText
-          const effectiveJd = singleCandidate.jobDescription
-          if (effectiveResume && effectiveJd) {
-            handleCalculateAts(effectiveResume, effectiveJd)
-          }
+          applyAutofill(data, cleanEmail)
+        } else if (result.isDenied) {
+          await handleViewPreviousInterviews(cleanEmail, data)
         }
+      } else {
+        lastCheckedEmailRef.current = cleanEmail
       }
     } catch (e) {
       console.error('Candidate check error:', e)
+    } finally {
+      isCheckingCandidateRef.current = false
     }
   }
 
@@ -932,6 +1105,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
               atsScoreData={atsScoreData}
               handleCalculateAts={handleCalculateAts}
               handleCheckCandidate={handleCheckCandidate}
+              handleViewPreviousInterviews={handleViewPreviousInterviews}
               handleParseFile={handleParseFile}
               handleGenerateInterviewLink={handleGenerateInterviewLink}
               handlePreviewEmail={handlePreviewEmail}
@@ -941,6 +1115,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
               hasCustomAIInstructions={hasCustomAIInstructions}
               hasIndustry={hasIndustry}
               singleCreatedLinks={singleCreatedLinks}
+              ignoredCandidateEmail={ignoredCandidateEmail}
+              candidateStatusInfo={candidateStatusInfo}
             />
           )}
 
@@ -984,6 +1160,189 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
         isOpen={bulkResultsModalOpen}
         onClose={() => setBulkResultsModalOpen(false)}
         bulkResultsData={bulkResultsData}
+      />
+
+      <PreviousInterviewsModal
+        isOpen={previousInterviewsModal.isOpen}
+        onClose={() => setPreviousInterviewsModal(prev => ({ ...prev, isOpen: false }))}
+        candidate={previousInterviewsModal.candidate}
+        history={previousInterviewsModal.history}
+        summary={previousInterviewsModal.summary}
+        loading={previousInterviewsModal.loading}
+        error={previousInterviewsModal.error}
+        onProceedInterview={async () => {
+          const cand = previousInterviewsModal.candidate
+          const cleanEmail = (cand?.email || cand?.candidate_email || singleCandidate.email || '').trim().toLowerCase()
+          setPreviousInterviewsModal(prev => ({ ...prev, isOpen: false }))
+          setIgnoredCandidateEmail('')
+          const authToken = token || localStorage.getItem('superadminToken') || localStorage.getItem('adminToken')
+          let autofillPayload = cand
+          if ((!autofillPayload || !autofillPayload.resume_text) && cleanEmail) {
+            try {
+              const chkRes = await axios.get(`${API_BASE_URL}/admin/candidate/check?email=${encodeURIComponent(cleanEmail)}`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+              })
+              if (chkRes.data?.exists) {
+                autofillPayload = chkRes.data
+              }
+            } catch (e) {
+              console.warn('Could not re-fetch candidate profile for autofill', e)
+            }
+          }
+          if ((!autofillPayload || !autofillPayload.resume_text) && previousInterviewsModal.history?.length > 0) {
+            const latest = previousInterviewsModal.history[0]
+            const candDet = latest.candidate_details || {}
+            autofillPayload = {
+              candidate_name: candDet.name || '',
+              resume_text: latest.resume_text || '',
+              candidate_phone: candDet.phone || ''
+            }
+          }
+          if (autofillPayload) {
+            applyAutofill(autofillPayload, cleanEmail)
+          } else {
+            Swal.fire({
+              toast: true,
+              position: 'top-end',
+              icon: 'success',
+              title: 'Proceeding with interview setup.',
+              showConfirmButton: false,
+              timer: 2500,
+              timerProgressBar: true
+            })
+          }
+        }}
+        onIgnoreCandidate={(info) => {
+          // 1. Reset candidate-specific fields in form state
+          setSingleCandidate(prev => ({
+            ...prev,
+            name: '',
+            email: '',
+            phone: '',
+            resumeText: '',
+            resumeFileName: '',
+            applicationId: '',
+            jobId: '',
+            jobTitle: '',
+            experience: '',
+            location: '',
+            current_ctc: '',
+            expected_ctc: ''
+          }))
+
+          // 2. Remove candidate-specific status labels and debounce timers
+          setCandidateStatusInfo(null)
+          setIgnoredCandidateEmail('')
+          lastCheckedEmailRef.current = ''
+          if (emailDebounceRef.current) {
+            clearTimeout(emailDebounceRef.current)
+            emailDebounceRef.current = null
+          }
+
+          // 3. Clear ATS match calculation & score data
+          setAtsScoreData(null)
+          setAtsCalculating(false)
+
+          // 4. Reset file upload input element in DOM
+          const resumeInputEl = document.getElementById('singleResumeInput')
+          if (resumeInputEl) resumeInputEl.value = ''
+
+          // 5. Clear stored session state for candidate information
+          try {
+            const stored = sessionStorage.getItem('createInterview_singleCandidate')
+            if (stored) {
+              const parsed = JSON.parse(stored)
+              const updated = {
+                ...parsed,
+                name: '',
+                email: '',
+                phone: '',
+                resumeText: '',
+                resumeFileName: '',
+                applicationId: '',
+                jobId: '',
+                jobTitle: '',
+                experience: '',
+                location: '',
+                current_ctc: '',
+                expected_ctc: ''
+              }
+              sessionStorage.setItem('createInterview_singleCandidate', JSON.stringify(updated))
+            }
+          } catch (e) {
+            console.error('Failed to clear stored singleCandidate on ignore', e)
+          }
+
+          // 6. Update modal state with the new ignore record
+          setPreviousInterviewsModal(prev => {
+            const newRecord = info?.newRecord
+            const prevHistory = prev.history || []
+            const updatedHistory = newRecord
+              ? (prevHistory.some(h => h.link_id === newRecord.link_id) ? prevHistory : [newRecord, ...prevHistory])
+              : prevHistory
+            const prevSummary = prev.summary || {}
+            return {
+              ...prev,
+              isOpen: false,
+              candidate: null,
+              history: updatedHistory,
+              summary: {
+                ...prevSummary,
+                total: (prevSummary.total || 0) + (newRecord ? 1 : 0),
+                ignored_noshow: (prevSummary.ignored_noshow || 0) + 1
+              }
+            }
+          })
+        }}
+        onRestoreCandidate={(info) => {
+          const cand = previousInterviewsModal.candidate
+          const cleanEmail = (info?.email || cand?.email || cand?.candidate_email || singleCandidate.email || '').trim().toLowerCase()
+          setIgnoredCandidateEmail('')
+          const restoredStatus = info?.restored_status || 'pending'
+          setCandidateStatusInfo({
+            email: cleanEmail,
+            status: restoredStatus === 'completed' ? 'completed' : (restoredStatus === 'rejected' ? 'rejected' : 'pending'),
+            label: restoredStatus === 'completed' ? 'Completed' : (restoredStatus === 'rejected' ? 'Rejected' : 'Pending')
+          })
+          setPreviousInterviewsModal(prev => {
+            const prevHistory = prev.history || []
+            const updatedHistory = info?.deleted_record
+              ? prevHistory.filter(item => item.link_id !== info.link_id)
+              : prevHistory.map((item, idx) => {
+                  const isMatch = (info?.link_id && item.link_id === info.link_id) || (!info?.link_id && idx === 0)
+                  if (isMatch) {
+                    const isAttended = restoredStatus === 'completed'
+                    const isExpired = restoredStatus === 'expired'
+                    const isPending = restoredStatus === 'pending'
+                    const isRejected = restoredStatus === 'rejected'
+                    return {
+                      ...item,
+                      status: restoredStatus,
+                      is_ignored: false,
+                      ignored: false,
+                      is_attended: isAttended,
+                      is_expired: isExpired,
+                      is_pending: isPending,
+                      is_rejected: isRejected,
+                      decision: isRejected ? 'rejected' : 'pending',
+                      ignored_at: null,
+                      ignored_by: null
+                    }
+                  }
+                  return item
+                })
+            const prevSummary = prev.summary || {}
+            return {
+              ...prev,
+              history: updatedHistory,
+              summary: {
+                ...prevSummary,
+                total: info?.deleted_record ? Math.max(0, (prevSummary.total || 1) - 1) : (prevSummary.total || 0),
+                ignored_noshow: Math.max(0, (prevSummary.ignored_noshow || 1) - 1)
+              }
+            }
+          })
+        }}
       />
     </>
   )

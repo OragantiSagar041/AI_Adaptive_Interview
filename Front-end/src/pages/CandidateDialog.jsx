@@ -78,6 +78,8 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
   const [error, setError] = useState(null)
   const [showResumeModal, setShowResumeModal] = useState(false)
   const [showRecordingModal, setShowRecordingModal] = useState(false)
+  const [camVideoError, setCamVideoError] = useState(false)
+  const [screenVideoError, setScreenVideoError] = useState(false)
   const [showTranscriptModal, setShowTranscriptModal] = useState(false)
 
   // New States
@@ -149,6 +151,8 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
     setDetail(null)
     setAtsData(null)
     setError(null)
+    setCamVideoError(false)
+    setScreenVideoError(false)
     setTranslations({})
     setTranslatingKeys({})
 
@@ -348,12 +352,22 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
 
   const formatMediaUrl = (url) => {
     if (!url) return null
-    if (url.startsWith('http')) return url
-    return `${API_BASE_URL}/${url.replace(/^\/+/, '')}`
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url
+    }
+    if (url.includes('recordings/') || url.startsWith('uploads/')) {
+      const fname = url.split('/').pop()
+      const apiBase = (API_BASE_URL || '').replace(/\/+$/, '')
+      return `${apiBase}/admin/recordings/stream/${fname}`
+    }
+    const base = (API_BASE_URL || '').replace(/\/api\/?$/, '').replace(/\/+$/, '')
+    return `${base}/${url.replace(/^\/+/, '')}`
   }
 
-  const recordingUrl = formatMediaUrl(c.recording_url)
-  const screenRecordingUrl = formatMediaUrl(c.screen_recording_url)
+  const rawCam = c.recording_url !== undefined ? c.recording_url : candidate?.recording_url
+  const rawScreen = c.screen_recording_url !== undefined ? c.screen_recording_url : candidate?.screen_recording_url
+  const recordingUrl = formatMediaUrl(rawCam)
+  const screenRecordingUrl = formatMediaUrl(rawScreen)
 
   const handleDecision = async (newDecision) => {
     if (!candidate) return;
@@ -445,6 +459,17 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
     return minutes > 0 ? `${minutes}m ${remainingSeconds}s` : `${Math.floor(duration)}s`
   }
 
+  const cleanForPdf = (text) => {
+    if (!text) return ''
+    return String(text)
+      .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015]/g, '-')
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/[\u201C\u201D]/g, '"')
+      .replace(/\u2026/g, '...')
+      .replace(/\u2022/g, '*')
+      .replace(/[^\x00-\x7F]/g, '')
+  }
+
   const handleDownloadTranscript = () => {
     if (!c.answers || c.answers.length === 0) return
 
@@ -463,11 +488,11 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
 
     doc.setFontSize(16)
     doc.setFont('helvetica', 'bold')
-    doc.text(`Interview Q&A: ${c.candidate_name || 'Unknown Candidate'}`, margin, y)
+    doc.text(`Interview Q&A: ${cleanForPdf(c.candidate_name) || 'Unknown Candidate'}`, margin, y)
     y += 10
     doc.setFontSize(11)
     doc.setFont('helvetica', 'normal')
-    doc.text(`Status: ${c.status || 'Completed'}`, margin, y)
+    doc.text(`Status: ${cleanForPdf(c.status) || 'Completed'}`, margin, y)
     y += 6
     doc.text(`Total Score: ${c.score || c.avg_score || 0}/100`, margin, y)
     y += 10
@@ -476,7 +501,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
     y += 10
 
     c.answers.forEach((a, index) => {
-      const questionLines = doc.splitTextToSize(`Q${index + 1}: ${a.question_text || 'No question recorded'}`, pageWidth - 2 * margin)
+      const questionLines = doc.splitTextToSize(cleanForPdf(`Q${index + 1}: ${a.question_text || 'No question recorded'}`), pageWidth - 2 * margin)
       checkPageBreak(questionLines.length * 5 + 30)
       doc.setFont('helvetica', 'bold')
       doc.text(questionLines, margin, y)
@@ -503,7 +528,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
       doc.text("Candidate's Answer:", margin, y)
       y += 5
       checkPageBreak(5)
-      const answerLines = doc.splitTextToSize(a.answer_text || 'No answer provided', pageWidth - 2 * margin)
+      const answerLines = doc.splitTextToSize(cleanForPdf(a.answer_text || 'No answer provided'), pageWidth - 2 * margin)
       answerLines.forEach((line) => {
         checkPageBreak(5)
         doc.text(line, margin, y)
@@ -516,7 +541,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
         doc.text('AI Feedback:', margin, y)
         y += 5
         doc.setFont('helvetica', 'normal')
-        const feedbackLines = doc.splitTextToSize(a.ai_feedback, pageWidth - 2 * margin)
+        const feedbackLines = doc.splitTextToSize(cleanForPdf(a.ai_feedback), pageWidth - 2 * margin)
         feedbackLines.forEach((line) => {
           checkPageBreak(5)
           doc.text(line, margin, y)
@@ -531,7 +556,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
       y += 10
     })
 
-    doc.save(`${c.candidate_name?.replace(/\s+/g, '_') || 'Candidate'}_interview_qa.pdf`)
+    doc.save(`${cleanForPdf(c.candidate_name)?.replace(/\s+/g, '_') || 'Candidate'}_interview_qa.pdf`)
   }
 
 
@@ -919,13 +944,27 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                           <div className="text-xs text-slate-400 font-medium">Interview video feed</div>
                         </div>
                       </div>
-                      {recordingUrl ? (
-                        <video controls className="w-full aspect-video object-contain rounded-lg border border-slate-200 bg-black max-h-48" src={recordingUrl}>
-                          Your browser does not support video.
-                        </video>
+                      {recordingUrl && !camVideoError ? (
+                        <div className="flex flex-col gap-2">
+                          <video 
+                            controls 
+                            preload="metadata" 
+                            playsInline 
+                            onError={() => setCamVideoError(true)}
+                            className="w-full aspect-video object-contain rounded-lg border border-slate-200 bg-black max-h-48" 
+                            src={recordingUrl}
+                          >
+                            Your browser does not support video.
+                          </video>
+                          <div className="flex justify-end">
+                            <a href={recordingUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold text-indigo-600 hover:underline">
+                              Open video in new tab ↗
+                            </a>
+                          </div>
+                        </div>
                       ) : (
                         <div className="h-28 flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
-                          No camera recording available
+                          {camVideoError ? "Camera recording currently unavailable" : "No camera recording available"}
                         </div>
                       )}
                     </div>
@@ -939,13 +978,27 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                           <div className="text-xs text-slate-400 font-medium">Screen share capture</div>
                         </div>
                       </div>
-                      {screenRecordingUrl ? (
-                        <video controls className="w-full aspect-video object-contain rounded-lg border border-slate-200 bg-black max-h-48" src={screenRecordingUrl}>
-                          Your browser does not support video.
-                        </video>
+                      {screenRecordingUrl && !screenVideoError ? (
+                        <div className="flex flex-col gap-2">
+                          <video 
+                            controls 
+                            preload="metadata" 
+                            playsInline 
+                            onError={() => setScreenVideoError(true)}
+                            className="w-full aspect-video object-contain rounded-lg border border-slate-200 bg-black max-h-48" 
+                            src={screenRecordingUrl}
+                          >
+                            Your browser does not support video.
+                          </video>
+                          <div className="flex justify-end">
+                            <a href={screenRecordingUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold text-emerald-600 hover:underline">
+                              Open video in new tab ↗
+                            </a>
+                          </div>
+                        </div>
                       ) : (
                         <div className="h-28 flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
-                          No screen recording available
+                          {screenVideoError ? "Screen recording currently unavailable" : "No screen recording available"}
                         </div>
                       )}
                     </div>
