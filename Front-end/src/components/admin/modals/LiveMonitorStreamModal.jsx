@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, memo } from 'react'
+﻿import React, { useState, useEffect, useRef, useCallback, memo } from 'react'
 import { API_BASE_URL } from '../../../apiConfig'
 import { getIceServers, initIceServers } from '../../../utils/webrtcConfig'
 import Modal from '../../Modal'
@@ -221,9 +221,12 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
     // or if the tracks are unmuted (meaning media is flowing).
     const isConnected = pc.connectionState === 'connected'
     
+    // Extract any live tracks attached to active receivers.
+    // Note: Do not reject tracks based on track.muted because in W3C WebRTC,
+    // remote tracks are initialized as muted until incoming media frames begin decoding.
     const receiverTracks = pc.getReceivers()
       .map(receiver => receiver.track)
-      .filter(track => track && (!track.muted || isConnected))
+      .filter(track => track && track.readyState === 'live')
 
     if (receiverTracks.length === 0) return
 
@@ -376,7 +379,10 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       pc.onconnectionstatechange = () => {
         console.log('[AdminWebRTC] PC state:', pc.connectionState)
         if (pc.connectionState === 'connected') {
-          if (mountedRef.current) setStatus('streaming')
+          if (mountedRef.current) {
+            setStatus('streaming')
+            updateRemoteStreamFromReceivers()
+          }
         } else if (pc.connectionState === 'failed') {
           if (mountedRef.current) {
             console.warn('[AdminWebRTC] PC state failed. Retrying offer...')
