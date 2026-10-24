@@ -35,17 +35,21 @@ db = client["AI_Interview"]
 
 # Collections
 candidates_collection = db["candidates"]
+projects_collection = db["projects"]
 interviews_collection = db["interviews"]
 answers_collection = db["answers"]
 admins_collection = db["admins"]
 
 # Ensure each Firebase account can be linked to only one admin.
 # sparse=True allows existing admins without firebase_uid.
-admins_collection.create_index(
-    [("firebase_uid", 1)],
-    unique=True,
-    sparse=True,
-)
+try:
+    admins_collection.create_index(
+        [("firebase_uid", 1)],
+        unique=True,
+        sparse=True,
+    )
+except Exception as _e:
+    pass
 
 interview_sessions_collection = db["interview_sessions"]
 plans_collection = db["plans"]
@@ -114,7 +118,7 @@ async def init_db_indexes():
             except Exception as e:
                 print(f"Warning: Failed to fix index {index_keys} on {collection.name}: {e}")
 
-    safe_create_index(candidates_collection, "name", unique=True)
+
     safe_create_index(admins_collection, "username", unique=True)
     safe_create_index(interview_sessions_collection, "link_id", unique=True)
     safe_create_index(answers_collection, [("interview_id", 1), ("question_id", 1)], unique=True)
@@ -153,7 +157,7 @@ async def init_db_indexes():
     safe_create_index(job_applications_collection, "omni_call_id")
     safe_create_index(answers_collection, [("interview_id", 1), ("created_at", -1)])
     safe_create_index(interview_sessions_collection, [("company_id", 1), ("created_by", 1), ("created_at", -1)])
-    safe_create_index(omni_call_logs_collection, "call_id", unique=True, sparse=True)
+    safe_create_index(omni_call_logs_collection, "call_id")
     safe_create_index(omni_call_logs_collection, "company_id")
     safe_create_index(omni_call_logs_collection, "admin_id")
     safe_create_index(interview_sessions_collection, "status")

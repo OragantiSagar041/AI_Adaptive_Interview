@@ -135,6 +135,13 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
 
           if (msg.type === 'admin_connected') {
             console.log(`[CandidateWebRTC] Admin connected: ${adminId}`)
+            const hasCam = mediaStreamRef.current?.getVideoTracks()?.some(t => t.readyState === 'live')
+            const hasScr = secondaryMediaStreamRef?.current?.getVideoTracks()?.some(t => t.readyState === 'live')
+            if (hasCam || hasScr) {
+              try {
+                ws.send(JSON.stringify({ type: 'candidate_connected', target_admin_id: adminId }))
+              } catch (_) {}
+            }
             return
           }
 
