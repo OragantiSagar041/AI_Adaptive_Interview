@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 import traceback
 from collections import defaultdict
 from datetime import timedelta, timezone
@@ -25,9 +26,10 @@ load_dotenv(override=False)
 # groq_client is removed to support dynamic key rotation via groq_manager
 
 cloudinary.config(
-    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
-    api_key=os.getenv("CLOUDINARY_API_KEY"),
-    api_secret=os.getenv("CLOUDINARY_API_SECRET"),
+    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME") or (json.loads(os.getenv("CLOUDINARY_ACCOUNTS", "[]"))[0].get("cloud_name") if os.getenv("CLOUDINARY_ACCOUNTS") else None),
+    api_key=os.getenv("CLOUDINARY_API_KEY") or (json.loads(os.getenv("CLOUDINARY_ACCOUNTS", "[]"))[0].get("api_key") if os.getenv("CLOUDINARY_ACCOUNTS") else None),
+    api_secret=os.getenv("CLOUDINARY_API_SECRET") or (json.loads(os.getenv("CLOUDINARY_ACCOUNTS", "[]"))[0].get("api_secret") if os.getenv("CLOUDINARY_ACCOUNTS") else None),
+    secure=True,
 )
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+psycopg2://user:password@localhost:5432/hireiq")

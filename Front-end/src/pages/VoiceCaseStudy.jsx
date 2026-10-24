@@ -533,7 +533,7 @@ export default function VoiceCaseStudy({
     stopListening()
     stopAllSpeech()
 
-    try { await candidateFetch(`${API_BASE_URL}/complete-session/${linkId}`, { method: 'POST' }) } catch(_) {}
+    // Delegate directly to onComplete (which uploads recordings first before marking completed)
     onComplete?.()
   }, [stopListening, stopAllSpeech, onComplete, linkId])
 

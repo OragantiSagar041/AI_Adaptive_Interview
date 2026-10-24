@@ -380,7 +380,17 @@ def sg_draft_summary(state: SummaryState) -> SummaryState:
     avg = sum(a.get("ai_score", 0) or 0 for a in ans) / len(ans) if ans else 0
     compressed = "\n".join([f"Q: {a.get('question_text', '')[:50]} | Score: {a.get('ai_score', 0)}" for a in ans])
     usr = f"Candidate: {state.get('candidate_name')}\nStats: {avg} avg\nQA: {compressed}\nReturn JSON."
-    fallback = InterviewSummary(recommendation="Borderline")
+    avg_score = int(avg)
+    rec = "Strong Hire" if avg >= 75 else "Hire" if avg >= 55 else "Borderline" if avg >= 35 else "No Hire"
+    fallback = InterviewSummary(
+        recommendation=rec,
+        communication_score=avg_score,
+        skills_score=avg_score,
+        competencies_score=avg_score,
+        personality_score=avg_score,
+        culture_fit_score=avg_score,
+        job_success_score=avg_score,
+    )
     res = _llm_json(sys, usr, schema_class=InterviewSummary, fallback=fallback)
     state["result"] = res.to_dict() if hasattr(res, 'to_dict') else res
     return state
