@@ -292,11 +292,13 @@ def check_candidate(email: str, current_admin: dict = Depends(get_current_admin_
             
         sessions = list(interview_sessions_collection.find(query).sort("created_at", -1).limit(5))
         for s in sessions:
+            resume_text = (s.get("resume_text") or "").strip()
             cand_name = (s.get("candidate_name") or "").strip()
             if resume_text:
                 skills_extracted = extract_skills_from_resume_text(resume_text)
                 return {
                     "exists": True,
+                    "resume_text": resume_text,
                     "candidate_name": cand_name,
                     "candidate_phone": s.get("candidate_phone") or s.get("phone", ""),
                     "candidate_id": s.get("candidate_id") or s.get("candidate_code", "CAND-0001"),
@@ -312,7 +314,8 @@ def check_candidate(email: str, current_admin: dict = Depends(get_current_admin_
         # 2. Search in job_applications_collection
         app_doc = job_applications_collection.find_one(
             {
-                "email": {"$regex": f"^{re.escape(clean_email)}$", "$options": "i"}
+                "email": {"$regex": f"^{re.escape(clean_email)}$", "$options": "i"},
+                "resume_text": {"$exists": True, "$ne": ""}
             },
             sort=[("applied_at", -1)]
         )
@@ -372,7 +375,7 @@ def check_candidate(email: str, current_admin: dict = Depends(get_current_admin_
                 "job_role": cand_doc.get("interview_title") or cand_doc.get("job_applied", "")
             }
 
-        # 5. If sessions found with candidate name
+        # 5. If sessions found with candidate name even if resume_text is blank
         if sessions:
             first_s = sessions[0]
             r_text = (first_s.get("resume_text") or "").strip()
@@ -3836,8 +3839,8 @@ def calculate_ats_score(
     current_admin: dict = Depends(get_current_admin_details),
 ):
     try:
-        resume_text = request.resume_text.strip()[:50000] if request.resume_text else ""
-        jd_text = request.jd_text.strip()[:50000] if request.jd_text else ""
+        resume_text = request.resume_text.strip()[:3000]
+        jd_text = request.jd_text.strip()[:3000]
         
         if not resume_text or not jd_text:
             raise HTTPException(status_code=400, detail="Resume or JD is empty")
@@ -3848,14 +3851,10 @@ def calculate_ats_score(
         if cached_result:
             return cached_result
 
-        # ── Primary Approach: Groq LLM Evaluation (when GROQ_API_KEY is configured) ──
-        groq_key = os.getenv("GROQ_API_KEY")
-        if groq_key and groq_key.strip():
-            try:
-                from groq import Groq
-                client = Groq(api_key=groq_key.strip())
-                
-                prompt = f"""You are a professional ATS (Applicant Tracking System) evaluator. You MUST use the Machine Reading Inference (MRI) workflow:
+
+        try:
+            from app.ai.ai_client import chat_completion
+            prompt = f"""You are a professional ATS (Applicant Tracking System) evaluator. You MUST use the Machine Reading Inference (MRI) workflow:
 1. QUICKLY EXTRACT core factual requirements from the Job Description.
 2. ANALYZE the candidate's Resume and map which exact requirements they met.
 3. CALCULATE the scores STRICTLY based on the ratio of requirements hit vs required.
@@ -3870,10 +3869,10 @@ SCORING RUBRIC (weights must sum to 100%):
 - formatting_ats (5%)
 
 Job Description:
-{jd_text[:8000]}
+{jd_text[:2000]}
 
 Resume:
-{resume_text[:8000]}
+{resume_text[:2000]}
 
 Return this EXACT JSON (all score fields are integers 0-100, weighted_total is the weighted average):
 {{
@@ -3889,103 +3888,169 @@ Return this EXACT JSON (all score fields are integers 0-100, weighted_total is t
   "summary": "2-3 sentence overall assessment and recommendations for improvement"
 }}"""
 
-                target_model = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
-                candidate_models = [target_model, "llama-3.1-8b-instant", "llama-3.3-70b-versatile", "llama3-70b-8192", "llama3-8b-8192"]
-                model_chain = list(dict.fromkeys(candidate_models))
+            import os
+            groq_key = os.getenv("GROQ_API_KEY")
+            if groq_key:
+                from groq import Groq
+                client = Groq(api_key=groq_key.strip())
+                response = client.chat.completions.create(
+                    model=os.getenv("GROQ_MODEL", "openai/gpt-oss-20b"),
+                    messages=[
+                        {"role": "system", "content": "You are a precise ATS scoring engine. Return ONLY valid JSON. No markdown. Be extremely fast and concise."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.0,
+                    max_tokens=300
+                )
+                raw = response.choices[0].message.content
+            else:
+                raw = chat_completion(
+                    messages=[
+                        {"role": "system", "content": "You are a precise ATS scoring engine. Return ONLY valid JSON. No markdown. Be extremely fast and concise."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    model="openai/gpt-4o-mini",
+                    temperature=0.0,
+                    timeout=15,
+                    max_tokens=300,
+                )
+
+            # Parse response
+            import json as _json, re as _re
+            raw_clean = _re.sub(r"```(?:json)?", "", raw).strip()
+            start = raw_clean.find("{")
+            end = raw_clean.rfind("}") + 1
+            if start != -1 and end > start:
+                data = _json.loads(raw_clean[start:end])
+
+                # Extract per-category breakdown
+                WEIGHTS = {
+                    "keyword_matching":     0.25,
+                    "semantic_similarity":  0.20,
+                    "experience_alignment": 0.25,
+                    "project_relevance":    0.15,
+                    "education":            0.10,
+                    "formatting_ats":       0.05,
+                }
+                LABELS = {
+                    "keyword_matching":     "Keyword Matching",
+                    "semantic_similarity":  "Semantic Similarity",
+                    "experience_alignment": "Experience Alignment",
+                    "project_relevance":    "Project Relevance",
+                    "education":            "Education Match",
+                    "formatting_ats":       "Formatting & ATS Compatibility",
+                }
+
+                breakdown = []
+                computed_total = 0.0
+                for key, weight in WEIGHTS.items():
+                    cat = data.get(key, {})
+                    cat_score = max(0, min(100, int(cat.get("score", 0) if isinstance(cat, dict) else cat)))
+                    cat_note = cat.get("note", "") if isinstance(cat, dict) else ""
+                    computed_total += cat_score * weight
+                    breakdown.append({
+                        "category": LABELS[key],
+                        "score": cat_score,
+                        "weight": int(weight * 100),
+                        "note": cat_note,
+                        "weighted_contribution": round(cat_score * weight, 1)
+                    })
+
+                # Use AI's weighted_total if provided, else use computed
+                ai_total = data.get("weighted_total")
+                if ai_total is not None:
+                    final_score = max(0, min(100, int(ai_total)))
+                else:
+                    final_score = max(0, min(100, round(computed_total)))
+
+                matched = [str(s) for s in data.get("matched_skills", [])][:15]
+                missing = [str(s) for s in data.get("missing_skills", [])][:15]
+                summary = str(data.get("summary", ""))
+
+                if not matched and not missing:
+                    matched = ["No clear skills identified"]
+                    missing = ["No clear skills identified"]
+
+                result = {
+                    "score": final_score,
+                    "matched_skills": matched,
+                    "missing_skills": missing,
+                    "summary": summary or f"AI ATS Analysis: {final_score}% weighted match score across 7 evaluation categories.",
+                    "breakdown": breakdown,
+                    "mode": "ai"
+                }
                 
-                raw = None
-                for m in model_chain:
-                    try:
-                        response = client.chat.completions.create(
-                            model=m,
-                            messages=[
-                                {"role": "system", "content": "You are a precise ATS scoring engine. Return ONLY valid JSON. No markdown. Be extremely fast and concise."},
-                                {"role": "user", "content": prompt}
-                            ],
-                            temperature=0.0,
-                            max_tokens=1000
-                        )
-                        if response and response.choices:
-                            raw = response.choices[0].message.content
-                            break
-                    except Exception as m_err:
-                        print(f"Groq model {m} failed: {m_err}, trying next...")
-                        continue
+                import app.ai.prompt_cache as prompt_cache
+                prompt_cache.set(cache_key_text, "ATS_SCORE", result)
+                return result
+        except Exception as ai_err:
+            print(f"⚠️ ATS AI call failed, falling back to keyword matching: {ai_err}")
 
-                if raw:
-                    import json as _json, re as _re
-                    raw_clean = _re.sub(r"```(?:json)?", "", raw).strip()
-                    start = raw_clean.find("{")
-                    end = raw_clean.rfind("}") + 1
-                    if start != -1 and end > start:
-                        data = _json.loads(raw_clean[start:end])
 
-                        WEIGHTS = {
-                            "keyword_matching":     0.25,
-                            "semantic_similarity":  0.20,
-                            "experience_alignment": 0.25,
-                            "project_relevance":    0.15,
-                            "education":            0.10,
-                            "formatting_ats":       0.05,
-                        }
-                        LABELS = {
-                            "keyword_matching":     "Keyword Matching",
-                            "semantic_similarity":  "Semantic Similarity",
-                            "experience_alignment": "Experience Alignment",
-                            "project_relevance":    "Project Relevance",
-                            "education":            "Education Match",
-                            "formatting_ats":       "Formatting & ATS Compatibility",
-                        }
+        # ── Offline Fallback: High-Accuracy Keyword Dictionary Match ──────────
+        import re
+        try:
+            from app.data.offline_skills_dict import COMMON_SKILLS
+        except Exception:
+            COMMON_SKILLS = {"python", "javascript", "react", "node", "java", "c++", "sql", "aws", "docker", "kubernetes", "git", "html", "css", "typescript", "mongodb", "fastapi", "django", "flask", "rest", "api"}
+            
+        resume_lower = resume_text.lower()
+        jd_lower = jd_text.lower()
+        
+        # Extract common skills that exist in the Job Description
+        jd_keywords = set()
+        for skill in COMMON_SKILLS:
+            pattern = r'\b' + re.escape(skill) + r'\b'
+            if re.search(pattern, jd_lower):
+                jd_keywords.add(skill)
+        
+        # If JD has no known keywords, fall back to basic extraction
+        if not jd_keywords:
+            words = set(re.findall(r'\b[a-z]{5,}\b', jd_lower))
+            stop_words = {"about", "above", "after", "again", "against", "because", "before", "below", "between", "cannot", "could", "doing", "during", "further", "having", "herself", "himself", "itself", "myself", "ought", "ourselves", "themselves", "there", "these", "those", "through", "under", "until", "where", "which", "while", "would", "yourself", "yourselves", "experience", "years", "skills", "ability", "working", "knowledge", "strong", "understanding", "preferred", "required", "responsibilities", "requirements", "including"}
+            jd_keywords = {w for w in words if w not in stop_words}
+        
+        matched = []
+        missing = []
+        
+        for word in jd_keywords:
+            pattern = r'\b' + re.escape(word) + r'\b'
+            if re.search(pattern, resume_lower):
+                matched.append(word.title())
+            else:
+                missing.append(word.title())
+                
+        matched = sorted(matched)[:15]
+        missing = sorted(missing)[:15]
+        
+        total_keywords = len(jd_keywords)
+        matched_count = len(matched)
+        score = min(100, int((matched_count / total_keywords) * 100)) if total_keywords > 0 else 0
+        
+        if not matched and not missing:
+            matched.append("No clear skills found")
+            missing.append("No clear skills found")
+            
+        # Create a dummy breakdown so the UI table still renders
+        dummy_breakdown = [
+            {"category": "Skills Match", "score": score, "weight": 30, "note": "Offline Keyword Match"},
+            {"category": "Experience Match", "score": score, "weight": 25, "note": "Offline Keyword Match"},
+            {"category": "Projects Match", "score": score, "weight": 15, "note": "Offline Keyword Match"},
+            {"category": "Education Match", "score": score, "weight": 10, "note": "Offline Keyword Match"},
+            {"category": "Keywords Match", "score": score, "weight": 10, "note": "Offline Keyword Match"},
+            {"category": "Formatting & ATS Compatibility", "score": score, "weight": 5, "note": "Offline Keyword Match"},
+            {"category": "Certifications", "score": score, "weight": 5, "note": "Offline Keyword Match"}
+        ]
 
-                        breakdown = []
-                        computed_total = 0.0
-                        for key, weight in WEIGHTS.items():
-                            cat = data.get(key, {})
-                            cat_score = max(0, min(100, int(cat.get("score", 0) if isinstance(cat, dict) else cat)))
-                            cat_note = cat.get("note", "") if isinstance(cat, dict) else ""
-                            computed_total += cat_score * weight
-                            breakdown.append({
-                                "category": LABELS[key],
-                                "score": cat_score,
-                                "weight": int(weight * 100),
-                                "note": cat_note,
-                                "weighted_contribution": round(cat_score * weight, 1)
-                            })
-
-                        ai_total = data.get("weighted_total")
-                        if ai_total is not None:
-                            final_score = max(0, min(100, int(ai_total)))
-                        else:
-                            final_score = max(0, min(100, round(computed_total)))
-
-                        matched = [str(s) for s in data.get("matched_skills", [])][:15]
-                        missing = [str(s) for s in data.get("missing_skills", [])][:15]
-                        summary = str(data.get("summary", ""))
-
-                        if not matched and not missing:
-                            matched = ["No clear skills identified"]
-                            missing = ["No clear skills identified"]
-
-                        result = {
-                            "score": final_score,
-                            "matched_skills": matched,
-                            "missing_skills": missing,
-                            "summary": summary or f"AI ATS Analysis: {final_score}% weighted match score across 7 evaluation categories.",
-                            "breakdown": breakdown,
-                            "mode": "ai"
-                        }
-                        
-                        prompt_cache.set(cache_key_text, "ATS_SCORE", result)
-                        return result
-            except Exception as groq_exc:
-                print(f"⚠️ Groq primary ATS evaluation failed: {groq_exc}. Falling back to calibrated scoring engine...")
-
-        # ── Resilient Fallback: Calibrated Grounded ATS Engine ──
-        # Guaranteed 96-98% accuracy matching GPT/Gemini across IT & Non-IT roles
-        from app.services.services import compute_ats_evaluation
-        result = compute_ats_evaluation(resume_text, jd_text)
-        result["mode"] = "fallback"
-
+        result = {
+            "score": score,
+            "matched_skills": matched,
+            "missing_skills": missing,
+            "summary": "Keyword Match Mode: Score calculated using offline skill dictionary matching. Upgrade to AI mode by ensuring AI keys are configured.",
+            "breakdown": dummy_breakdown,
+            "mode": "fallback"
+        }
+        
         import app.ai.prompt_cache as prompt_cache
         prompt_cache.set(cache_key_text, "ATS_SCORE", result)
         return result
@@ -3994,6 +4059,7 @@ Return this EXACT JSON (all score fields are integers 0-100, weighted_total is t
         raise
     except Exception as e:
         print(f" ATS Score endpoint error: {e}")
+
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/admin/update-talent-pool")
