@@ -44,6 +44,7 @@ from app.routes.admin_dashboard import router as admin_dashboard_router
 from app.routes.ai_calls import router as ai_calls_router
 from app.routes.auth import router as auth_router
 from app.routes.candidates import router as candidates_router
+from app.routes.projects import router as projects_router
 from app.routes.coding_chat import router as coding_chat_router
 from app.routes.credits import router as credits_router
 from app.routes.demo import router as demo_router
@@ -125,7 +126,7 @@ async def lifespan(app: FastAPI):
         interview_sessions_collection.create_index([("company_id", ASCENDING), ("created_by", ASCENDING), ("created_at", DESCENDING)])
         interview_sessions_collection.create_index([("company_id", ASCENDING), ("is_deactivated", ASCENDING), ("created_at", DESCENDING)])
         interview_sessions_collection.create_index([("company_id", ASCENDING), ("created_by", ASCENDING), ("is_deactivated", ASCENDING), ("created_at", DESCENDING)])
-        interview_sessions_collection.create_index([("omni_call_id", ASCENDING)])
+        interview_sessions_collection.create_index([("omni_call_id", ASCENDING)], sparse=True)
         interview_sessions_collection.create_index([("candidate_name", ASCENDING), ("company_id", ASCENDING)])
         interview_sessions_collection.create_index([("company_id", ASCENDING), ("decision", ASCENDING), ("created_at", DESCENDING)])
         interview_sessions_collection.create_index([("company_id", ASCENDING), ("created_by", ASCENDING), ("decision", ASCENDING), ("created_at", DESCENDING)])
@@ -189,11 +190,16 @@ async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
 
 
+import re
+_API_PREFIX_RE = re.compile(r"^(?:/api)+(?=/|$)")
+
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         global _last_rate_limit_cleanup
         # Live monitor polling/heartbeats are intentionally frequent and low-risk.
-        if request.url.path in config.RATE_LIMIT_EXEMPT_PATHS or request.url.path.startswith(config.RATE_LIMIT_EXEMPT_PREFIXES):
+        norm_path = _API_PREFIX_RE.sub("", request.url.path) or "/"
+        if norm_path in config.RATE_LIMIT_EXEMPT_PATHS or norm_path.startswith(config.RATE_LIMIT_EXEMPT_PREFIXES):
             return await call_next(request)
 
         x_forwarded_for = request.headers.get("x-forwarded-for")
@@ -321,6 +327,8 @@ app.include_router(admin_dashboard_router)
 app.include_router(ai_calls_router)
 app.include_router(auth_router)
 app.include_router(candidates_router)
+app.include_router(projects_router, prefix="/api/projects", tags=["Projects"])
+app.include_router(projects_router, prefix="/projects", tags=["Projects"])
 app.include_router(coding_chat_router)
 app.include_router(credits_router)
 app.include_router(demo_router)

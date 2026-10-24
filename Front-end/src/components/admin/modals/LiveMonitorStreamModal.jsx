@@ -221,9 +221,12 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
     // or if the tracks are unmuted (meaning media is flowing).
     const isConnected = pc.connectionState === 'connected'
     
+    // Extract any live tracks attached to active receivers.
+    // Note: Do not reject tracks based on track.muted because in W3C WebRTC,
+    // remote tracks are initialized as muted until incoming media frames begin decoding.
     const receiverTracks = pc.getReceivers()
       .map(receiver => receiver.track)
-      .filter(track => track && (!track.muted || isConnected))
+      .filter(track => track && track.readyState === 'live')
 
     if (receiverTracks.length === 0) return
 
@@ -376,7 +379,10 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       pc.onconnectionstatechange = () => {
         console.log('[AdminWebRTC] PC state:', pc.connectionState)
         if (pc.connectionState === 'connected') {
-          if (mountedRef.current) setStatus('streaming')
+          if (mountedRef.current) {
+            setStatus('streaming')
+            updateRemoteStreamFromReceivers()
+          }
         } else if (pc.connectionState === 'failed') {
           if (mountedRef.current) {
             console.warn('[AdminWebRTC] PC state failed. Retrying offer...')
@@ -421,13 +427,13 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
 
       // If no video track arrives within 25 s, retry the offer automatically (or wait if candidate is initializing)
       streamTimeoutRef.current = setTimeout(() => {
-        if (mountedRef.current && statusRef.current !== 'streaming' && statusRef.current !== 'waiting_tracks') {
+        if (mountedRef.current && statusRef.current !== 'streaming') {
           console.warn('[AdminWebRTC] No stream in 25 s — retrying offer...')
           if (sendOfferRef.current && wsRef.current?.readyState === WebSocket.OPEN) {
             sendOfferRef.current(wsRef.current)
           }
         }
-      }, 25000)
+      }, 12000)
 
     } catch (err) {
       console.error('[AdminWebRTC] sendOffer error:', err)
@@ -439,11 +445,15 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
     sendOfferRef.current = sendOffer
   }, [sendOffer])
 
+  const sessionId = typeof session === 'string'
+    ? session
+    : (session?.link_id || session?.session_id || session?.id || session?._id || session?.interview_id)
+
   useEffect(() => {
     if (!isOpen || !session) return
+    let disposed = false
     mountedRef.current = true
 
-    const sessionId = typeof session === 'string' ? session : (session?.link_id || session?.session_id || session?.id || session?._id || session?.interview_id)
     if (!sessionId || sessionId === 'undefined') {
       console.warn('[AdminWebRTC] No valid session ID provided to LiveMonitorStreamModal:', session)
       setStatus('error')
@@ -548,8 +558,11 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
 
         } else if (msg.type === 'candidate_disconnected') {
           if (mountedRef.current) {
-            setStatus('disconnected')
-            setIsCandidateNetworkDown(true)
+            // Only set disconnected if the peer connection is not actively streaming media
+            if (!pcRef.current || pcRef.current.connectionState !== 'connected') {
+              setStatus('disconnected')
+              setIsCandidateNetworkDown(true)
+            }
           }
         }
       } catch (err) {
@@ -565,6 +578,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
     ws.onclose = (e) => {
       console.log(`[AdminWebRTC] WS closed (${e.code})`)
       clearInterval(heartbeatTimerRef.current)
+      if (disposed) return
       if (mountedRef.current) {
         if (sessionId && sessionId !== 'undefined') {
           // Auto-reconnect on drop with exponential backoff
@@ -599,12 +613,14 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
     window.addEventListener('focus', handleVisibilityChange)
 
     return () => {
+      disposed = true
+      ws.onclose = null
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('focus', handleVisibilityChange)
       mountedRef.current = false
       cleanup()
     }
-  }, [isOpen, session, token, retryCount])  // retryCount forces full reconnect
+  }, [isOpen, sessionId, token, retryCount])  // sessionId, not session object
 
   const handleManualRetry = () => {
     cleanup()

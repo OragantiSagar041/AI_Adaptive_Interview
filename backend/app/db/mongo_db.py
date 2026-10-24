@@ -31,17 +31,21 @@ db = client["AI_Interview"]
 
 # Collections
 candidates_collection = db["candidates"]
+projects_collection = db["projects"]
 interviews_collection = db["interviews"]
 answers_collection = db["answers"]
 admins_collection = db["admins"]
 
 # Ensure each Firebase account can be linked to only one admin.
 # sparse=True allows existing admins without firebase_uid.
-admins_collection.create_index(
-    [("firebase_uid", 1)],
-    unique=True,
-    sparse=True,
-)
+try:
+    admins_collection.create_index(
+        [("firebase_uid", 1)],
+        unique=True,
+        sparse=True,
+    )
+except Exception as _e:
+    pass
 
 interview_sessions_collection = db["interview_sessions"]
 plans_collection = db["plans"]
@@ -86,16 +90,31 @@ async def init_db_indexes():
             collection.create_index(index_keys, **kwargs)
         except OperationFailure:
             try:
-                if isinstance(index_keys, str):
-                    name = f"{index_keys}_1"
-                else:
-                    name = "_".join([f"{k}_{v}" for k, v in index_keys])
-                collection.drop_index(name)
+                target_key = [(index_keys, 1)] if isinstance(index_keys, str) else index_keys
+                existing = collection.index_information()
+                name = None
+                for idx_name, idx_info in existing.items():
+                    if idx_info.get("key") == target_key:
+                        name = idx_name
+                        break
+                if not name:
+                    name = f"{index_keys}_1" if isinstance(index_keys, str) else "_".join([f"{k}_{v}" for k, v in index_keys])
+                try:
+                    collection.drop_index(name)
+                except OperationFailure as drop_err:
+
+                    if getattr(drop_err, "code", None) != 27:
+                        raise
+
+
+
+
+
                 collection.create_index(index_keys, **kwargs)
             except Exception as e:
                 print(f"Warning: Failed to fix index {index_keys} on {collection.name}: {e}")
 
-    safe_create_index(candidates_collection, "name", unique=True)
+
     safe_create_index(admins_collection, "username", unique=True)
     safe_create_index(interview_sessions_collection, "link_id", unique=True)
     safe_create_index(answers_collection, [("interview_id", 1), ("question_id", 1)], unique=True)
@@ -134,7 +153,7 @@ async def init_db_indexes():
     safe_create_index(job_applications_collection, "omni_call_id")
     safe_create_index(answers_collection, [("interview_id", 1), ("created_at", -1)])
     safe_create_index(interview_sessions_collection, [("company_id", 1), ("created_by", 1), ("created_at", -1)])
-    safe_create_index(omni_call_logs_collection, "call_id", unique=True, sparse=True)
+    safe_create_index(omni_call_logs_collection, "call_id")
     safe_create_index(omni_call_logs_collection, "company_id")
     safe_create_index(omni_call_logs_collection, "admin_id")
     safe_create_index(interview_sessions_collection, "status")

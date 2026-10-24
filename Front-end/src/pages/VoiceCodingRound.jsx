@@ -777,9 +777,7 @@ export default function VoiceCodingRound({
             <div className="flex items-center gap-2 mb-3">
               <i className="fas fa-puzzle-piece text-amber-400 text-xs" />
               <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Problem</span>
-              <span className="ml-auto text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2 py-0.5 font-semibold">
-                {question?.codingTask?.difficulty || 'Medium'}
-              </span>
+
             </div>
 
             {/* Title */}

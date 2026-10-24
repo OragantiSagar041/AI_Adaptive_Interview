@@ -28,6 +28,7 @@ from dotenv import load_dotenv
 from groq import AsyncGroq
 from pydantic import BaseModel, validator, Field
 from starlette.background import BackgroundTask
+from starlette.concurrency import run_in_threadpool
 from fastapi import (
     APIRouter, Depends, File, Form, HTTPException, Request, UploadFile,
     WebSocket, WebSocketDisconnect, BackgroundTasks, Header
@@ -1004,6 +1005,7 @@ async def get_webrtc_ice_servers(raw: bool = False):
     }
 
 
+@router.websocket("/api/ws/webrtc/{role}/{link_id}")
 @router.websocket("/ws/webrtc/{role}/{link_id}")
 async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: Optional[str] = None, admin_id: Optional[str] = None, spectator_id: Optional[str] = None):
     import os, tempfile
@@ -1013,22 +1015,27 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
     
     # Re-use admin_id and spectator_id from query parameters
 
+    raw_link_id = link_id
+
     if role == "candidate":
         if not token:
             await websocket.close(code=1008)
             return
         try:
-            candidate_session = _validate_candidate_monitoring_token(token, link_id)
+            candidate_session = await run_in_threadpool(_validate_candidate_monitoring_token, token, link_id)
         except HTTPException as e:
             logger.info(f"Candidate validation failed: {e.detail}")
             await websocket.close(code=1008)
             return
         # Resolve to canonical link_id so everyone joins the exact same room
-        link_id = str(candidate_session.get("link_id") or link_id)
-        await manager.connect_candidate(websocket, link_id)
+        canonical_link_id = str(candidate_session.get("link_id") or candidate_session.get("_id") or link_id)
+        link_id = canonical_link_id
+        await manager.connect_candidate(websocket, canonical_link_id, alias_id=raw_link_id)
         # Notify watching admins immediately that candidate stream is active/ready
         try:
-            await manager.send_to_admins(link_id, {"type": "candidate_connected"})
+            await manager.send_to_admins(canonical_link_id, {"type": "candidate_connected"})
+            if raw_link_id != canonical_link_id:
+                await manager.send_to_admins(raw_link_id, {"type": "candidate_connected"})
         except Exception:
             pass
     elif role == "admin":
@@ -1038,9 +1045,10 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
             return
         try:
             auth_context = _decode_dashboard_websocket_admin(token)
-            live_session_doc = _get_authorized_live_session(link_id, auth_context)
+            live_session_doc = await run_in_threadpool(_get_authorized_live_session, link_id, auth_context)
             # Resolve to canonical link_id so admin and candidate always join the exact same room
-            link_id = str(live_session_doc.get("link_id") or link_id)
+            canonical_link_id = str(live_session_doc.get("link_id") or live_session_doc.get("_id") or link_id)
+            link_id = canonical_link_id
             # Use client-provided unique admin_id or generate unique instance identifier
             client_admin_id = websocket.query_params.get("admin_id")
             if client_admin_id and client_admin_id != "undefined":
@@ -1049,11 +1057,13 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
                 base = auth_context.get("email") or auth_context.get("user_id") or "admin"
                 admin_id = f"{base}_{uuid.uuid4().hex[:8]}"
 
-            await manager.connect_admin(websocket, link_id, admin_id=admin_id)
-            logger.info(f"Admin ({admin_id}) connected successfully to room {link_id}.")
+            await manager.connect_admin(websocket, canonical_link_id, admin_id=admin_id, alias_id=raw_link_id)
+            logger.info(f"Admin ({admin_id}) connected successfully to room {canonical_link_id}.")
             # Also notify candidate that a new admin connected
             try:
-                await manager.send_to_candidate(link_id, {"type": "admin_connected", "admin_id": admin_id})
+                await manager.send_to_candidate(canonical_link_id, {"type": "admin_connected", "admin_id": admin_id})
+                if raw_link_id != canonical_link_id:
+                    await manager.send_to_candidate(raw_link_id, {"type": "admin_connected", "admin_id": admin_id})
             except Exception:
                 pass
         except HTTPException as e:
@@ -1157,9 +1167,15 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
                         "eye_contact_lost": _optional_bool(proctoring_status.get("eyeContactLost")),
                     }
                     await _store_live_snapshot(link_id, updates, candidate_session)
+                    if raw_link_id != link_id:
+                        await _store_live_snapshot(raw_link_id, updates, candidate_session)
                 else:
                     # WebRTC signaling (answer, ice candidate) - target specific admin/spectator if specified
                     target_admin = data.get("target_admin_id") or data.get("viewer_id") or data.get("spectator_id")
+                    if msg_type in ("webrtc_answer", "candidate_connected", "candidate_not_ready"):
+                        logger.info(f"[WebRTC Signaling] Candidate in session {link_id} sent {msg_type} (target: {target_admin})")
+                    elif msg_type == "webrtc_ice_candidate":
+                        logger.debug(f"[WebRTC Signaling] Candidate in session {link_id} sent ICE candidate (target: {target_admin})")
                     if target_admin:
                         await manager.send_to_specific_admin(link_id, target_admin, data)
                     else:
@@ -1169,6 +1185,10 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
                 # Ensure admin_id is tagged on outgoing offers and ICE candidates
                 if "admin_id" not in data and admin_id:
                     data["admin_id"] = admin_id
+                if msg_type in ("webrtc_offer", "admin_connected"):
+                    logger.info(f"[WebRTC Signaling] Admin {admin_id} in session {link_id} sent {msg_type}")
+                elif msg_type == "webrtc_ice_candidate":
+                    logger.debug(f"[WebRTC Signaling] Admin {admin_id} in session {link_id} sent ICE candidate")
                 # Forward all admin signaling (offer/ICE) directly to the candidate
                 await manager.send_to_candidate(link_id, data)
 
@@ -1213,6 +1233,7 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
 # --------------------------------------------------------------------------------
 
 @router.post('/api/webrtc/telemetry/{link_id}')
+@router.post('/webrtc/telemetry/{link_id}')
 async def telemetry_fallback(
     link_id: str,
     payload: dict,
@@ -1222,12 +1243,15 @@ async def telemetry_fallback(
     if not auth_header or not auth_header.startswith('Bearer '):
         raise HTTPException(status_code=401, detail='Missing token')
     token = auth_header.split(' ')[1]
-    candidate_session = _validate_candidate_monitoring_token(token, link_id)
+    candidate_session = await run_in_threadpool(_validate_candidate_monitoring_token, token, link_id)
     if not candidate_session:
         raise HTTPException(status_code=401, detail='Invalid token')
+    canonical_id = str(candidate_session.get("link_id") or candidate_session.get("_id") or link_id)
     data = {'type': 'telemetry', 'data': payload}
     from app.db.redis_manager import manager
-    await manager.send_to_admins(link_id, data)
+    await manager.send_to_admins(canonical_id, data)
+    if link_id != canonical_id:
+        await manager.send_to_admins(link_id, data)
     proctoring_status = payload.get('proctoring_status', {}) or {}
     updates = {
         'audio_level': _bounded_number(payload.get('audio_level'), 0, 100),
@@ -1243,6 +1267,8 @@ async def telemetry_fallback(
         'phone_detected': _optional_bool(proctoring_status.get('phoneDetected')),
         'eye_contact_lost': _optional_bool(proctoring_status.get('eyeContactLost')),
     }
-    await _store_live_snapshot(link_id, updates, candidate_session)
+    await _store_live_snapshot(canonical_id, updates, candidate_session)
+    if link_id != canonical_id:
+        await _store_live_snapshot(link_id, updates, candidate_session)
     return {'status': 'success'}
 

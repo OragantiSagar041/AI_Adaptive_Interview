@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 import traceback
 from collections import defaultdict
 from datetime import timedelta, timezone
@@ -16,7 +17,11 @@ from fastapi.security import HTTPBearer
 sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
 
-load_dotenv(override=False)
+backend_env = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")
+if os.path.exists(backend_env):
+    load_dotenv(backend_env, override=False)
+else:
+    load_dotenv(override=False)
 
 # ---------------------------------------------------------------------------
 # Third-party client setup
@@ -25,9 +30,10 @@ load_dotenv(override=False)
 # groq_client is removed to support dynamic key rotation via groq_manager
 
 cloudinary.config(
-    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
-    api_key=os.getenv("CLOUDINARY_API_KEY"),
-    api_secret=os.getenv("CLOUDINARY_API_SECRET"),
+    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME") or (json.loads(os.getenv("CLOUDINARY_ACCOUNTS", "[]"))[0].get("cloud_name") if os.getenv("CLOUDINARY_ACCOUNTS") else None),
+    api_key=os.getenv("CLOUDINARY_API_KEY") or (json.loads(os.getenv("CLOUDINARY_ACCOUNTS", "[]"))[0].get("api_key") if os.getenv("CLOUDINARY_ACCOUNTS") else None),
+    api_secret=os.getenv("CLOUDINARY_API_SECRET") or (json.loads(os.getenv("CLOUDINARY_ACCOUNTS", "[]"))[0].get("api_secret") if os.getenv("CLOUDINARY_ACCOUNTS") else None),
+    secure=True,
 )
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+psycopg2://user:password@localhost:5432/hireiq")
@@ -219,7 +225,7 @@ PLAN_ALIASES = {
 LAST_422_ERROR = None
 
 request_counts = defaultdict(list)
-RATE_LIMIT = 120  # general requests per minute per IP
+RATE_LIMIT = int(os.getenv("RATE_LIMIT", "600"))  # general requests per minute per IP (configurable)
 EXPENSIVE_RATE_LIMIT = 20
 PUBLIC_RESUME_RATE_LIMIT = 5
 RATE_LIMIT_WINDOW = 60
@@ -244,7 +250,9 @@ RATE_LIMIT_EXEMPT_PATHS = {
 }
 RATE_LIMIT_EXEMPT_PREFIXES = (
     "/superadmin/profile",
-    "/api/notifications",
+    "/notifications",
+    "/webrtc/",
+    "/admin/interview/",
 )
 
 # ---------------------------------------------------------------------------

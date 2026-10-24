@@ -26,6 +26,7 @@ async def start_realtime_services():
 async def stop_realtime_services():
     await task_queue.stop()
 
+@router.websocket("/api/ws/interview/{link_id}")
 @router.websocket("/ws/interview/{link_id}")
 async def interview_websocket(websocket: WebSocket, link_id: str):
     """

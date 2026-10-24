@@ -482,7 +482,8 @@ export const InterviewNonTechnical = () => {
     )
   }
 
-  const currentQuestionText = currentQuestion?.text || currentQuestion?.question || currentQuestion?.prompt || ''
+  const rawQuestionText = currentQuestion?.text || currentQuestion?.question || currentQuestion?.prompt || ''
+  const currentQuestionText = rawQuestionText.replace(/^\[[^\]]+\]\s*/, '').trim()
 
   const displayQuestionNum = currentQuestion?.caseStudyIndex !== undefined 
     ? currentQuestion.caseStudyIndex + 1 
@@ -707,9 +708,6 @@ export const InterviewNonTechnical = () => {
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477-4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
                     </div>
                     <h2 className="text-xl font-extrabold text-slate-800 tracking-tight m-0">Case Study Round</h2>
-                    <span className="rounded-full bg-indigo-50 text-indigo-700 text-[10px] font-bold px-3 py-1 ml-2 uppercase tracking-wide border border-indigo-100">
-                      {currentQuestion?.skill_tested || 'Scenario Based Question'}
-                    </span>
                   </div>
                   <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">
                     Question <span className="text-indigo-600 font-black">{displayQuestionNum}</span> of {totalDisplayQuestions}
@@ -771,22 +769,27 @@ export const InterviewNonTechnical = () => {
               <>
                 {/* Question Card */}
                 <div className="bg-white/70 backdrop-blur-2xl border border-white rounded-[24px] p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.06)] relative overflow-hidden transition-all duration-300 hover:shadow-xl">
-                  <div className="text-[11px] text-slate-400 font-extrabold tracking-wider uppercase mb-2">
+                  <div className="text-[11px] text-slate-400 font-extrabold tracking-wider uppercase mb-4">
                     Question <span id="questionNumber" className="text-indigo-600 font-black">{displayQuestionNum}</span> of <span id="totalQuestions">{totalDisplayQuestions}</span>
                   </div>
                   <div className="flex gap-2 justify-end mb-4">
                     <span className="px-3 py-1 rounded-full text-[10px] font-bold tracking-wide uppercase bg-indigo-50 text-indigo-600 border border-indigo-100">
                       {currentQuestion?.category || currentQuestion?.type || 'Case Analysis'}
                     </span>
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wide uppercase border ${
-                      String(currentQuestion?.difficulty || 'Easy').toLowerCase() === 'easy'
+                    {(() => {
+                      const activeDiff = String(currentQuestion?.difficulty || sessionDetail?.project_difficulty || sessionDetail?.difficulty || 'Medium').toLowerCase();
+                      const badgeLabel = activeDiff.charAt(0).toUpperCase() + activeDiff.slice(1);
+                      const badgeClass = activeDiff === 'easy'
                         ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                        : String(currentQuestion?.difficulty || 'Easy').toLowerCase() === 'medium'
-                        ? 'bg-amber-50 text-amber-600 border-amber-100'
-                        : 'bg-red-50 text-red-600 border-red-100'
-                    }`}>
-                      {currentQuestion?.difficulty || 'Easy'}
-                    </span>
+                        : activeDiff === 'medium'
+                          ? 'bg-amber-50 text-amber-600 border-amber-100'
+                          : 'bg-red-50 text-red-600 border-red-100';
+                      return (
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wide uppercase border ${badgeClass}`}>
+                          {badgeLabel}
+                        </span>
+                      );
+                    })()}
                   </div>
                   <div className="flex gap-4 items-start">
                     <div className="w-1.5 bg-indigo-600 self-stretch rounded-full shrink-0 min-h-[60px]" />

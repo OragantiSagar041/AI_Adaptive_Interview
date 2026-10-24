@@ -427,13 +427,22 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const ttsCacheRef = useRef(new Map())
   const TTS_CACHE_MAX = 20
 
-  const normalizeQuestions = (rawQuestions = []) => {
-    return rawQuestions.map((question, index) => ({
-      ...question,
-      id: question.id ?? index + 1,
-      text: question.text || question.question || question.prompt || '',
-      type: question.type || question.category || 'Interview'
-    }))
+  const normalizeQuestions = (rawQuestions = [], defaultDifficulty = '') => {
+    return rawQuestions.map((question, index) => {
+      const rawText = question.text || question.question || question.prompt || ''
+      const cleanText = rawText.replace(/^\[[^\]]+\]\s*/, '').trim()
+      const diff = question.difficulty || defaultDifficulty || 'Medium'
+      const capDiff = String(diff).charAt(0).toUpperCase() + String(diff).slice(1).toLowerCase()
+      return {
+        ...question,
+        id: question.id ?? index + 1,
+        text: cleanText,
+        question: cleanText,
+        prompt: cleanText,
+        difficulty: capDiff,
+        type: question.type || question.category || 'Interview'
+      }
+    })
   }
 
   useEffect(() => {
@@ -799,7 +808,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           : startPayload.first_question
             ? [startPayload.first_question]
             : []
-        const qList = normalizeQuestions(rawQuestions)
+        const sessionDiff = startPayload.project_difficulty || startPayload.difficulty || sessionDetail?.project_difficulty || sessionDetail?.difficulty || 'Medium'
+        const qList = normalizeQuestions(rawQuestions, sessionDiff)
         if (qList.length === 0) {
           throw new Error("No interview questions are available for this session. Please contact the recruiter.")
         }
@@ -1639,9 +1649,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     // Immediately stop any ongoing audio/TTS
     stopAudio()
 
+    const cleanText = (text || '').replace(/^\[[^\]]+\]\s*/, '').trim()
+
     // ── STRICT SUPPRESSION: Case Study Round or Coding Round MUST NEVER have TTS in any language ──
     const qType = currentQuestion?.type || ''
-    const textStr = String(text || '').toLowerCase()
+    const textStr = cleanText.toLowerCase()
     const itype = String(interviewType || sessionDetail?.interview_type || '').toLowerCase()
     const isNonTech = itype.includes('non-tech') || itype.includes('non_tech') || itype.includes('case')
 
@@ -1730,7 +1742,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       if (window.speechSynthesis) window.speechSynthesis.cancel()
       const activeVoiceId = clonedVoiceIdRef.current || sessionDetail?.custom_voice_id || sessionDetail?.cloned_voice_id
       const bodyPayload = {
-        text,
+        text: cleanText,
         voice: 'shimmer',
         language: sessionDetail?.language || 'English',
         use_custom_voice: !!(sessionDetail?.voice_clone || sessionDetail?.voice_cloning_enabled || sessionDetail?.custom_voice_id || clonedVoiceIdRef.current)
@@ -1738,7 +1750,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       if (activeVoiceId) bodyPayload.voice_id = activeVoiceId
 
       // Check TTS cache first — same question text + voice + language doesn't need a new network call.
-      const ttsCacheKey = `${text}::${activeVoiceId || 'default'}::${sessionDetail?.language || 'English'}`
+      const ttsCacheKey = `${cleanText}::${activeVoiceId || 'default'}::${sessionDetail?.language || 'English'}`
       let url = ttsCacheRef.current.get(ttsCacheKey)
 
       if (!url) {
@@ -2440,7 +2452,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           formData.append('link_id', sessionId || '')
 
           const xhr = new XMLHttpRequest()
-          const uploadBase = (api.defaults.baseURL || '').replace(/\/api\/?$/, '')
+          const uploadBase = (api.defaults.baseURL || '').replace(/\/+$/, '')
           const uploadUrl = `${uploadBase}/upload-full-recording`
           console.log(`[REC_TRACE] Initiating XHR POST ${uploadUrl} for ${type} (interview_id: ${iid}, link_id: ${sessionId})`)
           xhr.open('POST', uploadUrl, true)
@@ -2453,10 +2465,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           }
 
           xhr.upload.onprogress = (e) => {
-            if (e.lengthComputable && type === 'camera') {
-              const percent = Math.floor((e.loaded / e.total) * 100)
-              console.log(`[REC_TRACE] Upload progress (${type}): ${percent}% (${e.loaded}/${e.total} bytes)`)
-              setUploadPercentage(percent)
+            if (e.lengthComputable) {
+              const base = type === 'camera' ? 10 : 50;
+              const weight = 40;
+              const percent = Math.floor(base + (e.loaded / e.total) * weight);
+              console.log(`[REC_TRACE] Upload progress (${type}): ${percent}% (${e.loaded}/${e.total} bytes)`);
+              setUploadPercentage(Math.min(92, percent));
             }
           }
 
@@ -2547,6 +2561,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       await api.post(`/save-behavioral-data`, payload)
     } catch (e) { console.error("Failed to save final behavioral data:", e) }
 
+    // Wait for the video upload to finish BEFORE completing session in DB
+    setUploadingText('Securing video recordings...')
+    await uploadPromiseChain
+
+    setUploadPercentage(95)
+    setUploadingText('Submitting responses and finalizing session...')
     try {
       const queryParams = terminationReason ? `?reason=${encodeURIComponent(terminationReason)}` : ''
       await api.post(`/complete-session/${sessionId}${queryParams}`, {
@@ -2570,9 +2590,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       })
       return
     }
-
-    // Wait for the video upload to finish before marking everything complete
-    await uploadPromiseChain
 
     setShowSkipButton(false)
     setUploadPercentage(100)
