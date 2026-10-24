@@ -2,7 +2,7 @@ import json
 from typing import Any, Dict, List, TypedDict, Optional
 from app.ai.ai_client import chat_completion
 from app.ai.ai_schemas import AnswerScore, InterviewQuestion, FollowupQuestion, InterviewSummary
-from app.ai.typed_ai_layer import _parse_with_schema, _extract_json_robust, _truncate
+from app.ai.typed_ai_layer import _parse_with_schema, _extract_json_robust, _truncate, sanitize_spoken_interview_question
 
 try:
     from langgraph.graph import END, StateGraph
@@ -12,7 +12,7 @@ except ImportError:
 
 # ─── COMMON HELPERS ──────────────────────────────────────────────────────────
 
-def _llm_json(system_prompt: str, user_prompt: str, schema_class=None, fallback=None, model="openai/gpt-4o-mini", temperature=0.1) -> Any:
+def _llm_json(system_prompt: str, user_prompt: str, schema_class=None, fallback=None, model="openai/gpt-4o-mini", temperature=0.1, max_tokens: int = 4096) -> Any:
     try:
         raw = chat_completion(
             messages=[
@@ -20,7 +20,8 @@ def _llm_json(system_prompt: str, user_prompt: str, schema_class=None, fallback=
                 {"role": "user", "content": user_prompt}
             ],
             model=model,
-            temperature=temperature
+            temperature=temperature,
+            max_tokens=max_tokens
         )
         if schema_class:
             return _parse_with_schema(raw, schema_class, fallback).to_dict()
@@ -111,6 +112,7 @@ class QuestionGenerationState(TypedDict, total=False):
     interview_type: str
     industry: str
     language: str
+    ai_instructions: str
     
     # internal
     extracted_topics: List[str]
@@ -124,27 +126,60 @@ def qg_generate_all(state: QuestionGenerationState) -> QuestionGenerationState:
     lang = state.get("language", "English")
     industry = state.get("industry", "General")
     int_type = state.get("interview_type", "Technical")
+    ai_inst = state.get("ai_instructions", "").strip()
+    if ai_inst:
+        inst_block = (
+            f"\n======================================================\n"
+            f"CRITICAL MANDATORY INSTRUCTIONS FROM RECRUITER (STRICT OVERRIDE):\n"
+            f"{ai_inst}\n\n"
+            f"STRICT COMPLIANCE RULES (HIGHEST PRIORITY IN THE SYSTEM):\n"
+            f"1. OVERRIDE MANDATE: These recruiter instructions OVERRIDE any default focus or assumptions from the Job Description or Resume.\n"
+            f"2. SENIORITY & LEVEL CALIBRATION (FRESHER TO CEO): Strictly calibrate question scope and depth to any requested level:\n"
+            f"   - Executive / C-Suite / CEO / Founder: Focus on organizational vision, P&L responsibility, board governance, capital allocation, scaling businesses, culture building, and crisis leadership.\n"
+            f"   - Director / VP / Engineering Manager: Focus on multi-team management, hiring strategy, architecture roadmap, budget, delivery under pressure, and cross-functional stakeholder alignment.\n"
+            f"   - Senior / Experienced Professional: Focus on advanced architecture, complex problem-solving, trade-offs, system resilience, and mentoring junior engineers.\n"
+            f"   - Fresher / Entry-Level / Graduate: Focus on foundational fundamentals, conceptual understanding, coding principles, problem-solving mindset, and project coursework.\n"
+            f"3. DOMAIN & TOPIC ALLOCATION: If specific topics, percentages, or ratios are requested (e.g., '60% ML, 20% Banking, 20% Real Estate' or 'Focus 100% on Healthcare Compliance'), you MUST STRICTLY allocate the questions to match that exact breakdown across the {num} questions.\n"
+            f"4. UNLISTED TOPICS: Even if an instructed topic, domain, or business scenario is NOT mentioned in the candidate's Resume or Job Description, you MUST STILL generate questions directly covering that topic as commanded by the recruiter.\n"
+            f"5. TECHNICAL & NON-TECHNICAL ADAPTABILITY: Seamlessly handle both Technical engineering interviews (coding concepts, system architecture) and Non-Technical leadership, management, product, operations, sales, and strategy interviews.\n"
+            f"======================================================\n"
+        )
+    else:
+        inst_block = ""
+
+    spoken_format_constraint = (
+        "\nCRITICAL INTERVIEW FORMAT - SPOKEN/ORAL ONLY:\n"
+        "- This is an oral conversational interview where the candidate speaks verbally (speech-to-text).\n"
+        "- There is NO code editor, IDE, compiler, or code-writing box available in the interview platform.\n"
+        "- NEVER ask the candidate to 'write code', 'write a function', 'write a script', 'provide code examples', 'sketch code', or provide syntax snippets.\n"
+        "- ALWAYS frame every question to be verbally answerable: ask the candidate to explain their step-by-step logic, architectural workflow, trade-offs between approaches, debugging methodology, or performance optimization strategies.\n"
+    )
 
     sys = (
-        f"You are an expert recruiter for the {industry} industry. Generate {int_type} interview questions based on the candidate's "
-        "Resume and Job Description. Extract key topics first, then write the questions tailored specifically to the "
-        f"{industry} domain and the {int_type} format. "
+        f"You are an elite, executive-caliber recruiter and interviewer for the {industry} industry. "
+        f"Generate {num} {int_type} interview questions. {inst_block}\n"
+        f"Format and Rules:\n"
+        f"- Tailor questions specifically to the candidate's Resume and Job Description, BUT STRICTLY ADHERE to all recruiter instructions, seniority calibrations, and topic percentages above.\n"
+        f"{spoken_format_constraint}"
         f"CRITICAL: All questions MUST be generated strictly in {lang}. Do NOT use English unless the selected language is English. "
         "Return JSON."
     )
 
     usr = (
+        f"{inst_block}\n"
         f"Industry: {industry}\n"
         f"Interview Type: {int_type}\n"
         f"JD: {state.get('jd_text', '')}\n"
         f"Resume: {state.get('resume_text', '')}\n"
         f"Topics: {state.get('extracted_topics', [])}\n"
-        f"Generate {num} highly relevant questions in {lang}.\n"
+        f"{spoken_format_constraint}\n"
+        f"Generate {num} highly relevant questions in {lang} that the candidate can explain verbally without writing code.\n"
+        f"FINAL CHECK: Ensure the generated questions STRICTLY fulfill all Custom Recruiter Instructions (including any requested topic percentages or domains)!\n"
         "Return JSON: {'questions': [{'question':'...', 'difficulty':'Medium', 'type':'Technical/Behavioral', 'category':'Core'}]}"
     )
 
     try:
-        res = _llm_json(sys, usr, fallback={"questions": []}, temperature=0.7)
+        res = _llm_json(sys, usr, fallback={"questions": []}, temperature=0.7, max_tokens=4096)
         state["drafts"] = res.get("questions", [])
     except Exception as e:
         # If LLM call fails (quota or network), fall back to empty drafts to trigger validation fallback
@@ -171,6 +206,8 @@ def qg_validate_format(state: QuestionGenerationState) -> QuestionGenerationStat
                     pass
             q = _parse_with_schema(json.dumps(d), InterviewQuestion, InterviewQuestion(question=default_q, id=i+1))
             q.id = i + 1
+            # Sanitize to ensure the question is verbally answerable (no 'write code' commands)
+            q.question = sanitize_spoken_interview_question(q.question)
             item = q.to_dict()
             q_text = item.get("question", "").strip().lower()
             if q_text and q_text not in seen_questions:  # skip duplicates
@@ -197,14 +234,15 @@ def build_question_generation_graph():
 
 QUESTION_GENERATION_GRAPH = build_question_generation_graph()
 
-def run_question_generation_graph(resume, jd, num_questions, interview_type, industry, language):
+def run_question_generation_graph(resume, jd, num_questions, interview_type, industry, language, ai_instructions=""):
     state: QuestionGenerationState = {
         "resume_text": resume or "",
         "jd_text": jd or "",
         "num_questions": num_questions,
         "interview_type": interview_type,
         "industry": industry,
-        "language": language
+        "language": language,
+        "ai_instructions": ai_instructions or ""
     }
     final_state = QUESTION_GENERATION_GRAPH.invoke(state)
     return final_state.get("result", [])
@@ -219,6 +257,7 @@ class FollowUpState(TypedDict, total=False):
     current_q_id: int
     followup_streak: int
     language: str
+    ai_instructions: str
     
     # internal
     gap_analysis: str
@@ -227,12 +266,20 @@ class FollowUpState(TypedDict, total=False):
     result: Dict[str, Any]
 
 def fu_generate_all(state: FollowUpState) -> FollowUpState:
+    ai_inst = state.get("ai_instructions", "").strip()
     sys = "Analyze the candidate's answer to identify a missing depth, then draft a follow-up question. Keep it conversational."
-    usr = f"Q: {state.get('original_question')}\nA: {state.get('answer')}\nLanguage: {state.get('language')}\nReturn JSON for FollowupQuestion schema with fields 'question' and 'expected_answer'."
+    if ai_inst:
+        sys += f"\n\nCRITICAL INTERVIEWER PERSONA AND BEHAVIORAL RULES (STRICTLY ADOPT THIS PERSONA, TONE, AND TOPICAL FOCUS):\n{ai_inst}"
+    usr = f"Q: {state.get('original_question')}\nA: {state.get('answer')}\nLanguage: {state.get('language')}"
+    if ai_inst:
+        usr += f"\nSpecific Interviewer Rules to Follow: {ai_inst[:400]}"
+    usr += "\nReturn JSON for FollowupQuestion schema with fields 'question' and 'expected_answer'."
     res = _llm_json(sys, usr, schema_class=FollowupQuestion, fallback=FollowupQuestion(question="Can you elaborate on that?").to_dict())
     
     if hasattr(res, 'to_dict'):
         res = res.to_dict()
+    if "question" in res and res["question"]:
+        res["question"] = sanitize_spoken_interview_question(res["question"])
     res["id"] = state.get("current_q_id", 0) + 1
     state["result"] = res
     return state
@@ -246,10 +293,10 @@ def build_followup_graph():
 
 FOLLOW_UP_GRAPH = build_followup_graph()
 
-def run_followup_graph(answer, resume, jd, q_id, streak, language):
+def run_followup_graph(answer, resume, jd, q_id, streak, language, ai_instructions=""):
     if streak >= 3:
         from app.ai.typed_ai_layer import generate_followup
-        return generate_followup(answer, resume, jd, q_id, streak, language)
+        return generate_followup(answer, resume, jd, q_id, streak, language, ai_instructions=ai_instructions)
         
     state: FollowUpState = {
         "answer": answer,
@@ -257,7 +304,8 @@ def run_followup_graph(answer, resume, jd, q_id, streak, language):
         "jd_text": jd,
         "current_q_id": q_id,
         "followup_streak": streak,
-        "language": language
+        "language": language,
+        "ai_instructions": ai_instructions or ""
     }
     final_state = FOLLOW_UP_GRAPH.invoke(state)
     return final_state.get("result", FollowupQuestion(id=q_id+1, question="Can you elaborate?").to_dict())

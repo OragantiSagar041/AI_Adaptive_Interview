@@ -477,7 +477,8 @@ export const InterviewNonTechnical = () => {
     )
   }
 
-  const currentQuestionText = currentQuestion?.text || currentQuestion?.question || currentQuestion?.prompt || ''
+  const rawQuestionText = currentQuestion?.text || currentQuestion?.question || currentQuestion?.prompt || ''
+  const currentQuestionText = rawQuestionText.replace(/^\[[^\]]+\]\s*/, '').trim()
 
   const displayQuestionNum = currentQuestion?.caseStudyIndex !== undefined 
     ? currentQuestion.caseStudyIndex + 1 
@@ -773,15 +774,20 @@ export const InterviewNonTechnical = () => {
                     <span className="px-3 py-1 rounded-full text-[10px] font-bold tracking-wide uppercase bg-indigo-50 text-indigo-600 border border-indigo-100">
                       {currentQuestion?.category || currentQuestion?.type || 'Case Analysis'}
                     </span>
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wide uppercase border ${
-                      String(currentQuestion?.difficulty || 'Easy').toLowerCase() === 'easy'
+                    {(() => {
+                      const activeDiff = String(currentQuestion?.difficulty || sessionDetail?.project_difficulty || sessionDetail?.difficulty || 'Medium').toLowerCase();
+                      const badgeLabel = activeDiff.charAt(0).toUpperCase() + activeDiff.slice(1);
+                      const badgeClass = activeDiff === 'easy'
                         ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                        : String(currentQuestion?.difficulty || 'Easy').toLowerCase() === 'medium'
-                        ? 'bg-amber-50 text-amber-600 border-amber-100'
-                        : 'bg-red-50 text-red-600 border-red-100'
-                    }`}>
-                      {currentQuestion?.difficulty || 'Easy'}
-                    </span>
+                        : activeDiff === 'medium'
+                          ? 'bg-amber-50 text-amber-600 border-amber-100'
+                          : 'bg-red-50 text-red-600 border-red-100';
+                      return (
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wide uppercase border ${badgeClass}`}>
+                          {badgeLabel}
+                        </span>
+                      );
+                    })()}
                   </div>
                   <div className="flex gap-4 items-start">
                     <div className="w-1.5 bg-indigo-600 self-stretch rounded-full shrink-0 min-h-[60px]" />

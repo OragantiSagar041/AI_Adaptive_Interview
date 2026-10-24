@@ -34,9 +34,17 @@ export default function CreateInterviewSingleTab({
   hasCustomAIInstructions,
   hasIndustry,
   singleCreatedLinks = [],
+  propNewSingleQuestion,
+  setPropNewSingleQuestion,
+  propNewSingleInstruction,
+  setPropNewSingleInstruction,
 }) {
-  const [newSingleQuestion, setNewSingleQuestion] = useState('')
-  const [newSingleInstruction, setNewSingleInstruction] = useState('')
+  const [localSingleQuestion, setLocalSingleQuestion] = useState('')
+  const [localSingleInstruction, setLocalSingleInstruction] = useState('')
+  const newSingleQuestion = propNewSingleQuestion !== undefined ? propNewSingleQuestion : localSingleQuestion
+  const setNewSingleQuestion = setPropNewSingleQuestion || setLocalSingleQuestion
+  const newSingleInstruction = propNewSingleInstruction !== undefined ? propNewSingleInstruction : localSingleInstruction
+  const setNewSingleInstruction = setPropNewSingleInstruction || setLocalSingleInstruction
 
   const [editingSingleQuestionIndex, setEditingSingleQuestionIndex] = useState(null)
   const [editingSingleQuestionText, setEditingSingleQuestionText] = useState('')

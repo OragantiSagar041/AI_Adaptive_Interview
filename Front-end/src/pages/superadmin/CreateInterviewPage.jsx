@@ -45,6 +45,10 @@ export default function CreateInterviewPage() {
   const [instructionsOpen, setInstructionsOpen] = useState(false)
   const [bulkQuestionsOpen, setBulkQuestionsOpen] = useState(false)
   const [bulkInstructionsOpen, setBulkInstructionsOpen] = useState(false)
+  const [newSingleQuestion, setNewSingleQuestion] = useState('')
+  const [newSingleInstruction, setNewSingleInstruction] = useState('')
+  const [newBulkQuestion, setNewBulkQuestion] = useState('')
+  const [newBulkInstruction, setNewBulkInstruction] = useState('')
 
   const [singleCandidate, setSingleCandidate] = useState(() => {
     let defaultState = {
@@ -710,8 +714,27 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
         scheduled_start: toUtcIso(scheduledStart),
         scheduled_end: toUtcIso(scheduledEnd),
         hr_screening: hrScreening,
-        custom_questions: Array.isArray(customQuestions) ? customQuestions.join('\n') : customQuestions,
-        ai_instructions: Array.isArray(aiInstructions) ? aiInstructions.join('\n') : aiInstructions,
+        custom_questions: (() => {
+          const list = [
+            ...(Array.isArray(customQuestions) ? customQuestions : (customQuestions ? [customQuestions] : [])),
+            ...(Array.isArray(singleCandidate.projectQuestions) ? singleCandidate.projectQuestions : [])
+          ];
+          if (newSingleQuestion && newSingleQuestion.trim() && !list.includes(newSingleQuestion.trim())) {
+            list.push(newSingleQuestion.trim());
+          }
+          return list.join('\n');
+        })(),
+        ai_instructions: (() => {
+          let list = Array.isArray(aiInstructions) ? [...aiInstructions] : (aiInstructions ? [aiInstructions] : []);
+          if (newSingleInstruction && newSingleInstruction.trim() && !list.includes(newSingleInstruction.trim())) {
+            list.push(newSingleInstruction.trim());
+          }
+          if (singleCandidate.projectText || (singleCandidate.projectQuestions && singleCandidate.projectQuestions.length > 0)) {
+            const summary = singleCandidate.projectText ? singleCandidate.projectText.slice(0, 2500) : singleCandidate.projectQuestions.join('\n');
+            list.push(`CRITICAL MANDATORY REQUIREMENT - PROJECT / CASE STUDY EVALUATION:\nYou MUST ask the candidate deep-dive questions based on the following Project / Case Study:\n${summary}\nEvaluate their architecture, technical decisions, implementation challenges, and individual contributions.`);
+          }
+          return list.join('\n');
+        })(),
         case_study_count: interviewType === 'Non-Technical' ? Number(caseStudyCount) : 0,
         voice_clone: voiceCloning,
         custom_voice_id: singleCandidate.customVoiceId || "",
@@ -828,8 +851,20 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
         scheduled_start: toUtcIso(scheduledStart),
         scheduled_end: toUtcIso(scheduledEnd),
         hr_screening: hrScreening,
-        custom_questions: Array.isArray(customQuestions) ? customQuestions.join('\n') : customQuestions,
-        ai_instructions: Array.isArray(aiInstructions) ? aiInstructions.join('\n') : aiInstructions,
+        custom_questions: (() => {
+          const list = Array.isArray(customQuestions) ? [...customQuestions] : (customQuestions ? [customQuestions] : []);
+          if (newBulkQuestion && newBulkQuestion.trim() && !list.includes(newBulkQuestion.trim())) {
+            list.push(newBulkQuestion.trim());
+          }
+          return list.join('\n');
+        })(),
+        ai_instructions: (() => {
+          let list = Array.isArray(aiInstructions) ? [...aiInstructions] : (aiInstructions ? [aiInstructions] : []);
+          if (newBulkInstruction && newBulkInstruction.trim() && !list.includes(newBulkInstruction.trim())) {
+            list.push(newBulkInstruction.trim());
+          }
+          return list.join('\n');
+        })(),
         voice_clone: bulkConfig.voiceCloning,
         custom_voice_id: bulkConfig.customVoiceId || "",
         jd_file_url: bulkConfig.jdFileUrl || null
@@ -941,6 +976,10 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
               hasCustomAIInstructions={hasCustomAIInstructions}
               hasIndustry={hasIndustry}
               singleCreatedLinks={singleCreatedLinks}
+              propNewSingleQuestion={newSingleQuestion}
+              setPropNewSingleQuestion={setNewSingleQuestion}
+              propNewSingleInstruction={newSingleInstruction}
+              setPropNewSingleInstruction={setNewSingleInstruction}
             />
           )}
 
@@ -965,6 +1004,10 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
               inviting={inviting}
               handleSendBulkInterviews={handleSendBulkInterviews}
               handlePreviewEmail={handlePreviewEmail}
+              propNewBulkQuestion={newBulkQuestion}
+              setPropNewBulkQuestion={setNewBulkQuestion}
+              propNewBulkInstruction={newBulkInstruction}
+              setPropNewBulkInstruction={setNewBulkInstruction}
             />
           )}
         </React.Suspense>

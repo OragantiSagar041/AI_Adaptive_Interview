@@ -106,6 +106,7 @@ HF_TIMEOUT_SECONDS = int(os.getenv("HF_TIMEOUT_SECONDS", "8"))
 
 _lock = threading.Lock()
 _quota_hit_at: float = 0.0          # timestamp when quota error was last seen
+_gemini_quota_hit_at: float = 0.0   # timestamp when Gemini failed / quota hit
 _active_hf_model: str = HF_MODELS[0]  # which HF model is currently working
 _provider_override: Optional[str] = None  # Force a provider: "openrouter" | "huggingface" | None
 
@@ -115,6 +116,13 @@ def _is_in_cooldown() -> bool:
     if _quota_hit_at == 0.0:
         return False
     return (time.time() - _quota_hit_at) < QUOTA_COOLDOWN_SECONDS
+
+
+def _is_gemini_in_cooldown() -> bool:
+    """Check if Gemini is in cooldown after failure."""
+    if _gemini_quota_hit_at == 0.0:
+        return False
+    return (time.time() - _gemini_quota_hit_at) < 300  # 5 min cooldown
 
 
 def _mark_quota_exhausted(details: str = ""):
@@ -169,11 +177,9 @@ def _call_gemini(
         payload["systemInstruction"] = system_instruction
 
     candidate_models = list(dict.fromkeys([
+        "gemini-2.0-flash",
+        "gemini-1.5-flash",
         model,
-        "gemini-3.6-flash",
-        "gemini-3.5-flash",
-        "gemini-3.7-flash",
-        "gemini-flash-latest"
     ]))
     last_err = None
 
@@ -315,13 +321,13 @@ def _call_groq(
     messages: List[Dict[str, str]],
     model: Optional[str] = None,
     temperature: float = 0.1,
-    timeout: int = 15,
-    max_tokens: int = 1024,
+    timeout: int = 25,
+    max_tokens: int = 4096,
 ) -> str:
     """Call Groq API (completions) with active model and automatic fallback on decommissioned models."""
     url = "https://api.groq.com/openai/v1/chat/completions"
-    active_model = model or os.getenv("GROQ_MODEL", "llama3-8b-8192")
-    fallback_models = ["llama3-8b-8192", "llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+    active_model = model if (model and ("gpt-oss" in model or "qwen" in model)) else os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
+    fallback_models = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"]
     
     max_attempts = groq_key_manager.get_total_keys() or 1
     last_error_text = ""
@@ -385,22 +391,21 @@ def chat_completion(
     model: str = "openai/gpt-4o-mini",
     temperature: float = 0.1,
     timeout: int = 45,
-    max_tokens: int = 1024,
+    max_tokens: int = 4096,
 ) -> str:
     """
     Send a chat completion request.
-    Provider chain: Gemini (primary if configured) → OpenRouter → HuggingFace (fallback).
-
-    NOTE: Groq is intentionally excluded here — it is reserved exclusively
-    for Whisper voice transcription (routes.py /transcribe endpoint).
+    Provider chain: Gemini (primary if configured) → OpenRouter → Groq (resilient fast fallback) → HuggingFace.
     """
-    # 0. Primary Fast Path: Google Gemini (if GEMINI_API_KEY is configured)
+    # 0. Primary Fast Path: Google Gemini (if GEMINI_API_KEY is configured and not in cooldown)
     active_gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_API_Key") or GEMINI_API_KEY
-    if active_gemini_key and active_gemini_key.strip():
+    if active_gemini_key and active_gemini_key.strip() and not _is_gemini_in_cooldown():
         try:
-            return _call_gemini(messages, model="gemini-3.6-flash", temperature=temperature, timeout=min(timeout, 30), max_tokens=max_tokens)
+            return _call_gemini(messages, model="gemini-2.0-flash", temperature=temperature, timeout=min(timeout, 45), max_tokens=max_tokens)
         except Exception as gemini_exc:
-            print(f"Gemini API call failed ({gemini_exc}). Falling back to OpenRouter...")
+            global _gemini_quota_hit_at
+            _gemini_quota_hit_at = time.time()
+            print(f"Gemini API call failed ({gemini_exc}). Cooldown set for 300s. Falling back to OpenRouter/Groq...")
 
     # 1. Secondary path: try OpenRouter if not in cooldown
     if not _is_in_cooldown() and OPENROUTER_API_KEY:
@@ -410,21 +415,29 @@ def chat_completion(
             err_msg = str(openrouter_exc)
             if _is_quota_error(openrouter_exc):
                 _mark_quota_exhausted(err_msg)
-                print(f"OpenRouter quota hit: {err_msg}. Switching to HuggingFace fallback...")
+                print(f"OpenRouter quota hit: {err_msg}. Switching to Groq fallback...")
             else:
-                print(f"OpenRouter failed: {openrouter_exc}. Switching to HuggingFace fallback...")
+                print(f"OpenRouter failed: {openrouter_exc}. Switching to Groq fallback...")
     else:
         if _is_in_cooldown():
-            print("OpenRouter is in cooldown. Using HuggingFace fallback...")
+            print("OpenRouter is in cooldown. Using Groq fallback...")
         else:
-            print("No OpenRouter API key. Using HuggingFace fallback...")
+            print("No OpenRouter API key. Using Groq fallback...")
 
-    # 2. Fallback: HuggingFace (Groq is reserved for voice transcription only)
+    # 2. Resilient High-Speed Fallback: Groq
+    try:
+        if groq_key_manager.get_total_keys() > 0 or os.getenv("GROQ_API_KEY") or os.getenv("GROQ_API_KEYS"):
+            print("Calling Groq completion model...")
+            return _call_groq(messages, temperature=temperature, timeout=min(timeout, 25), max_tokens=max_tokens)
+    except Exception as groq_exc:
+        print(f"Groq completion failed ({groq_exc}). Switching to HuggingFace fallback...")
+
+    # 3. Fallback: HuggingFace
     try:
         print("Calling HuggingFace fallback model...")
         return _call_huggingface(messages, temperature=temperature, timeout=timeout)
     except Exception as hf_exc:
-        print(f"All LLM providers failed: Gemini, OpenRouter and HuggingFace.")
+        print(f"All LLM providers failed: Gemini, OpenRouter, Groq, and HuggingFace.")
         raise RuntimeError("QUOTA_EXHAUSTED_INSTANT_OFFLINE")
 
 

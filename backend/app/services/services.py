@@ -3,6 +3,7 @@
 # ---------------------------------------------------------------------------
 import os
 import sys
+import re
 import io
 import json
 import hmac
@@ -73,9 +74,11 @@ try:
     from app.ai.typed_ai_layer import parse_resume as _typed_parse_resume
     from app.ai.typed_ai_layer import generate_summary as _typed_generate_summary
     from app.ai.typed_ai_layer import generate_followup as _typed_generate_followup
+    from app.ai.typed_ai_layer import sanitize_spoken_interview_question
     _TYPED_LAYER_AVAILABLE = True
 except ImportError:
     _TYPED_LAYER_AVAILABLE = False
+    def sanitize_spoken_interview_question(q): return q
     print("[WARN] typed_ai_layer not available")
 
 try:
@@ -1409,7 +1412,11 @@ def generate_jd_questions(jd_text: str, ai_instructions: str = "", interview_typ
         }
     ]
 
-    instruction_block = f"\n    Additional Admin Instructions to Follow:\n    {ai_instructions}\n" if ai_instructions else ""
+    instruction_block = (
+        f"\n    CRITICAL MANDATORY INSTRUCTIONS & TOPIC DISTRIBUTION (STRICT OVERRIDE):\n"
+        f"    {ai_instructions}\n"
+        f"    STRICT REQUIREMENT: These instructions OVERRIDE any default focus from the Job Description. If specific percentages or domains are requested, you MUST allocate the questions to match that exact breakdown.\n"
+    ) if ai_instructions else ""
     
     # Inject language requirement if not English
     if language != "English":
@@ -1451,6 +1458,7 @@ def generate_jd_questions(jd_text: str, ai_instructions: str = "", interview_typ
            - Vary difficulty: Start with basic checks, move to scenario-based/hard problems.
            - Act as a real human interviewer. NEVER say "According to the job description" or "You mentioned in your resume". Just ask the question directly.
            - CRITICAL LENGTH CONSTRAINT: Keep every question strictly under 2-3 sentences. Make it conversational, punchy, and direct. Do NOT generate multi-part essay questions.
+           - SPOKEN/ORAL FORMAT (NO CODE WRITING): This is an oral conversational interview without a code editor. NEVER ask the candidate to write code, write functions, provide code examples, or sketch syntax. Ask them to explain their logic, approach, architecture, or debugging methodology verbally.
         """
 
     prompt += f"""
@@ -1544,7 +1552,7 @@ def generate_jd_questions(jd_text: str, ai_instructions: str = "", interview_typ
 
     return questions
 
-def generate_mock_questions(text: str, source: str, num_questions: int = 6, resume_text: str = None, jd_text: str = None, hr_screening: dict = None, custom_questions: str = "", ai_instructions: str = "", interview_type: str = "Technical", industry: str = "General", language: str = "English") -> List[Dict[str, str]]:
+def generate_mock_questions(text: str, source: str, num_questions: int = 6, resume_text: str = None, jd_text: str = None, hr_screening: dict = None, custom_questions: str = "", ai_instructions: str = "", interview_type: str = "Technical", industry: str = "General", language: str = "English", difficulty: str = "Medium") -> List[Dict[str, str]]:
     """
     Generate structured interview questions.
     Structure: Self-Intro → Technical Middle → HR Screening (if enabled) → Closing
@@ -1575,42 +1583,54 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
             "What specifically caught your eye about this firm and the job description we posted?"
         ]
 
-    opening = [
-        {
-            "id": 1,
-            "question": intro_q_text,
-            "difficulty": "Easy",
-            "type": "Self-Introduction",
-            "category": "Basic"
-        },
-        {
-            "id": 2,
-            "question": phase1_qs[0],
-            "difficulty": "Easy",
-            "type": "Background",
-            "category": "Experience"
-        },
-        {
-            "id": 3,
-            "question": phase1_qs[1],
-            "difficulty": "Easy",
-            "type": "Motivation",
-            "category": "Motivation"
-        }
-    ]
+    target_diff = (difficulty or "Medium").capitalize()
+    if custom_questions and custom_questions.strip():
+        opening = [
+            {
+                "id": 1,
+                "question": intro_q_text,
+                "difficulty": target_diff,
+                "type": "Self-Introduction",
+                "category": "Basic"
+            }
+        ]
+    else:
+        opening = [
+            {
+                "id": 1,
+                "question": intro_q_text,
+                "difficulty": target_diff,
+                "type": "Self-Introduction",
+                "category": "Basic"
+            },
+            {
+                "id": 2,
+                "question": phase1_qs[0],
+                "difficulty": target_diff,
+                "type": "Background",
+                "category": "Experience"
+            },
+            {
+                "id": 3,
+                "question": phase1_qs[1],
+                "difficulty": target_diff,
+                "type": "Motivation",
+                "category": "Motivation"
+            }
+        ]
     
     closing = []
     if str(interview_type).lower() != "technical":
         closing = [
             {
                 "question": "What do you consider your biggest strengths and weaknesses?",
-                "difficulty": "Easy",
+                "difficulty": target_diff,
                 "type": "Self-Assessment",
                 "category": "Strengths & Weaknesses"
             },
             {
                 "question": "Where do you see yourself in the next 5 years, and how does this role fit into that vision?",
-                "difficulty": "Easy",
+                "difficulty": target_diff,
                 "type": "Career Goals",
                 "category": "Future Plans"
             }
@@ -1618,7 +1638,7 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
         if num_questions >= 10:
             closing.append({
                 "question": "Do you have any questions for us about the team, the role, or the company?",
-                "difficulty": "Easy",
+                "difficulty": target_diff,
                 "type": "Closing",
                 "category": "Candidate Questions"
             })
@@ -1652,14 +1672,25 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
     try:
         # 1. Inject custom questions FIRST if provided
         if custom_questions:
-            custom_q_list = [q.strip() for q in custom_questions.split('\n') if q.strip()]
-            for cq in custom_q_list:
+            custom_q_list = []
+            seen_custom = set()
+            for q_raw in custom_questions.split('\n'):
+                cq = q_raw.strip()
+                if not cq:
+                    continue
+                clean_cq = re.sub(r'^\[[^\]]+\]\s*', '', cq).strip()
+                norm = clean_cq.lower()
+                if norm in seen_custom:
+                    continue
+                seen_custom.add(norm)
+                is_proj = any(kw in clean_cq.lower() for kw in ["project", "case study", "architecture", "system design", "implementation"])
                 middle_questions.append({
-                    "question": cq,
-                    "difficulty": "Medium",
+                    "question": clean_cq,
+                    "difficulty": target_diff,
                     "type": "Technical",
-                    "category": "Custom Question"
+                    "category": "Project / Case Study" if is_proj else "Custom Question"
                 })
+                custom_q_list.append(clean_cq)
             print(f" Loaded {len(custom_q_list)} custom questions")
             
         # 2. Add AI questions (Instructions and JD/Resume) with dynamic validation & regeneration
@@ -1670,10 +1701,9 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
                 lang_inst += f"\nSTRICT LANGUAGE REQUIREMENT: You MUST generate all question texts STRICTLY in the {language} language. Do NOT use English under any circumstances."
             
             if _GRAPH_LAYER_AVAILABLE:
-                if "resume" in source.lower():
-                    return run_question_generation_graph(text, "", middle_count, interview_type, industry, language)
-                else:
-                    return run_question_generation_graph("", text, middle_count, interview_type, industry, language)
+                res_txt = resume_text or (text if "resume" in source.lower() else "")
+                job_txt = jd_text or (text if "jd" in source.lower() or "job" in source.lower() else "")
+                return run_question_generation_graph(res_txt, job_txt, middle_count, interview_type, industry, language, ai_instructions=lang_inst)
             else:
                 if "resume" in source.lower():
                     return generate_resume_questions(text, language=language, industry=industry)
@@ -1729,7 +1759,9 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
     # ── OFFLINE FALLBACK: Extract skills/projects and build timeline-based questions ──
     # Only run offline fallback if we don't have enough questions
     if len(middle_questions) < middle_count:
-        offline_questions = _generate_offline_questions(resume_text or "", jd_text or text, num_questions, interview_type, industry=industry, language=language)
+        offline_questions = _generate_offline_questions(resume_text or "", jd_text or text, num_questions, interview_type, industry=industry, language=language, ai_instructions=ai_instructions or "")
+        for oq in offline_questions:
+            oq["difficulty"] = target_diff
         middle_questions.extend(offline_questions)
         print(f" Offline generator added {len(offline_questions)} questions")
     
@@ -1764,17 +1796,125 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
         q["id"] = idx
         all_questions.append(q)
         idx += 1
-    
+
+    for q in all_questions:
+        if isinstance(q, dict):
+            if "question" in q and isinstance(q["question"], str):
+                q["question"] = sanitize_spoken_interview_question(q["question"])
+            if "text" in q and isinstance(q["text"], str):
+                q["text"] = sanitize_spoken_interview_question(q["text"])
+
     return all_questions
 
 
-def _generate_offline_questions(resume_text: str, jd_text: str, total_count: int, interview_type: str = "Technical", industry: str = "General", language: str = "English") -> List[Dict[str, str]]:
+def _generate_offline_questions(resume_text: str, jd_text: str, total_count: int, interview_type: str = "Technical", industry: str = "General", language: str = "English", ai_instructions: str = "") -> List[Dict[str, str]]:
     """
     Intelligent Interview Coach Offline Generator.
     No question is ever repeated — modulo cycling removed throughout.
     """
     import re, random
     questions = []
+
+    # ── Instruction-driven offline questions ──
+    if ai_instructions and str(ai_instructions).strip():
+        inst_lower = str(ai_instructions).lower()
+        extracted_topics = []
+        topic_types = {}  # topic -> "ml" | "data" | "code" | "api" | "general"
+
+        if "python" in inst_lower:
+            extracted_topics.append("Python Programming & Optimization")
+            topic_types["Python Programming & Optimization"] = "code"
+        if "preprocessing" in inst_lower or "data preprocessing" in inst_lower:
+            extracted_topics.append("Data Preprocessing & Cleaning")
+            topic_types["Data Preprocessing & Cleaning"] = "data"
+        if "feature engineering" in inst_lower:
+            extracted_topics.append("Feature Engineering & Transformation")
+            topic_types["Feature Engineering & Transformation"] = "ml"
+        if "deployment" in inst_lower or "model deployment" in inst_lower:
+            extracted_topics.append("Model Deployment & Serving")
+            topic_types["Model Deployment & Serving"] = "api"
+        if "api" in inst_lower or "microservice" in inst_lower:
+            extracted_topics.append("API Integration & Backend Architecture")
+            topic_types["API Integration & Backend Architecture"] = "api"
+        if "regression" in inst_lower:
+            extracted_topics.append("Regression Models & Analysis")
+            topic_types["Regression Models & Analysis"] = "ml"
+        if "classification" in inst_lower:
+            extracted_topics.append("Classification Models & Metrics")
+            topic_types["Classification Models & Metrics"] = "ml"
+        if "sql" in inst_lower or "query optimization" in inst_lower:
+            extracted_topics.append("SQL Query Optimization")
+            topic_types["SQL Query Optimization"] = "data"
+        if "etl" in inst_lower or "pipeline" in inst_lower:
+            extracted_topics.append("ETL Pipelines & Data Workflows")
+            topic_types["ETL Pipelines & Data Workflows"] = "data"
+        if "rag" in inst_lower or "llm" in inst_lower:
+            extracted_topics.append("RAG Architecture & LLM Engineering")
+            topic_types["RAG Architecture & LLM Engineering"] = "ml"
+
+        if not extracted_topics:
+            raw_phrases = re.findall(r'focus\s+(?:on\s+)?([a-zA-Z0-9\s,\/]+?)(?:rather|than|and|\.|$)', inst_lower)
+            for rp in raw_phrases:
+                for part in rp.split(','):
+                    cleaned = part.strip()
+                    if len(cleaned) > 3 and cleaned not in ["basic theory", "general concepts"]:
+                        top_title = cleaned.title()
+                        extracted_topics.append(top_title)
+                        topic_types[top_title] = "general"
+
+        ml_templates = [
+            "Based on your hands-on experience with {topic}, walk me through your model selection, validation, and training workflow.",
+            "How do you rigorously evaluate {topic} to detect and prevent overfitting, data leakage, and distribution drift?",
+            "What feature transformations and evaluation metrics do you rely on when tuning {topic} for production?",
+            "Describe a situation where a {topic} model underperformed in production. How did you isolate and resolve the root cause?"
+        ]
+        api_templates = [
+            "Walk me through your production architecture for {topic}, focusing on latency, concurrency, and serialization overhead.",
+            "In your experience with {topic}, what are the most critical production edge cases, scaling bottlenecks, or failover mechanisms you have handled?",
+            "How do you design, version, and monitor endpoints for {topic} to ensure backward compatibility and high availability?",
+            "Describe how you test and debug API performance regressions or timeout spikes in a {topic} deployment."
+        ]
+        code_templates = [
+            "In {topic}, how do you manage memory consumption, vectorization, and concurrency bottlenecks when processing high-volume workloads?",
+            "What are common debugging pitfalls or performance anti-patterns you encounter in {topic}, and how do you architect around them?",
+            "Walk me through how you structure unit testing, type safety, and code maintainability in a production codebase.",
+            "Describe an advanced optimization you implemented in {topic} to reduce execution time or resource footprint."
+        ]
+        data_templates = [
+            "How do you handle schema variations, missing data, and idempotency in {topic} across real-world data pipelines?",
+            "Walk me through your strategy for optimizing query execution plans, indexing, or batch transformations in {topic}.",
+            "In your experience with {topic}, what are the biggest data quality or bottleneck risks in production, and how do you mitigate them?",
+            "Describe how you validate and test {topic} to ensure data integrity without causing downtime."
+        ]
+        general_templates = [
+            "In your experience with {topic}, what are the most critical production edge cases, performance bottlenecks, or debugging challenges you have tackled?",
+            "Can you describe an advanced project where you designed or optimized the implementation of {topic}?",
+            "What architectural trade-offs do you weigh when taking {topic} from development into a real-time production system?",
+            "Walk me through a situation where a {topic} implementation failed under load. How did you isolate and resolve the root cause?"
+        ]
+
+        is_strict = "strict" in inst_lower or "senior" in inst_lower
+        for topic in extracted_topics:
+            t_kind = topic_types.get(topic, "general")
+            if t_kind == "ml":
+                tmpls = ml_templates
+            elif t_kind == "api":
+                tmpls = api_templates
+            elif t_kind == "code":
+                tmpls = code_templates
+            elif t_kind == "data":
+                tmpls = data_templates
+            else:
+                tmpls = general_templates
+
+            for tmpl in tmpls:
+                questions.append({
+                    "question": tmpl.format(topic=topic),
+                    "difficulty": "Hard" if is_strict else "Medium",
+                    "type": "Technical",
+                    "category": f"{topic} Deep-Dive",
+                    "_generation_origin": "instruction_offline"
+                })
 
     has_resume = bool(resume_text and len(resume_text.strip()) > 50)
     jd_lower = jd_text.lower()
@@ -2285,16 +2425,18 @@ Return STRICT JSON only:
 
 # --- ADAPTIVE INTERVIEW LOGIC ---
 
-def generate_followup_question(answer_text: str, resume_context: str, jd_text: str, current_q_id: int, followup_streak: int, language: str = "English") -> Dict:
+def generate_followup_question(answer_text: str, resume_context: str, jd_text: str, current_q_id: int, followup_streak: int, language: str = "English", ai_instructions: str = "") -> Dict:
     if _GRAPH_LAYER_AVAILABLE:
         try:
-            return run_followup_graph(answer_text, resume_context, jd_text, current_q_id, followup_streak, language)
+            return run_followup_graph(answer_text, resume_context, jd_text, current_q_id, followup_streak, language, ai_instructions=ai_instructions)
         except Exception as e:
             print(f"Graph followup failed, falling back: {e}")
 
+    inst_block = f"\n        CRITICAL INTERVIEWER INSTRUCTIONS & RULES:\n        {ai_instructions}\n" if ai_instructions else ""
+
     if followup_streak < 3:
         prompt = f"""
-        You are an intelligent technical interviewer.
+        You are an intelligent technical interviewer.{inst_block}
         
         CRITICAL LANGUAGE REQUIREMENT:
         You MUST generate the follow-up question and output STRICTLY in the {language} language. Do NOT use English unless {language} is English.

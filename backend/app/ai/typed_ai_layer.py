@@ -61,20 +61,81 @@ def _truncate(text: str, limit: int) -> str:
 
 
 def _extract_json_robust(text: str) -> Optional[Dict]:
-    """Robustly extract a JSON object from AI text (handles markdown fences)."""
+    """Robustly extract a JSON object from AI text (handles markdown fences and truncated JSON)."""
     if not text:
         return None
     # Strip markdown fences
-    text = re.sub(r"```(?:json)?", "", text).strip()
-    # Find first { ... }
-    start = text.find("{")
-    end = text.rfind("}") + 1
-    if start == -1 or end <= start:
-        return None
-    try:
-        return json.loads(text[start:end])
-    except json.JSONDecodeError:
-        return None
+    cleaned = re.sub(r"```(?:json)?", "", text).strip()
+    start = cleaned.find("{")
+    end = cleaned.rfind("}") + 1
+    if start != -1 and end > start:
+        candidate = cleaned[start:end]
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            pass
+
+    # Partial JSON recovery for truncated responses (e.g. token limits cutting off the last item)
+    if start != -1:
+        sub = cleaned[start:]
+        last_obj_end = len(sub)
+        while True:
+            last_obj_end = sub.rfind("}", 0, last_obj_end)
+            if last_obj_end <= 0:
+                break
+            truncated_cand = sub[:last_obj_end + 1]
+            for suffix in ["", "]", "]}", "}]}", '"}']:
+                try:
+                    res = json.loads(truncated_cand + suffix)
+                    if isinstance(res, dict):
+                        return res
+                except Exception:
+                    pass
+
+    return None
+
+
+def sanitize_spoken_interview_question(q_text: str) -> str:
+    """
+    Ensures interview questions are verbally/conversationally answerable in a spoken interview
+    where no code editor or code writing box is available.
+    Transforms 'Write code to...', 'Provide code examples', etc. into oral explanations.
+    """
+    if not q_text or not isinstance(q_text, str):
+        return q_text or ""
+    
+    cleaned = q_text.strip()
+
+    # 1. Trailing or embedded "Provide code examples for both." / "Provide code examples." / "Include code examples."
+    cleaned = re.sub(
+        r'(?i)(?:please\s+)?(?:provide|include|give)\s+(?:working\s+)?code\s+(?:examples?|snippets?)(?:\s+(?:for|to|of)\s+[^.?!]+)?[.?!]?',
+        'Explain the key technical differences and how each is implemented in practice.',
+        cleaned
+    )
+    cleaned = re.sub(r'(?i)include\s+code\s+for\s+([^.?!]+)[.?!]?', r'Explain your step-by-step approach for \1.', cleaned)
+    cleaned = re.sub(r'(?i)provide\s+code\s+for\s+([^.?!]+)[.?!]?', r'Walk through how you would implement \1.', cleaned)
+
+    # 2. "Write code to combine them..." -> "Explain how you would combine them..."
+    cleaned = re.sub(r'(?i)\bwrite\s+code\s+to\s+', 'Explain how you would ', cleaned)
+    cleaned = re.sub(r'(?i)\bwrite\s+code\s+that\s+', 'Explain how you would design a solution that ', cleaned)
+    cleaned = re.sub(r'(?i)\bwrite\s+code\s+for\s+', 'Walk me through your implementation logic for ', cleaned)
+    cleaned = re.sub(r'(?i)\bwrite\s+(?:a|an)\s+(?:python\s+)?(?:function|script|method|program|pipeline|routine)\s+(?:that|to)\s+', 'Walk me through how you would design and implement a solution that ', cleaned)
+    cleaned = re.sub(r'(?i)\bwrite\s+(?:a|an)\s+(?:sql\s+)?query\s+(?:that|to)\s+', 'Explain how you would structure the SQL query and logic to ', cleaned)
+    cleaned = re.sub(r'(?i)\bwrite\s+(?:a\s+)?unit\s+test(?:\s+\(using\s+pytest\))?\s+for\s+', 'Explain how you would structure unit tests (e.g. using pytest) for ', cleaned)
+    cleaned = re.sub(r'(?i)\bwrite\s+(?:a\s+)?performant\s+python\s+snippet(?:\s+\([^)]+\))?\s+that\s+', 'Walk through how you would architect a performant Python solution that ', cleaned)
+    cleaned = re.sub(r'(?i)\bsketch\s+(?:the\s+)?(?:fastapi\s+)?route\s+implementation,\s+including\s+', 'Walk me through how you would architect the FastAPI route implementation, including ', cleaned)
+    cleaned = re.sub(r'(?i)\bsketch\s+code\s+(?:for|to)\s+', 'Explain your approach and architecture to ', cleaned)
+
+    # 3. Clean up non-printable control characters, escaped hex artifacts like \x7f, and bullet artifacts
+    cleaned = re.sub(r'\\x[0-9a-fA-F]{2}', '', cleaned)
+    cleaned = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\uf000-\uf8ff]', '', cleaned)
+    cleaned = re.sub(r"'\s+([^']+?)\s*'", r"'\1'", cleaned)
+    cleaned = re.sub(r'"\s+([^"]+?)\s*"', r'"\1"', cleaned)
+
+    # 4. Clean up double spaces or awkward repeated punctuation
+    cleaned = re.sub(r'\s{2,}', ' ', cleaned)
+    cleaned = re.sub(r'\.\s*\.', '.', cleaned)
+    return cleaned.strip()
 
 
 def _parse_with_schema(raw: str, schema_class, fallback):
@@ -307,6 +368,7 @@ def generate_followup(
     current_q_id: int,
     followup_streak: int,
     language: str = "English",
+    ai_instructions: str = "",
 ) -> dict:
     """
     Generate a dynamic follow-up question.
@@ -316,8 +378,10 @@ def generate_followup(
     resume_short = _truncate(resume_context, 500)
     jd_short = _truncate(jd_text, 500)
 
+    inst_block = f"\nCustom Interviewer Instructions/Rules to Strictly Follow:\n{ai_instructions}\n" if ai_instructions else ""
+
     if followup_streak < 3:
-        user_msg = f"""Generate ONE follow-up interview question in {language} based on this answer.
+        user_msg = f"""Generate ONE follow-up interview question in {language} based on this answer.{inst_block}
 Candidate's Last Answer: "{answer_short}"
 Resume Context: {resume_short}
 
@@ -328,7 +392,7 @@ Rules:
 
 Return JSON: {{"question": "...", "difficulty": "Medium", "type": "Follow-up", "category": "Deep Dive"}}"""
     else:
-        user_msg = f"""Change topic. Generate ONE new interview question in {language} from this JD.
+        user_msg = f"""Change topic. Generate ONE new interview question in {language} from this JD.{inst_block}
 Job Description: {jd_short}
 
 Rules: Ask a role-specific question. Under 2 sentences.
@@ -347,10 +411,14 @@ Return JSON: {{"question": "...", "difficulty": "Medium", "type": "JD-Based", "c
         question=random.choice(OFFLINE_FALLBACKS.get(language, OFFLINE_FALLBACKS["English"])),
     )
 
+    system_prompt = _FOLLOWUP_SYSTEM
+    if ai_instructions:
+        system_prompt += f"\nCRITICAL INTERVIEWER PERSONA AND BEHAVIORAL RULES:\n{ai_instructions}"
+
     try:
         raw = chat_completion(
             messages=[
-                {"role": "system", "content": _FOLLOWUP_SYSTEM},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_msg},
             ],
             model="openai/gpt-4o-mini",

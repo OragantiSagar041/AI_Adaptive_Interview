@@ -126,6 +126,12 @@ class CreateSession(BaseModel):
     notice_period: str = ""
     job_id: str = ""
     interview_title: str = ""
+    project_id: Optional[str] = None
+    project_name: Optional[str] = None
+    project_text: Optional[str] = None
+    project_questions: Optional[Union[str, List[str]]] = None
+    project_difficulty: Optional[str] = "medium"
+    difficulty: Optional[str] = "medium"
 
 class ForgotPasswordRequest(BaseModel):
     username: str

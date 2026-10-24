@@ -16,7 +16,11 @@ from fastapi.security import HTTPBearer
 sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
 
-load_dotenv(override=False)
+backend_env = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")
+if os.path.exists(backend_env):
+    load_dotenv(backend_env, override=False)
+else:
+    load_dotenv(override=False)
 
 # ---------------------------------------------------------------------------
 # Third-party client setup

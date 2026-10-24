@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+﻿import React, { useState, useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
 import axios from 'axios'
@@ -110,6 +110,11 @@ export default function CreateInterviewPage() {
       recordVideo: true,
       voiceCloning: false,
       customVoiceId: '',
+      projectQuestions: [],
+      projectText: '',
+      projectFileName: '',
+      projectDifficulty: 'hard',
+      projectResumeDismissed: false,
       hrScreening: {
         askWorkMode: false,
         workModeType: 'On-site',
@@ -178,6 +183,11 @@ export default function CreateInterviewPage() {
   const [jdParsing, setJdParsing] = useState(false)
   const [customQuestionsParsing, setCustomQuestionsParsing] = useState(false)
   const [aiInstructionsParsing, setAiInstructionsParsing] = useState(false)
+  const [projectParsing, setProjectParsing] = useState(false)
+  const [singleProjectQuestionsAdded, setSingleProjectQuestionsAdded] = useState(false)
+  const [bulkProjectQuestionsAdded, setBulkProjectQuestionsAdded] = useState(false)
+  const [newProjectQuestion, setNewProjectQuestion] = useState('')
+  const [newBulkProjectQuestion, setNewBulkProjectQuestion] = useState('')
   const [atsCalculating, setAtsCalculating] = useState(false)
   const [atsScoreData, setAtsScoreData] = useState(null) // { score, summary, matched_skills, missing_skills }
 
@@ -224,6 +234,10 @@ export default function CreateInterviewPage() {
       recordVideo: true,
       voiceCloning: false,
       customVoiceId: '',
+      projectQuestions: [],
+      projectText: '',
+      projectFileName: '',
+      projectDifficulty: 'hard',
       hrScreening: {
         askWorkMode: false,
         workModeType: 'On-site',
@@ -341,40 +355,141 @@ export default function CreateInterviewPage() {
     }))
   }
 
-  const addSingleQuestion = () => {
-    if (!newSingleQuestion.trim()) return
-    handleSingleChange('customQuestions', [...(singleCandidate.customQuestions || []), newSingleQuestion.trim()])
+  const parseMultiLineItems = (text) => {
+    if (!text) return []
+    return text
+      .split(/\r?\n/)
+      .map(line => line.replace(/^[\s\d]+[\.\)\-\:]\s*|^[\s\*\-\•\–\—\>]\s*/, '').trim())
+      .filter(line => line.length > 0)
+  }
+
+  const addSingleQuestion = (itemsToAdd = null) => {
+    const items = Array.isArray(itemsToAdd) ? itemsToAdd : parseMultiLineItems(newSingleQuestion)
+    if (!items || items.length === 0) return
+    handleSingleChange('customQuestions', [...(singleCandidate.customQuestions || []), ...items])
     setNewSingleQuestion('')
   }
   const deleteSingleQuestion = (index) => {
     handleSingleChange('customQuestions', (singleCandidate.customQuestions || []).filter((_, i) => i !== index))
   }
 
-  const addSingleInstruction = () => {
-    if (!newSingleInstruction.trim()) return
-    handleSingleChange('aiInstructions', [...(singleCandidate.aiInstructions || []), newSingleInstruction.trim()])
+  const addSingleInstruction = (itemsToAdd = null) => {
+    const items = Array.isArray(itemsToAdd) ? itemsToAdd : parseMultiLineItems(newSingleInstruction)
+    if (!items || items.length === 0) return
+    handleSingleChange('aiInstructions', [...(singleCandidate.aiInstructions || []), ...items])
     setNewSingleInstruction('')
   }
   const deleteSingleInstruction = (index) => {
     handleSingleChange('aiInstructions', (singleCandidate.aiInstructions || []).filter((_, i) => i !== index))
   }
 
-  const addBulkQuestion = () => {
-    if (!newBulkQuestion.trim()) return
-    handleBulkConfigChange('customQuestions', [...(bulkConfig.customQuestions || []), newBulkQuestion.trim()])
+  const addSingleProjectQuestion = (itemsToAdd = null) => {
+    const items = Array.isArray(itemsToAdd) ? itemsToAdd : parseMultiLineItems(newProjectQuestion)
+    if (!items || items.length === 0) return
+    const current = singleCandidate.projectQuestions || []
+    const newItems = items.filter(item => !current.includes(item))
+    if (newItems.length > 0) {
+      handleSingleChange('projectQuestions', [...current, ...newItems])
+    }
+    setNewProjectQuestion('')
+  }
+
+  const deleteSingleProjectQuestion = (index) => {
+    const current = singleCandidate.projectQuestions || []
+    const updated = current.filter((_, idx) => idx !== index)
+    handleSingleChange('projectQuestions', updated)
+    if (updated.length === 0) {
+      setSingleProjectQuestionsAdded(false)
+    }
+  }
+
+  const handleGenerateProjectQuestions = async (isBulk = false, overrideDifficulty = null, overrideProjectText = null, overrideFileName = null, overrideResumeText = null) => {
+    const currentDiff = overrideDifficulty || (isBulk ? (bulkConfig.projectDifficulty || 'hard') : (singleCandidate.projectDifficulty || 'hard'))
+    const pText = overrideProjectText !== null ? overrideProjectText : (isBulk ? bulkConfig.projectText : singleCandidate.projectText)
+    const pFileName = overrideFileName !== null ? overrideFileName : (isBulk ? bulkConfig.projectFileName : singleCandidate.projectFileName)
+    const rText = overrideResumeText !== null ? overrideResumeText : (isBulk ? '' : (singleCandidate.resumeText || ''))
+
+    if (!pText && !rText) {
+      Swal.fire({
+        title: 'No Project or Resume Found',
+        text: 'Please upload a project document or candidate resume first to generate project questions.',
+        icon: 'info',
+        confirmButtonColor: '#6366f1'
+      })
+      return
+    }
+
+    setProjectParsing(true)
+    try {
+      const res = await axios.post(`${API_BASE_URL}/projects/generate-questions`, {
+        project_text: pText || '',
+        resume_text: rText || '',
+        file_name: pFileName || '',
+        difficulty: currentDiff
+      })
+      const qs = res.data?.questions || []
+      if (isBulk) {
+        handleBulkConfigChange('projectQuestions', qs)
+        setBulkProjectQuestionsAdded(false)
+      } else {
+        setSingleCandidate(prev => ({
+          ...prev,
+          projectQuestions: qs,
+          projectResumeDismissed: false
+        }))
+        setSingleProjectQuestionsAdded(false)
+      }
+    } catch (err) {
+      console.error('Failed to generate project questions', err)
+      Swal.fire({
+        title: 'Generation Failed',
+        text: err.response?.data?.detail || 'Failed to generate project questions.',
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      })
+    } finally {
+      setProjectParsing(false)
+    }
+  }
+
+  const addBulkQuestion = (itemsToAdd = null) => {
+    const items = Array.isArray(itemsToAdd) ? itemsToAdd : parseMultiLineItems(newBulkQuestion)
+    if (!items || items.length === 0) return
+    handleBulkConfigChange('customQuestions', [...(bulkConfig.customQuestions || []), ...items])
     setNewBulkQuestion('')
   }
   const deleteBulkQuestion = (index) => {
     handleBulkConfigChange('customQuestions', (bulkConfig.customQuestions || []).filter((_, i) => i !== index))
   }
 
-  const addBulkInstruction = () => {
-    if (!newBulkInstruction.trim()) return
-    handleBulkConfigChange('aiInstructions', [...(bulkConfig.aiInstructions || []), newBulkInstruction.trim()])
+  const addBulkInstruction = (itemsToAdd = null) => {
+    const items = Array.isArray(itemsToAdd) ? itemsToAdd : parseMultiLineItems(newBulkInstruction)
+    if (!items || items.length === 0) return
+    handleBulkConfigChange('aiInstructions', [...(bulkConfig.aiInstructions || []), ...items])
     setNewBulkInstruction('')
   }
   const deleteBulkInstruction = (index) => {
     handleBulkConfigChange('aiInstructions', (bulkConfig.aiInstructions || []).filter((_, i) => i !== index))
+  }
+
+  const addBulkProjectQuestion = (itemsToAdd = null) => {
+    const items = Array.isArray(itemsToAdd) ? itemsToAdd : parseMultiLineItems(newBulkProjectQuestion)
+    if (!items || items.length === 0) return
+    const current = bulkConfig.projectQuestions || []
+    const newItems = items.filter(item => !current.includes(item))
+    if (newItems.length > 0) {
+      handleBulkConfigChange('projectQuestions', [...current, ...newItems])
+    }
+    setNewBulkProjectQuestion('')
+  }
+
+  const deleteBulkProjectQuestion = (index) => {
+    const current = bulkConfig.projectQuestions || []
+    const updated = current.filter((_, idx) => idx !== index)
+    handleBulkConfigChange('projectQuestions', updated)
+    if (updated.length === 0) {
+      setBulkProjectQuestionsAdded(false)
+    }
   }
 
   // Parse file content
@@ -431,7 +546,7 @@ export default function CreateInterviewPage() {
                 An existing profile was found for <strong class="text-indigo-600 font-bold">${cleanEmail}</strong>${data.candidate_name ? ` (${data.candidate_name})` : ''}.
               </p>
               <p class="text-xs text-slate-500 dark:text-slate-400 font-normal">
-                ${hasResume ? '📄 A saved resume is available on file. Would you like to automatically fill the candidate details and resume?' : 'Would you like to automatically fill the saved candidate details?'}
+                ${hasResume ? 'ðŸ“„ A saved resume is available on file. Would you like to automatically fill the candidate details and resume?' : 'Would you like to automatically fill the saved candidate details?'}
               </p>
             </div>
           `,
@@ -455,6 +570,7 @@ export default function CreateInterviewPage() {
             email: cleanEmail,
             resumeText: data.resume_text || prev.resumeText,
             resumeFileName: hasResume ? 'Existing candidate resume profile' : prev.resumeFileName,
+            projectResumeDismissed: false,
             phone: data.candidate_phone || prev.phone
           }))
 
@@ -602,16 +718,16 @@ export default function CreateInterviewPage() {
 
 Congratulations! You have been selected for an AI-powered interview. Please review the details below and click the button to begin when you're ready.
 
-📋 Role Details:
+ðŸ“‹ Role Details:
 {job_description}
 
 [Start Interview Button]
 
-⚠️ Mandatory Interview Guidelines
-• Full-Screen Only: You must remain in full-screen mode. Exiting or switching tabs is flagged as a violation.
-• Camera Active: AI-powered face tracking and multi-face detection will be active throughout the session.
-• Quiet Environment: Background noise or additional voices may negatively impact your evaluation score.
-• Screen Sharing: You must share your entire screen during the session.
+âš ï¸ Mandatory Interview Guidelines
+â€¢ Full-Screen Only: You must remain in full-screen mode. Exiting or switching tabs is flagged as a violation.
+â€¢ Camera Active: AI-powered face tracking and multi-face detection will be active throughout the session.
+â€¢ Quiet Environment: Background noise or additional voices may negatively impact your evaluation score.
+â€¢ Screen Sharing: You must share your entire screen during the session.
 
 {schedule_info}`
 
@@ -706,8 +822,31 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
         scheduled_start: toUtcIso(scheduledStart),
         scheduled_end: toUtcIso(scheduledEnd),
         hr_screening: hrScreening,
-        custom_questions: Array.isArray(customQuestions) ? customQuestions.join('\n') : customQuestions,
-        ai_instructions: Array.isArray(aiInstructions) ? aiInstructions.join('\n') : aiInstructions,
+        custom_questions: (() => {
+          let list = Array.isArray(customQuestions) ? [...customQuestions] : (customQuestions ? [customQuestions] : []);
+          if (newSingleQuestion && newSingleQuestion.trim() && !list.includes(newSingleQuestion.trim())) {
+            list.push(newSingleQuestion.trim());
+          }
+          if (singleProjectQuestionsAdded && singleCandidate.projectQuestions && singleCandidate.projectQuestions.length > 0) {
+            singleCandidate.projectQuestions.forEach(q => {
+              if (q && !list.includes(q)) list.push(q);
+            });
+          }
+          return list.join('\n');
+        })(),
+        ai_instructions: (() => {
+          let list = Array.isArray(aiInstructions) ? [...aiInstructions] : (aiInstructions ? [aiInstructions] : []);
+          if (newSingleInstruction && newSingleInstruction.trim() && !list.includes(newSingleInstruction.trim())) {
+            list.push(newSingleInstruction.trim());
+          }
+          if (singleProjectQuestionsAdded && (singleCandidate.projectText || (singleCandidate.projectQuestions && singleCandidate.projectQuestions.length > 0))) {
+            const summary = singleCandidate.projectText ? singleCandidate.projectText.slice(0, 2500) : singleCandidate.projectQuestions.slice(0, 5).join('; ');
+            list.push(`CRITICAL MANDATORY REQUIREMENT - PROJECT / CASE STUDY EVALUATION:\nYou MUST ask the candidate deep-dive questions based on the following Project / Case Study:\n${summary}\nEvaluate their architecture, technical decisions, implementation challenges, and individual contributions.`);
+          }
+          return list.join('\n');
+        })(),
+        project_questions: singleProjectQuestionsAdded ? (singleCandidate.projectQuestions || []) : [],
+        project_text: singleProjectQuestionsAdded ? (singleCandidate.projectText || '') : '',
         case_study_count: interviewType === 'Non-Technical' ? Number(caseStudyCount) : 0,
         voice_clone: voiceCloning,
         custom_voice_id: singleCandidate.customVoiceId,
@@ -781,7 +920,9 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
       setAtsScoreData(null)
       setCustomEmailHtml('')
 
-      const singleIdsToClear = ['singleResumeInput', 'singleJdInput', 'singleCustomInput', 'singleAiInstructionsInput'];
+      setSingleProjectQuestionsAdded(false);
+      setNewProjectQuestion('');
+      const singleIdsToClear = ['singleResumeInput', 'singleJdInput', 'singleCustomInput', 'singleAiInstructionsInput', 'singleProjectFileInput'];
       singleIdsToClear.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
@@ -992,8 +1133,33 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
           scheduled_start: toUtcIso(scheduledStart),
           scheduled_end: toUtcIso(scheduledEnd),
           hr_screening: hrScreening,
-          custom_questions: Array.isArray(customQuestions) ? customQuestions.join('\n') : customQuestions,
-          ai_instructions: Array.isArray(aiInstructions) ? aiInstructions.join('\n') : aiInstructions,
+          custom_questions: (() => {
+            let list = Array.isArray(customQuestions) ? [...customQuestions] : (customQuestions ? [customQuestions] : []);
+            if (newBulkQuestion && newBulkQuestion.trim() && !list.includes(newBulkQuestion.trim())) {
+              list.push(newBulkQuestion.trim());
+            }
+            if (bulkProjectQuestionsAdded && bulkConfig.projectQuestions && bulkConfig.projectQuestions.length > 0) {
+              bulkConfig.projectQuestions.forEach(q => {
+                if (q && !list.includes(q)) list.push(q);
+              });
+            }
+            return list.join('\n');
+          })(),
+          ai_instructions: (() => {
+            let list = Array.isArray(aiInstructions) ? [...aiInstructions] : (aiInstructions ? [aiInstructions] : []);
+            if (newBulkInstruction && newBulkInstruction.trim() && !list.includes(newBulkInstruction.trim())) {
+              list.push(newBulkInstruction.trim());
+            }
+            if (bulkProjectQuestionsAdded && (bulkConfig.projectText || (bulkConfig.projectQuestions && bulkConfig.projectQuestions.length > 0))) {
+              const summary = bulkConfig.projectText ? bulkConfig.projectText.slice(0, 2500) : bulkConfig.projectQuestions.slice(0, 5).join('; ');
+              list.push(`CRITICAL MANDATORY REQUIREMENT - PROJECT / CASE STUDY EVALUATION:\nYou MUST ask the candidate deep-dive questions based on the following Project / Case Study:\n${summary}\nEvaluate their architecture, technical decisions, implementation challenges, and individual contributions.`);
+            }
+            return list.join('\n');
+          })(),
+          project_questions: bulkProjectQuestionsAdded ? (bulkConfig.projectQuestions || []) : [],
+          project_text: bulkProjectQuestionsAdded ? (bulkConfig.projectText || '') : '',
+          project_difficulty: bulkConfig.projectDifficulty || 'hard',
+          project_name: bulkConfig.projectFileName || '',
           voice_clone: bulkConfig.voiceCloning,
           custom_voice_id: bulkConfig.customVoiceId || "",
           jd_file_url: bulkConfig.jdFileUrl || null
@@ -1023,8 +1189,9 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
       setBulkCandidates([])
       setCustomEmailHtml('')
       setBulkCsvLabel('Click to upload or drag and drop Excel or CSV template')
+      setBulkProjectQuestionsAdded(false)
 
-      const bulkIdsToClear = ['bulkJdInput', 'bulkCustomInput', 'bulkAiInstructionsInput', 'bulkExcelInput', 'bulkCsvInput'];
+      const bulkIdsToClear = ['bulkJdInput', 'bulkCustomInput', 'bulkAiInstructionsInput', 'bulkProjectFileInput', 'bulkExcelInput', 'bulkCsvInput'];
       bulkIdsToClear.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
@@ -1257,6 +1424,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                             email: data.email || prev.email,
                             resumeText: data.text || '',
                             resumeFileName: file.name,
+                            projectResumeDismissed: false,
                             phone: data.phone || prev.phone,
                             experience: data.experience || prev.experience,
                             location: data.location || prev.location,
@@ -1489,10 +1657,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                               })
                               setCustomQuestionsParsing(false)
                             } else {
-                              const lines = (data.text || '')
-                                .split('\n')
-                                .map(line => line.trim())
-                                .filter(Boolean);
+                              const lines = parseMultiLineItems(data.text || '');
                               handleSingleChange('customQuestions', [...(singleCandidate.customQuestions || []), ...lines])
                             }
                           }, setCustomQuestionsParsing)
@@ -1511,6 +1676,16 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                         className="flex-1 bg-slate-50 dark:bg-slate-900/50/95 border border-slate-200 dark:border-slate-700 rounded-[5px] px-4 py-2.5 text-slate-900 dark:text-white text-[0.95rem] outline-none transition-all duration-200 focus:border-primary focus:bg-white dark:bg-slate-800/60 focus:shadow-[0_0_0_3px_rgba(99,102,241,0.12)] placeholder:text-slate-400"
                         value={newSingleQuestion}
                         onChange={(e) => setNewSingleQuestion(e.target.value)}
+                        onPaste={(e) => {
+                          const pasteData = e.clipboardData.getData('text');
+                          if (pasteData && (pasteData.includes('\n') || pasteData.includes('\r'))) {
+                            e.preventDefault();
+                            const items = parseMultiLineItems(pasteData);
+                            if (items.length > 0) {
+                              addSingleQuestion(items);
+                            }
+                          }
+                        }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             e.preventDefault();
@@ -1520,7 +1695,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       />
                       <button
                         type="button"
-                        onClick={addSingleQuestion}
+                        onClick={() => addSingleQuestion()}
                         className="bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2.5 rounded-[5px] transition-colors cursor-pointer"
                         style={{ backgroundColor: '#6366f1' }}
                       >
@@ -1528,48 +1703,51 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       </button>
                     </div>
                     {singleCandidate.customQuestions && singleCandidate.customQuestions.length > 0 && (
-                      <ol className="list-decimal pl-5 flex flex-col gap-2 mt-2 max-h-60 overflow-y-auto">
+                      <div className="space-y-2 mt-2 max-h-60 overflow-y-auto">
                         {singleCandidate.customQuestions.map((q, idx) => (
-                          <li key={idx} className="text-sm text-slate-700 dark:text-slate-200 font-medium">
-                            {editingSingleQuestionIndex === idx ? (
-                              <div className="flex gap-2 items-center w-full">
-                                <input
-                                  type="text"
-                                  className="flex-1 bg-slate-50 dark:bg-slate-900/50/95 border border-slate-200 dark:border-slate-700 rounded-[5px] px-3 py-1.5 text-slate-900 dark:text-white text-sm outline-none focus:border-primary focus:bg-white dark:bg-slate-800/60"
-                                  value={editingSingleQuestionText}
-                                  onChange={(e) => setEditingSingleQuestionText(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      e.preventDefault();
-                                      if (editingSingleQuestionText.trim()) {
-                                        const updated = [...singleCandidate.customQuestions];
-                                        updated[idx] = editingSingleQuestionText.trim();
-                                        handleSingleChange('customQuestions', updated);
-                                      }
-                                      setEditingSingleQuestionIndex(null);
-                                    } else if (e.key === 'Escape') {
-                                      setEditingSingleQuestionIndex(null);
-                                    }
-                                  }}
-                                  autoFocus
-                                  onBlur={() => setEditingSingleQuestionIndex(null)}
-                                />
-                              </div>
-                            ) : (
-                              <div className="flex justify-between items-start gap-4 group" onDoubleClick={() => { setEditingSingleQuestionIndex(idx); setEditingSingleQuestionText(singleCandidate.customQuestions[idx]); }}>
-                                <span className="break-all">{q}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => deleteSingleQuestion(idx)}
-                                  className="text-rose-500 hover:text-rose-700 transition-colors p-1 cursor-pointer flex-shrink-0 bg-transparent border-none"
-                                >
-                                  <i className="fas fa-trash"></i>
-                                </button>
-                              </div>
-                            )}
-                          </li>
+                          <div key={idx} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200 font-medium">
+                            <span className="shrink-0 font-semibold text-slate-500 dark:text-slate-400 w-7 text-right">{idx + 1}.</span>
+                            <div className="flex-1">
+                             {editingSingleQuestionIndex === idx ? (
+                               <div className="flex gap-2 items-center w-full">
+                                 <input
+                                   type="text"
+                                   className="flex-1 bg-slate-50 dark:bg-slate-900/50/95 border border-slate-200 dark:border-slate-700 rounded-[5px] px-3 py-1.5 text-slate-900 dark:text-white text-sm outline-none focus:border-primary focus:bg-white dark:bg-slate-800/60"
+                                   value={editingSingleQuestionText}
+                                   onChange={(e) => setEditingSingleQuestionText(e.target.value)}
+                                   onKeyDown={(e) => {
+                                     if (e.key === 'Enter') {
+                                       e.preventDefault();
+                                       if (editingSingleQuestionText.trim()) {
+                                         const updated = [...singleCandidate.customQuestions];
+                                         updated[idx] = editingSingleQuestionText.trim();
+                                         handleSingleChange('customQuestions', updated);
+                                       }
+                                       setEditingSingleQuestionIndex(null);
+                                     } else if (e.key === 'Escape') {
+                                       setEditingSingleQuestionIndex(null);
+                                     }
+                                   }}
+                                   autoFocus
+                                   onBlur={() => setEditingSingleQuestionIndex(null)}
+                                 />
+                               </div>
+                             ) : (
+                               <div className="flex justify-between items-start gap-4 group" onDoubleClick={() => { setEditingSingleQuestionIndex(idx); setEditingSingleQuestionText(singleCandidate.customQuestions[idx]); }}>
+                                 <span className="break-all">{q}</span>
+                                 <button
+                                   type="button"
+                                   onClick={() => deleteSingleQuestion(idx)}
+                                   className="text-rose-500 hover:text-rose-700 transition-colors p-1 cursor-pointer flex-shrink-0 bg-transparent border-none"
+                                 >
+                                   <i className="fas fa-trash"></i>
+                                 </button>
+                               </div>
+                             )}
+                            </div>
+                          </div>
                         ))}
-                      </ol>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1609,10 +1787,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                               })
                               setAiInstructionsParsing(false)
                             } else {
-                              const lines = (data.text || '')
-                                .split('\n')
-                                .map(line => line.trim())
-                                .filter(Boolean);
+                              const lines = parseMultiLineItems(data.text || '');
                               handleSingleChange('aiInstructions', [...(singleCandidate.aiInstructions || []), ...lines])
                             }
                           }, setAiInstructionsParsing)
@@ -1631,6 +1806,16 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                         className="flex-1 bg-slate-50 dark:bg-slate-900/50/95 border border-slate-200 dark:border-slate-700 rounded-[5px] px-4 py-2.5 text-slate-900 dark:text-white text-[0.95rem] outline-none transition-all duration-200 focus:border-primary focus:bg-white dark:bg-slate-800/60 focus:shadow-[0_0_0_3px_rgba(99,102,241,0.12)] placeholder:text-slate-400"
                         value={newSingleInstruction}
                         onChange={(e) => setNewSingleInstruction(e.target.value)}
+                        onPaste={(e) => {
+                          const pasteData = e.clipboardData.getData('text');
+                          if (pasteData && (pasteData.includes('\n') || pasteData.includes('\r'))) {
+                            e.preventDefault();
+                            const items = parseMultiLineItems(pasteData);
+                            if (items.length > 0) {
+                              addSingleInstruction(items);
+                            }
+                          }
+                        }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             e.preventDefault();
@@ -1640,7 +1825,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       />
                       <button
                         type="button"
-                        onClick={addSingleInstruction}
+                        onClick={() => addSingleInstruction()}
                         className="bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2.5 rounded-[5px] transition-colors cursor-pointer"
                         style={{ backgroundColor: '#6366f1' }}
                       >
@@ -1648,48 +1833,289 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       </button>
                     </div>
                     {singleCandidate.aiInstructions && singleCandidate.aiInstructions.length > 0 && (
-                      <ol className="list-decimal pl-5 flex flex-col gap-2 mt-2 max-h-60 overflow-y-auto">
+                      <div className="space-y-2 mt-2 max-h-60 overflow-y-auto">
                         {singleCandidate.aiInstructions.map((inst, idx) => (
-                          <li key={idx} className="text-sm text-slate-700 dark:text-slate-200 font-medium">
-                            {editingSingleInstructionIndex === idx ? (
-                              <div className="flex gap-2 items-center w-full">
-                                <input
-                                  type="text"
-                                  className="flex-1 bg-slate-50 dark:bg-slate-900/50/95 border border-slate-200 dark:border-slate-700 rounded-[5px] px-3 py-1.5 text-slate-900 dark:text-white text-sm outline-none focus:border-primary focus:bg-white dark:bg-slate-800/60"
-                                  value={editingSingleInstructionText}
-                                  onChange={(e) => setEditingSingleInstructionText(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      e.preventDefault();
-                                      if (editingSingleInstructionText.trim()) {
-                                        const updated = [...singleCandidate.aiInstructions];
-                                        updated[idx] = editingSingleInstructionText.trim();
-                                        handleSingleChange('aiInstructions', updated);
+                          <div key={idx} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200 font-medium">
+                            <span className="shrink-0 font-semibold text-slate-500 dark:text-slate-400 w-7 text-right">{idx + 1}.</span>
+                            <div className="flex-1">
+                              {editingSingleInstructionIndex === idx ? (
+                                <div className="flex gap-2 items-center w-full">
+                                  <input
+                                    type="text"
+                                    className="flex-1 bg-slate-50 dark:bg-slate-900/50/95 border border-slate-200 dark:border-slate-700 rounded-[5px] px-3 py-1.5 text-slate-900 dark:text-white text-sm outline-none focus:border-primary focus:bg-white dark:bg-slate-800/60"
+                                    value={editingSingleInstructionText}
+                                    onChange={(e) => setEditingSingleInstructionText(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        if (editingSingleInstructionText.trim()) {
+                                          const updated = [...singleCandidate.aiInstructions];
+                                          updated[idx] = editingSingleInstructionText.trim();
+                                          handleSingleChange('aiInstructions', updated);
+                                        }
+                                        setEditingSingleInstructionIndex(null);
+                                      } else if (e.key === 'Escape') {
+                                        setEditingSingleInstructionIndex(null);
                                       }
-                                      setEditingSingleInstructionIndex(null);
-                                    } else if (e.key === 'Escape') {
-                                      setEditingSingleInstructionIndex(null);
-                                    }
-                                  }}
-                                  autoFocus
-                                  onBlur={() => setEditingSingleInstructionIndex(null)}
-                                />
-                              </div>
-                            ) : (
-                              <div className="flex justify-between items-start gap-4 group" onDoubleClick={() => { setEditingSingleInstructionIndex(idx); setEditingSingleInstructionText(singleCandidate.aiInstructions[idx]); }}>
-                                <span className="break-all">{inst}</span>
+                                    }}
+                                    autoFocus
+                                    onBlur={() => setEditingSingleInstructionIndex(null)}
+                                  />
+                                </div>
+                              ) : (
+                                <div className="flex justify-between items-start gap-4 group" onDoubleClick={() => { setEditingSingleInstructionIndex(idx); setEditingSingleInstructionText(singleCandidate.aiInstructions[idx]); }}>
+                                  <span className="break-all">{inst}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => deleteSingleInstruction(idx)}
+                                    className="text-rose-500 hover:text-rose-700 transition-colors p-1 cursor-pointer flex-shrink-0 bg-transparent border-none"
+                                  >
+                                    <i className="fas fa-trash"></i>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Project (Optional) Section */}
+                <div className="border border-slate-200 dark:border-slate-700/80 rounded-2xl overflow-hidden bg-white dark:bg-slate-800/60/82 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-slate-300">
+                  <div className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-900/50/50 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                      <i className="fas fa-project-diagram text-primary"></i> Project (Optional)
+                    </span>
+                  </div>
+                  <div className="p-5 flex flex-col gap-4 bg-white dark:bg-slate-800/60">
+                    {/* Subbar: Count + Action Buttons */}
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                        Generated {singleCandidate.projectQuestions?.length || 0} project questions
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleGenerateProjectQuestions(false)}
+                          disabled={projectParsing}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 rounded-lg cursor-pointer transition-all shadow-sm disabled:opacity-50"
+                        >
+                          <i className={`fas fa-arrows-rotate ${projectParsing ? 'fa-spin' : ''}`}></i>
+                          {singleCandidate.projectQuestions?.length > 0 ? 'Regenerate questions' : 'Generate questions'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => document.getElementById('singleProjectFileInput').click()}
+                          disabled={projectParsing}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg cursor-pointer transition-all shadow-sm"
+                        >
+                          <i className="fas fa-paperclip"></i>
+                          Upload project
+                        </button>
+                        <input
+                          type="file"
+                          id="singleProjectFileInput"
+                          accept=".pdf,.docx,.doc,.txt"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files[0];
+                            if (!file) return;
+                            handleParseFile(file, (err, data) => {
+                              if (err) {
+                                Swal.fire({ title: 'Parsing Failed', text: err, icon: 'error' });
+                                setProjectParsing(false);
+                                return;
+                              }
+                              const extractedText = data.text || '';
+                              setSingleCandidate(prev => ({
+                                ...prev,
+                                projectText: extractedText,
+                                projectFileName: file.name,
+                                projectResumeDismissed: false
+                              }));
+                              handleGenerateProjectQuestions(false, null, extractedText, file.name);
+                            }, setProjectParsing);
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {projectParsing && (
+                      <span className="text-xs text-warning font-semibold flex items-center gap-1">
+                        <i className="fas fa-spinner fa-spin"></i> Processing project data & generating questions...
+                      </span>
+                    )}
+
+                    {/* Difficulty Selection */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        <i className="fas fa-chart-simple text-indigo-500"></i>
+                        <span>Difficulty Level:</span>
+                        <span className="text-slate-400 font-normal">
+                          ({((singleCandidate.projectDifficulty || 'hard').charAt(0).toUpperCase() + (singleCandidate.projectDifficulty || 'hard').slice(1))})
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        {[
+                          { key: 'easy', label: 'Easy', icon: 'fa-seedling' },
+                          { key: 'medium', label: 'Medium', icon: 'fa-scale-balanced' },
+                          { key: 'hard', label: 'Hard', icon: 'fa-fire' }
+                        ].map(d => {
+                          const isActive = (singleCandidate.projectDifficulty || 'hard') === d.key;
+                          return (
+                            <button
+                              key={d.key}
+                              type="button"
+                              onClick={() => {
+                                setSingleCandidate(prev => ({
+                                  ...prev,
+                                  projectDifficulty: d.key,
+                                  projectResumeDismissed: false
+                                }));
+                                handleGenerateProjectQuestions(false, d.key);
+                              }}
+                              className={`inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg cursor-pointer transition-all ${
+                                isActive
+                                  ? d.key === 'hard'
+                                    ? 'bg-rose-600 text-white shadow-sm'
+                                    : d.key === 'medium'
+                                    ? 'bg-indigo-600 text-white shadow-sm'
+                                    : 'bg-emerald-600 text-white shadow-sm'
+                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                              }`}
+                            >
+                              <i className={`fas ${d.icon}`}></i>
+                              {d.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Uploaded File Banner */}
+                    {(singleCandidate.projectFileName || (singleCandidate.resumeText && !singleCandidate.projectResumeDismissed)) && (
+                      <div className="flex items-center justify-between px-3 py-2 bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50 rounded-xl text-xs text-indigo-900 dark:text-indigo-200 font-medium">
+                        <div className="flex items-center gap-2 truncate">
+                          <i className="fas fa-file-lines text-indigo-600 dark:text-indigo-400"></i>
+                          <span>Uploaded:</span>
+                          <span className="font-bold truncate">
+                            {singleCandidate.projectFileName || 'Existing candidate resume profile'}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSingleCandidate(prev => ({
+                              ...prev,
+                              projectText: '',
+                              projectFileName: '',
+                              projectQuestions: [],
+                              projectResumeDismissed: true
+                            }));
+                            setSingleProjectQuestionsAdded(false);
+                            const fileInput = document.getElementById('singleProjectFileInput');
+                            if (fileInput) fileInput.value = '';
+                          }}
+                          className="text-slate-400 hover:text-rose-500 transition-colors p-1"
+                          title="Clear uploaded project"
+                        >
+                          <i className="fas fa-xmark"></i>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Manual Question Input */}
+                    <div className="flex gap-2 items-center w-full">
+                      <input
+                        type="text"
+                        placeholder="Add a project-related question or requirement..."
+                        className="flex-1 bg-slate-50 dark:bg-slate-900/50/95 border border-slate-200 dark:border-slate-700 rounded-[5px] px-4 py-2.5 text-slate-900 dark:text-white text-[0.95rem] outline-none transition-all duration-200 focus:border-primary focus:bg-white dark:bg-slate-800/60 focus:shadow-[0_0_0_3px_rgba(99,102,241,0.12)] placeholder:text-slate-400"
+                        value={newProjectQuestion}
+                        onChange={(e) => setNewProjectQuestion(e.target.value)}
+                        onPaste={(e) => {
+                          const pasteData = e.clipboardData.getData('text');
+                          if (pasteData && (pasteData.includes('\n') || pasteData.includes('\r'))) {
+                            e.preventDefault();
+                            const items = parseMultiLineItems(pasteData);
+                            if (items.length > 0) {
+                              addSingleProjectQuestion(items);
+                            }
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            addSingleProjectQuestion();
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => addSingleProjectQuestion()}
+                        className="text-white text-xs font-bold px-4 py-2.5 rounded-[5px] transition-colors cursor-pointer"
+                        style={{ backgroundColor: '#6366f1' }}
+                      >
+                        Add
+                      </button>
+                    </div>
+
+                    {/* Generated Questions List with [ Clear all ] and [ + Add all ] */}
+                    {singleCandidate.projectQuestions && singleCandidate.projectQuestions.length > 0 && (
+                      <div className="flex flex-col gap-2 mt-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                            <i className="fas fa-list-check text-primary"></i>
+                            Generated Questions ({singleCandidate.projectQuestions.length})
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleSingleChange('projectQuestions', []);
+                                setSingleProjectQuestionsAdded(false);
+                              }}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg cursor-pointer transition-all shadow-sm"
+                            >
+                              <i className="fas fa-trash-alt text-[0.7rem]"></i> Clear all
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSingleProjectQuestionsAdded(!singleProjectQuestionsAdded);
+                              }}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold rounded-lg cursor-pointer transition-all shadow-sm ${
+                                singleProjectQuestionsAdded
+                                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-600'
+                                  : 'bg-primary hover:bg-primary/90 text-white border border-primary'
+                              }`}
+                            >
+                              <i className={`fas ${singleProjectQuestionsAdded ? 'fa-check' : 'fa-plus'}`}></i>
+                              {singleProjectQuestionsAdded ? 'Added' : 'Add all'}
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2 max-h-72 overflow-y-auto pt-2 border-t border-slate-100 dark:border-slate-800">
+                          {singleCandidate.projectQuestions.map((q, idx) => (
+                            <div key={idx} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200 font-medium">
+                              <span className="shrink-0 font-semibold text-slate-500 dark:text-slate-400 w-7 text-right leading-relaxed">{idx + 1}.</span>
+                              <div className="flex justify-between items-start gap-3 group flex-1">
+                                <span className="break-words leading-relaxed">{q}</span>
                                 <button
                                   type="button"
-                                  onClick={() => deleteSingleInstruction(idx)}
+                                  onClick={() => deleteSingleProjectQuestion(idx)}
                                   className="text-rose-500 hover:text-rose-700 transition-colors p-1 cursor-pointer flex-shrink-0 bg-transparent border-none"
+                                  title="Delete question"
                                 >
                                   <i className="fas fa-trash"></i>
                                 </button>
                               </div>
-                            )}
-                          </li>
-                        ))}
-                      </ol>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -2162,10 +2588,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                               })
                               setBulkCustomQuestionsParsing(false)
                             } else {
-                              const lines = (data.text || '')
-                                .split('\n')
-                                .map(line => line.trim())
-                                .filter(Boolean);
+                              const lines = parseMultiLineItems(data.text || '');
                               handleBulkConfigChange('customQuestions', [...(bulkConfig.customQuestions || []), ...lines])
                             }
                           }, setBulkCustomQuestionsParsing)
@@ -2184,6 +2607,16 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                         className="flex-1 bg-slate-50 dark:bg-slate-900/50/95 border border-slate-200 dark:border-slate-700 rounded-[5px] px-4 py-2.5 text-slate-900 dark:text-white text-[0.95rem] outline-none transition-all duration-200 focus:border-primary focus:bg-white dark:bg-slate-800/60 focus:shadow-[0_0_0_3px_rgba(99,102,241,0.12)] placeholder:text-slate-400"
                         value={newBulkQuestion}
                         onChange={(e) => setNewBulkQuestion(e.target.value)}
+                        onPaste={(e) => {
+                          const pasteData = e.clipboardData.getData('text');
+                          if (pasteData && (pasteData.includes('\n') || pasteData.includes('\r'))) {
+                            e.preventDefault();
+                            const items = parseMultiLineItems(pasteData);
+                            if (items.length > 0) {
+                              addBulkQuestion(items);
+                            }
+                          }
+                        }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             e.preventDefault();
@@ -2193,7 +2626,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       />
                       <button
                         type="button"
-                        onClick={addBulkQuestion}
+                        onClick={() => addBulkQuestion()}
                         className="bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2.5 rounded-[5px] transition-colors cursor-pointer"
                         style={{ backgroundColor: '#6366f1' }}
                       >
@@ -2201,48 +2634,51 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       </button>
                     </div>
                     {bulkConfig.customQuestions && bulkConfig.customQuestions.length > 0 && (
-                      <ol className="list-decimal pl-5 flex flex-col gap-2 mt-2 max-h-60 overflow-y-auto">
+                      <div className="space-y-2 mt-2 max-h-60 overflow-y-auto">
                         {bulkConfig.customQuestions.map((q, idx) => (
-                          <li key={idx} className="text-sm text-slate-700 dark:text-slate-200 font-medium">
-                            {editingBulkQuestionIndex === idx ? (
-                              <div className="flex gap-2 items-center w-full">
-                                <input
-                                  type="text"
-                                  className="flex-1 bg-slate-50 dark:bg-slate-900/50/95 border border-slate-200 dark:border-slate-700 rounded-[5px] px-3 py-1.5 text-slate-900 dark:text-white text-sm outline-none focus:border-primary focus:bg-white dark:bg-slate-800/60"
-                                  value={editingBulkQuestionText}
-                                  onChange={(e) => setEditingBulkQuestionText(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      e.preventDefault();
-                                      if (editingBulkQuestionText.trim()) {
-                                        const updated = [...bulkConfig.customQuestions];
-                                        updated[idx] = editingBulkQuestionText.trim();
-                                        handleBulkConfigChange('customQuestions', updated);
+                          <div key={idx} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200 font-medium">
+                            <span className="shrink-0 font-semibold text-slate-500 dark:text-slate-400 w-7 text-right">{idx + 1}.</span>
+                            <div className="flex-1">
+                              {editingBulkQuestionIndex === idx ? (
+                                <div className="flex gap-2 items-center w-full">
+                                  <input
+                                    type="text"
+                                    className="flex-1 bg-slate-50 dark:bg-slate-900/50/95 border border-slate-200 dark:border-slate-700 rounded-[5px] px-3 py-1.5 text-slate-900 dark:text-white text-sm outline-none focus:border-primary focus:bg-white dark:bg-slate-800/60"
+                                    value={editingBulkQuestionText}
+                                    onChange={(e) => setEditingBulkQuestionText(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        if (editingBulkQuestionText.trim()) {
+                                          const updated = [...bulkConfig.customQuestions];
+                                          updated[idx] = editingBulkQuestionText.trim();
+                                          handleBulkConfigChange('customQuestions', updated);
+                                        }
+                                        setEditingBulkQuestionIndex(null);
+                                      } else if (e.key === 'Escape') {
+                                        setEditingBulkQuestionIndex(null);
                                       }
-                                      setEditingBulkQuestionIndex(null);
-                                    } else if (e.key === 'Escape') {
-                                      setEditingBulkQuestionIndex(null);
-                                    }
-                                  }}
-                                  autoFocus
-                                  onBlur={() => setEditingBulkQuestionIndex(null)}
-                                />
-                              </div>
-                            ) : (
-                              <div className="flex justify-between items-start gap-4 group" onDoubleClick={() => { setEditingBulkQuestionIndex(idx); setEditingBulkQuestionText(bulkConfig.customQuestions[idx]); }}>
-                                <span className="break-all">{q}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => deleteBulkQuestion(idx)}
-                                  className="text-rose-500 hover:text-rose-700 transition-colors p-1 cursor-pointer flex-shrink-0 bg-transparent border-none"
-                                >
-                                  <i className="fas fa-trash"></i>
-                                </button>
-                              </div>
-                            )}
-                          </li>
+                                    }}
+                                    autoFocus
+                                    onBlur={() => setEditingBulkQuestionIndex(null)}
+                                  />
+                                </div>
+                              ) : (
+                                <div className="flex justify-between items-start gap-4 group" onDoubleClick={() => { setEditingBulkQuestionIndex(idx); setEditingBulkQuestionText(bulkConfig.customQuestions[idx]); }}>
+                                  <span className="break-all">{q}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => deleteBulkQuestion(idx)}
+                                    className="text-rose-500 hover:text-rose-700 transition-colors p-1 cursor-pointer flex-shrink-0 bg-transparent border-none"
+                                  >
+                                    <i className="fas fa-trash"></i>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         ))}
-                      </ol>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -2282,10 +2718,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                               })
                               setBulkAiInstructionsParsing(false)
                             } else {
-                              const lines = (data.text || '')
-                                .split('\n')
-                                .map(line => line.trim())
-                                .filter(Boolean);
+                              const lines = parseMultiLineItems(data.text || '');
                               handleBulkConfigChange('aiInstructions', [...(bulkConfig.aiInstructions || []), ...lines])
                             }
                           }, setBulkAiInstructionsParsing)
@@ -2304,6 +2737,16 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                         className="flex-1 bg-slate-50 dark:bg-slate-900/50/95 border border-slate-200 dark:border-slate-700 rounded-[5px] px-4 py-2.5 text-slate-900 dark:text-white text-[0.95rem] outline-none transition-all duration-200 focus:border-primary focus:bg-white dark:bg-slate-800/60 focus:shadow-[0_0_0_3px_rgba(99,102,241,0.12)] placeholder:text-slate-400"
                         value={newBulkInstruction}
                         onChange={(e) => setNewBulkInstruction(e.target.value)}
+                        onPaste={(e) => {
+                          const pasteData = e.clipboardData.getData('text');
+                          if (pasteData && (pasteData.includes('\n') || pasteData.includes('\r'))) {
+                            e.preventDefault();
+                            const items = parseMultiLineItems(pasteData);
+                            if (items.length > 0) {
+                              addBulkInstruction(items);
+                            }
+                          }
+                        }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             e.preventDefault();
@@ -2313,7 +2756,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       />
                       <button
                         type="button"
-                        onClick={addBulkInstruction}
+                        onClick={() => addBulkInstruction()}
                         className="bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2.5 rounded-[5px] transition-colors cursor-pointer"
                         style={{ backgroundColor: '#6366f1' }}
                       >
@@ -2321,48 +2764,277 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       </button>
                     </div>
                     {bulkConfig.aiInstructions && bulkConfig.aiInstructions.length > 0 && (
-                      <ol className="list-decimal pl-5 flex flex-col gap-2 mt-2 max-h-60 overflow-y-auto">
+                      <div className="space-y-2 mt-2 max-h-60 overflow-y-auto">
                         {bulkConfig.aiInstructions.map((inst, idx) => (
-                          <li key={idx} className="text-sm text-slate-700 dark:text-slate-200 font-medium">
-                            {editingBulkInstructionIndex === idx ? (
-                              <div className="flex gap-2 items-center w-full">
-                                <input
-                                  type="text"
-                                  className="flex-1 bg-slate-50 dark:bg-slate-900/50/95 border border-slate-200 dark:border-slate-700 rounded-[5px] px-3 py-1.5 text-slate-900 dark:text-white text-sm outline-none focus:border-primary focus:bg-white dark:bg-slate-800/60"
-                                  value={editingBulkInstructionText}
-                                  onChange={(e) => setEditingBulkInstructionText(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      e.preventDefault();
-                                      if (editingBulkInstructionText.trim()) {
-                                        const updated = [...bulkConfig.aiInstructions];
-                                        updated[idx] = editingBulkInstructionText.trim();
-                                        handleBulkConfigChange('aiInstructions', updated);
+                          <div key={idx} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200 font-medium">
+                            <span className="shrink-0 font-semibold text-slate-500 dark:text-slate-400 w-7 text-right">{idx + 1}.</span>
+                            <div className="flex-1">
+                              {editingBulkInstructionIndex === idx ? (
+                                <div className="flex gap-2 items-center w-full">
+                                  <input
+                                    type="text"
+                                    className="flex-1 bg-slate-50 dark:bg-slate-900/50/95 border border-slate-200 dark:border-slate-700 rounded-[5px] px-3 py-1.5 text-slate-900 dark:text-white text-sm outline-none focus:border-primary focus:bg-white dark:bg-slate-800/60"
+                                    value={editingBulkInstructionText}
+                                    onChange={(e) => setEditingBulkInstructionText(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        if (editingBulkInstructionText.trim()) {
+                                          const updated = [...bulkConfig.aiInstructions];
+                                          updated[idx] = editingBulkInstructionText.trim();
+                                          handleBulkConfigChange('aiInstructions', updated);
+                                        }
+                                        setEditingBulkInstructionIndex(null);
+                                      } else if (e.key === 'Escape') {
+                                        setEditingBulkInstructionIndex(null);
                                       }
-                                      setEditingBulkInstructionIndex(null);
-                                    } else if (e.key === 'Escape') {
-                                      setEditingBulkInstructionIndex(null);
-                                    }
-                                  }}
-                                  autoFocus
-                                  onBlur={() => setEditingBulkInstructionIndex(null)}
-                                />
-                              </div>
-                            ) : (
-                              <div className="flex justify-between items-start gap-4 group" onDoubleClick={() => { setEditingBulkInstructionIndex(idx); setEditingBulkInstructionText(bulkConfig.aiInstructions[idx]); }}>
-                                <span className="break-all">{inst}</span>
+                                    }}
+                                    autoFocus
+                                    onBlur={() => setEditingBulkInstructionIndex(null)}
+                                  />
+                                </div>
+                              ) : (
+                                <div className="flex justify-between items-start gap-4 group" onDoubleClick={() => { setEditingBulkInstructionIndex(idx); setEditingBulkInstructionText(bulkConfig.aiInstructions[idx]); }}>
+                                  <span className="break-all">{inst}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => deleteBulkInstruction(idx)}
+                                    className="text-rose-500 hover:text-rose-700 transition-colors p-1 cursor-pointer flex-shrink-0 bg-transparent border-none"
+                                  >
+                                    <i className="fas fa-trash"></i>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Project (Optional) Section (Bulk) */}
+                <div className="border border-slate-200 dark:border-slate-700/80 rounded-2xl overflow-hidden bg-white dark:bg-slate-800/60/82 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-slate-300">
+                  <div className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-900/50/50 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                      <i className="fas fa-project-diagram text-primary"></i> Project (Optional)
+                    </span>
+                  </div>
+                  <div className="p-5 flex flex-col gap-4 bg-white dark:bg-slate-800/60">
+                    {/* Subbar: Count + Action Buttons */}
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                        Generated {bulkConfig.projectQuestions?.length || 0} project questions
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleGenerateProjectQuestions(true)}
+                          disabled={projectParsing}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 rounded-lg cursor-pointer transition-all shadow-sm disabled:opacity-50"
+                        >
+                          <i className={`fas fa-arrows-rotate ${projectParsing ? 'fa-spin' : ''}`}></i>
+                          {bulkConfig.projectQuestions?.length > 0 ? 'Regenerate questions' : 'Generate questions'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => document.getElementById('bulkProjectFileInput').click()}
+                          disabled={projectParsing}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg cursor-pointer transition-all shadow-sm"
+                        >
+                          <i className="fas fa-paperclip"></i>
+                          Upload project
+                        </button>
+                        <input
+                          type="file"
+                          id="bulkProjectFileInput"
+                          accept=".pdf,.docx,.doc,.txt"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files[0];
+                            if (!file) return;
+                            handleParseFile(file, (err, data) => {
+                              if (err) {
+                                Swal.fire({ title: 'Parsing Failed', text: err, icon: 'error' });
+                                setProjectParsing(false);
+                                return;
+                              }
+                              const extractedText = data.text || '';
+                              handleBulkConfigChange('projectText', extractedText);
+                              handleBulkConfigChange('projectFileName', file.name);
+                              handleGenerateProjectQuestions(true, null, extractedText, file.name);
+                            }, setProjectParsing);
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {projectParsing && (
+                      <span className="text-xs text-warning font-semibold flex items-center gap-1">
+                        <i className="fas fa-spinner fa-spin"></i> Processing project data & generating questions...
+                      </span>
+                    )}
+
+                    {/* Difficulty Selection */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        <i className="fas fa-chart-simple text-indigo-500"></i>
+                        <span>Difficulty Level:</span>
+                        <span className="text-slate-400 font-normal">
+                          ({((bulkConfig.projectDifficulty || 'hard').charAt(0).toUpperCase() + (bulkConfig.projectDifficulty || 'hard').slice(1))})
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        {[
+                          { key: 'easy', label: 'Easy', icon: 'fa-seedling' },
+                          { key: 'medium', label: 'Medium', icon: 'fa-scale-balanced' },
+                          { key: 'hard', label: 'Hard', icon: 'fa-fire' }
+                        ].map(d => {
+                          const isActive = (bulkConfig.projectDifficulty || 'hard') === d.key;
+                          return (
+                            <button
+                              key={d.key}
+                              type="button"
+                              onClick={() => {
+                                handleBulkConfigChange('projectDifficulty', d.key);
+                                handleGenerateProjectQuestions(true, d.key);
+                              }}
+                              className={`inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg cursor-pointer transition-all ${
+                                isActive
+                                  ? d.key === 'hard'
+                                    ? 'bg-rose-600 text-white shadow-sm'
+                                    : d.key === 'medium'
+                                    ? 'bg-indigo-600 text-white shadow-sm'
+                                    : 'bg-emerald-600 text-white shadow-sm'
+                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                              }`}
+                            >
+                              <i className={`fas ${d.icon}`}></i>
+                              {d.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Uploaded File Banner */}
+                    {bulkConfig.projectFileName && (
+                      <div className="flex items-center justify-between px-3 py-2 bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50 rounded-xl text-xs text-indigo-900 dark:text-indigo-200 font-medium">
+                        <div className="flex items-center gap-2 truncate">
+                          <i className="fas fa-file-lines text-indigo-600 dark:text-indigo-400"></i>
+                          <span>Uploaded:</span>
+                          <span className="font-bold truncate">
+                            {bulkConfig.projectFileName}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleBulkConfigChange('projectText', '');
+                            handleBulkConfigChange('projectFileName', '');
+                            handleBulkConfigChange('projectQuestions', []);
+                            setBulkProjectQuestionsAdded(false);
+                            const fileInput = document.getElementById('bulkProjectFileInput');
+                            if (fileInput) fileInput.value = '';
+                          }}
+                          className="text-slate-400 hover:text-rose-500 transition-colors p-1"
+                          title="Clear uploaded project"
+                        >
+                          <i className="fas fa-xmark"></i>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Manual Question Input */}
+                    <div className="flex gap-2 items-center w-full">
+                      <input
+                        type="text"
+                        placeholder="Add a project-related question or requirement..."
+                        className="flex-1 bg-slate-50 dark:bg-slate-900/50/95 border border-slate-200 dark:border-slate-700 rounded-[5px] px-4 py-2.5 text-slate-900 dark:text-white text-[0.95rem] outline-none transition-all duration-200 focus:border-primary focus:bg-white dark:bg-slate-800/60 focus:shadow-[0_0_0_3px_rgba(99,102,241,0.12)] placeholder:text-slate-400"
+                        value={newBulkProjectQuestion}
+                        onChange={(e) => setNewBulkProjectQuestion(e.target.value)}
+                        onPaste={(e) => {
+                          const pasteData = e.clipboardData.getData('text');
+                          if (pasteData && (pasteData.includes('\n') || pasteData.includes('\r'))) {
+                            e.preventDefault();
+                            const items = parseMultiLineItems(pasteData);
+                            if (items.length > 0) {
+                              addBulkProjectQuestion(items);
+                            }
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            addBulkProjectQuestion();
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => addBulkProjectQuestion()}
+                        className="text-white text-xs font-bold px-4 py-2.5 rounded-[5px] transition-colors cursor-pointer"
+                        style={{ backgroundColor: '#6366f1' }}
+                      >
+                        Add
+                      </button>
+                    </div>
+
+                    {/* Generated Questions List with [ Clear all ] and [ + Add all ] */}
+                    {bulkConfig.projectQuestions && bulkConfig.projectQuestions.length > 0 && (
+                      <div className="flex flex-col gap-2 mt-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                            <i className="fas fa-list-check text-primary"></i>
+                            Generated Questions ({bulkConfig.projectQuestions.length})
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleBulkConfigChange('projectQuestions', []);
+                                setBulkProjectQuestionsAdded(false);
+                              }}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg cursor-pointer transition-all shadow-sm"
+                            >
+                              <i className="fas fa-trash-alt text-[0.7rem]"></i> Clear all
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setBulkProjectQuestionsAdded(!bulkProjectQuestionsAdded);
+                              }}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold rounded-lg cursor-pointer transition-all shadow-sm ${
+                                bulkProjectQuestionsAdded
+                                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-600'
+                                  : 'bg-primary hover:bg-primary/90 text-white border border-primary'
+                              }`}
+                            >
+                              <i className={`fas ${bulkProjectQuestionsAdded ? 'fa-check' : 'fa-plus'}`}></i>
+                              {bulkProjectQuestionsAdded ? 'Added' : 'Add all'}
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2 max-h-72 overflow-y-auto pt-2 border-t border-slate-100 dark:border-slate-800">
+                          {bulkConfig.projectQuestions.map((q, idx) => (
+                            <div key={idx} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200 font-medium">
+                              <span className="shrink-0 font-semibold text-slate-500 dark:text-slate-400 w-7 text-right leading-relaxed">{idx + 1}.</span>
+                              <div className="flex justify-between items-start gap-3 group flex-1">
+                                <span className="break-words leading-relaxed">{q}</span>
                                 <button
                                   type="button"
-                                  onClick={() => deleteBulkInstruction(idx)}
+                                  onClick={() => deleteBulkProjectQuestion(idx)}
                                   className="text-rose-500 hover:text-rose-700 transition-colors p-1 cursor-pointer flex-shrink-0 bg-transparent border-none"
+                                  title="Delete question"
                                 >
                                   <i className="fas fa-trash"></i>
                                 </button>
                               </div>
-                            )}
-                          </li>
-                        ))}
-                      </ol>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>
