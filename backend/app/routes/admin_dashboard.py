@@ -232,6 +232,7 @@ def update_agent_flow(req: UpdateAgentFlowRequest, omni_api_key: Optional[str] =
 
 
 @router.get("/admin/interview/{link_id}")
+@router.get("/api/admin/interview/{link_id}")
 def get_interview_details(link_id: str, current_admin: dict = Depends(get_current_admin_details)):
     if link_id.startswith("ai_call_"):
         # This is an AI Call Test Session!
@@ -1109,6 +1110,7 @@ def analyze(req: AnalyzeRequest):
     return result
 
 @router.post("/upload-full-recording")
+@router.post("/api/upload-full-recording")
 def upload_full_recording(
     interview_id: str = Form(...),
     link_id: Optional[str] = Form(None),
@@ -1401,6 +1403,7 @@ class RecordingUploadFailure(BaseModel):
 
 
 @router.post("/recording-upload-failure")
+@router.post("/api/recording-upload-failure")
 def record_recording_upload_failure(
     data: RecordingUploadFailure,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),

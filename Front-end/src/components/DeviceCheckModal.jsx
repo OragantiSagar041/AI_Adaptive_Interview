@@ -52,6 +52,12 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
 
     const setupDevices = async () => {
       try {
+        if (typeof window !== 'undefined' && !window.isSecureContext && !['localhost', '127.0.0.1'].includes(window.location.hostname)) {
+          throw new Error('Camera and microphone access requires HTTPS. Please reload this page using https://');
+        }
+        if (!navigator?.mediaDevices?.getUserMedia) {
+          throw new Error('MediaDevices API not supported in this browser. Please ensure you are using a modern browser over HTTPS.');
+        }
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: 15 },
           audio: {

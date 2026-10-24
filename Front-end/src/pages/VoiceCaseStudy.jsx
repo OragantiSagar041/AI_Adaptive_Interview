@@ -533,7 +533,7 @@ export default function VoiceCaseStudy({
     stopListening()
     stopAllSpeech()
 
-    try { await candidateFetch(`${API_BASE_URL}/complete-session/${linkId}`, { method: 'POST' }) } catch(_) {}
+    // Delegate directly to onComplete (which uploads recordings first before marking completed)
     onComplete?.()
   }, [stopListening, stopAllSpeech, onComplete, linkId])
 
@@ -670,8 +670,6 @@ export default function VoiceCaseStudy({
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-xs font-bold uppercase tracking-widest text-violet-400">Scenario {currentScenarioIdx + 1}</span>
-                    <span className="w-1 h-1 rounded-full bg-slate-600"/>
-                    <span className="text-xs text-slate-500 uppercase tracking-widest">{currentScenario.type || 'Case Study'}</span>
                   </div>
                   <p className="text-base font-semibold text-white leading-relaxed">{currentScenario.text}</p>
                 </div>

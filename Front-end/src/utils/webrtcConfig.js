@@ -48,7 +48,11 @@ let dynamicIceServers = null
 export async function initIceServers() {
   if (dynamicIceServers) return dynamicIceServers
   try {
-    const res = await fetch(`${API_BASE_URL}/api/webrtc/ice-servers`)
+    const base = (API_BASE_URL || '').replace(/\/+$/, '')
+    let res = await fetch(`${base}/webrtc/ice-servers`)
+    if (!res.ok && !base.endsWith('/api')) {
+      res = await fetch(`${base}/api/webrtc/ice-servers`)
+    }
     if (res.ok) {
       const data = await res.json()
       const serverList = Array.isArray(data) ? data : (data?.iceServers || data?.ice_servers)

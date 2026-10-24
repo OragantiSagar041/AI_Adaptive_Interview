@@ -440,10 +440,7 @@ export default function CaseStudyPage() {
               Question {currentIndex + 1} <span className="text-slate-400 font-medium text-sm">of {questions.length}</span>
             </span>
           </div>
-          <span className="rounded-full bg-white border border-slate-200/60 shadow-sm text-indigo-600 text-xs font-bold px-4 py-1.5 flex items-center gap-2">
-            <Cpu className="w-3.5 h-3.5" />
-            {currentQuestion?.skill_tested || 'Scenario Assessment'}
-          </span>
+
         </div>
 
         {/* Scenario Block */}

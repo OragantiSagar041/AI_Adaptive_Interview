@@ -1,4 +1,4 @@
- # Build stage
+# Build stage
 FROM node:20-alpine AS build
 WORKDIR /app
 COPY package*.json ./
@@ -7,13 +7,13 @@ COPY . .
 ARG VITE_API_URL=https://hireiq.co.in/api
 ENV VITE_API_URL=$VITE_API_URL
 
-
-
 RUN npm run build
 
 # Production stage
 FROM nginx:alpine
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Strip any Windows UTF-8 BOM if present and validate configuration
+RUN sed -i '1s/^\xEF\xBB\xBF//' /etc/nginx/conf.d/default.conf && nginx -t
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

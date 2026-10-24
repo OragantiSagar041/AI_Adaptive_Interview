@@ -86,11 +86,26 @@ async def init_db_indexes():
             collection.create_index(index_keys, **kwargs)
         except OperationFailure:
             try:
-                if isinstance(index_keys, str):
-                    name = f"{index_keys}_1"
-                else:
-                    name = "_".join([f"{k}_{v}" for k, v in index_keys])
-                collection.drop_index(name)
+                target_key = [(index_keys, 1)] if isinstance(index_keys, str) else index_keys
+                existing = collection.index_information()
+                name = None
+                for idx_name, idx_info in existing.items():
+                    if idx_info.get("key") == target_key:
+                        name = idx_name
+                        break
+                if not name:
+                    name = f"{index_keys}_1" if isinstance(index_keys, str) else "_".join([f"{k}_{v}" for k, v in index_keys])
+                try:
+                    collection.drop_index(name)
+                except OperationFailure as drop_err:
+
+                    if getattr(drop_err, "code", None) != 27:
+                        raise
+
+
+
+
+
                 collection.create_index(index_keys, **kwargs)
             except Exception as e:
                 print(f"Warning: Failed to fix index {index_keys} on {collection.name}: {e}")

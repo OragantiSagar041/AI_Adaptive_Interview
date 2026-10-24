@@ -234,9 +234,24 @@ def _validate_candidate_monitoring_token(token: str, link_id: str) -> Dict[str, 
     except (jwt.PyJWTError, ValueError) as exc:
         raise HTTPException(status_code=401, detail="Invalid or expired monitoring token") from exc
 
+    token_link_id = str(payload.get("link_id") or "")
+    token_interview_id = str(payload.get("interview_id") or "")
+
+    # Multi-identifier search supporting link_id (UUID), session _id (ObjectId), or interview_id
+    query_conditions = []
+    for test_id in set(filter(None, [link_id, token_link_id, token_interview_id])):
+        query_conditions.extend([{"link_id": test_id}, {"interview_id": test_id}, {"session_id": test_id}])
+        if ObjectId.is_valid(test_id):
+            query_conditions.append({"_id": ObjectId(test_id)})
+        try:
+            query_conditions.append({"_id": test_id})
+        except Exception:
+            pass
+
     session = interview_sessions_collection.find_one(
-        {"link_id": link_id},
+        {"$or": query_conditions},
         {
+            "_id": 1,
             "link_id": 1,
             "interview_id": 1,
             "company_id": 1,
@@ -250,11 +265,14 @@ def _validate_candidate_monitoring_token(token: str, link_id: str) -> Dict[str, 
     if session.get("is_deactivated") or session.get("status") in ("terminated", "cancelled", "expired"):
         raise HTTPException(status_code=403, detail="This interview session is not active")
 
-    token_interview_id = str(payload.get("interview_id") or "")
+    session_link_id = str(session.get("link_id") or "")
+    session_obj_id = str(session.get("_id") or "")
     session_interview_id = str(session.get("interview_id") or "")
-    if token_interview_id and session_interview_id and not hmac.compare_digest(token_interview_id, session_interview_id):
-        # If link_id matches, allow connection and sync interview_id
-        logger.info(f"Monitoring token interview_id transition: {token_interview_id} -> {session_interview_id}")
+
+    allowed_ids = {session_link_id, session_obj_id, session_interview_id, str(link_id)}
+    if token_link_id and not any(hmac.compare_digest(token_link_id, str(allowed)) for allowed in allowed_ids if allowed):
+        raise HTTPException(status_code=403, detail="Monitoring token does not match this session")
+
     return session
 
 
@@ -294,14 +312,26 @@ def _require_candidate_session(
     token_interview_id = str(payload.get("interview_id") or "")
     if payload.get("scope") != MONITORING_SCOPE or not token_link_id:
         raise HTTPException(status_code=401, detail="Invalid candidate session token scope")
+    # Allow match by link_id, or if link_id is session ObjectId, verify against session
+    session_match = False
     if link_id and not hmac.compare_digest(token_link_id, str(link_id)):
-        raise HTTPException(status_code=403, detail="Candidate token does not match this session")
+        query_check = [{"link_id": link_id}]
+        if ObjectId.is_valid(link_id):
+            query_check.append({"_id": ObjectId(link_id)})
+        matched_doc = interview_sessions_collection.find_one({"$or": query_check}, {"link_id": 1, "_id": 1})
+        if matched_doc and (str(matched_doc.get("link_id")) == token_link_id or str(matched_doc.get("_id")) == token_link_id):
+            session_match = True
+        else:
+            raise HTTPException(status_code=403, detail="Candidate token does not match this session")
     if interview_id and token_interview_id and not hmac.compare_digest(token_interview_id, str(interview_id)):
         # If link matches token_link_id, allow interview_id update
         pass
 
+    query_sess = [{"link_id": token_link_id}]
+    if ObjectId.is_valid(token_link_id):
+        query_sess.append({"_id": ObjectId(token_link_id)})
     session = interview_sessions_collection.find_one(
-        {"link_id": token_link_id},
+        {"$or": query_sess},
         {"link_id": 1, "interview_id": 1, "status": 1, "is_deactivated": 1},
     )
     if not session:
