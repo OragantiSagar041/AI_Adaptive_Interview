@@ -1172,6 +1172,10 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
                 else:
                     # WebRTC signaling (answer, ice candidate) - target specific admin/spectator if specified
                     target_admin = data.get("target_admin_id") or data.get("viewer_id") or data.get("spectator_id")
+                    if msg_type in ("webrtc_answer", "candidate_connected", "candidate_not_ready"):
+                        logger.info(f"[WebRTC Signaling] Candidate in session {link_id} sent {msg_type} (target: {target_admin})")
+                    elif msg_type == "webrtc_ice_candidate":
+                        logger.debug(f"[WebRTC Signaling] Candidate in session {link_id} sent ICE candidate (target: {target_admin})")
                     if target_admin:
                         await manager.send_to_specific_admin(link_id, target_admin, data)
                     else:
@@ -1181,6 +1185,10 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
                 # Ensure admin_id is tagged on outgoing offers and ICE candidates
                 if "admin_id" not in data and admin_id:
                     data["admin_id"] = admin_id
+                if msg_type in ("webrtc_offer", "admin_connected"):
+                    logger.info(f"[WebRTC Signaling] Admin {admin_id} in session {link_id} sent {msg_type}")
+                elif msg_type == "webrtc_ice_candidate":
+                    logger.debug(f"[WebRTC Signaling] Admin {admin_id} in session {link_id} sent ICE candidate")
                 # Forward all admin signaling (offer/ICE) directly to the candidate
                 await manager.send_to_candidate(link_id, data)
 
