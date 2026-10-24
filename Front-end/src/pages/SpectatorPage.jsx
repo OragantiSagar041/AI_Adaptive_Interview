@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+﻿import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { API_BASE_URL } from '../apiConfig'
 import { getIceServers, initIceServers } from '../utils/webrtcConfig'
@@ -180,7 +180,10 @@ export default function SpectatorPage() {
       pc.onconnectionstatechange = () => {
         console.log('[SpectatorWebRTC] PC state:', pc.connectionState)
         if (pc.connectionState === 'connected') {
-          if (mountedRef.current) setStatus('streaming')
+          if (mountedRef.current) {
+            setStatus('streaming')
+            updateRemoteStreamFromReceivers()
+          }
         } else if (pc.connectionState === 'failed') {
           if (mountedRef.current) {
             if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {

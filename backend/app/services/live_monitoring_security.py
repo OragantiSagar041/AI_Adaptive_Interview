@@ -36,11 +36,11 @@ def create_monitoring_token(
     )
 
 
-def decode_monitoring_token(secret: str, algorithm: str, token: str, expected_link_id: str) -> Dict[str, Any]:
+def decode_monitoring_token(secret: str, algorithm: str, token: str, expected_link_id: str = "") -> Dict[str, Any]:
     payload = jwt.decode(token, secret, algorithms=[algorithm])
     token_link_id = str(payload.get("link_id") or "")
-    if payload.get("scope") != MONITORING_SCOPE or not hmac.compare_digest(token_link_id, expected_link_id):
-        raise ValueError("Monitoring token does not match this session")
+    if payload.get("scope") != MONITORING_SCOPE or not token_link_id:
+        raise ValueError("Invalid candidate monitoring token scope")
     return payload
 
 

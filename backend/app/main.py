@@ -189,11 +189,16 @@ async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
 
 
+import re
+_API_PREFIX_RE = re.compile(r"^(?:/api)+(?=/|$)")
+
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         global _last_rate_limit_cleanup
         # Live monitor polling/heartbeats are intentionally frequent and low-risk.
-        if request.url.path in config.RATE_LIMIT_EXEMPT_PATHS or request.url.path.startswith(config.RATE_LIMIT_EXEMPT_PREFIXES):
+        norm_path = _API_PREFIX_RE.sub("", request.url.path) or "/"
+        if norm_path in config.RATE_LIMIT_EXEMPT_PATHS or norm_path.startswith(config.RATE_LIMIT_EXEMPT_PREFIXES):
             return await call_next(request)
 
         x_forwarded_for = request.headers.get("x-forwarded-for")

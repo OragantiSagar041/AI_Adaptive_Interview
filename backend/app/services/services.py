@@ -144,8 +144,30 @@ def cloudinary_cleanup_loop():
                         try:
                             if public_id not in deleted_public_ids:
                                 print(f" [Cleanup] Deleting expired recording {public_id}")
-                                cloudinary.uploader.destroy(
-                                    public_id,
+                                from app.core.cloudinary_manager import cloudinary_manager
+                                accounts = cloudinary_manager.get_all_accounts()
+                                if accounts:
+                                    for acc in accounts:
+                                        try:
+                                            cloudinary.config(
+                                                cloud_name=acc.get("cloud_name"),
+                                                api_key=acc.get("api_key"),
+                                                api_secret=acc.get("api_secret"),
+                                                secure=True,
+                                               )
+                                            res = cloudinary.uploader.destroy(
+                                                public_id,
+                                                resource_type="video",
+                                                   type="authenticated",
+                                                   invalidate=True,
+                                               )
+                                            if res.get("result") in ("ok", "not found"):
+                                                break
+                                        except Exception:
+                                            pass
+                                else:
+                                    cloudinary.uploader.destroy(
+                                        public_id,
                                     resource_type="video",
                                     type="authenticated",
                                     invalidate=True,
