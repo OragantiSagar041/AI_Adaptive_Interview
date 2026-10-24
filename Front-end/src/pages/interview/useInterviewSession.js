@@ -2453,10 +2453,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           }
 
           xhr.upload.onprogress = (e) => {
-            if (e.lengthComputable && type === 'camera') {
-              const percent = Math.floor((e.loaded / e.total) * 100)
-              console.log(`[REC_TRACE] Upload progress (${type}): ${percent}% (${e.loaded}/${e.total} bytes)`)
-              setUploadPercentage(percent)
+            if (e.lengthComputable) {
+              const base = type === 'camera' ? 10 : 50;
+              const weight = 40;
+              const percent = Math.floor(base + (e.loaded / e.total) * weight);
+              console.log(`[REC_TRACE] Upload progress (${type}): ${percent}% (${e.loaded}/${e.total} bytes)`);
+              setUploadPercentage(Math.min(92, percent));
             }
           }
 
@@ -2547,6 +2549,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       await api.post(`/save-behavioral-data`, payload)
     } catch (e) { console.error("Failed to save final behavioral data:", e) }
 
+    // Wait for the video upload to finish BEFORE completing session in DB
+    setUploadingText('Securing video recordings...')
+    await uploadPromiseChain
+
+    setUploadPercentage(95)
+    setUploadingText('Submitting responses and finalizing session...')
     try {
       const queryParams = terminationReason ? `?reason=${encodeURIComponent(terminationReason)}` : ''
       await api.post(`/complete-session/${sessionId}${queryParams}`, {
@@ -2570,9 +2578,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       })
       return
     }
-
-    // Wait for the video upload to finish before marking everything complete
-    await uploadPromiseChain
 
     setShowSkipButton(false)
     setUploadPercentage(100)
