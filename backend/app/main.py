@@ -126,7 +126,7 @@ async def lifespan(app: FastAPI):
         interview_sessions_collection.create_index([("company_id", ASCENDING), ("created_by", ASCENDING), ("created_at", DESCENDING)])
         interview_sessions_collection.create_index([("company_id", ASCENDING), ("is_deactivated", ASCENDING), ("created_at", DESCENDING)])
         interview_sessions_collection.create_index([("company_id", ASCENDING), ("created_by", ASCENDING), ("is_deactivated", ASCENDING), ("created_at", DESCENDING)])
-        interview_sessions_collection.create_index([("omni_call_id", ASCENDING)])
+        interview_sessions_collection.create_index([("omni_call_id", ASCENDING)], sparse=True)
         interview_sessions_collection.create_index([("candidate_name", ASCENDING), ("company_id", ASCENDING)])
         interview_sessions_collection.create_index([("company_id", ASCENDING), ("decision", ASCENDING), ("created_at", DESCENDING)])
         interview_sessions_collection.create_index([("company_id", ASCENDING), ("created_by", ASCENDING), ("decision", ASCENDING), ("created_at", DESCENDING)])
