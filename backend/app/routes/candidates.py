@@ -347,7 +347,7 @@ def check_candidate(email: str, current_admin: dict = Depends(get_current_admin_
             r_text = (call_doc.get("resume_text") or call_doc.get("parsed_resume") or "").strip()
             if r_text:
                 skills_extracted = extract_skills_from_resume_text(r_text)
-                     {
+                return {
                     "exists": True,
                     "resume_text": r_text,
                     "candidate_name": call_doc.get("candidate_name") or call_doc.get("name", ""),
