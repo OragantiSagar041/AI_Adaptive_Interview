@@ -1,10 +1,5 @@
-<<<<<<< HEAD
-﻿import React, { useState, useEffect, useRef } from 'react'
-import { useLocation } from 'react-router-dom'
-=======
 import React, { useState, useEffect, useRef } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
->>>>>>> c623cf7afccf138983ffeec6e8fb09ebd01240bc
+import { useLocation, useNavigate } from 'react-router-dom' 
 import { useSelector, useDispatch } from 'react-redux'
 import axios from 'axios'
 import Swal from 'sweetalert2'
@@ -759,37 +754,9 @@ export default function CreateInterviewPage() {
         })
 
         if (result.isConfirmed) {
-<<<<<<< HEAD
-          setSingleCandidate(prev => ({
-            ...prev,
-            name: data.candidate_name || prev.name,
-            email: cleanEmail,
-            resumeText: data.resume_text || prev.resumeText,
-            resumeFileName: hasResume ? 'Existing candidate resume profile' : prev.resumeFileName,
-            projectResumeDismissed: false,
-            phone: data.candidate_phone || prev.phone
-          }))
-
-          Swal.fire({
-            toast: true,
-            position: 'top-end',
-            icon: 'success',
-            title: hasResume ? 'Profile & resume autofilled!' : 'Candidate details autofilled!',
-            showConfirmButton: false,
-            timer: 2500,
-            timerProgressBar: true
-          })
-
-          const effectiveResume = data.resume_text || singleCandidate.resumeText
-          const effectiveJd = singleCandidate.jobDescription
-          if (effectiveResume && effectiveJd) {
-            handleCalculateAts(effectiveResume, effectiveJd)
-          }
-=======
           applyAutofill(data, cleanEmail)
         } else if (result.isDenied) {
           await handleViewPreviousInterviews(cleanEmail, data)
->>>>>>> c623cf7afccf138983ffeec6e8fb09ebd01240bc
         }
       } else {
         lastCheckedEmailRef.current = cleanEmail

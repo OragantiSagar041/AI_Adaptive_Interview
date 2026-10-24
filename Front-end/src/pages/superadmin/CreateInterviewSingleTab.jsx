@@ -35,15 +35,12 @@ export default function CreateInterviewSingleTab({
   hasCustomAIInstructions,
   hasIndustry,
   singleCreatedLinks = [],
-<<<<<<< HEAD
   propNewSingleQuestion,
   setPropNewSingleQuestion,
   propNewSingleInstruction,
   setPropNewSingleInstruction,
-=======
   ignoredCandidateEmail = '',
   candidateStatusInfo = null,
->>>>>>> c623cf7afccf138983ffeec6e8fb09ebd01240bc
 }) {
   const [localSingleQuestion, setLocalSingleQuestion] = useState('')
   const [localSingleInstruction, setLocalSingleInstruction] = useState('')

@@ -1150,15 +1150,12 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
               hasCustomAIInstructions={hasCustomAIInstructions}
               hasIndustry={hasIndustry}
               singleCreatedLinks={singleCreatedLinks}
-<<<<<<< HEAD
               propNewSingleQuestion={newSingleQuestion}
               setPropNewSingleQuestion={setNewSingleQuestion}
               propNewSingleInstruction={newSingleInstruction}
               setPropNewSingleInstruction={setNewSingleInstruction}
-=======
               ignoredCandidateEmail={ignoredCandidateEmail}
               candidateStatusInfo={candidateStatusInfo}
->>>>>>> c623cf7afccf138983ffeec6e8fb09ebd01240bc
             />
           )}
 

@@ -1708,7 +1708,6 @@ export const InterviewTechnical = () => {
                   <div className="text-[11px] text-slate-400 font-extrabold tracking-wider uppercase mb-4">
                     Question <span id="questionNumber" className="text-indigo-600 font-black">{displayQuestionNum}</span> of <span id="totalQuestions">{totalDisplayQuestions}</span>
                   </div>
-<<<<<<< HEAD
                   <div className="flex gap-2 justify-end mb-4">
                     <span className="px-3 py-1 rounded-full text-[10px] font-bold tracking-wide uppercase bg-indigo-50 text-indigo-600 border border-indigo-100">
                       {currentQuestion?.category || currentQuestion?.type || 'Case Analysis'}
@@ -1728,8 +1727,7 @@ export const InterviewTechnical = () => {
                       );
                     })()}
                   </div>
-=======
->>>>>>> c623cf7afccf138983ffeec6e8fb09ebd01240bc
+
                   <div className="flex gap-4 items-start">
                     <div className="w-1.5 bg-indigo-600 self-stretch rounded-full shrink-0 min-h-[60px]" />
                     <p className="flex-1 text-slate-800 text-base md:text-lg font-semibold leading-relaxed m-0">{currentQuestionText || 'Question is loading...'}</p>

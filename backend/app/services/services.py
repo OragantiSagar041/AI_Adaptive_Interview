@@ -75,11 +75,7 @@ try:
     from app.ai.typed_ai_layer import parse_resume as _typed_parse_resume
     from app.ai.typed_ai_layer import generate_summary as _typed_generate_summary
     from app.ai.typed_ai_layer import generate_followup as _typed_generate_followup
-<<<<<<< HEAD
-    from app.ai.typed_ai_layer import sanitize_spoken_interview_question
-=======
-    from app.ai.typed_ai_layer import sanitize_verbal_question_text
->>>>>>> c623cf7afccf138983ffeec6e8fb09ebd01240bc
+    from app.ai.typed_ai_layer import sanitize_spoken_interview_question, sanitize_verbal_question_text
     _TYPED_LAYER_AVAILABLE = True
 except ImportError:
     _TYPED_LAYER_AVAILABLE = False
@@ -1585,11 +1581,7 @@ def generate_jd_questions(jd_text: str, ai_instructions: str = "", interview_typ
 
     return questions
 
-<<<<<<< HEAD
-def generate_mock_questions(text: str, source: str, num_questions: int = 6, resume_text: str = None, jd_text: str = None, hr_screening: dict = None, custom_questions: str = "", ai_instructions: str = "", interview_type: str = "Technical", industry: str = "General", language: str = "English", difficulty: str = "Medium") -> List[Dict[str, str]]:
-=======
-def generate_interview_questions(text: str, source: str, num_questions: int = 6, resume_text: str = None, jd_text: str = None, hr_screening: dict = None, custom_questions: str = "", ai_instructions: str = "", interview_type: str = "Technical", industry: str = "General", language: str = "English") -> List[Dict[str, str]]:
->>>>>>> c623cf7afccf138983ffeec6e8fb09ebd01240bc
+def generate_interview_questions(text: str, source: str, num_questions: int = 6, resume_text: str = None, jd_text: str = None, hr_screening: dict = None, custom_questions: str = "", ai_instructions: str = "", interview_type: str = "Technical", industry: str = "General", language: str = "English", difficulty: str = "Medium") -> List[Dict[str, str]]:
     """
     Generate structured interview questions.
     Structure: Self-Intro → Technical Middle → HR Screening (if enabled) → Closing
@@ -5703,3 +5695,6 @@ def compute_ats_evaluation(resume_text: str, jd_text: str = "") -> Dict[str, Any
     Called by candidates.py router and administrative endpoints.
     """
     return calculate_ats_score(resume_text, jd_text)
+
+
+generate_mock_questions = generate_interview_questions

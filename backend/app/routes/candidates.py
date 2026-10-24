@@ -69,11 +69,8 @@ from app.services.candidate_auth import require_active_candidate
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 from app.data.interview_graphs import run_followup_graph
-<<<<<<< HEAD
-from app.ai.typed_ai_layer import sanitize_spoken_interview_question
-=======
+from app.ai.typed_ai_layer import sanitize_spoken_interview_question, sanitize_verbal_question_text
 from app.services.resume_nlp_extractor import extract_skills_from_resume_text
->>>>>>> c623cf7afccf138983ffeec6e8fb09ebd01240bc
 
 # Re-import shared helpers from routes_core
 from app.schemas.routes_models import *
