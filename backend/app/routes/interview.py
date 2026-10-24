@@ -48,6 +48,7 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 from app.ai.ai_client import chat_completion, extract_json, current_session_id
 from app.ai.analyze_answer import analyze_answer
 from app.data.coding_graph import generate_coding_task, observe_coding_intent, run_coding_round
+from app.ai.typed_ai_layer import sanitize_spoken_interview_question
 from app.data.industry_fallback_data import INDUSTRY_TECHNICAL_QUESTIONS, INDUSTRY_CASE_STUDIES
 from app.db.redis_manager import manager
 import app.services.transcription as transcription
@@ -143,13 +144,23 @@ def api_gen_next_question(
     try:
         # Generate the question
         language = interview.get("language", "English")
+        ai_instructions = interview.get("ai_instructions") or ""
+        if not ai_instructions:
+            try:
+                db_rec = interviews_collection.find_one({"id": req.interview_id}) or interview_sessions_collection.find_one({"interview_id": req.interview_id})
+                if db_rec and db_rec.get("ai_instructions"):
+                    ai_instructions = db_rec.get("ai_instructions")
+            except Exception:
+                pass
+
         new_question = run_followup_graph(
             req.answer_text, 
             interview.get("profile_text", ""),
-            interview.get("job_description", ""),
+            interview.get("job_description", "") or interview.get("profile_text", ""),
             req.current_question_id,
             followup_streak,
-            language
+            language,
+            ai_instructions=ai_instructions or ""
         )
         
         if followup_streak >= 3:
@@ -161,7 +172,10 @@ def api_gen_next_question(
         # If API fails, return a 503 so frontend catches it and moves to next pre-generated question
         raise HTTPException(status_code=503, detail="AI generation failed")
     
-    # Assign the inserted follow-up ID explicitly
+    # Assign the inserted follow-up ID explicitly and sanitize question text
+    if isinstance(new_question, dict):
+        if "question" in new_question and new_question["question"]:
+            new_question["question"] = sanitize_spoken_interview_question(new_question["question"])
     new_question["id"] = int(current_q["id"]) + 1
     
     # Shift IDs of subsequent questions to make room for the new follow-up

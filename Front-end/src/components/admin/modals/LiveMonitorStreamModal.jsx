@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, useCallback, memo } from 'react'
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react'
 import { API_BASE_URL } from '../../../apiConfig'
 import { getIceServers, initIceServers } from '../../../utils/webrtcConfig'
 import Modal from '../../Modal'
@@ -427,13 +427,13 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
 
       // If no video track arrives within 25 s, retry the offer automatically (or wait if candidate is initializing)
       streamTimeoutRef.current = setTimeout(() => {
-        if (mountedRef.current && statusRef.current !== 'streaming' && statusRef.current !== 'waiting_tracks') {
+        if (mountedRef.current && statusRef.current !== 'streaming') {
           console.warn('[AdminWebRTC] No stream in 25 s — retrying offer...')
           if (sendOfferRef.current && wsRef.current?.readyState === WebSocket.OPEN) {
             sendOfferRef.current(wsRef.current)
           }
         }
-      }, 25000)
+      }, 12000)
 
     } catch (err) {
       console.error('[AdminWebRTC] sendOffer error:', err)

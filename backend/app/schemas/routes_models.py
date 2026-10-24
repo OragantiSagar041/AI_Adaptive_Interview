@@ -154,6 +154,12 @@ class BulkCreateSession(BaseModel):
     ai_instructions: Union[str, List[str]] = ""
     voice_clone: bool = False
     custom_voice_id: str = ""
+    project_id: Optional[str] = None
+    project_name: Optional[str] = None
+    project_text: Optional[str] = None
+    project_questions: Optional[Union[str, List[str]]] = None
+    project_difficulty: Optional[str] = "medium"
+    difficulty: Optional[str] = "medium"
 
     @validator('scheduled_end')
     def validate_dates(cls, v, values):

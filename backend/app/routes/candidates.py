@@ -52,7 +52,7 @@ from app.data.coding_graph import generate_coding_task, observe_coding_intent, r
 from app.data.industry_fallback_data import INDUSTRY_TECHNICAL_QUESTIONS, INDUSTRY_CASE_STUDIES
 from app.db.redis_manager import manager
 import app.services.transcription as transcription
-from app.db.mongo_db import client as mongo_client, omni_call_logs_collection
+from app.db.mongo_db import projects_collection, client as mongo_client, omni_call_logs_collection
 from app.services.services import *
 from app.services.services import require_role
 from app.core.session_store import get_session, set_session, delete_session as delete_cached_session
@@ -69,7 +69,7 @@ from app.services.candidate_auth import require_active_candidate
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 from app.data.interview_graphs import run_followup_graph
-from app.services.resume_nlp_extractor import extract_skills_from_resume_text
+from app.ai.typed_ai_layer import sanitize_spoken_interview_question
 
 # Re-import shared helpers from routes_core
 from app.schemas.routes_models import *
@@ -1334,7 +1334,13 @@ def create_session(data: CreateSession, http_req: Request, current_admin: dict =
             "candidate_phone": data.candidate_phone,
             "ats_score": data.ats_score,
             "job_id": data.job_id,
-            "interview_title": data.interview_title
+            "interview_title": data.interview_title,
+            "project_id": getattr(data, "project_id", None),
+            "project_name": getattr(data, "project_name", None),
+            "project_text": getattr(data, "project_text", None),
+            "project_questions": getattr(data, "project_questions", None),
+            "project_difficulty": getattr(data, "project_difficulty", getattr(data, "difficulty", "medium")),
+            "difficulty": getattr(data, "project_difficulty", getattr(data, "difficulty", "medium"))
         }
     
         # Task 4: Store scheduled time window
@@ -1398,7 +1404,7 @@ def create_session(data: CreateSession, http_req: Request, current_admin: dict =
                 admin_id_to_charge = current_admin.get("admin_id") or current_admin.get("_id")
                 admins_collection.update_one({"_id": ObjectId(admin_id_to_charge)}, {"$inc": {"credits": 1}})
                 
-            from app.db.mongo_db import db
+            from app.db.mongo_db import projects_collection, db
             db.credit_ledger.insert_one({
                 "company_id": str(company_id) if company_id else None,
                 "super_admin_id": str(current_admin.get("admin_id") or current_admin.get("_id")),
@@ -1541,7 +1547,13 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
                 "status": "pending",
                 "hr_screening": data.hr_screening.dict(),
                 "custom_questions": custom_questions,
-                "ai_instructions": ai_instructions
+                "ai_instructions": ai_instructions,
+                "project_id": getattr(data, "project_id", None),
+                "project_name": getattr(data, "project_name", None),
+                "project_text": getattr(data, "project_text", None),
+                "project_questions": getattr(data, "project_questions", None),
+                "project_difficulty": getattr(data, "project_difficulty", getattr(data, "difficulty", "medium")),
+                "difficulty": getattr(data, "project_difficulty", getattr(data, "difficulty", "medium"))
             }
             if data.scheduled_start:
                 session_doc["scheduled_start"] = data.scheduled_start
@@ -1631,7 +1643,7 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
                 admin_id_to_charge = current_admin.get("admin_id") or current_admin.get("_id")
                 admins_collection.update_one({"_id": ObjectId(admin_id_to_charge)}, {"$inc": {"credits": failed}})
                 
-            from app.db.mongo_db import db
+            from app.db.mongo_db import projects_collection, db
             db.credit_ledger.insert_one({
                 "company_id": str(company_id) if company_id else None,
                 "super_admin_id": str(current_admin.get("admin_id") or current_admin.get("_id")),
@@ -1768,7 +1780,9 @@ def get_session_by_link(link_id: str):
             "interview_type": row.get("interview_type", "Technical"),
             "voice_clone": row.get("voice_clone", False),
             "custom_voice_id": row.get("custom_voice_id", ""),
-            "cloned_voice_id": row.get("cloned_voice_id", "")
+            "cloned_voice_id": row.get("cloned_voice_id", ""),
+            "project_difficulty": row.get("project_difficulty") or row.get("difficulty") or "Medium",
+            "difficulty": row.get("project_difficulty") or row.get("difficulty") or "Medium"
         }
     else:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -1950,6 +1964,29 @@ def reschedule_session(link_id: str, new_expiry: str = Form(...), new_start: str
         "email_scheduled": email_result.get("email_scheduled", False)
     }
 
+def check_questions_match_instructions(questions_list, instructions_text):
+    if not instructions_text or not str(instructions_text).strip():
+        return True
+    if not questions_list:
+        return False
+    
+    all_text = " ".join((q.get("question") or q.get("text") or q.get("category") or "").lower() for q in questions_list if isinstance(q, dict))
+    
+    stopwords = {"ask", "of", "the", "on", "and", "in", "to", "for", "a", "an", "questions", "question", "technical",
+                 "domain", "concepts", "scenarios", "scenario", "about", "with", "or", "from", "be", "is", "are",
+                 "strict", "please", "make", "sure", "give", "provide", "all"}
+    
+    lines = [line.strip() for line in str(instructions_text).split('\n') if line.strip()]
+    for line in lines:
+        words = re.findall(r'[a-zA-Z]{3,}', line.lower())
+        meaningful = [w for w in words if w not in stopwords and not w.isdigit()]
+        if meaningful:
+            if not any(w in all_text for w in meaningful):
+                print(f"⚠️ Instruction line not reflected in questions: '{line}' (keywords: {meaningful})")
+                return False
+    return True
+
+
 @router.post("/start-session-interview")
 @router.post("/start_session_interview")
 async def start_session_interview(link_id: str = Form(...)):
@@ -2088,6 +2125,8 @@ async def start_session_interview(link_id: str = Form(...)):
 
             # ── Find the last answered question so we can resume from there ──
             resume_question_id = None
+            answered_ids = []
+            answered_docs = []
             try:
                 answered_docs = list(answers_collection.find(
                     {"interview_id": existing_interview_id},
@@ -2110,53 +2149,93 @@ async def start_session_interview(link_id: str = Form(...)):
             except Exception as resume_err:
                 print(f" Could not determine resume question: {resume_err}")
 
-            resume_question = next(
-                (q for q in questions if int(q["id"]) == resume_question_id),
-                questions[0]
-            ) if resume_question_id else questions[0]
-            
-            # Determine if we should skip the verbal round entirely upon resume
-            all_verbal_answered = False
-            try:
-                if answered_ids and len(answered_ids) >= len(questions):
-                    all_verbal_answered = True
-            except:
-                pass
+            # If 0 answers were submitted, check if existing questions are missing project questions or custom instructions
+            proj_check = row.get("project_questions") or row.get("custom_questions")
+            if not answered_docs and proj_check:
+                proj_first = (proj_check[0] if isinstance(proj_check, list) else str(proj_check).split('\n')[0]).strip()
+                clean_pf = re.sub(r'^\[[^\]]+\]\s*', '', proj_first).strip()
+                if clean_pf and not any(clean_pf.lower() in (q.get("question") or q.get("text") or "").lower() for q in questions if isinstance(q, dict)):
+                    print("⚠️ Existing session questions were missing project questions and 0 answers submitted. Forcing fresh regeneration...")
+                    existing = None
+                    questions = None
 
-            return {
-                "status": "started",
-                "interview_id": existing_interview_id,
-                "questions": questions,
-                "first_question": resume_question,
-                "resume_question_id": resume_question_id or 1,
-                "total_questions": len(questions),
-                "candidate_name": candidate_name,
-                "interview_duration": interview_duration,
-                "interview_type": interview_type,
-                "interview_format": row.get("interview_format", "Standard"),
-                "record_video": row.get("record_video", True),
-                "language": row.get("language", "English"),
-                "voice_clone": row.get("voice_clone", False),
-                "custom_voice_id": row.get("custom_voice_id", ""),
-                "cloned_voice_id": row.get("cloned_voice_id", ""),
-                "all_verbal_answered": all_verbal_answered,
-                "started_at": row.get("started_at"),
-                "monitoring_token": _create_candidate_monitoring_token(
-                    link_id, existing_interview_id, interview_duration
-                ),
-            }
-        
-        # Fallback: regenerate if questions lost
-        return {
-            "already_started": True,
-            "session_status": status,
-            "candidate_name": candidate_name,
-            "interview_id": existing_interview_id,
-            "interview_duration": interview_duration,
-            "monitoring_token": _create_candidate_monitoring_token(
-                link_id, existing_interview_id, interview_duration
-            ),
-        }
+            inst_check = row.get("ai_instructions")
+            if not answered_docs and inst_check and str(inst_check).strip() and existing and questions:
+                if not check_questions_match_instructions(questions, inst_check):
+                    print("⚠️ Existing session questions don't match AI instructions keywords. Resetting to regenerate fresh questions...")
+                    existing = None
+                    questions = None
+
+            # If questions were invalidated due to AI instruction mismatch (0 answers submitted),
+            # reset the session status to 'pending' so we fall through to generate fresh questions.
+            if not questions and not answered_docs:
+                print("🔄 Resetting session status to pending for fresh question generation with AI instructions...")
+                interview_sessions_collection.update_one(
+                    {"link_id": link_id},
+                    {"$set": {"status": "pending"}, "$unset": {"interview_id": "", "started_at": ""}}
+                )
+                # Fall through to fresh question generation below (skip the returns in this block)
+            else:
+                if existing and questions:
+                    resume_question = next(
+                        (q for q in questions if int(q["id"]) == resume_question_id),
+                        questions[0]
+                    ) if resume_question_id else questions[0]
+                    
+                    # Determine if we should skip the verbal round entirely upon resume
+                    all_verbal_answered = False
+                    try:
+                        if answered_ids and len(answered_ids) >= len(questions):
+                            all_verbal_answered = True
+                    except:
+                        pass
+
+                if questions:
+                    session_difficulty = (row.get("project_difficulty") or row.get("difficulty") or "Medium").capitalize()
+                    for q in questions:
+                        if isinstance(q, dict):
+                            if "question" in q and isinstance(q["question"], str):
+                                q["question"] = re.sub(r'^\[[^\]]+\]\s*', '', q["question"]).strip()
+                            if "text" in q and isinstance(q["text"], str):
+                                q["text"] = re.sub(r'^\[[^\]]+\]\s*', '', q["text"]).strip()
+                            q["difficulty"] = session_difficulty
+
+                    return {
+                        "status": "started",
+                        "interview_id": existing_interview_id,
+                        "questions": questions,
+                        "first_question": resume_question,
+                        "resume_question_id": resume_question_id or 1,
+                        "total_questions": len(questions),
+                        "candidate_name": candidate_name,
+                        "interview_duration": interview_duration,
+                        "interview_type": interview_type,
+                        "interview_format": row.get("interview_format", "Standard"),
+                        "record_video": row.get("record_video", True),
+                        "language": row.get("language", "English"),
+                        "voice_clone": row.get("voice_clone", False),
+                        "custom_voice_id": row.get("custom_voice_id", ""),
+                        "cloned_voice_id": row.get("cloned_voice_id", ""),
+                        "project_difficulty": session_difficulty,
+                        "difficulty": session_difficulty,
+                        "all_verbal_answered": all_verbal_answered,
+                        "started_at": row.get("started_at"),
+                        "monitoring_token": _create_candidate_monitoring_token(
+                            link_id, existing_interview_id, interview_duration
+                        ),
+                    }
+                else:
+                    # Fallback: return already_started if questions truly lost with no instruction override
+                    return {
+                        "already_started": True,
+                        "session_status": status,
+                        "candidate_name": candidate_name,
+                        "interview_id": existing_interview_id,
+                        "interview_duration": interview_duration,
+                        "monitoring_token": _create_candidate_monitoring_token(
+                            link_id, existing_interview_id, interview_duration
+                        ),
+                    }
     
     # Always generate a full pool of questions — exactly 22 questions for the interview
     num_questions_to_generate = 22
@@ -2180,6 +2259,34 @@ async def start_session_interview(link_id: str = Form(...)):
     hr_screening = row.get("hr_screening")
     custom_questions_text = row.get("custom_questions", "")
     ai_instructions_text = row.get("ai_instructions", "")
+    
+    # ── Project / Case Study Questions Integration ──────────
+    proj_qs = row.get("project_questions")
+    if proj_qs:
+        if isinstance(proj_qs, list):
+            proj_qs_list = [str(q).strip() for q in proj_qs if str(q).strip()]
+        else:
+            proj_qs_list = [q.strip() for q in str(proj_qs).split("\n") if q.strip()]
+        
+        existing_custom = [q.strip() for q in custom_questions_text.split("\n") if q.strip()] if custom_questions_text else []
+        combined_qs = []
+        seen = set()
+        for q in existing_custom + proj_qs_list:
+            clean_q = re.sub(r'^\[[^\]]+\]\s*', '', q).strip()
+            if clean_q and clean_q.lower() not in seen:
+                seen.add(clean_q.lower())
+                combined_qs.append(clean_q)
+        custom_questions_text = "\n".join(combined_qs)
+
+    proj_text = row.get("project_text")
+    if proj_text and str(proj_text).strip():
+        proj_instruction = (
+            f"\n\nCRITICAL MANDATORY REQUIREMENT - PROJECT / CASE STUDY EVALUATION:\n"
+            f"The candidate has provided the following project details/case study:\n{str(proj_text).strip()[:3000]}\n"
+            f"You MUST ask questions evaluating their real project implementation, architectural decisions, technical choices, and individual contributions."
+        )
+        ai_instructions_text = f"{ai_instructions_text}{proj_instruction}" if ai_instructions_text else proj_instruction
+
     language = row.get("language", "English")
     industry_val = row.get("industry") or row.get("industry_type") or "General"
     
@@ -2190,16 +2297,36 @@ async def start_session_interview(link_id: str = Form(...)):
     pre_cached_questions = row.get("pre_generated_questions")
     if pre_cached_questions:
         try:
-            questions = json.loads(pre_cached_questions) if isinstance(pre_cached_questions, str) else pre_cached_questions
-            if questions:
-                print(f"⚡ Loaded {len(questions)} pre-cached questions instantly (no AI call needed)")
+            loaded_qs = json.loads(pre_cached_questions) if isinstance(pre_cached_questions, str) else pre_cached_questions
+            if loaded_qs and isinstance(loaded_qs, list):
+                # If session has project/custom questions, verify cache actually contains them
+                if custom_questions_text:
+                    custom_first = custom_questions_text.split('\n')[0].strip()
+                    clean_first = re.sub(r'^\[[^\]]+\]\s*', '', custom_first).strip()
+                    has_custom = any(clean_first.lower() in (q.get("question") or q.get("text") or "").lower() for q in loaded_qs if isinstance(q, dict))
+                    if not has_custom:
+                        print("⚠️ Pre-cached questions were missing custom/project questions. Regenerating fresh questions...")
+                        loaded_qs = None
+
+                # If session has custom AI instructions, verify cache actually reflects them
+                if loaded_qs and ai_instructions_text and str(ai_instructions_text).strip():
+                    if not check_questions_match_instructions(loaded_qs, ai_instructions_text):
+                        print("⚠️ Pre-cached questions don't match AI instructions keywords. Regenerating fresh questions...")
+                        loaded_qs = None
+
+                if loaded_qs:
+                    questions = loaded_qs
+                    print(f"⚡ Loaded {len(questions)} pre-cached questions instantly (no AI call needed)")
+                else:
+                    questions = None
             else:
-                raise ValueError("Empty questions list")
+                questions = None
         except Exception:
             questions = None
     else:
         questions = None
 
+    session_difficulty = (row.get("project_difficulty") or row.get("difficulty") or "Medium").capitalize()
     if not questions:
         print("🤖 Generating questions via AI (not pre-cached)...")
         questions = generate_interview_questions(
@@ -2213,11 +2340,22 @@ async def start_session_interview(link_id: str = Form(...)):
             ai_instructions=ai_instructions_text,
             interview_type=interview_type,
             industry=industry_val,
-            language=language
+            language=language,
+            difficulty=session_difficulty
         )
     
     if not questions:
         raise HTTPException(status_code=400, detail="Failed to generate questions")
+
+    for q in questions:
+        if isinstance(q, dict):
+            if "question" in q and isinstance(q["question"], str):
+                cleaned_text = re.sub(r'^\[[^\]]+\]\s*', '', q["question"]).strip()
+                q["question"] = sanitize_spoken_interview_question(cleaned_text)
+            if "text" in q and isinstance(q["text"], str):
+                cleaned_text = re.sub(r'^\[[^\]]+\]\s*', '', q["text"]).strip()
+                q["text"] = sanitize_spoken_interview_question(cleaned_text)
+            q["difficulty"] = session_difficulty
 
     interview_id = f"int_{int(datetime.now(timezone.utc).timestamp())}_{uuid.uuid4().hex[:8]}"
 
@@ -2227,6 +2365,7 @@ async def start_session_interview(link_id: str = Form(...)):
         "link_id": link_id,
         "source": source,
         "profile_text": content_str[:5000],
+        "job_description": job_description or "",
         "profile_analysis": profile_analysis,
         "questions": questions,
         "answers": {},
@@ -2237,7 +2376,8 @@ async def start_session_interview(link_id: str = Form(...)):
         "language": language,
         "interview_type": interview_type,
         "industry": industry_val,
-        "case_study_count": row.get("case_study_count", 3)
+        "case_study_count": row.get("case_study_count", 3),
+        "ai_instructions": ai_instructions_text or ""
     })
     
     # Store interview data (DB)
@@ -2246,10 +2386,12 @@ async def start_session_interview(link_id: str = Form(...)):
             "id": interview_id,
             "source": source,
             "profile_text": content_str[:5000],
+            "job_description": job_description or "",
             "questions": json.dumps(questions),
             "created_at": datetime.now(timezone.utc).isoformat(),
             "language": language,
-            "interview_format": row.get("interview_format", "Standard")
+            "interview_format": row.get("interview_format", "Standard"),
+            "ai_instructions": ai_instructions_text or ""
         })
         
         # Update session status AND cache questions for instant future loads
@@ -2259,7 +2401,8 @@ async def start_session_interview(link_id: str = Form(...)):
                 "status": "started", 
                 "interview_id": interview_id,
                 "started_at": datetime.now(timezone.utc).isoformat(),
-                "pre_generated_questions": json.dumps(questions)  # cache for instant reload
+                "pre_generated_questions": json.dumps(questions),  # cache for instant reload
+                "ai_instructions": ai_instructions_text or ""
             }}
         )
 
@@ -2293,6 +2436,8 @@ async def start_session_interview(link_id: str = Form(...)):
         "voice_clone": row.get("voice_clone", False),
         "custom_voice_id": row.get("custom_voice_id", ""),
         "cloned_voice_id": row.get("cloned_voice_id", ""),
+        "project_difficulty": session_difficulty,
+        "difficulty": session_difficulty,
         "started_at": datetime.now(timezone.utc).isoformat(),
         "monitoring_token": _create_candidate_monitoring_token(
             link_id, interview_id, interview_duration
@@ -2762,7 +2907,7 @@ def admin_copilot_chat(request: CopilotRequest, raw_request: Request, current_ad
             }
 
         from app.ai.ai_client import call_gemini
-        from app.db.mongo_db import db
+        from app.db.mongo_db import projects_collection, db
         from app.services.subscription_service import get_subscription_stats
         
         role = current_admin.get("role", "admin")
@@ -3551,7 +3696,7 @@ def admin_copilot_execute(request: CopilotExecuteRequest, http_req: Request, cur
                         admins_collection.update_one({"_id": ObjectId(admin_id)}, {"$inc": {"credits": 1}})
                     
                     from datetime import datetime, timezone
-                    from app.db.mongo_db import db
+                    from app.db.mongo_db import projects_collection, db
                     db.credit_ledger.insert_one({
                         "company_id": str(company_id) if company_id else None,
                         "super_admin_id": str(admin_id),
