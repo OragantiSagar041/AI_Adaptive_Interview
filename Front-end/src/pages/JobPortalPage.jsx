@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 
 import { API_BASE_URL } from "../apiConfig";
+import { formatRelativeTime } from '../utils/adminFormatters';
 import ThemeToggle from '../components/ThemeToggle';
 
 const WORK_MODE_STYLES = {
@@ -184,9 +185,14 @@ export default function JobPortalPage() {
                           )}
                         </div>
                       </div>
-                      <span className={`px-3 py-1 text-xs font-bold rounded-full border whitespace-nowrap ${modeStyle}`}>
-                        {job.workMode || 'Remote'}
-                      </span>
+                      <div className="flex flex-col items-end gap-1.5 shrink-0">
+                        <span className={`px-3 py-1 text-xs font-bold rounded-full border whitespace-nowrap ${modeStyle}`}>
+                          {job.workMode || 'Remote'}
+                        </span>
+                        <span className="text-[0.72rem] font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                          <Clock size={11} className="text-indigo-500" /> Posted {formatRelativeTime(job.created_at, job._id)}
+                        </span>
+                      </div>
                     </div>
 
                     <div className="mt-6 flex flex-wrap gap-2">

@@ -107,6 +107,7 @@ export const InterviewNonTechnical = () => {
     error,
     scheduledStart,
     isCompleted,
+    isAlreadyCompleted,
     isDisclaimerAccepted,
     agreeChecked,
     setAgreeChecked,
@@ -280,9 +281,13 @@ export const InterviewNonTechnical = () => {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
         </div>
-        <h2 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">Interview Already Completed</h2>
+        <h2 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">
+          {isAlreadyCompleted ? 'Interview Already Completed' : 'Interview Completed'}
+        </h2>
         <p className="text-slate-600 mt-2 max-w-md text-base">
-          Thank you for your time. Your interview session has already been completed and submitted successfully.
+          {isAlreadyCompleted
+            ? 'Thank you for your time. Your interview session has already been completed and submitted successfully.'
+            : 'Thank you for your time. Your interview session has been completed and submitted successfully.'}
         </p>
         <p className="text-slate-500 mt-4 text-sm">
           Please contact the recruiter or HR via email for any further updates or questions.
@@ -703,9 +708,6 @@ export const InterviewNonTechnical = () => {
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477-4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
                     </div>
                     <h2 className="text-xl font-extrabold text-slate-800 tracking-tight m-0">Case Study Round</h2>
-                    <span className="rounded-full bg-indigo-50 text-indigo-700 text-[10px] font-bold px-3 py-1 ml-2 uppercase tracking-wide border border-indigo-100">
-                      {currentQuestion?.skill_tested || 'Scenario Based Question'}
-                    </span>
                   </div>
                   <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">
                     Question <span className="text-indigo-600 font-black">{displayQuestionNum}</span> of {totalDisplayQuestions}
@@ -767,9 +769,10 @@ export const InterviewNonTechnical = () => {
               <>
                 {/* Question Card */}
                 <div className="bg-white/70 backdrop-blur-2xl border border-white rounded-[24px] p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.06)] relative overflow-hidden transition-all duration-300 hover:shadow-xl">
-                  <div className="text-[11px] text-slate-400 font-extrabold tracking-wider uppercase mb-2">
+                  <div className="text-[11px] text-slate-400 font-extrabold tracking-wider uppercase mb-4">
                     Question <span id="questionNumber" className="text-indigo-600 font-black">{displayQuestionNum}</span> of <span id="totalQuestions">{totalDisplayQuestions}</span>
                   </div>
+<<<<<<< HEAD
                   <div className="flex gap-2 justify-end mb-4">
                     <span className="px-3 py-1 rounded-full text-[10px] font-bold tracking-wide uppercase bg-indigo-50 text-indigo-600 border border-indigo-100">
                       {currentQuestion?.category || currentQuestion?.type || 'Case Analysis'}
@@ -789,6 +792,8 @@ export const InterviewNonTechnical = () => {
                       );
                     })()}
                   </div>
+=======
+>>>>>>> c623cf7afccf138983ffeec6e8fb09ebd01240bc
                   <div className="flex gap-4 items-start">
                     <div className="w-1.5 bg-indigo-600 self-stretch rounded-full shrink-0 min-h-[60px]" />
                     {currentQuestion?.type === 'case_study' ? (

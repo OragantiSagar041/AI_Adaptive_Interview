@@ -232,9 +232,10 @@ def update_agent_flow(req: UpdateAgentFlowRequest, omni_api_key: Optional[str] =
 
 
 @router.get("/admin/interview/{link_id}")
+@router.get("/api/admin/interview/{link_id}")
 def get_interview_details(link_id: str, current_admin: dict = Depends(get_current_admin_details)):
     if link_id.startswith("ai_call_"):
-        # This is an AI Call Mock Session!
+        # This is an AI Call Test Session!
         app_id = link_id.replace("ai_call_", "")
         from bson import ObjectId
         try:
@@ -321,7 +322,7 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
                     }
                 })
 
-        # Mock dimensions
+        # Test dimensions
         score = app.get("score") or 0.0
         
         # Calculate actual duration from Omni Call
@@ -337,7 +338,7 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
             
         response_payload = {
             "interview_id": link_id,
-            "actual_interview_id": "mock_ai_call",
+            "actual_interview_id": "test_ai_call",
             "candidate_id": f"CAN{str(app['_id'])[:4].upper()}",
             "candidate_name": app.get("name") or "Candidate",
             "candidate_email": app.get("email") or "",
@@ -407,6 +408,36 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
     candidate_email = session_data.get("candidate_email")
 
 
+    def find_local_recording_file(raw_path_str):
+        if not raw_path_str:
+            return None
+        raw_clean = str(raw_path_str).replace("\\", "/").strip()
+        filename = os.path.basename(raw_clean)
+        if not filename or filename == ".":
+            return None
+        
+        backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        check_dirs = [
+            os.path.join(backend_dir, "uploads", "recordings"),
+            os.path.join(backend_dir, "uploads"),
+            os.path.abspath("backend/uploads/recordings"),
+            os.path.abspath("backend/uploads"),
+            os.path.abspath("uploads/recordings"),
+            os.path.abspath("uploads"),
+        ]
+        
+        # Direct check if path is absolute or relative
+        if os.path.isfile(raw_path_str) and os.path.getsize(raw_path_str) > 0:
+            return os.path.abspath(raw_path_str)
+        if os.path.isfile(os.path.join("backend", raw_path_str)) and os.path.getsize(os.path.join("backend", raw_path_str)) > 0:
+            return os.path.abspath(os.path.join("backend", raw_path_str))
+            
+        for d in check_dirs:
+            candidate = os.path.join(d, filename)
+            if os.path.isfile(candidate) and os.path.getsize(candidate) > 0:
+                return candidate
+        return None
+
     def get_url_from_raw_path(rpath):
         if not rpath: return None
         try:
@@ -415,19 +446,18 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
                 import cloudinary
                 import cloudinary.utils
                 
-                # Parse out the public_id and any custom credentials we saved
                 parsed_uri = urlparse(rpath)
-                public_id = parsed_uri.netloc + parsed_uri.path
+                public_id = (parsed_uri.netloc + parsed_uri.path).lstrip("/")
+                if not public_id or public_id == "None":
+                    return None
+
                 query_params = parse_qs(parsed_uri.query)
                 
-                # If we saved the specific round-robin account credentials used to upload this,
-                # we must use those exact same credentials to generate the signed URL to view it.
-                cloud_name = query_params.get("cloud_name", [None])[0]
-                api_key = query_params.get("api_key", [None])[0]
-                api_secret = query_params.get("api_secret", [None])[0]
+                cloud_name = query_params.get("cloud_name", [None])[0] or os.getenv("CLOUDINARY_CLOUD_NAME")
+                api_key = query_params.get("api_key", [None])[0] or os.getenv("CLOUDINARY_API_KEY")
+                api_secret = query_params.get("api_secret", [None])[0] or os.getenv("CLOUDINARY_API_SECRET")
                 
                 if cloud_name and api_key and api_secret:
-                    # Temporarily configure Cloudinary to sign this URL with the correct account
                     cloudinary.config(
                         cloud_name=cloud_name,
                         api_key=api_key,
@@ -443,28 +473,26 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
                     sign_url=True,
                 )
                 return signed_url
-            if rpath.startswith("http"): return rpath
-            
-            raw_path_fixed = rpath.replace("\\", "/")
-            idx = raw_path_fixed.find("uploads/")
-            
-            if idx != -1: 
-                relative_path = raw_path_fixed[idx:]
-                if os.path.exists(rpath):
-                    return relative_path
-                else:
-                    # If running locally, the file might be on the production server
-                    return "https://ai-adaptive-interview-1hsw.onrender.com/" + relative_path
-                    
-            print(f"Recording file not found on disk: {rpath}")
+
+            if rpath.startswith("http://") or rpath.startswith("https://"):
+                if "onrender.com/uploads/" in rpath:
+                    fname = os.path.basename(rpath)
+                    local_match = find_local_recording_file(fname)
+                    if local_match:
+                        return f"/api/admin/recordings/stream/{fname}"
+                return rpath
+
+            local_file = find_local_recording_file(rpath)
+            if local_file:
+                fname = os.path.basename(local_file)
+                return f"/api/admin/recordings/stream/{fname}"
+
+            # If not found locally on disk, return None
             return None
         except Exception as e:
             print(f"Error generating recording URL for {rpath}: {e}")
             return None
 
-    recording_url = None
-    screen_recording_url = None
-    
     raw_path = session_data.get("recording_path")
     raw_screen_path = session_data.get("screen_recording_path")
     
@@ -475,7 +503,7 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
                 raw_path = rec_row["recording_path"]
             if not raw_screen_path and rec_row.get("screen_recording_path"):
                 raw_screen_path = rec_row["screen_recording_path"]
-                
+
     recording_url = get_url_from_raw_path(raw_path)
     screen_recording_url = get_url_from_raw_path(raw_screen_path)
 
@@ -1082,6 +1110,7 @@ def analyze(req: AnalyzeRequest):
     return result
 
 @router.post("/upload-full-recording")
+@router.post("/api/upload-full-recording")
 def upload_full_recording(
     interview_id: str = Form(...),
     link_id: Optional[str] = Form(None),
@@ -1096,6 +1125,7 @@ def upload_full_recording(
         link_id=link_id,
         interview_id=interview_id,
         allow_completed=True,
+        allow_terminated=True,
     )
     link_id = session.get("link_id")
     if recording_type not in {"camera", "screen"}:
@@ -1217,6 +1247,8 @@ def upload_full_recording(
                     )
                     
                     cloudinary_public_id = upload_result.get("public_id")
+                    if not cloudinary_public_id:
+                        raise ValueError(f"Cloudinary returned empty public_id: {upload_result}")
                     
                     # Store the account details in the DB along with the path so we know which 
                     # credentials to use when generating signed URLs later, since we have multiple keys!
@@ -1327,12 +1359,51 @@ def upload_full_recording(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/admin/recordings/stream/{filename}")
+@router.get("/api/admin/recordings/stream/{filename}")
+def stream_local_recording(filename: str):
+    """
+    Stream a local video recording from server disk with media headers.
+    Ensures recordings work reliably even if they haven't been uploaded to Cloudinary yet.
+    """
+    clean_filename = os.path.basename(filename.strip().replace("\\", "/"))
+    if not clean_filename or clean_filename != filename.strip().replace("\\", "/"):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    check_dirs = [
+        os.path.join(backend_dir, "uploads", "recordings"),
+        os.path.join(backend_dir, "uploads"),
+        os.path.abspath("backend/uploads/recordings"),
+        os.path.abspath("backend/uploads"),
+        os.path.abspath("uploads/recordings"),
+        os.path.abspath("uploads"),
+    ]
+
+    target_file = None
+    for d in check_dirs:
+        cand = os.path.join(d, clean_filename)
+        if os.path.isfile(cand) and os.path.getsize(cand) > 0:
+            target_file = cand
+            break
+
+    if not target_file:
+        raise HTTPException(status_code=404, detail="Recording file not found on server disk")
+
+    media_type = "video/webm"
+    if clean_filename.lower().endswith(".mp4"):
+        media_type = "video/mp4"
+
+    return FileResponse(target_file, media_type=media_type)
+
+
 class RecordingUploadFailure(BaseModel):
     interview_id: str
     link_id: Optional[str] = None
 
 
 @router.post("/recording-upload-failure")
+@router.post("/api/recording-upload-failure")
 def record_recording_upload_failure(
     data: RecordingUploadFailure,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
@@ -1342,6 +1413,7 @@ def record_recording_upload_failure(
         link_id=data.link_id,
         interview_id=data.interview_id,
         allow_completed=True,
+        allow_terminated=True,
     )
     interview_sessions_collection.update_one(
         {"_id": session["_id"]},

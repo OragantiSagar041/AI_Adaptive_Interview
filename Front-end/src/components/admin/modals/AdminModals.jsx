@@ -239,10 +239,17 @@ export function CandidateScorecardModal({
 
   const getVideoUrl = (url) => {
     if (!url) return null
-    if (url.startsWith('http')) return url
-    const base = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url
+    }
+    if (url.includes('recordings/') || url.startsWith('uploads/')) {
+      const fname = url.split('/').pop()
+      const apiBase = (API_BASE_URL || '').replace(/\/+$/, '')
+      return `${apiBase}/admin/recordings/stream/${fname}`
+    }
+    const cleanBase = (API_BASE_URL || '').replace(/\/api\/?$/, '').replace(/\/+$/, '')
     const path = url.startsWith('/') ? url : `/${url}`
-    return `${base}${path}`
+    return `${cleanBase}${path}`
   }
 
   return (

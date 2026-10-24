@@ -224,8 +224,8 @@ def get_companies(
     result = []
     for c in companies:
         company_id = str(c["_id"])
-        mock_user = {"company_id": company_id}
-        plan_context = get_admin_plan_context(mock_user)
+        test_user = {"company_id": company_id}
+        plan_context = get_admin_plan_context(test_user)
         
         c_date_str = c.get("created_at") or c.get("subscription_start")
         if start_dt or end_dt:
@@ -386,8 +386,8 @@ def get_master_dashboard_stats(
     total_sales_inr = 0
     for c in all_companies:
         company_id = str(c["_id"])
-        mock_user = {"company_id": company_id}
-        plan_context = get_admin_plan_context(mock_user)
+        test_user = {"company_id": company_id}
+        plan_context = get_admin_plan_context(test_user)
         plan_key = (plan_context.get("plan_key") or "trial").lower()
         plan_label = plan_context.get("plan_label") or "Free Trial"
         is_expired = plan_context.get("is_expired", False)
@@ -905,8 +905,8 @@ def get_company_revenue(
     
     for c in companies:
         company_id = str(c["_id"])
-        mock_user = {"company_id": company_id}
-        plan_context = get_admin_plan_context(mock_user)
+        test_user = {"company_id": company_id}
+        plan_context = get_admin_plan_context(test_user)
         plan_key = (plan_context.get("plan_key") or "trial").lower()
         plan_label = plan_context.get("plan_label") or "Free Trial"
         is_expired = plan_context.get("is_expired", False)

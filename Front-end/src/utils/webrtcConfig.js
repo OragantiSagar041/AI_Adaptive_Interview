@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '../apiConfig'
+import { API_BASE_URL } from '../apiConfig.js'
 
 function getMeteredIceServers(username, credential) {
   return [
@@ -48,12 +48,24 @@ let dynamicIceServers = null
 export async function initIceServers() {
   if (dynamicIceServers) return dynamicIceServers
   try {
-    const res = await fetch(`${API_BASE_URL}/api/webrtc/ice-servers`)
+    const base = (API_BASE_URL || '').replace(/\/+$/, '')
+    let res = await fetch(`${base}/webrtc/ice-servers`)
+    if (!res.ok && !base.endsWith('/api')) {
+      res = await fetch(`${base}/api/webrtc/ice-servers`)
+    }
     if (res.ok) {
       const data = await res.json()
       const serverList = Array.isArray(data) ? data : (data?.iceServers || data?.ice_servers)
       if (Array.isArray(serverList) && serverList.length > 0) {
-        dynamicIceServers = serverList
+        const hasGoogle = serverList.some(s => {
+          const u = s?.urls
+          return (typeof u === 'string' ? u.includes('google') : Array.isArray(u) && u.some(x => x.includes('google')))
+        })
+        dynamicIceServers = hasGoogle ? serverList : [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          ...serverList
+        ]
         return dynamicIceServers
       }
     }
@@ -70,7 +82,7 @@ if (typeof window !== 'undefined') {
 
 export function getIceServers() {
   if (dynamicIceServers && dynamicIceServers.length > 0) {
-    return [...dynamicIceServers, ...FREE_TURN_FALLBACK]
+    return dynamicIceServers
   }
 
   const env = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : {}

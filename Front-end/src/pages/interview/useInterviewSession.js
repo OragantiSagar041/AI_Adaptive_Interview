@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+﻿import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Swal from 'sweetalert2'
 import api from '../../utils/api'
@@ -50,6 +50,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const [error, setError] = useState(null)
   const [scheduledStart, setScheduledStart] = useState(null)
   const [isCompleted, setIsCompleted] = useState(false)
+  const [isAlreadyCompleted, setIsAlreadyCompleted] = useState(false)
   const _sessionKey = sessionId ? `interview_session_${sessionId}` : null
   const _savedSession = _sessionKey ? (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || 'null') } catch { return null } })() : null
 
@@ -113,6 +114,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const isNextingRef = useRef(false)
   const behavioralStatsRef = useRef({ wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0, noiseAlerts: 0 })
   const globalFaceAlertsRef = useRef(0)
+  const unansweredCountRef = useRef(0)          // tracks total unanswered verbal questions
+  const probabilityAlertShownRef = useRef(0)    // 0=none shown, 1=first shown, 2=second shown, 3=terminated
   const audioRmsRef = useRef(0)
   const lipSyncStreakRef = useRef(0)
   const lipSyncCooldownRef = useRef(0)
@@ -316,6 +319,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const [aiInsights, setAiInsights] = useState({ clarity: 50, technicalDepth: 50, confidence: 50 })
   const [showDeviceCheck, setShowDeviceCheck] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+   const isSavingRef = useRef(false)
   const prefetchedQuestionsRef = useRef([])  // background-fetched next batch
   const isPrefetchingRef = useRef(false)     // prevent duplicate fetches
 
@@ -451,18 +455,18 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
         if (globalTabSwitchesRef.current >= 3) {
           Swal.fire({
-            title: 'Interview Terminated',
-            text: 'Your interview has been automatically submitted because you exceeded the maximum allowed tab switches (3).',
-            icon: 'error',
+            title: 'Thank You',
+            text: 'Thank you for your time. If you are shortlisted, our HR team will get back to you regarding the next steps.',
+            icon: 'info',
             background: '#161c2d',
             color: '#fff',
-            confirmButtonColor: '#ef4444',
+            showConfirmButton: false,
+            timer: 8000,
             allowOutsideClick: false,
             allowEscapeKey: false,
             customClass: { popup: 'z-[99999]' }
-          }).then(() => {
-            handleSubmitInterview(true, "Terminated: Exceeded Tab Switches (3)")
           })
+          handleSubmitInterview(true, "Terminated: Exceeded Tab Switches (3)")
         } else {
           Swal.fire({
             icon: 'error',
@@ -735,6 +739,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       // completed screen immediately without waiting for the API round-trip.
       try {
         if (sessionStorage.getItem(`interview_done_${sessionId}`) === '1') {
+          setIsAlreadyCompleted(true)
           setIsCompleted(true)
           setLoading(false)
           return
@@ -768,6 +773,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           throw new Error(`This interview is scheduled to start on ${startTime.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'short', timeStyle: 'short' })}. Please try again at the scheduled time.`)
         }
         if (payload.session_status === 'completed') {
+          setIsAlreadyCompleted(true)
           setIsCompleted(true)
           setLoading(false)
           return
@@ -791,6 +797,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           throw new Error("This interview session is scheduled for a future time window.")
         }
         if (startPayload.session_status === 'completed') {
+          setIsAlreadyCompleted(true)
           setIsCompleted(true)
           setLoading(false)
           return
@@ -1075,7 +1082,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       rec.onstart = () => {
         isRecognitionActiveRef.current = true
         lastSpeechActivityRef.current = Date.now()
-        lastSpeechTimeRef.current = Date.now()
       }
 
       rec.onend = () => {
@@ -1116,7 +1122,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         isRecognitionActiveRef.current = true
         const now = Date.now()
         lastSpeechActivityRef.current = now
-        lastSpeechTimeRef.current = now
 
         let sessionFinal = ''
         let sessionInterim = ''
@@ -1129,13 +1134,21 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           }
         }
 
+        if (sessionFinal.trim() || sessionInterim.trim()) {
+          lastSpeechTimeRef.current = now
+          if (inactivityAlertCountRef.current > 0 && inactivityAlertCountRef.current < 3) {
+            inactivityAlertCountRef.current = 0
+            Swal.close()
+          }
+        }
+
         currentSessionFinalRef.current = sessionFinal.trim()
         interimTextRef.current = sessionInterim.trim()
         setInterimTranscriptText('')
 
         // Web Speech is display-only "ghost" text for the *current* in-progress segment.
         // Gate: ignore Web Speech hallucination if no real acoustic energy occurred
-        if (segmentPeakRmsRef.current < 0.04 && audioRmsRef.current < 0.04) {
+        if (segmentPeakRmsRef.current < 0.012 && audioRmsRef.current < 0.012) {
           return
         }
 
@@ -1240,6 +1253,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       const AudioCtx = window.AudioContext || window.webkitAudioContext
       const actx = new AudioCtx()
       noiseAudioContextRef.current = actx
+      if (actx.state === 'suspended') {
+        actx.resume().catch(e => console.log("Noise AudioContext resume failed:", e))
+      }
       const source = actx.createMediaStreamSource(stream)
       const analyser = actx.createAnalyser()
       analyser.fftSize = 256
@@ -1248,6 +1264,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
       const tick = () => {
         if (!noiseAudioContextRef.current) return
+        if (noiseAudioContextRef.current.state === 'suspended') {
+          noiseAudioContextRef.current.resume().catch(() => {})
+        }
         noiseMonitorFrameRef.current = requestAnimationFrame(tick)
         analyser.getByteTimeDomainData(dataArray)
 
@@ -1263,9 +1282,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
         const now = Date.now()
 
-        // Treat RMS > 0.03 as speech and bump the silence timer
+        // Only mark segment speech for Whisper, don't reset inactivity timer on just noise
         if (rms > 0.03) {
-          lastSpeechTimeRef.current = now
           if (isSpeechRecordingRef.current && !isTTSPlayingRef.current) {
             markSegmentHasSpeech()
             if (rms > segmentPeakRmsRef.current) segmentPeakRmsRef.current = rms
@@ -1317,15 +1335,140 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
 
 
-  const startSilenceTimer = (delayMs = 60000) => {
+  const inactivityAlertCountRef = useRef(0)
+
+  const startSilenceTimer = () => {
     if (!isRoundTwoRef.current) {
       if (silenceIntervalRef.current) clearInterval(silenceIntervalRef.current)
       lastSpeechTimeRef.current = Date.now()
       silenceIntervalRef.current = setInterval(() => {
-        // Only trigger if no speech was detected for the full delayMs duration (default 60s)
-        if (Date.now() - lastSpeechTimeRef.current >= delayMs) {
-          clearInterval(silenceIntervalRef.current)
-          if (handleNextQuestionRef.current) handleNextQuestionRef.current()
+        // Pause if AI is speaking or loading
+        if (isTTSPlayingRef.current || isSavingRef?.current) {
+          lastSpeechTimeRef.current = Date.now()
+          return
+        }
+
+        const idleTime = Date.now() - lastSpeechTimeRef.current
+        
+        // 120 seconds = 120000ms
+        if (idleTime > 120000) {
+          if (inactivityAlertCountRef.current === 0) {
+            inactivityAlertCountRef.current = 1
+            lastSpeechTimeRef.current = Date.now() // reset for next 120s
+            speakAIQuestion("Are you there? Can I continue the interview?")
+            Swal.fire({
+              title: 'Not Responding',
+              text: 'Are you there? Can I continue the interview?',
+              icon: 'warning',
+              confirmButtonText: 'Yes, continue',
+              allowOutsideClick: false,
+              background: '#0f172a',
+              color: '#fff',
+              customClass: {
+                popup: 'border border-white/10 rounded-2xl shadow-2xl',
+                title: 'text-xl font-bold text-white',
+                confirmButton: 'bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg px-5 py-2.5 font-medium transition-colors cursor-pointer border-none outline-none'
+              }
+            }).then((res) => {
+              if (res.isConfirmed) {
+                lastSpeechTimeRef.current = Date.now()
+                // DO NOT reset count here. Sequence only resets if they actually speak.
+                stopAudio()
+              }
+            })
+          } else if (inactivityAlertCountRef.current === 1) {
+            inactivityAlertCountRef.current = 2
+            lastSpeechTimeRef.current = Date.now() // reset for final 120s
+            speakAIQuestion("Still not responding. Please answer or the interview will be terminated.")
+            Swal.fire({
+              title: 'Still Not Responding',
+              text: 'Please respond or the interview will be terminated.',
+              icon: 'warning',
+              confirmButtonText: 'Yes, continue',
+              allowOutsideClick: false,
+              background: '#0f172a',
+              color: '#fff',
+              customClass: {
+                popup: 'border border-white/10 rounded-2xl shadow-2xl',
+                title: 'text-xl font-bold text-white',
+                confirmButton: 'bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg px-5 py-2.5 font-medium transition-colors cursor-pointer border-none outline-none'
+              }
+            }).then((res) => {
+              if (res.isConfirmed) {
+                lastSpeechTimeRef.current = Date.now()
+                // DO NOT reset count here. Sequence only resets if they actually speak.
+                stopAudio()
+              }
+            })
+          } else if (inactivityAlertCountRef.current === 2) {
+            inactivityAlertCountRef.current = 3
+            if (silenceIntervalRef.current) clearInterval(silenceIntervalRef.current)
+            speakAIQuestion("No response detected. Terminating interview.")
+
+            Swal.fire({
+              title: 'Interview Terminated',
+              html: `
+                <div style="display:flex; flex-direction:column; align-items:center; gap:16px; margin-top:8px;">
+                  <p style="color:#94a3b8; font-size:14px; margin:0; line-height:1.5; text-align:center;">
+                    No response detected after multiple warnings.<br/>
+                    <span style="color:#f87171; font-weight:600;">The interview is terminating.</span>
+                  </p>
+                  <div style="display:flex; align-items:center; justify-content:center; gap:16px; margin:12px 0; min-height:56px;">
+                    <div id="term-chip-1" style="width:52px; height:52px; border-radius:50%; background:#ef4444; color:#ffffff; display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:800; box-shadow:0 0 24px rgba(239,68,68,0.7); transform:scale(1.15); transition:all 0.35s ease-out; opacity:1;">1</div>
+                    <div id="term-chip-2" style="width:52px; height:52px; border-radius:50%; background:#ef4444; color:#ffffff; display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:800; box-shadow:0 0 24px rgba(239,68,68,0.7); transform:scale(0.5); transition:all 0.35s ease-out; opacity:0;">2</div>
+                    <div id="term-chip-3" style="width:52px; height:52px; border-radius:50%; background:#ef4444; color:#ffffff; display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:800; box-shadow:0 0 24px rgba(239,68,68,0.7); transform:scale(0.5); transition:all 0.35s ease-out; opacity:0;">3</div>
+                  </div>
+                  <div style="font-size:14px; color:#cbd5e1; font-weight:600; letter-spacing:0.02em;">
+                    Terminating in: <span id="term-sequence-text" style="color:#f87171; font-weight:800; font-size:18px;">1</span>
+                  </div>
+                </div>
+              `,
+              icon: 'error',
+              background: '#0f172a',
+              color: '#fff',
+              allowOutsideClick: false,
+              allowEscapeKey: false,
+              showConfirmButton: false,
+              customClass: {
+                popup: 'border border-white/10 rounded-2xl shadow-2xl',
+                title: 'text-xl font-bold text-white'
+              },
+              didOpen: (popup) => {
+                let step = 1
+                const chip1 = popup.querySelector('#term-chip-1')
+                const chip2 = popup.querySelector('#term-chip-2')
+                const chip3 = popup.querySelector('#term-chip-3')
+                const seqText = popup.querySelector('#term-sequence-text')
+
+                const intervalId = setInterval(() => {
+                  step += 1
+                  if (step === 2) {
+                    if (chip1) chip1.style.transform = 'scale(1)'
+                    if (chip2) {
+                      chip2.style.opacity = '1'
+                      chip2.style.transform = 'scale(1.15)'
+                    }
+                    if (seqText) seqText.innerText = '1, 2'
+                  } else if (step === 3) {
+                    if (chip2) chip2.style.transform = 'scale(1)'
+                    if (chip3) {
+                      chip3.style.opacity = '1'
+                      chip3.style.transform = 'scale(1.15)'
+                    }
+                    if (seqText) seqText.innerText = '1, 2, 3'
+                  }
+                }, 1000)
+
+                setTimeout(() => {
+                  clearInterval(intervalId)
+                  Swal.close()
+                  if (handleSubmitInterviewRef.current) {
+                    handleSubmitInterviewRef.current(true, 'Terminated: Lack of response from candidate (3 alerts)')
+                  }
+                }, 3000)
+              }
+            })
+          }
         }
       }, 1000)
     }
@@ -1335,6 +1478,151 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     if (silenceIntervalRef.current) clearInterval(silenceIntervalRef.current)
     if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current)
   }
+  // ── Low Response Probability Check ──────────────────────────────────────────
+  // Fires warnings at 40% and 50% unanswered, terminates at 60%.
+  // Only applies to the verbal round (round 1). Coding questions are excluded.
+  const checkLowResponseProbability = () => {
+    const total = questions.length
+    if (total < 1 || isRoundTwoRef.current) return
+
+    const unanswered = unansweredCountRef.current
+    const ratio = unanswered / total
+
+    const WARN1_THRESHOLD = 0.40
+    const WARN2_THRESHOLD = 0.50
+    const TERM_THRESHOLD  = 0.60
+
+    // ── TERMINATION at 60% ───────────────────────────────────────────────────
+    if (ratio >= TERM_THRESHOLD && probabilityAlertShownRef.current < 3) {
+      probabilityAlertShownRef.current = 3
+      Swal.fire({
+        title: 'Interview Terminated',
+        html: `
+          <div style="display:flex; flex-direction:column; align-items:center; gap:10px; margin-top:4px;">
+            <p style="color:#94a3b8; font-size:14px; margin:0; line-height:1.5; text-align:center;">
+              You have not responded to <strong style="color:#f87171">${unanswered} out of ${total}</strong> questions.<br/>
+              <span style="color:#f87171; font-weight:600;">The interview is terminating.</span>
+            </p>
+            <div id="prob-countdown-number" style="
+              font-size:120px;
+              font-weight:900;
+              color:#ef4444;
+              line-height:1;
+              text-shadow: 0 0 40px rgba(239,68,68,0.8), 0 0 80px rgba(239,68,68,0.4);
+              transition: transform 0.15s ease-out, opacity 0.15s ease-out;
+              transform: scale(1);
+              opacity: 1;
+              font-variant-numeric: tabular-nums;
+              min-width: 140px;
+              text-align: center;
+            ">5</div>
+            <p style="font-size:13px; color:#64748b; margin:0; letter-spacing:0.04em;">seconds remaining</p>
+          </div>
+        `,
+        icon: 'error',
+        background: '#0f172a',
+        color: '#fff',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showConfirmButton: false,
+        customClass: {
+          popup: 'border border-white/10 rounded-2xl shadow-2xl',
+          title: 'text-xl font-bold text-white'
+        },
+        didOpen: (popup) => {
+          const numEl = popup.querySelector('#prob-countdown-number')
+          let countdown = 5
+
+          const tick = () => {
+            countdown -= 1
+            if (numEl) {
+              // Pop-out flash animation on each tick
+              numEl.style.transform = 'scale(1.35)'
+              numEl.style.opacity = '0.3'
+              setTimeout(() => {
+                if (numEl) {
+                  numEl.innerText = countdown > 0 ? String(countdown) : '0'
+                  numEl.style.transform = 'scale(1)'
+                  numEl.style.opacity = '1'
+                }
+              }, 150)
+            }
+          }
+
+          const intervalId = setInterval(tick, 1000)
+
+          setTimeout(() => {
+            clearInterval(intervalId)
+            Swal.close()
+            if (handleSubmitInterviewRef.current) {
+              handleSubmitInterviewRef.current(
+                true,
+                `Terminated: Low Response Rate — ${unanswered}/${total} questions unanswered (${Math.round(ratio * 100)}%)`
+              )
+            }
+          }, 5000)
+        }
+      })
+      return
+    }
+
+    // ── WARNING 2 at 50% ─────────────────────────────────────────────────────
+    if (ratio >= WARN2_THRESHOLD && probabilityAlertShownRef.current < 2) {
+      probabilityAlertShownRef.current = 2
+      Swal.fire({
+        title: '⚠️ Low Response',
+        html: `
+          <p style="color:#fbbf24; font-size:14px; line-height:1.6; text-align:center; margin:0;">
+            You are losing your qualifying probability.<br/>
+            <strong style="color:#f87171">${unanswered} of ${total} questions</strong> remain unanswered.<br/>
+            <span style="font-size:13px; color:#94a3b8;">Please respond to avoid interview termination.</span>
+          </p>
+        `,
+        icon: 'warning',
+        background: '#0f172a',
+        color: '#fff',
+        confirmButtonText: 'I will respond',
+        allowOutsideClick: false,
+        customClass: {
+          popup: 'border border-yellow-500/30 rounded-2xl shadow-2xl',
+          title: 'text-xl font-bold text-white',
+          confirmButton: 'bg-blue-600 hover:bg-blue-700 text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none'
+        },
+        buttonsStyling: false
+      })
+      return
+    }
+
+    // ── WARNING 1 at 40% ─────────────────────────────────────────────────────
+    if (ratio >= WARN1_THRESHOLD && probabilityAlertShownRef.current < 1) {
+      probabilityAlertShownRef.current = 1
+      Swal.fire({
+        title: '⚠️ Low Response',
+        html: `
+          <p style="color:#fbbf24; font-size:14px; line-height:1.6; text-align:center; margin:0;">
+            You are losing your qualifying probability.<br/>
+            <strong style="color:#f87171">${unanswered} of ${total} questions</strong> remain unanswered.<br/>
+            <span style="font-size:13px; color:#94a3b8;">Please respond to avoid interview termination.</span>
+          </p>
+        `,
+        icon: 'warning',
+        background: '#0f172a',
+        color: '#fff',
+        confirmButtonText: 'I will respond',
+        allowOutsideClick: false,
+        customClass: {
+          popup: 'border border-yellow-500/30 rounded-2xl shadow-2xl',
+          title: 'text-xl font-bold text-white',
+          confirmButton: 'bg-blue-600 hover:bg-blue-700 text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none'
+        },
+        buttonsStyling: false
+      })
+    }
+  }
+  // ────────────────────────────────────────────────────────────────────────────
+
+
+
 
   const stopAudio = useCallback(() => {
     speakRequestIdRef.current = Date.now() + Math.random()
@@ -1825,6 +2113,19 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         if (flushed) safeTranscript = flushed
       }
 
+      // ── Low Response Rate Tracking ────────────────────────────────────────
+      // Count this question as unanswered if the candidate gave no response
+      const isVerbalUnanswered = (
+        currentQuestion.type !== 'coding' &&
+        currentQuestion.type !== 'case_study' &&
+        (!safeTranscript || safeTranscript.trim() === '' || safeTranscript.trim() === 'No answer provided')
+      )
+      if (isVerbalUnanswered) {
+        unansweredCountRef.current += 1
+        checkLowResponseProbability()
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
       const timeSpent = Math.round((Date.now() - (questionStartTimeRef.current || Date.now())) / 1000)
       const words = safeTranscript ? safeTranscript.split(/\s+/).filter(w => w.length > 0).length : 0
       const wpm = timeSpent > 0 ? Math.round((words / timeSpent) * 60) : 0
@@ -2036,6 +2337,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     if (isSubmittingRef.current) return  // Prevent double-submit
     isSubmittingRef.current = true
     setIsSaving(true)
+    isSavingRef.current = true
     stopAudio()
 
     // ── Immediately mark as completed so the interview UI hides right away ──
@@ -2150,7 +2452,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           formData.append('link_id', sessionId || '')
 
           const xhr = new XMLHttpRequest()
-          const uploadBase = (api.defaults.baseURL || '').replace(/\/api\/?$/, '')
+          const uploadBase = (api.defaults.baseURL || '').replace(/\/+$/, '')
           const uploadUrl = `${uploadBase}/upload-full-recording`
           console.log(`[REC_TRACE] Initiating XHR POST ${uploadUrl} for ${type} (interview_id: ${iid}, link_id: ${sessionId})`)
           xhr.open('POST', uploadUrl, true)
@@ -2163,10 +2465,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           }
 
           xhr.upload.onprogress = (e) => {
-            if (e.lengthComputable && type === 'camera') {
-              const percent = Math.floor((e.loaded / e.total) * 100)
-              console.log(`[REC_TRACE] Upload progress (${type}): ${percent}% (${e.loaded}/${e.total} bytes)`)
-              setUploadPercentage(percent)
+            if (e.lengthComputable) {
+              const base = type === 'camera' ? 10 : 50;
+              const weight = 40;
+              const percent = Math.floor(base + (e.loaded / e.total) * weight);
+              console.log(`[REC_TRACE] Upload progress (${type}): ${percent}% (${e.loaded}/${e.total} bytes)`);
+              setUploadPercentage(Math.min(92, percent));
             }
           }
 
@@ -2257,6 +2561,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       await api.post(`/save-behavioral-data`, payload)
     } catch (e) { console.error("Failed to save final behavioral data:", e) }
 
+    // Wait for the video upload to finish BEFORE completing session in DB
+    setUploadingText('Securing video recordings...')
+    await uploadPromiseChain
+
+    setUploadPercentage(95)
+    setUploadingText('Submitting responses and finalizing session...')
     try {
       const queryParams = terminationReason ? `?reason=${encodeURIComponent(terminationReason)}` : ''
       await api.post(`/complete-session/${sessionId}${queryParams}`, {
@@ -2281,9 +2591,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       return
     }
 
-    // Wait for the video upload to finish before marking everything complete
-    await uploadPromiseChain
-
     setShowSkipButton(false)
     setUploadPercentage(100)
     setUploadingText("")
@@ -2293,6 +2600,14 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       }
       setShowAllSet(true)
       setIsSaving(false)  // Upload complete, allow tab close
+      isSavingRef.current = false
+      
+      speakAIQuestion("Thank you for your time. If you are shortlisted, our HR team will get back to you regarding the next steps.")
+      
+      setTimeout(() => {
+        window.close()
+        window.location.href = '/' // Fallback if close is blocked
+      }, 8000)
     }, 1500)
   }
   handleSubmitInterviewRef.current = handleSubmitInterview
@@ -2458,6 +2773,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     isSpeechRecordingRef,
     interimTranscriptText,
     isCompleted,
+    isAlreadyCompleted,
     scheduledStart,
     isOnline
   }

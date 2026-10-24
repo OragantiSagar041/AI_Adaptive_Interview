@@ -453,7 +453,7 @@ export default function SuperAdminLayout() {
       const orderData = orderRes.data;
       const storedUser = (() => {
         try {
-          return JSON.parse(sessionStorage.getItem('adminUser')) || {};
+          return JSON.parse(localStorage.getItem('adminUser')) || {};
         } catch {
           return {};
         }

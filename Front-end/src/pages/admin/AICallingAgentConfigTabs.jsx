@@ -398,7 +398,7 @@ function CallConfigTab({ config, loading, omniApiKey, onRefresh }) {
     setSaveError('')
     try {
 
-      const token = sessionStorage.getItem('token') || localStorage.getItem('token')
+      const token = localStorage.getItem('token') || localStorage.getItem('token')
       const configuredOmniApiKey = omniApiKey || sessionStorage.getItem('omniDimensionApiKey') || ''
       const res = await fetch(`${API_BASE_URL}/api/calls/call-config`, {
         method: 'POST',
@@ -855,7 +855,7 @@ function IntegrationsTab({ integrations, loading, onRefresh }) {
     setDetaching(integrationId)
     try {
 
-      const token = sessionStorage.getItem('token') || localStorage.getItem('token')
+      const token = localStorage.getItem('token') || localStorage.getItem('token')
       const omniApiKey = sessionStorage.getItem('omniDimensionApiKey') || ''
       const r = await fetch(`${API_BASE_URL}/api/calls/integrations/detach`, {
         method: 'POST',
@@ -1101,7 +1101,7 @@ function PostCallTab({ configs, loading, onRefresh }) {
     setSaveSuccess('')
     setSaveError('')
     try {
-      const token = sessionStorage.getItem('token')
+      const token = localStorage.getItem('token')
       const payload = {
         delivery_method: deliveryMethod,
         destination: destination,

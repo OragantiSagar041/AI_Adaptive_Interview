@@ -92,13 +92,108 @@ function blendshapeScorer(categories) {
   return (name) => categories?.find((b) => b.categoryName === name)?.score ?? 0;
 }
 
-function extractPhoneCandidates(detections) {
+// Bounding box IoU helper for competitor object suppression
+function computeIoU(boxA, boxB) {
+  if (!boxA || !boxB) return 0;
+  const xA = Math.max(boxA.originX, boxB.originX);
+  const yA = Math.max(boxA.originY, boxB.originY);
+  const xB = Math.min(boxA.originX + boxA.width, boxB.originX + boxB.width);
+  const yB = Math.min(boxA.originY + boxA.height, boxB.originY + boxB.height);
+
+  const interWidth = Math.max(0, xB - xA);
+  const interHeight = Math.max(0, yB - yA);
+  const interArea = interWidth * interHeight;
+
+  const areaA = boxA.width * boxA.height;
+  const areaB = boxB.width * boxB.height;
+  const unionArea = areaA + areaB - interArea;
+
+  return unionArea > 0 ? interArea / unionArea : 0;
+}
+
+const BENIGN_OBJECTS = ['bottle', 'cup', 'wine glass', 'bowl', 'mug', 'book', 'mouse', 'apple', 'orange', 'banana'];
+
+function extractPhoneCandidates(detections, faceLandmarks, bitmap) {
   const candidates = [];
+
+  // Identify all high-confidence benign desk/handheld objects (bottles, cups, mugs, books)
+  const benignDetections = [];
+  for (const d of detections) {
+    const topCat = d.categories?.[0];
+    if (topCat) {
+      const catName = (topCat.categoryName || '').toLowerCase();
+      if (BENIGN_OBJECTS.some((b) => catName.includes(b))) {
+        benignDetections.push({
+          label: catName,
+          score: topCat.score || 0,
+          boundingBox: d.boundingBox,
+        });
+      }
+    }
+  }
+
   for (const d of detections) {
     for (const cat of d.categories ?? []) {
       const label = `${cat.categoryName ?? ''} ${cat.displayName ?? ''}`.toLowerCase();
-      if (label.includes('phone') || label.includes('mobile') || label.includes('cell') || label.includes('tablet')) {
-        candidates.push({ score: cat.score ?? 0 });
+      const isTarget =
+        label.includes('cell phone') ||
+        label.includes('mobile phone') ||
+        label.includes('phone') ||
+        label.includes('camera') ||
+        label.includes('tablet');
+
+      if (isTarget) {
+        const score = cat.score ?? 0;
+
+        // 1. Direct Competitor Suppression:
+        // If the top prediction for this exact bounding box is actually a bottle/cup/etc. with a higher score, ignore phone
+        const topCatName = (d.categories?.[0]?.categoryName || '').toLowerCase();
+        const topCatScore = d.categories?.[0]?.score || 0;
+        if (BENIGN_OBJECTS.some((b) => topCatName.includes(b)) && topCatScore >= score) {
+          continue;
+        }
+
+        // 2. Spatial Overlap Suppression:
+        // If this detection overlaps significantly with a detected water bottle/cup that has equal or higher confidence
+        let suppressedByOverlap = false;
+        for (const b of benignDetections) {
+          if (computeIoU(d.boundingBox, b.boundingBox) > 0.25 && b.score >= score) {
+            suppressedByOverlap = true;
+            break;
+          }
+        }
+        if (suppressedByOverlap) {
+          continue;
+        }
+
+        // 3. Ear / Head-turn Profile Artifact Suppression:
+        // When a candidate turns their head, the ear/hair profile can trigger faint 'camera' blips (< 0.50).
+        // If the bounding box is situated inside the candidate's own facial perimeter, suppress it.
+        if (faceLandmarks && faceLandmarks.length >= 468 && label.includes('camera') && score < 0.50) {
+          if (bitmap && bitmap.width && bitmap.height && d.boundingBox) {
+            const centerX = d.boundingBox.originX + d.boundingBox.width / 2;
+            const centerY = d.boundingBox.originY + d.boundingBox.height / 2;
+            const normX = centerX / bitmap.width;
+            const normY = centerY / bitmap.height;
+
+            const nose = faceLandmarks[LANDMARK.NOSE_TIP];
+            const chin = faceLandmarks[LANDMARK.CHIN];
+            const forehead = faceLandmarks[LANDMARK.FOREHEAD];
+            if (nose && chin && forehead) {
+              const faceRadius = Math.max(Math.abs(chin.y - forehead.y), 0.15);
+              const distToNose = Math.hypot(normX - nose.x, normY - nose.y);
+              if (distToNose < faceRadius * 0.70) {
+                continue; // Suppressed: within the candidate's own head profile
+              }
+            }
+          }
+        }
+
+        candidates.push({
+          score,
+          label: cat.categoryName || 'phone',
+          boundingBox: d.boundingBox,
+        });
       }
     }
   }
@@ -150,7 +245,7 @@ function extractFrameFeatures(bitmap) {
       downRight: score('eyeLookDownRight'),
       downLeft:  score('eyeLookDownLeft'),
     },
-    phoneCandidates: extractPhoneCandidates(objectResult.detections ?? []),
+    phoneCandidates: extractPhoneCandidates(objectResult.detections ?? [], faceLandmarks[0], bitmap),
     jawOpenScore,
   };
 }

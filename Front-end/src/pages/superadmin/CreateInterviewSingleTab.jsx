@@ -25,6 +25,7 @@ export default function CreateInterviewSingleTab({
   atsScoreData,
   handleCalculateAts,
   handleCheckCandidate,
+  handleViewPreviousInterviews,
   handleParseFile,
   handleGenerateInterviewLink,
   handlePreviewEmail,
@@ -34,10 +35,15 @@ export default function CreateInterviewSingleTab({
   hasCustomAIInstructions,
   hasIndustry,
   singleCreatedLinks = [],
+<<<<<<< HEAD
   propNewSingleQuestion,
   setPropNewSingleQuestion,
   propNewSingleInstruction,
   setPropNewSingleInstruction,
+=======
+  ignoredCandidateEmail = '',
+  candidateStatusInfo = null,
+>>>>>>> c623cf7afccf138983ffeec6e8fb09ebd01240bc
 }) {
   const [localSingleQuestion, setLocalSingleQuestion] = useState('')
   const [localSingleInstruction, setLocalSingleInstruction] = useState('')
@@ -96,17 +102,39 @@ export default function CreateInterviewSingleTab({
                   <select
                     className="w-full px-4 py-2.5 bg-white dark:bg-slate-800/60 border border-indigo-200 rounded-lg text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm disabled:bg-slate-50 dark:bg-slate-900/50 disabled:text-slate-400 disabled:cursor-not-allowed"
                     disabled={callLogs.length === 0}
+                    value={singleCandidate.applicationId || ''}
                     onChange={(e) => {
                       const selectedId = e.target.value;
-                      if (!selectedId) return;
+                      if (!selectedId) {
+                        setSingleCandidate(prev => ({
+                          ...prev,
+                          name: '',
+                          email: '',
+                          phone: '',
+                          resumeText: '',
+                          resumeFileName: '',
+                          applicationId: '',
+                          jobId: '',
+                          jobTitle: '',
+                          experience: '',
+                          location: '',
+                          current_ctc: '',
+                          expected_ctc: ''
+                        }));
+                        const resumeInputEl = document.getElementById('singleResumeInput');
+                        if (resumeInputEl) resumeInputEl.value = '';
+                        return;
+                      }
                       const log = callLogs.find(l => (l._id || l.id) === selectedId);
                       if (log) {
+                        const hasResume = Boolean((log.resume_text || log.resume_url) && (log.resume_text || log.resume_url).trim().length > 10);
                         setSingleCandidate(prev => ({
                           ...prev,
                           name: log.name || prev.name,
                           email: log.email || prev.email,
                           phone: log.phone || prev.phone,
                           resumeText: log.resume_text || log.resume_url || prev.resumeText,
+                          resumeFileName: hasResume ? 'Candidate profile resume loaded' : prev.resumeFileName,
                           applicationId: log._id || log.id || ''
                         }));
                         // Automatically trigger ATS calculation if we have both
@@ -145,23 +173,68 @@ export default function CreateInterviewSingleTab({
                     onChange={(e) => handleSingleChange('name', e.target.value.replace(/[0-9]/g, ''))}
                   />
 
-                  <Input
-                    label="Candidate Email"
-                    type="email"
-                    placeholder="e.g. john@example.com"
-                    value={singleCandidate.email}
-                    onChange={(e) => {
-                      const val = e.target.value
-                      handleSingleChange('email', val)
-                      if (val && /\S+@\S+\.\S+/.test(val.trim())) {
-                        if (emailDebounceRef.current) clearTimeout(emailDebounceRef.current)
-                        emailDebounceRef.current = setTimeout(() => {
-                          handleCheckCandidate(val.trim())
-                        }, 600)
-                      }
-                    }}
-                    onBlur={() => handleCheckCandidate(singleCandidate.email, true)}
-                  />
+                  <div>
+                    <Input
+                      label="Candidate Email"
+                      type="email"
+                      placeholder="e.g. john@example.com"
+                      value={singleCandidate.email}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        handleSingleChange('email', val)
+                        if (val && /\S+@\S+\.\S+/.test(val.trim())) {
+                          if (emailDebounceRef.current) clearTimeout(emailDebounceRef.current)
+                          emailDebounceRef.current = setTimeout(() => {
+                            handleCheckCandidate(val.trim())
+                          }, 600)
+                        }
+                      }}
+                      onBlur={() => handleCheckCandidate(singleCandidate.email, true)}
+                    />
+                    {singleCandidate.email && singleCandidate.email.includes('@') && (
+                      <div className="flex items-center justify-between mt-1.5 px-0.5">
+                        <button
+                          type="button"
+                          onClick={() => handleViewPreviousInterviews && handleViewPreviousInterviews(singleCandidate.email)}
+                          className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 flex items-center gap-1.5 transition-colors cursor-pointer bg-transparent border-0 p-0"
+                          title="View historical interview details and AI scores for this candidate"
+                        >
+                          <i className="fas fa-history text-[11px]"></i>
+                          View Previous Interview Details
+                        </button>
+                        {candidateStatusInfo && singleCandidate.email && candidateStatusInfo.email === singleCandidate.email.trim().toLowerCase() ? (
+                          <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded border shadow-xs ${
+                            candidateStatusInfo.status === 'selected'
+                              ? 'text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900/60'
+                              : candidateStatusInfo.status === 'rejected'
+                              ? 'text-rose-700 bg-rose-50 dark:bg-rose-950/40 dark:text-rose-300 border-rose-200 dark:border-rose-900/60'
+                              : candidateStatusInfo.status === 'completed'
+                              ? 'text-indigo-700 bg-indigo-50 dark:bg-indigo-950/40 dark:text-indigo-300 border-indigo-200 dark:border-indigo-900/60'
+                              : candidateStatusInfo.status === 'ignored'
+                              ? 'text-rose-700 bg-rose-50 dark:bg-rose-950/40 dark:text-rose-300 border-rose-200 dark:border-rose-900/60'
+                              : 'text-amber-700 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-300 border-amber-200 dark:border-amber-900/60'
+                          }`}>
+                            <i className={`text-[10px] ${
+                              candidateStatusInfo.status === 'selected'
+                                ? 'fas fa-check-circle text-emerald-600'
+                                : candidateStatusInfo.status === 'rejected'
+                                ? 'fas fa-times-circle text-rose-600'
+                                : candidateStatusInfo.status === 'completed'
+                                ? 'fas fa-check-double text-indigo-600'
+                                : candidateStatusInfo.status === 'ignored'
+                                ? 'fas fa-ban text-rose-600'
+                                : 'fas fa-clock text-amber-600'
+                            }`}></i>
+                            Status: {candidateStatusInfo.label}
+                          </span>
+                        ) : ignoredCandidateEmail && ignoredCandidateEmail === singleCandidate.email?.trim().toLowerCase() ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-600 bg-rose-50 dark:bg-rose-950/40 dark:text-rose-400 px-2 py-0.5 rounded border border-rose-200 dark:border-rose-900/60 shadow-xs">
+                            <i className="fas fa-ban text-[10px]"></i> Status: Ignored
+                          </span>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </Card>
 
@@ -553,9 +626,7 @@ export default function CreateInterviewSingleTab({
                     )}
                   </div>
                 </div>
-</FeatureLockOverlay>
-
-                {/* AI Instructions Section */}
+</FeatureLockOverlay>{/* AI Instructions Section */}
                 <FeatureLockOverlay isLocked={!hasCustomAIInstructions} featureName="Custom AI Interviewer Instructions">
 <div className="border border-slate-200 dark:border-slate-700/80 rounded-2xl overflow-hidden bg-white dark:bg-slate-800/60/82 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-slate-300">
                   <div className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-900/50/50 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">

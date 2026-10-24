@@ -27,15 +27,31 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
     latestTelemetryRef.current = telemetryData
   }, [telemetryData])
 
-  // Broadcast streams update when screen stream changes so all watching admins renegotiate
+  // Broadcast streams update when camera or screen stream becomes ready so watching admins renegotiate
   useEffect(() => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && secondaryMediaStreamRef?.current) {
-      console.log('[CandidateWebRTC] Screen stream active/updated — notifying watching admins')
-      try {
-        wsRef.current.send(JSON.stringify({ type: 'candidate_connected' }))
-      } catch (_) {}
+    let lastTrackKey = ''
+    const notifyAdminsIfReady = () => {
+      const hasCam = mediaStreamRef.current?.getVideoTracks()?.some(t => t.readyState === 'live')
+      const hasScr = secondaryMediaStreamRef?.current?.getVideoTracks()?.some(t => t.readyState === 'live')
+      const trackKey = `${Boolean(hasCam)}_${Boolean(hasScr)}`
+
+      if ((hasCam || hasScr) && trackKey !== lastTrackKey) {
+        lastTrackKey = trackKey
+        console.log(`[CandidateWebRTC] Live video tracks confirmed (cam: ${Boolean(hasCam)}, scr: ${Boolean(hasScr)}) — notifying watching admins`)
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          try {
+            wsRef.current.send(JSON.stringify({ type: 'candidate_connected' }))
+          } catch (_) {}
+        }
+      } else if (!hasCam && !hasScr) {
+        lastTrackKey = ''
+      }
     }
-  }, [secondaryMediaStreamRef?.current])
+
+    notifyAdminsIfReady()
+    const pollId = setInterval(notifyAdminsIfReady, 2500)
+    return () => clearInterval(pollId)
+  }, [])
 
   // ─── WebSocket factory with auto-reconnect ──────────────────────────────────
   useEffect(() => {
@@ -71,6 +87,9 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
         console.log('[CandidateWebRTC] Signaling connected.')
         reconnectDelayRef.current = 2000  // reset back-off on successful connect
         startHeartbeat(ws)
+        try {
+          ws.send(JSON.stringify({ type: 'candidate_connected' }))
+        } catch (_) {}
       }
 
       ws.onerror = (e) => {
@@ -78,15 +97,26 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
       }
 
       ws.onclose = (e) => {
-        console.log(`[CandidateWebRTC] WS closed (${e.code}). Will reconnect...`)
+        console.log(`[CandidateWebRTC] WS closed (${e.code}). Reconnecting signaling...`)
         clearInterval(heartbeatTimerRef.current)
 
-        // Close all peer connections — they're all dead without the signaling channel
-        Object.values(pcsRef.current).forEach(pc => {
-          try { pc.close() } catch (_) {}
-        })
-        pcsRef.current = {}
-        pendingIceCandidatesRef.current = {}
+        // Only close peer connections if component is unmounted or if peer connection failed.
+        // In WebRTC, media continues flowing over peer connection even during transient signaling drops!
+        if (destroyedRef.current) {
+          Object.values(pcsRef.current).forEach(pc => {
+            try { pc.close() } catch (_) {}
+          })
+          pcsRef.current = {}
+          pendingIceCandidatesRef.current = {}
+        } else {
+          Object.entries(pcsRef.current).forEach(([admId, pc]) => {
+            if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+              try { pc.close() } catch (_) {}
+              delete pcsRef.current[admId]
+              delete pendingIceCandidatesRef.current[admId]
+            }
+          })
+        }
 
         if (!destroyedRef.current) {
           const delay = reconnectDelayRef.current
@@ -111,19 +141,43 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
           if (msg.type === 'webrtc_offer') {
             console.log(`[CandidateWebRTC] Received offer from ${msg.role === 'spectator' ? 'spectator' : 'admin'}: ${adminId}`)
 
-            // Await dynamic ICE servers from backend — ensures TURN credentials are fetched
-            // before RTCPeerConnection is created, not just fired as a background hint
             ;(async () => {
-            const cameraStream = mediaStreamRef.current
-            const screenStream = secondaryMediaStreamRef?.current
+            // Await dynamic ICE servers from backend — ensures TURN credentials are fetched
+            // before RTCPeerConnection is created
+            await initIceServers()
 
-            const cameraVideoTrack = cameraStream?.getVideoTracks()?.find(t => t.readyState === 'live')
-            const screenVideoTrack = screenStream?.getVideoTracks()?.find(t => t.readyState === 'live')
+            // Wait up to 3 seconds if tracks are in the process of initializing
+            let cameraStream = mediaStreamRef.current
+            let screenStream = secondaryMediaStreamRef?.current
+            let cameraVideoTrack = cameraStream?.getVideoTracks()?.find(t => t.readyState === 'live')
+            let screenVideoTrack = screenStream?.getVideoTracks()?.find(t => t.readyState === 'live')
+
+            if (!cameraVideoTrack && !screenVideoTrack) {
+              console.log('[CandidateWebRTC] Waiting for camera/screen tracks to become live...')
+              for (let i = 0; i < 10; i++) {
+                await new Promise(r => setTimeout(r, 300))
+                cameraStream = mediaStreamRef.current
+                screenStream = secondaryMediaStreamRef?.current
+                cameraVideoTrack = cameraStream?.getVideoTracks()?.find(t => t.readyState === 'live')
+                screenVideoTrack = screenStream?.getVideoTracks()?.find(t => t.readyState === 'live')
+                if (cameraVideoTrack || screenVideoTrack) break
+              }
+            }
+
             const audioTrack = (screenStream?.getAudioTracks()?.find(t => t.readyState === 'live')) ||
                                (cameraStream?.getAudioTracks()?.find(t => t.readyState === 'live'))
 
             if (!cameraVideoTrack && !screenVideoTrack) {
-              console.warn('[CandidateWebRTC] No live video tracks available — cannot answer offer yet.')
+              console.warn('[CandidateWebRTC] No live video tracks available after waiting — sending notice.')
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                  type: 'candidate_not_ready',
+                  target_admin_id: adminId,
+                  viewer_id: adminId,
+                  spectator_id: adminId,
+                  reason: 'tracks_initializing'
+                }))
+              }
               return
             }
 
@@ -132,8 +186,6 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
               try { pcsRef.current[adminId].close() } catch (_) {}
             }
 
-            // Always await fresh ICE servers before creating RTCPeerConnection
-            await initIceServers()
             const pc = new RTCPeerConnection({
               iceServers: getIceServers(),
             })
@@ -143,48 +195,6 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
             const streamTier = msg.stream_tier || (adminId.startsWith('grid_') ? 'low' : 'high')
             const isLowTier = streamTier === 'low'
             console.log(`[CandidateWebRTC] Negotiating peer connection with tier: ${streamTier.toUpperCase()} for viewer: ${adminId}`)
-
-            // Deterministic track mapping:
-            // High Tier: Camera + Screen + Audio
-            // Low Tier: Camera only (360p/15fps) to conserve candidate upload and proctor download
-            let cameraSender = null
-            if (cameraVideoTrack) {
-              console.log(`[CandidateWebRTC] Adding camera track (${isLowTier ? '360p/15fps Low Tier' : '720p/30fps High Tier'}) to PC`)
-              cameraSender = pc.addTrack(cameraVideoTrack, cameraStream || new MediaStream([cameraVideoTrack]))
-            }
-            if (!isLowTier && screenVideoTrack) {
-              console.log('[CandidateWebRTC] Adding screen track to PC (High Tier)')
-              pc.addTrack(screenVideoTrack, screenStream || new MediaStream([screenVideoTrack]))
-            }
-            if (!isLowTier && audioTrack) {
-              console.log('[CandidateWebRTC] Adding audio track to PC (High Tier)')
-              pc.addTrack(audioTrack, new MediaStream([audioTrack]))
-            }
-
-            // Apply Layered Adaptive Stream Subscription (LASS) parameters to camera sender
-            if (cameraSender) {
-              try {
-                const params = cameraSender.getParameters()
-                if (!params.encodings || params.encodings.length === 0) {
-                  params.encodings = [{}]
-                }
-                if (isLowTier) {
-                  // Low Layer: 360p / ~15 FPS / ~220 kbps (matches SFU Simulcast low-tier spec)
-                  params.encodings[0].scaleResolutionDownBy = 2.0
-                  params.encodings[0].maxFramerate = 15
-                  params.encodings[0].maxBitrate = 220000
-                } else {
-                  // High Layer: 720p / ~30 FPS / ~1.5 Mbps (matches SFU Simulcast high-tier spec)
-                  params.encodings[0].scaleResolutionDownBy = 1.0
-                  params.encodings[0].maxFramerate = 30
-                  params.encodings[0].maxBitrate = 1500000
-                }
-                await cameraSender.setParameters(params)
-                console.log(`[CandidateWebRTC] Successfully set ${streamTier.toUpperCase()} tier encoding parameters on camera sender.`)
-              } catch (paramErr) {
-                console.warn('[CandidateWebRTC] Could not set encoding parameters (browser fallback active):', paramErr)
-              }
-            }
 
             pc.onicecandidate = (e) => {
               if (e.candidate && ws.readyState === WebSocket.OPEN) {
@@ -201,9 +211,77 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
 
             pc.onconnectionstatechange = () => {
               console.log(`[CandidateWebRTC] PC state [${adminId}]: ${pc.connectionState}`)
+              if (pc.connectionState === 'connected') {
+                try {
+                  const trans = pc.getTransceivers()
+                  trans.forEach(t => {
+                    if (t.sender && typeof t.sender.generateKeyFrame === 'function') {
+                      t.sender.generateKeyFrame().catch(() => {})
+                    }
+                  })
+                } catch (_) {}
+              }
             }
 
+            // 1. Set Remote Description FIRST (JSEP RFC 8829 Answerer Protocol)
             await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp))
+
+            // 2. Map candidate tracks directly to incoming transceivers from the offer
+            const transceivers = pc.getTransceivers()
+            const videoTransceivers = transceivers.filter(t => t.receiver?.track?.kind === 'video' || t.sender?.track?.kind === 'video')
+            const audioTransceivers = transceivers.filter(t => t.receiver?.track?.kind === 'audio' || t.sender?.track?.kind === 'audio')
+
+            let cameraSender = null
+            let screenSender = null
+
+            // Slot 0 (Video): Camera track (or screen if only screen is active)
+            if (videoTransceivers.length > 0) {
+              const camTransceiver = videoTransceivers[0]
+              if (cameraVideoTrack) {
+                console.log(`[CandidateWebRTC] Attaching camera track (${isLowTier ? '360p Low Tier' : '720p High Tier'}) to transceiver 0`)
+                await camTransceiver.sender.replaceTrack(cameraVideoTrack)
+                camTransceiver.direction = 'sendonly'
+                cameraSender = camTransceiver.sender
+              } else if (screenVideoTrack) {
+                console.log('[CandidateWebRTC] Attaching screen track to transceiver 0 (fallback)')
+                await camTransceiver.sender.replaceTrack(screenVideoTrack)
+                camTransceiver.direction = 'sendonly'
+                screenSender = camTransceiver.sender
+              } else {
+                camTransceiver.direction = 'inactive'
+              }
+            } else if (cameraVideoTrack) {
+              cameraSender = pc.addTrack(cameraVideoTrack, cameraStream || new MediaStream([cameraVideoTrack]))
+            }
+
+            // Slot 1 (Video): Screen track (High tier only)
+            if (videoTransceivers.length > 1) {
+              const scrTransceiver = videoTransceivers[1]
+              if (!isLowTier && screenVideoTrack && screenVideoTrack !== cameraVideoTrack) {
+                console.log('[CandidateWebRTC] Attaching screen track to transceiver 1 (High Tier)')
+                await scrTransceiver.sender.replaceTrack(screenVideoTrack)
+                scrTransceiver.direction = 'sendonly'
+                screenSender = scrTransceiver.sender
+              } else {
+                scrTransceiver.direction = 'inactive'
+              }
+            } else if (!isLowTier && screenVideoTrack && !screenSender) {
+              screenSender = pc.addTrack(screenVideoTrack, screenStream || new MediaStream([screenVideoTrack]))
+            }
+
+            // Slot 2 (Audio): Microphone / Mixed Audio track
+            if (audioTransceivers.length > 0) {
+              const audTransceiver = audioTransceivers[0]
+              if (!isLowTier && audioTrack) {
+                console.log('[CandidateWebRTC] Attaching audio track to transceiver (High Tier)')
+                await audTransceiver.sender.replaceTrack(audioTrack)
+                audTransceiver.direction = 'sendonly'
+              } else {
+                audTransceiver.direction = 'inactive'
+              }
+            } else if (!isLowTier && audioTrack) {
+              pc.addTrack(audioTrack, new MediaStream([audioTrack]))
+            }
 
             // Flush any ICE candidates queued before remoteDescription was set
             const queued = pendingIceCandidatesRef.current[adminId] || []
@@ -218,6 +296,44 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
 
             const answer = await pc.createAnswer()
             await pc.setLocalDescription(answer)
+
+            // Safely apply encoding parameters after descriptions are set
+            if (cameraSender) {
+              try {
+                const params = cameraSender.getParameters()
+                if (!params.encodings || params.encodings.length === 0) {
+                  params.encodings = [{}]
+                }
+                if (isLowTier) {
+                  params.encodings[0].scaleResolutionDownBy = 2.0
+                  params.encodings[0].maxFramerate = 15
+                  params.encodings[0].maxBitrate = 200000
+                } else {
+                  params.encodings[0].scaleResolutionDownBy = 1.0
+                  params.encodings[0].maxFramerate = 24
+                  params.encodings[0].maxBitrate = 900000
+                }
+                await cameraSender.setParameters(params)
+                console.log(`[CandidateWebRTC] Successfully set ${streamTier.toUpperCase()} tier encoding parameters on camera sender.`)
+              } catch (paramErr) {
+                console.warn('[CandidateWebRTC] Could not set camera encoding parameters:', paramErr)
+              }
+            }
+
+            if (screenSender) {
+              try {
+                const sParams = screenSender.getParameters()
+                if (!sParams.encodings || sParams.encodings.length === 0) {
+                  sParams.encodings = [{}]
+                }
+                sParams.encodings[0].maxFramerate = 15
+                sParams.encodings[0].maxBitrate = 1200000
+                await screenSender.setParameters(sParams)
+                console.log('[CandidateWebRTC] Successfully set screen encoding parameters.')
+              } catch (sErr) {
+                console.warn('[CandidateWebRTC] Could not set screen encoding parameters:', sErr)
+              }
+            }
 
             console.log(`[CandidateWebRTC] Sending answer to viewer: ${adminId}`)
             ws.send(JSON.stringify({
@@ -326,13 +442,32 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
       }
     }
 
-    const sendTelemetry = () => {
+    const sendTelemetry = async () => {
       const current = latestTelemetryRef.current
-      if (wsRef.current?.readyState === WebSocket.OPEN && current) {
+      if (!current) return
+
+      const payload = { ...current, audio_level: measureAudioLevel() }
+
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
           type: 'telemetry',
-          data: { ...current, audio_level: measureAudioLevel() },
+          data: payload,
         }))
+      } else {
+        // Fallback to HTTP if WebRTC signaling socket is blocked or reconnecting
+        try {
+          const baseUrl = (API_BASE_URL || '').replace(/\/+$/, '')
+          await fetch(`${baseUrl}/webrtc/telemetry/${linkId}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${monitoringToken}`
+            },
+            body: JSON.stringify(payload)
+          })
+        } catch (err) {
+          // Silent catch for telemetry
+        }
       }
     }
 

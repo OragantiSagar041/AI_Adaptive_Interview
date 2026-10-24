@@ -28,6 +28,7 @@ from dotenv import load_dotenv
 from groq import AsyncGroq
 from pydantic import BaseModel, validator, Field
 from starlette.background import BackgroundTask
+from starlette.concurrency import run_in_threadpool
 from fastapi import (
     APIRouter, Depends, File, Form, HTTPException, Request, UploadFile,
     WebSocket, WebSocketDisconnect, BackgroundTasks, Header
@@ -246,6 +247,40 @@ def complete_session(
                     answers = list(answers_collection.find({"interview_id": interview_id}))
                     all_scored = all(a.get("scoring_status") in ("complete", "failed") for a in answers)
                     
+                    if not all_scored:
+                        # Auto-catchup: Score any answers that are still pending
+                        pending_answers = [a for a in answers if a.get("scoring_status") not in ("complete", "failed")]
+                        if pending_answers:
+                            logger.info(f"Auto-completing {len(pending_answers)} pending answers for session {link_id}")
+                            from app import tasks
+                            interview_doc = interviews_collection.find_one({"id": interview_id}) or {}
+                            ctx = f"Candidate's {interview_doc.get('source', 'Resume')}: {interview_doc.get('profile_text', '')}"
+                            lang = interview_doc.get("language") or session.get("language") or "English"
+
+                            from concurrent.futures import ThreadPoolExecutor
+                            def _score_one(ans_doc):
+                                try:
+                                    tasks.score_answer_task(
+                                        interview_id=str(ans_doc.get("interview_id")),
+                                        question_id=str(ans_doc.get("question_id")),
+                                        question_text=ans_doc.get("question_text", ""),
+                                        answer_text=ans_doc.get("answer_text", ""),
+                                        context=ctx,
+                                        time_spent_seconds=int(ans_doc.get("time_spent_seconds") or 0),
+                                        time_limit_seconds=int(ans_doc.get("time_limit_seconds") or 120),
+                                        language=lang,
+                                        answer_version=str(ans_doc.get("answer_version") or "")
+                                    )
+                                except Exception as sc_err:
+                                    logger.error(f"Error auto-scoring Q{ans_doc.get('question_id')}: {sc_err}")
+
+                            with ThreadPoolExecutor(max_workers=min(5, len(pending_answers))) as executor:
+                                list(executor.map(_score_one, pending_answers))
+
+                            # Reload answers after auto-scoring
+                            answers = list(answers_collection.find({"interview_id": interview_id}))
+                            all_scored = all(a.get("scoring_status") in ("complete", "failed") for a in answers)
+
                     if all_scored and not session.get("notification_sent"):
                         # ALWAYS recalculate the final score to include the coding/case-study round
                         avg_score = session.get("avg_score") or 0.0
@@ -864,8 +899,44 @@ async def get_metered_ice_servers() -> list:
     Fetch dynamic STUN/TURN credentials from Metered API (e.g. hireiq.metered.live),
     or fall back gracefully to configured TURN_SERVER / standard STUN.
     """
-    metered_api_key = os.getenv("METERED_API_KEY", "").strip()
-    metered_domain = os.getenv("METERED_DOMAIN", "hireiq.metered.live").strip()
+    metered_api_key = (
+        os.getenv("METERED_API_KEY")
+        or os.getenv("metered_api_key")
+        or os.getenv("METERED_KEY")
+        or os.getenv("metered_key")
+        or ""
+    ).strip()
+    metered_domain = (
+        os.getenv("METERED_DOMAIN")
+        or os.getenv("metered_domain")
+        or "hireiq.metered.live"
+    ).strip().replace("https://", "").replace("http://", "").strip("/")
+
+    # Support raw JSON secret strings from AWS Secrets Manager
+    if not metered_api_key:
+        for env_k in ("SECRETS", "APP_SECRETS", "SECRET_STRING", "SECRET_JSON", "METERED_CONFIG", "TURN_CONFIG"):
+            raw_json = os.getenv(env_k, "").strip()
+            if raw_json.startswith("{"):
+                try:
+                    import json as _j
+                    parsed = _j.loads(raw_json)
+                    if isinstance(parsed, dict):
+                        metered_api_key = (
+                            parsed.get("METERED_API_KEY")
+                            or parsed.get("metered_api_key")
+                            or parsed.get("METERED_KEY")
+                            or parsed.get("metered_key")
+                            or ""
+                        ).strip()
+                        metered_domain = (
+                            parsed.get("METERED_DOMAIN")
+                            or parsed.get("metered_domain")
+                            or metered_domain
+                        ).strip().replace("https://", "").replace("http://", "").strip("/")
+                        if metered_api_key:
+                            break
+                except Exception:
+                    pass
 
     # If no Metered API key configured, use fallback STUN/TURN servers
     if not metered_api_key:
@@ -908,8 +979,21 @@ async def get_webrtc_ice_servers(raw: bool = False):
     """
     Returns dynamic STUN and TURN server configurations.
     Uses TURN credentials from environment / Secrets Manager, or dynamic Metered API if configured.
+    Guarantees robust Google STUN is always included to prevent ICE gathering failures.
     """
-    ice_servers = await get_metered_ice_servers()
+    raw_ice = await get_metered_ice_servers()
+    
+    # Ensure high-availability STUN is always present alongside TURN
+    ice_servers = [
+        {"urls": "stun:stun.l.google.com:19302"},
+        {"urls": "stun:stun1.l.google.com:19302"},
+    ]
+    for s in raw_ice:
+        # Don't add duplicate google stuns
+        urls = s.get("urls", "")
+        if "google.com" not in (urls if isinstance(urls, str) else " ".join(urls)):
+            ice_servers.append(s)
+
     has_turn = any("turn:" in s.get("urls", "") or "turns:" in s.get("urls", "") for s in ice_servers)
     logger.info(f"[/api/webrtc/ice-servers] Served {len(ice_servers)} ICE servers (TURN active: {has_turn})")
     if raw:
@@ -921,6 +1005,7 @@ async def get_webrtc_ice_servers(raw: bool = False):
     }
 
 
+@router.websocket("/api/ws/webrtc/{role}/{link_id}")
 @router.websocket("/ws/webrtc/{role}/{link_id}")
 async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: Optional[str] = None, admin_id: Optional[str] = None, spectator_id: Optional[str] = None):
     import os, tempfile
@@ -930,20 +1015,27 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
     
     # Re-use admin_id and spectator_id from query parameters
 
+    raw_link_id = link_id
+
     if role == "candidate":
         if not token:
             await websocket.close(code=1008)
             return
         try:
-            candidate_session = _validate_candidate_monitoring_token(token, link_id)
+            candidate_session = await run_in_threadpool(_validate_candidate_monitoring_token, token, link_id)
         except HTTPException as e:
             logger.info(f"Candidate validation failed: {e.detail}")
             await websocket.close(code=1008)
             return
-        await manager.connect_candidate(websocket, link_id)
+        # Resolve to canonical link_id so everyone joins the exact same room
+        canonical_link_id = str(candidate_session.get("link_id") or candidate_session.get("_id") or link_id)
+        link_id = canonical_link_id
+        await manager.connect_candidate(websocket, canonical_link_id, alias_id=raw_link_id)
         # Notify watching admins immediately that candidate stream is active/ready
         try:
-            await manager.send_to_admins(link_id, {"type": "candidate_connected"})
+            await manager.send_to_admins(canonical_link_id, {"type": "candidate_connected"})
+            if raw_link_id != canonical_link_id:
+                await manager.send_to_admins(raw_link_id, {"type": "candidate_connected"})
         except Exception:
             pass
     elif role == "admin":
@@ -953,7 +1045,10 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
             return
         try:
             auth_context = _decode_dashboard_websocket_admin(token)
-            _get_authorized_live_session(link_id, auth_context)
+            live_session_doc = await run_in_threadpool(_get_authorized_live_session, link_id, auth_context)
+            # Resolve to canonical link_id so admin and candidate always join the exact same room
+            canonical_link_id = str(live_session_doc.get("link_id") or live_session_doc.get("_id") or link_id)
+            link_id = canonical_link_id
             # Use client-provided unique admin_id or generate unique instance identifier
             client_admin_id = websocket.query_params.get("admin_id")
             if client_admin_id and client_admin_id != "undefined":
@@ -962,11 +1057,13 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
                 base = auth_context.get("email") or auth_context.get("user_id") or "admin"
                 admin_id = f"{base}_{uuid.uuid4().hex[:8]}"
 
-            await manager.connect_admin(websocket, link_id, admin_id=admin_id)
-            logger.info(f"Admin ({admin_id}) connected successfully.")
+            await manager.connect_admin(websocket, canonical_link_id, admin_id=admin_id, alias_id=raw_link_id)
+            logger.info(f"Admin ({admin_id}) connected successfully to room {canonical_link_id}.")
             # Also notify candidate that a new admin connected
             try:
-                await manager.send_to_candidate(link_id, {"type": "admin_connected", "admin_id": admin_id})
+                await manager.send_to_candidate(canonical_link_id, {"type": "admin_connected", "admin_id": admin_id})
+                if raw_link_id != canonical_link_id:
+                    await manager.send_to_candidate(raw_link_id, {"type": "admin_connected", "admin_id": admin_id})
             except Exception:
                 pass
         except HTTPException as e:
@@ -992,14 +1089,18 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
             await websocket.close(code=1008)
             return
         # Verify session is not deactivated or cancelled
+        session_query = [{"link_id": link_id}]
+        if ObjectId.is_valid(link_id):
+            session_query.append({"_id": ObjectId(link_id)})
         session_check = interview_sessions_collection.find_one(
-            {"link_id": link_id},
-            {"status": 1, "is_deactivated": 1}
+            {"$or": session_query},
+            {"link_id": 1, "status": 1, "is_deactivated": 1}
         )
         if not session_check or session_check.get("is_deactivated") or session_check.get("status") in ("terminated", "cancelled", "expired"):
             logger.info(f"Spectator session check failed for link_id {link_id}: {session_check}")
             await websocket.close(code=1008)
             return
+        link_id = str(session_check.get("link_id") or link_id)
         spectator_id = f"spectator_{uuid.uuid4().hex[:8]}"
         await manager.connect_spectator(websocket, link_id, spectator_id=spectator_id)
         try:
@@ -1066,6 +1167,8 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
                         "eye_contact_lost": _optional_bool(proctoring_status.get("eyeContactLost")),
                     }
                     await _store_live_snapshot(link_id, updates, candidate_session)
+                    if raw_link_id != link_id:
+                        await _store_live_snapshot(raw_link_id, updates, candidate_session)
                 else:
                     # WebRTC signaling (answer, ice candidate) - target specific admin/spectator if specified
                     target_admin = data.get("target_admin_id") or data.get("viewer_id") or data.get("spectator_id")
@@ -1120,3 +1223,44 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
 # --------------------------------------------------------------------------------
 # MASTER & SUBSCRIPTION APIs
 # --------------------------------------------------------------------------------
+
+@router.post('/api/webrtc/telemetry/{link_id}')
+@router.post('/webrtc/telemetry/{link_id}')
+async def telemetry_fallback(
+    link_id: str,
+    payload: dict,
+    request: Request,
+):
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        raise HTTPException(status_code=401, detail='Missing token')
+    token = auth_header.split(' ')[1]
+    candidate_session = await run_in_threadpool(_validate_candidate_monitoring_token, token, link_id)
+    if not candidate_session:
+        raise HTTPException(status_code=401, detail='Invalid token')
+    canonical_id = str(candidate_session.get("link_id") or candidate_session.get("_id") or link_id)
+    data = {'type': 'telemetry', 'data': payload}
+    from app.db.redis_manager import manager
+    await manager.send_to_admins(canonical_id, data)
+    if link_id != canonical_id:
+        await manager.send_to_admins(link_id, data)
+    proctoring_status = payload.get('proctoring_status', {}) or {}
+    updates = {
+        'audio_level': _bounded_number(payload.get('audio_level'), 0, 100),
+        'current_question': _bounded_number(payload.get('current_question'), 0, 10_000, integer=True),
+        'total_questions': _bounded_number(payload.get('total_questions'), 0, 10_000, integer=True),
+        'question_text': str(payload.get('question_text') or '')[:500],
+        'round_type': _safe_round_type(payload.get('round_type')),
+        'proctoring_alerts': _bounded_number(payload.get('proctoring_alerts'), 0, 10_000, integer=True),
+        'last_alert_type': str(proctoring_status.get('lastAlertType') or '')[:64] or None,
+        'face_visible': _optional_bool(proctoring_status.get('faceVisible')),
+        'face_count': _bounded_number(proctoring_status.get('faceCount'), 0, 20, integer=True),
+        'multi_face': _optional_bool(proctoring_status.get('multiFace')),
+        'phone_detected': _optional_bool(proctoring_status.get('phoneDetected')),
+        'eye_contact_lost': _optional_bool(proctoring_status.get('eyeContactLost')),
+    }
+    await _store_live_snapshot(canonical_id, updates, candidate_session)
+    if link_id != canonical_id:
+        await _store_live_snapshot(link_id, updates, candidate_session)
+    return {'status': 'success'}
+

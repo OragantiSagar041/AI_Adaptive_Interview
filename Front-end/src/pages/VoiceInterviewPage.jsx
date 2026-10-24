@@ -19,7 +19,7 @@ import ErrorBoundary from '../components/ErrorBoundary'
 const VoiceCodingRound = React.lazy(() => import('./VoiceCodingRound'))
 const VoiceCaseStudy = React.lazy(() => import('./VoiceCaseStudy'))
 import { API_BASE_URL } from '../apiConfig'
-import { candidateFetch, setCandidateSessionAuth } from '../utils/candidateAuth'
+import { candidateFetch, setCandidateSessionAuth, getCandidateSessionToken } from '../utils/candidateAuth'
 import useCandidateWebRTC from '../hooks/useCandidateWebRTC'
 import OrbAvatar from '../components/OrbAvatar'
 import Swal from 'sweetalert2'
@@ -257,6 +257,8 @@ export default function VoiceInterviewPage() {
   const [roundDuration, setRoundDuration] = useState(900)
   const [answeredCount, setAnsweredCount] = useState(_savedSession?.answeredCount || 0)
   const [isSaving, setIsSaving] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [uploadStatusText, setUploadStatusText] = useState('')
   const prefetchedQuestionsRef = useRef([])  // background-fetched next batch
   const isPrefetchingRef = useRef(false)     // prevent duplicate fetches
   const [followUpCount, setFollowUpCount] = useState(0)  // follow-ups per question
@@ -352,6 +354,8 @@ export default function VoiceInterviewPage() {
   const voiceNoiseFrameCountRef = useRef(0)
   const voiceNoiseCooldownRef = useRef(0)
   const lastCandidateVoiceTimeRef = useRef(0)
+  const inactivityAlertCountRef = useRef(0)
+  const lastCandidateActiveTimeRef = useRef(Date.now())
 
   // ── Browser online/offline detection ────────────────────────────
   const [isOnline, setIsOnline] = useState(() => navigator.onLine)
@@ -824,6 +828,39 @@ export default function VoiceInterviewPage() {
         onEnd?.()
       })
     } catch (e) {
+      console.warn("Backend TTS unavailable, falling back to browser speech synthesis:", e)
+      if (window.speechSynthesis) {
+        try {
+          window.speechSynthesis.cancel()
+          const utterance = new SpeechSynthesisUtterance(text)
+          const bcp47Map = {
+            'Hindi': 'hi-IN', 'Telugu': 'te-IN', 'Tamil': 'ta-IN',
+            'Malayalam': 'ml-IN', 'Kannada': 'kn-IN', 'English': 'en-IN'
+          }
+          const targetLang = bcp47Map[languageRef.current] || 'en-IN'
+          utterance.lang = targetLang
+          const prefix = targetLang.split('-')[0]
+          const voices = window.speechSynthesis.getVoices()
+          const preferred = voices.find(v => v.lang.startsWith(prefix) && (v.name.includes("Female") || v.name.includes("Google")))
+          if (preferred) utterance.voice = preferred
+          
+          utterance.onend = () => {
+            isTTSPlayingRef.current = false
+            setAiStatus('listening')
+            onEnd?.()
+          }
+          utterance.onerror = () => {
+            isTTSPlayingRef.current = false
+            setAiStatus('idle')
+            onEnd?.()
+          }
+          setAiStatus('speaking')
+          window.speechSynthesis.speak(utterance)
+          return
+        } catch (synthErr) {
+          console.error("Browser speech synthesis failed:", synthErr)
+        }
+      }
       isTTSPlayingRef.current = false
       setAiStatus('idle')
       onEnd?.()
@@ -1068,56 +1105,106 @@ export default function VoiceInterviewPage() {
     mediaStreamRef.current?.getTracks().forEach(t => t.stop())
     cameraStreamRef.current?.getTracks().forEach(t => t.stop())
 
-    const uploadRecording = async (chunksRef, bytesRef, type, truncated) => {
-      if (!chunksRef.current.length) return
-      const blob = new Blob(chunksRef.current, { type: 'video/webm' })
-      if (blob.size < 1000) return
-
-      const fd = new FormData()
-      fd.append('interview_id', iid)
-      fd.append('link_id', linkId || '')
-      fd.append('recording_type', type)
-      fd.append('recording_upload_id', `${recordingUploadSessionId}-${type}`)
-      fd.append('recording_truncated', String(truncated))
-      fd.append('file', blob, `${type}_recording.webm`)
-
-      let lastError
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        const controller = new AbortController()
-        const uploadTimeout = setTimeout(() => controller.abort(), 5 * 60 * 1000)
-        try {
-          const response = await candidateFetch(`${API_BASE_URL}/upload-full-recording`, {
-            method: 'POST',
-            body: fd,
-            signal: controller.signal,
-          })
-          if (!response.ok) throw new Error(`HTTP ${response.status}`)
-          chunksRef.current = []
-          bytesRef.current = 0
-          return
-        } catch (error) {
-          lastError = error
-          await new Promise(resolve => setTimeout(resolve, 800 * (attempt + 1)))
-        } finally {
-          clearTimeout(uploadTimeout)
+    const uploadRecording = (chunksRef, bytesRef, type, truncated, progressOffset = 0, progressWeight = 50) => {
+      return new Promise((resolve, reject) => {
+        if (!chunksRef.current || !chunksRef.current.length) {
+          setUploadProgress(prev => Math.max(prev, progressOffset + progressWeight))
+          return resolve()
         }
-      }
-      throw lastError
+        const blob = new Blob(chunksRef.current, { type: 'video/webm' })
+        if (blob.size < 1000) {
+          setUploadProgress(prev => Math.max(prev, progressOffset + progressWeight))
+          return resolve()
+        }
+
+        const fd = new FormData()
+        fd.append('interview_id', iid)
+        fd.append('link_id', linkId || '')
+        fd.append('recording_type', type)
+        fd.append('recording_upload_id', `${recordingUploadSessionId}-${type}`)
+        fd.append('recording_truncated', String(truncated))
+        fd.append('file', blob, `${type}_recording.webm`)
+
+        const doUpload = (attempt = 0) => {
+          setUploadStatusText(`Securing ${type === 'camera' ? 'camera' : 'screen'} recording (attempt ${attempt + 1}/3)...`)
+          const xhr = new XMLHttpRequest()
+          const uploadBase = (API_BASE_URL || '').replace(/\/+$/, '')
+          const uploadUrl = `${uploadBase}/upload-full-recording`
+          xhr.open('POST', uploadUrl, true)
+          xhr.timeout = 5 * 60 * 1000 // 5 minutes
+
+          const token = getCandidateSessionToken()
+          if (token) {
+            xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+          }
+
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable && e.total > 0) {
+              const fraction = e.loaded / e.total
+              const totalPct = Math.round(progressOffset + fraction * progressWeight)
+              setUploadProgress(Math.min(95, Math.max(5, totalPct)))
+            }
+          }
+
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              chunksRef.current = []
+              bytesRef.current = 0
+              setUploadProgress(prev => Math.max(prev, progressOffset + progressWeight))
+              resolve()
+            } else {
+              if (attempt < 2) {
+                setTimeout(() => doUpload(attempt + 1), 1000 * (attempt + 1))
+              } else {
+                reject(new Error(`Upload of ${type} failed with HTTP ${xhr.status}: ${xhr.responseText}`))
+              }
+            }
+          }
+
+          xhr.onerror = () => {
+            if (attempt < 2) {
+              setTimeout(() => doUpload(attempt + 1), 1000 * (attempt + 1))
+            } else {
+              reject(new Error(`Network error during ${type} recording upload`))
+            }
+          }
+
+          xhr.ontimeout = () => {
+            if (attempt < 2) {
+              setTimeout(() => doUpload(attempt + 1), 1000 * (attempt + 1))
+            } else {
+              reject(new Error(`Upload timeout for ${type} recording`))
+            }
+          }
+
+          xhr.send(fd)
+        }
+
+        doUpload(0)
+      })
     }
 
     try {
+      setUploadStatusText("Securing camera recording...")
       await uploadRecording(
         cameraChunksRef,
         cameraBytesRef,
         'camera',
         cameraRecordingTruncatedRef.current,
+        5,
+        45
       )
+      setUploadStatusText("Securing screen recording...")
       await uploadRecording(
         recordedChunksRef,
         recordedBytesRef,
         'screen',
         screenRecordingTruncatedRef.current,
+        50,
+        45
       )
+      setUploadProgress(95)
+      setUploadStatusText("Recordings secured. Finalizing session...")
     } catch (error) {
       console.warn('Interview recording upload failed after retries:', error)
       throw error
@@ -1291,6 +1378,13 @@ export default function VoiceInterviewPage() {
           const previous = whisperTxRef.current.trim()
           const merged = mergeWhisperChunks(previous, freshWhisper)
           whisperTxRef.current = merged
+          if (freshWhisper.trim()) {
+            lastCandidateActiveTimeRef.current = Date.now()
+            if (inactivityAlertCountRef.current > 0 && inactivityAlertCountRef.current < 3) {
+              inactivityAlertCountRef.current = 0
+              Swal.close()
+            }
+          }
           accumulatedTranscriptRef.current = merged
           currentTxRef.current = merged
           setTranscript(merged)
@@ -1779,6 +1873,14 @@ export default function VoiceInterviewPage() {
 
     if (rec) rec.onresult = ev => {
       if (!isListeningRef.current || isTTSPlayingRef.current) return
+      
+      // Candidate is actually producing words
+      lastCandidateActiveTimeRef.current = Date.now()
+      if (inactivityAlertCountRef.current > 0 && inactivityAlertCountRef.current < 3) {
+        inactivityAlertCountRef.current = 0
+        Swal.close()
+      }
+
       let finalStr = '', interimStr = ''
       for (let i = 0; i < ev.results.length; i++) {
         if (ev.results[i].isFinal) {
@@ -2130,6 +2232,127 @@ export default function VoiceInterviewPage() {
 
     checkAndGenerateFollowUp()
   }, [addMsg, aiSay, startListening])
+  // ── Inactivity / No Response Tracking ────────────────────────────────
+  useEffect(() => {
+    if (round !== 'verbal' && round !== 'coding' && round !== 'case_study') return
+
+    // Pause inactivity timer if AI is speaking, system is saving, or TTS is playing
+    if (aiStatus === 'speaking' || isTTSPlayingRef.current || isSaving) {
+      lastCandidateActiveTimeRef.current = Date.now()
+      return
+    }
+
+    const idleTime = Date.now() - lastCandidateActiveTimeRef.current
+    // 2 minutes = 120000 ms
+    if (idleTime > 120000) {
+      if (inactivityAlertCountRef.current === 0) {
+        inactivityAlertCountRef.current = 1
+        lastCandidateActiveTimeRef.current = Date.now() // reset timer for the next alert window
+
+        // Speak the warning
+        speak("Are you there? Can I continue the interview?")
+        
+        Swal.fire({
+          title: 'Not Responding',
+          text: 'Are you there? Can I continue the interview?',
+          icon: 'warning',
+          confirmButtonText: 'Yes, continue',
+          background: '#161c2d',
+          color: '#fff',
+          allowOutsideClick: false
+        }).then((result) => {
+          if (result.isConfirmed) {
+            lastCandidateActiveTimeRef.current = Date.now()
+            // Sequence only resets when candidate actually resumes responding via microphone
+          }
+        })
+      } else if (inactivityAlertCountRef.current === 1) {
+        inactivityAlertCountRef.current = 2
+        lastCandidateActiveTimeRef.current = Date.now()
+        speak("Still not responding. Please answer or the interview will be terminated.")
+        
+        Swal.fire({
+          title: 'Still Not Responding',
+          text: 'Please respond or the interview will be terminated.',
+          icon: 'warning',
+          confirmButtonText: 'Yes, continue',
+          background: '#161c2d',
+          color: '#fff',
+          allowOutsideClick: false
+        }).then((result) => {
+          if (result.isConfirmed) {
+            lastCandidateActiveTimeRef.current = Date.now()
+            // Sequence only resets when candidate actually resumes responding via microphone
+          }
+        })
+      } else if (inactivityAlertCountRef.current === 2) {
+        inactivityAlertCountRef.current = 3
+        speak("No response detected. Terminating interview.")
+
+        Swal.fire({
+          title: 'Interview Terminated',
+          html: `
+            <div style="display:flex; flex-direction:column; align-items:center; gap:16px; margin-top:8px;">
+              <p style="color:#94a3b8; font-size:14px; margin:0; line-height:1.5; text-align:center;">
+                No response detected after multiple warnings.<br/>
+                <span style="color:#f87171; font-weight:600;">The interview is terminating.</span>
+              </p>
+              <div style="display:flex; align-items:center; justify-content:center; gap:16px; margin:12px 0; min-height:56px;">
+                <div id="term-chip-1" style="width:52px; height:52px; border-radius:50%; background:#ef4444; color:#ffffff; display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:800; box-shadow:0 0 24px rgba(239,68,68,0.7); transform:scale(1.15); transition:all 0.35s ease-out; opacity:1;">1</div>
+                <div id="term-chip-2" style="width:52px; height:52px; border-radius:50%; background:#ef4444; color:#ffffff; display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:800; box-shadow:0 0 24px rgba(239,68,68,0.7); transform:scale(0.5); transition:all 0.35s ease-out; opacity:0;">2</div>
+                <div id="term-chip-3" style="width:52px; height:52px; border-radius:50%; background:#ef4444; color:#ffffff; display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:800; box-shadow:0 0 24px rgba(239,68,68,0.7); transform:scale(0.5); transition:all 0.35s ease-out; opacity:0;">3</div>
+              </div>
+              <div style="font-size:14px; color:#cbd5e1; font-weight:600; letter-spacing:0.02em;">
+                Terminating in: <span id="term-sequence-text" style="color:#f87171; font-weight:800; font-size:18px;">1</span>
+              </div>
+            </div>
+          `,
+          icon: 'error',
+          background: '#161c2d',
+          color: '#fff',
+          allowOutsideClick: false,
+          allowEscapeKey: false,
+          showConfirmButton: false,
+          customClass: {
+            popup: 'border border-white/10 rounded-2xl shadow-2xl',
+            title: 'text-xl font-bold text-white'
+          },
+          didOpen: (popup) => {
+            let step = 1
+            const chip1 = popup.querySelector('#term-chip-1')
+            const chip2 = popup.querySelector('#term-chip-2')
+            const chip3 = popup.querySelector('#term-chip-3')
+            const seqText = popup.querySelector('#term-sequence-text')
+
+            const intervalId = setInterval(() => {
+              step += 1
+              if (step === 2) {
+                if (chip1) chip1.style.transform = 'scale(1)'
+                if (chip2) {
+                  chip2.style.opacity = '1'
+                  chip2.style.transform = 'scale(1.15)'
+                }
+                if (seqText) seqText.innerText = '1, 2'
+              } else if (step === 3) {
+                if (chip2) chip2.style.transform = 'scale(1)'
+                if (chip3) {
+                  chip3.style.opacity = '1'
+                  chip3.style.transform = 'scale(1.15)'
+                }
+                if (seqText) seqText.innerText = '1, 2, 3'
+              }
+            }, 1000)
+
+            setTimeout(() => {
+              clearInterval(intervalId)
+              Swal.close()
+              completeInterview({ isTimeout: true, reason: 'Terminated due to lack of response from candidate (3 alerts).' })
+            }, 3000)
+          }
+        })
+      }
+    }
+  }, [countdown])
 
   // ── Complete interview ────────────────────────────────────────────────────
   const completeInterview = useCallback(async (options = {}) => {
@@ -2175,7 +2398,24 @@ export default function VoiceInterviewPage() {
       wsRef.current = null
     }
 
-    // Fire backend completion with detailed integrity metrics
+    // STEP 1: Upload heavy recordings FIRST before marking session completed in DB!
+    setUploadProgress(5)
+    setUploadStatusText("Securing interview recordings...")
+    try {
+      await stopAndUploadRecording(iid)
+    } catch (err) {
+      console.error("Recording upload failed:", err)
+      await candidateFetch(`${API_BASE_URL}/recording-upload-failure`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ interview_id: iid, link_id: linkId }),
+      }).catch(() => { })
+      // Even if upload failed after 3 retries, continue to complete-session so answers are preserved
+    }
+
+    // STEP 2: Now that recordings are saved in DB, mark the session completed
+    setUploadProgress(95)
+    setUploadStatusText("Finalizing evaluation and candidate session...")
     try {
       const response = await candidateFetch(`${API_BASE_URL}/complete-session/${linkId}`, {
         method: 'POST',
@@ -2206,24 +2446,8 @@ export default function VoiceInterviewPage() {
       return
     }
 
-    // Upload heavy recording and WAIT for it so it's not lost
-    try {
-      await stopAndUploadRecording(iid)
-    } catch (err) {
-      console.error("Recording upload failed:", err)
-      await candidateFetch(`${API_BASE_URL}/recording-upload-failure`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ interview_id: iid, link_id: linkId }),
-      }).catch(() => { })
-      await Swal.fire({
-        title: 'Interview Saved',
-        text: 'Your answers were submitted, but the recording upload was interrupted. The interview team has been notified.',
-        icon: 'warning',
-        background: '#161c2d',
-        color: '#fff',
-      })
-    }
+    setUploadProgress(100)
+    setUploadStatusText("All set! Redirecting...")
 
     // Stop audio and mark done ONLY after upload finishes
     stopAudio()
@@ -2244,6 +2468,12 @@ export default function VoiceInterviewPage() {
 
     setRound('done')
     setIsSaving(false)
+    
+    speak("Thank you for your time. If you are shortlisted, our HR team will get back to you regarding the next steps.")
+    setTimeout(() => {
+      window.close()
+      window.location.href = '/' // Fallback if close is blocked
+    }, 8000)
   }, [stopListening, linkId, stopAndUploadRecording, warningsCount, stopAudio, aiSay])
 
   // ── Load coding/case study round questions ────────────────────────────────
@@ -2516,15 +2746,16 @@ export default function VoiceInterviewPage() {
 
     if (count >= 3) {
       Swal.fire({
-        icon: 'error',
-        title: 'Interview Terminated',
-        html: `<p>You stopped screen sharing <strong>${count} times</strong>. This interview has been automatically terminated and the incident has been reported.</p>`,
-        confirmButtonColor: '#ef4444',
-        confirmButtonText: 'Close Interview',
+        icon: 'info',
+        title: 'Thank You',
+        text: 'Thank you for your time. If you are shortlisted, our HR team will get back to you regarding the next steps.',
+        showConfirmButton: false,
+        timer: 8000,
         width: '460px',
         allowOutsideClick: false,
         allowEscapeKey: false,
-      }).then(() => completeInterview({ isTimeout: true, reason: 'Terminated due to screen sharing violations.' }))
+      })
+      completeInterview({ isTimeout: true, reason: 'Terminated due to screen sharing violations.' })
     } else {
       Swal.fire({
         icon: 'warning',
@@ -2565,13 +2796,14 @@ export default function VoiceInterviewPage() {
         if (focusLossCount > MAX_FOCUS_LOSSES) {
           // Auto-end interview after too many violations
           Swal.fire({
-            icon: 'error',
-            title: '🚨 Interview Terminated!',
-            text: `You have exceeded the maximum allowed background activity violations. The interview has been automatically ended and saved.`,
-            confirmButtonColor: '#ef4444',
-            confirmButtonText: 'OK',
+            icon: 'info',
+            title: 'Thank You',
+            text: 'Thank you for your time. If you are shortlisted, our HR team will get back to you regarding the next steps.',
+            showConfirmButton: false,
+            timer: 8000,
             allowOutsideClick: false,
-          }).then(() => completeInterview({ isTimeout: true, reason: 'Terminated due to multiple tab switching or background app usage.' }))
+          })
+          completeInterview({ isTimeout: true, reason: 'Terminated due to multiple tab switching or background app usage.' })
         } else {
           Swal.fire({
             icon: 'warning',
@@ -3040,12 +3272,45 @@ export default function VoiceInterviewPage() {
   )
 
   if (round === 'submitting') return (
-    <div className="min-h-screen bg-[#0a0f1e] flex flex-col items-center justify-center text-white gap-5">
-      <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center animate-pulse shadow-[0_0_40px_rgba(99,102,241,0.4)]">
-        <RefreshCw size={32} className="animate-spin text-white" />
+    <div className="min-h-screen bg-[#0a0f1e] flex flex-col items-center justify-center text-white px-6 text-center select-none">
+      <div className="w-full max-w-md bg-slate-900/90 border border-indigo-500/30 rounded-3xl p-8 backdrop-blur-xl shadow-[0_0_50px_rgba(99,102,241,0.25)] flex flex-col items-center gap-6">
+        <div className="relative w-20 h-20 flex items-center justify-center">
+          <div className="absolute inset-0 rounded-full border-4 border-indigo-500/20 border-t-indigo-500 animate-spin" />
+          <div className="w-14 h-14 rounded-full bg-indigo-500/10 flex items-center justify-center shadow-inner">
+            <RefreshCw size={26} className="animate-spin text-indigo-400" />
+          </div>
+        </div>
+
+        <div>
+          <h2 className="text-xl font-bold tracking-tight text-white">Saving Interview & Recordings</h2>
+          <p className="text-xs text-indigo-300 font-medium mt-1">
+            {uploadStatusText || 'Securing your camera and screen telemetry...'}
+          </p>
+        </div>
+
+        {/* Real-time Progress Bar */}
+        <div className="w-full">
+          <div className="flex justify-between items-center text-xs mb-2">
+            <span className="text-slate-400 font-medium">Upload Progress</span>
+            <span className="text-indigo-400 font-bold">{uploadProgress}%</span>
+          </div>
+          <div className="w-full h-3 bg-slate-800/80 rounded-full overflow-hidden p-0.5 border border-slate-700">
+            <div
+              className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-400 rounded-full transition-all duration-300 ease-out shadow-[0_0_12px_rgba(99,102,241,0.6)]"
+              style={{ width: `${Math.max(5, Math.min(100, uploadProgress))}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Prominent Safety Notice */}
+        <div className="w-full bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-start gap-3 text-left">
+          <div className="w-2 h-2 rounded-full bg-amber-400 mt-1.5 shrink-0 animate-ping" />
+          <div className="text-xs text-amber-200/90 leading-relaxed">
+            <strong className="text-amber-300 font-semibold block mb-0.5">Do Not Close or Refresh This Page</strong>
+            Your interview answers and video proctoring are currently being uploaded. Closing your browser or laptop now may result in incomplete submission.
+          </div>
+        </div>
       </div>
-      <h2 className="text-xl font-bold">Submitting Interview...</h2>
-      <p className="text-slate-400 text-sm animate-pulse">Please wait, your video and audio are being securely uploaded.</p>
     </div>
   )
 
@@ -3636,7 +3901,7 @@ export default function VoiceInterviewPage() {
 
         {/* Question number badge */}
         <div className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 shrink-0">
-          {currentQ?.type || 'Interview'} &nbsp;·&nbsp; Question {currentQIdx + 1} of {questions.length}
+          Question {currentQIdx + 1} of {questions.length}
         </div>
 
         <div className="flex-1" />

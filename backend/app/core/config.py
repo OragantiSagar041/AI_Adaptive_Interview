@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 import traceback
 from collections import defaultdict
 from datetime import timedelta, timezone
@@ -29,9 +30,10 @@ else:
 # groq_client is removed to support dynamic key rotation via groq_manager
 
 cloudinary.config(
-    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
-    api_key=os.getenv("CLOUDINARY_API_KEY"),
-    api_secret=os.getenv("CLOUDINARY_API_SECRET"),
+    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME") or (json.loads(os.getenv("CLOUDINARY_ACCOUNTS", "[]"))[0].get("cloud_name") if os.getenv("CLOUDINARY_ACCOUNTS") else None),
+    api_key=os.getenv("CLOUDINARY_API_KEY") or (json.loads(os.getenv("CLOUDINARY_ACCOUNTS", "[]"))[0].get("api_key") if os.getenv("CLOUDINARY_ACCOUNTS") else None),
+    api_secret=os.getenv("CLOUDINARY_API_SECRET") or (json.loads(os.getenv("CLOUDINARY_ACCOUNTS", "[]"))[0].get("api_secret") if os.getenv("CLOUDINARY_ACCOUNTS") else None),
+    secure=True,
 )
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+psycopg2://user:password@localhost:5432/hireiq")
@@ -58,8 +60,10 @@ def get_omni_agent_id() -> str:
 CLOUDINARY_CLEANUP_STARTED = False
 RECORDING_RETENTION_DAYS = max(3, int(os.getenv("RECORDING_RETENTION_DAYS", "3")))
 
-UPLOAD_FOLDER = "uploads"
+_backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+UPLOAD_FOLDER = os.path.join(_backend_dir, "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(os.path.join(UPLOAD_FOLDER, "recordings"), exist_ok=True)
 
 _ENV = os.getenv("ENV", "local").lower()
 _DEFAULT_FRONTEND = "https://hireiq.co.in" if _ENV == "production" else "http://localhost:5173"
@@ -221,7 +225,7 @@ PLAN_ALIASES = {
 LAST_422_ERROR = None
 
 request_counts = defaultdict(list)
-RATE_LIMIT = 120  # general requests per minute per IP
+RATE_LIMIT = int(os.getenv("RATE_LIMIT", "600"))  # general requests per minute per IP (configurable)
 EXPENSIVE_RATE_LIMIT = 20
 PUBLIC_RESUME_RATE_LIMIT = 5
 RATE_LIMIT_WINDOW = 60
@@ -246,7 +250,9 @@ RATE_LIMIT_EXEMPT_PATHS = {
 }
 RATE_LIMIT_EXEMPT_PREFIXES = (
     "/superadmin/profile",
-    "/api/notifications",
+    "/notifications",
+    "/webrtc/",
+    "/admin/interview/",
 )
 
 # ---------------------------------------------------------------------------

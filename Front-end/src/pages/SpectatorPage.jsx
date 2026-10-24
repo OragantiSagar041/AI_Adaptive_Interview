@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+﻿import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { API_BASE_URL } from '../apiConfig'
 import { getIceServers, initIceServers } from '../utils/webrtcConfig'
@@ -108,12 +108,14 @@ export default function SpectatorPage() {
 
     const targetStream = activeView === 'screen' && screenStream ? screenStream : cameraStream
     if (targetStream) {
-      if (video.srcObject !== targetStream) {
+      const currentTrackId = video.srcObject?.getVideoTracks()?.[0]?.id
+      const targetTrackId = targetStream?.getVideoTracks()?.[0]?.id
+      if (currentTrackId !== targetTrackId || !video.srcObject) {
         video.srcObject = targetStream
+        video.play().catch(err => {
+          console.warn('[SpectatorWebRTC] Autoplay prevented:', err)
+        })
       }
-      video.play().catch(err => {
-        console.warn('[SpectatorWebRTC] Autoplay prevented:', err)
-      })
     } else {
       video.srcObject = null
     }
@@ -178,7 +180,10 @@ export default function SpectatorPage() {
       pc.onconnectionstatechange = () => {
         console.log('[SpectatorWebRTC] PC state:', pc.connectionState)
         if (pc.connectionState === 'connected') {
-          if (mountedRef.current) setStatus('streaming')
+          if (mountedRef.current) {
+            setStatus('streaming')
+            updateRemoteStreamFromReceivers()
+          }
         } else if (pc.connectionState === 'failed') {
           if (mountedRef.current) {
             if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -217,13 +222,13 @@ export default function SpectatorPage() {
       if (mountedRef.current) setStatus('negotiating')
 
       streamTimeoutRef.current = setTimeout(() => {
-        if (mountedRef.current && statusRef.current !== 'streaming') {
+        if (mountedRef.current && statusRef.current !== 'streaming' && statusRef.current !== 'waiting_tracks') {
           console.warn('[SpectatorWebRTC] Stream timeout — retrying offer...')
           if (sendOfferRef.current && wsRef.current?.readyState === WebSocket.OPEN) {
             sendOfferRef.current(wsRef.current)
           }
         }
-      }, 8000)
+      }, 25000)
     } catch (err) {
       console.error('[SpectatorWebRTC] Error in sendOffer:', err)
       if (mountedRef.current) setStatus('error')
@@ -270,9 +275,6 @@ export default function SpectatorPage() {
           if (msg.spectator_id) {
             spectatorIdRef.current = msg.spectator_id
           }
-          if (wsRef.current?.readyState === WebSocket.OPEN) {
-            await sendOffer(wsRef.current)
-          }
           return
         }
 
@@ -283,6 +285,13 @@ export default function SpectatorPage() {
           }
           return
         }
+        if (msg.type === 'candidate_not_ready') {
+          if (mountedRef.current && statusRef.current !== 'streaming') {
+            setStatus('waiting_tracks')
+          }
+          return
+        }
+
 
         if (msg.type === 'telemetry') {
           if (mountedRef.current) {

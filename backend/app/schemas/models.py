@@ -171,6 +171,7 @@ class JobCreate(BaseModel):
     bond: str = ""
     location: str = ""
     salary: str = ""
+    certifications: Optional[Union[List[str], str]] = None
     admin_id: Optional[str] = None
 
 class JobApplicationCreate(BaseModel):

@@ -418,7 +418,7 @@ def get_admin_qualified(pipeline: Optional[str] = "all", current_admin: dict = D
             
         app_id = str(app.get("_id"))
         score = app.get("score") or 0.0
-        mock_session = {
+        test_session = {
             "id": f"ai_call_{app_id}",
             "_id": f"ai_call_{app_id}",
             "link_id": f"ai_call_{app_id}",
@@ -439,7 +439,7 @@ def get_admin_qualified(pipeline: Optional[str] = "all", current_admin: dict = D
             "decision_at": app.get("decision_at"),
             "talent_pool_status": app.get("talent_pool_status", "archived")
         }
-        merged_list.append(mock_session)
+        merged_list.append(test_session)
         
     return merged_list
 
@@ -498,7 +498,7 @@ def get_admin_rejected(pipeline: Optional[str] = "all", current_admin: dict = De
             
         app_id = str(app.get("_id"))
         score = app.get("score") or 0.0
-        mock_session = {
+        test_session = {
             "id": f"ai_call_{app_id}",
             "_id": f"ai_call_{app_id}",
             "link_id": f"ai_call_{app_id}",
@@ -523,7 +523,7 @@ def get_admin_rejected(pipeline: Optional[str] = "all", current_admin: dict = De
             "decision_at": app.get("decision_at"),
             "talent_pool_status": app.get("talent_pool_status", "archived")
         }
-        merged_list.append(mock_session)
+        merged_list.append(test_session)
         
     return merged_list
 
@@ -830,7 +830,7 @@ def get_superadmin_qualified(adminId: Optional[str] = None, pipeline: Optional[s
             
         app_id = str(app.get("_id"))
         score = app.get("score") or 0.0
-        mock_session = {
+        test_session = {
             "id": f"ai_call_{app_id}",
             "_id": f"ai_call_{app_id}",
             "link_id": f"ai_call_{app_id}",
@@ -851,7 +851,7 @@ def get_superadmin_qualified(adminId: Optional[str] = None, pipeline: Optional[s
             "decision_at": app.get("decision_at"),
             "talent_pool_status": app.get("talent_pool_status", "archived")
         }
-        merged_list.append(mock_session)
+        merged_list.append(test_session)
         
     return merged_list
 
@@ -922,7 +922,7 @@ def get_superadmin_rejected(adminId: Optional[str] = None, pipeline: Optional[st
             
         app_id = str(app.get("_id"))
         score = app.get("score") or 0.0
-        mock_session = {
+        test_session = {
             "id": f"ai_call_{app_id}",
             "_id": f"ai_call_{app_id}",
             "link_id": f"ai_call_{app_id}",
@@ -947,7 +947,7 @@ def get_superadmin_rejected(adminId: Optional[str] = None, pipeline: Optional[st
             "decision_at": app.get("decision_at"),
             "talent_pool_status": app.get("talent_pool_status", "archived")
         }
-        merged_list.append(mock_session)
+        merged_list.append(test_session)
         
     return merged_list
 

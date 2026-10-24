@@ -11,6 +11,15 @@ All business logic lives in services.py, routes.py, and tasks.py.
 """
 
 import sys
+import os
+from dotenv import load_dotenv
+
+_env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+if os.path.exists(_env_path):
+    load_dotenv(dotenv_path=_env_path)
+else:
+    load_dotenv()
+
 sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
 
@@ -181,11 +190,16 @@ async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
 
 
+import re
+_API_PREFIX_RE = re.compile(r"^(?:/api)+(?=/|$)")
+
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         global _last_rate_limit_cleanup
         # Live monitor polling/heartbeats are intentionally frequent and low-risk.
-        if request.url.path in config.RATE_LIMIT_EXEMPT_PATHS or request.url.path.startswith(config.RATE_LIMIT_EXEMPT_PREFIXES):
+        norm_path = _API_PREFIX_RE.sub("", request.url.path) or "/"
+        if norm_path in config.RATE_LIMIT_EXEMPT_PATHS or norm_path.startswith(config.RATE_LIMIT_EXEMPT_PREFIXES):
             return await call_next(request)
 
         x_forwarded_for = request.headers.get("x-forwarded-for")
@@ -300,8 +314,13 @@ app.add_middleware(
 # private Cloudinary assets and must never be exposed by an unauthenticated
 # static-file mount.
 import os as _os
-if _os.getenv("ENV", "local") != "production" and _os.path.isdir("uploads"):
-    app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+_backend_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+_uploads_dir = _os.path.join(_backend_dir, "uploads")
+if not _os.path.isdir(_uploads_dir) and _os.path.isdir("uploads"):
+    _uploads_dir = _os.path.abspath("uploads")
+
+if _os.getenv("ENV", "local") != "production" and _os.path.isdir(_uploads_dir):
+    app.mount("/uploads", StaticFiles(directory=_uploads_dir), name="uploads")
 
 # --- Routers ---
 app.include_router(admin_dashboard_router)

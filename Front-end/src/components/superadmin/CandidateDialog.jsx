@@ -5,12 +5,13 @@ import Swal from 'sweetalert2'
 import axios from 'axios'
 import { handleUpdateDecision } from '../../store/slices/interviewSlice'
 import ScheduleModal from './ScheduleModal'
+import InterviewHistorySection from './InterviewHistorySection'
 import {
   Mail, Phone, MapPin, Building2, IndianRupee, Clock, Download,
   Play, FileText, Sparkles, Star, Check, X, Calendar, Send,
   MessageSquare, Video, Scale, Loader2, AlertCircle, Monitor,
-  Mic, ShieldAlert, Eye, ChevronRight, Code, UserCheck, User, ExternalLink, ArrowLeft,
-  Globe
+  Mic, ShieldAlert, Eye, ChevronRight, Code, UserCheck, User, ExternalLink, ArrowLeft, ArrowRight,
+  Globe, RotateCcw
 } from "lucide-react"
 import { jsPDF } from 'jspdf'
 import { detectNonEnglishText, translateText, translateQAPairs } from '../../utils/translation'
@@ -80,6 +81,8 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   const [resumeSubTab, setResumeSubTab] = useState('document')
   const [showResumeContent, setShowResumeContent] = useState(false)
   const [showRecordingModal, setShowRecordingModal] = useState(false)
+  const [camVideoError, setCamVideoError] = useState(false)
+  const [screenVideoError, setScreenVideoError] = useState(false)
   const [showTranscriptModal, setShowTranscriptModal] = useState(false)
   const [transcriptTab, setTranscriptTab] = useState('verbal')
   const [showAllTests, setShowAllTests] = useState(false)
@@ -87,8 +90,12 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   const [extractingInfo, setExtractingInfo] = useState(false)
   const [showNotes, setShowNotes] = useState(false)
   const [newNote, setNewNote] = useState("")
-  const [notesSaving, setNotesSaving] = useState(false)
   const [showScheduleModal, setShowScheduleModal] = useState(false)
+  const [previousInterviews, setPreviousInterviews] = useState([])
+  const [previousSummary, setPreviousSummary] = useState(null)
+  const [previousLoading, setPreviousLoading] = useState(false)
+  const [previousError, setPreviousError] = useState(null)
+
 
   // Translation States for Candidate Answers
   const [translations, setTranslations] = useState({})
@@ -250,12 +257,53 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
     setAtsData(null)
     setError(null)
     setShowResumeContent(false)
+    setCamVideoError(false)
+    setScreenVideoError(false)
     setTranslations({})
     setTranslatingKeys({})
     setTranslatingAll(false)
     setAllTranslated(false)
+    setPreviousInterviews([])
+    setPreviousSummary(null)
+    setPreviousLoading(false)
+    setPreviousError(null)
 
     const linkId = candidate.link_id || candidate.id || candidate._id
+
+    // Fetch previous interview details if candidate email exists
+    const candidateEmail = candidate.candidate_email || candidate.email
+    if (candidateEmail) {
+      const fetchPreviousHistory = async () => {
+        setPreviousLoading(true)
+        setPreviousError(null)
+        try {
+          const res = await axios.get(`${API_BASE_URL}/admin/candidate/previous-interviews`, {
+            params: {
+              email: candidateEmail,
+              current_link_id: linkId || "",
+              include_current: true
+            },
+            headers: { Authorization: `Bearer ${token}` }
+          })
+          if (res.data && Array.isArray(res.data.history)) {
+            setPreviousInterviews(res.data.history)
+            setPreviousSummary(res.data.summary || null)
+          } else {
+            setPreviousInterviews([])
+            setPreviousSummary(null)
+          }
+        } catch (histErr) {
+          console.error("Error fetching candidate previous interviews:", histErr)
+          setPreviousError("Could not load previous interview history.")
+          setPreviousInterviews([])
+          setPreviousSummary(null)
+        } finally {
+          setPreviousLoading(false)
+        }
+      }
+      fetchPreviousHistory()
+    }
+
     if (!linkId || linkId.startsWith("ai_call_")) {
       // AI Calling candidates don't have a session - use candidate data as-is
       setDetail({ ...candidate })
@@ -433,9 +481,64 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   const jobTitle = c.interview_title || candidate.interview_title || c.job_applied || candidate.job_applied || "Position"
   const email = c.candidate_email || c.email || candidate.candidate_email || candidate.email || "No email provided"
   const phone = c.candidate_phone || c.phone || candidate.candidate_phone || "N/A"
-  const aiScore = Number(c.avg_score || c.score || candidate.score || 0)
+  const overallScoreValue = c.avg_score ?? c.score ?? candidate.score
+  const aiScore = Number(overallScoreValue ?? 0)
   const isQualified = (c.decision || candidate.decision) === 'selected'
   const status = c.status || candidate.status || ''
+  const interviewAnswers = Array.isArray(c.answers) ? c.answers : []
+  const answeredInterviewCount = interviewAnswers.filter(answer =>
+    typeof answer.answer_text === 'string' &&
+    answer.answer_text.trim() !== '' &&
+    answer.answer_text.trim() !== '(No answer yet)'
+  ).length
+  const scoredInterviewCount = interviewAnswers.filter(answer =>
+    answer.ai_score !== null &&
+    answer.ai_score !== undefined &&
+    answer.ai_score !== '' &&
+    Number.isFinite(Number(answer.ai_score))
+  ).length
+  const interviewDuration = Number(c.integrity?.total_time_minutes)
+  const interviewDateValue = c.started_at || c.date || candidate.date
+  const interviewDate = interviewDateValue && !Number.isNaN(new Date(interviewDateValue).getTime())
+    ? new Date(interviewDateValue).toLocaleString()
+    : ''
+  const interviewType = c.interview_type || candidate.interview_type
+  const experience = c.experience || candidate.experience
+  const currentCompany = c.current_company || candidate.current_company
+  const location = c.location || candidate.location
+  const strengths = c.strengths_summary || candidate.strengths_summary
+  const areasToImprove = c.weaknesses_summary || candidate.weaknesses_summary
+  const recruiterDecision = c.decision || candidate.decision
+  const recommendation = c.overall_recommendation || candidate.overall_recommendation
+  const summarySections = [
+    ['Candidate', [
+      name,
+      email !== 'No email provided' ? email : null,
+      phone !== 'N/A' ? phone : null,
+    ].filter(Boolean).join('; ')],
+    ['Professional background', [
+      experience ? `${experience} experience` : null,
+      currentCompany ? `currently at ${currentCompany}` : null,
+      location ? `based in ${location}` : null,
+    ].filter(Boolean).join('; ')],
+    ['Role applied for', jobTitle !== 'Position' ? jobTitle : null],
+    ['Interview', [
+      interviewType,
+      interviewDate,
+      status ? `Status: ${String(status).replaceAll('_', ' ')}` : null,
+      interviewDuration > 0 ? `Duration: ${interviewDuration} minutes` : null,
+    ].filter(Boolean).join('; ')],
+    ['Participation', interviewAnswers.length > 0
+      ? `${answeredInterviewCount} of ${interviewAnswers.length} recorded questions answered${scoredInterviewCount ? `; ${scoredInterviewCount} responses scored` : ''}`
+      : 'No interview responses recorded'],
+    ['Overall interview score',
+      overallScoreValue !== null && overallScoreValue !== undefined && overallScoreValue !== '' && Number.isFinite(Number(overallScoreValue))
+        ? `${aiScore.toFixed(1)} out of 100` : null],
+    ['AI recommendation', recommendation ? `${recommendation} (automated assessment of interview responses)` : null],
+    ['Strengths', strengths && !/^(no answers provided|n\/a|unable to generate\.?)$/i.test(String(strengths).trim()) ? strengths : null],
+    ['Areas to improve', areasToImprove && !/^(no answers provided|n\/a|unable to generate\.?)$/i.test(String(areasToImprove).trim()) ? areasToImprove : null],
+    ['Recruiter decision', recruiterDecision ? String(recruiterDecision).replaceAll('_', ' ') : null],
+  ].filter(([, value]) => value)
   // Resume/profile text from any field available
   const resumeText = c.profile_text || c.resume_text || ''
   const resumeUrl = c.resume_url || ''
@@ -484,12 +587,22 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
 
   const formatMediaUrl = (url) => {
     if (!url) return null
-    if (url.startsWith('http')) return url
-    return `${API_BASE_URL}/${url.replace(/^\/+/, '')}`
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url
+    }
+    if (url.includes('recordings/') || url.startsWith('uploads/')) {
+      const fname = url.split('/').pop()
+      const apiBase = (API_BASE_URL || '').replace(/\/+$/, '')
+      return `${apiBase}/admin/recordings/stream/${fname}`
+    }
+    const base = (API_BASE_URL || '').replace(/\/api\/?$/, '').replace(/\/+$/, '')
+    return `${base}/${url.replace(/^\/+/, '')}`
   }
 
-  const recordingUrl = formatMediaUrl(c.recording_url)
-  const screenRecordingUrl = formatMediaUrl(c.screen_recording_url)
+  const rawCam = c.recording_url !== undefined ? c.recording_url : candidate?.recording_url
+  const rawScreen = c.screen_recording_url !== undefined ? c.screen_recording_url : candidate?.screen_recording_url
+  const recordingUrl = formatMediaUrl(rawCam)
+  const screenRecordingUrl = formatMediaUrl(rawScreen)
 
   const handleDownloadRecording = async () => {
     const urlsToDownload = [];
@@ -525,6 +638,17 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
     return minutes > 0 ? `${minutes}m ${remainingSeconds}s` : `${Math.floor(duration)}s`;
   };
 
+  const cleanForPdf = (text) => {
+    if (!text) return '';
+    return String(text)
+      .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015]/g, '-')
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/[\u201C\u201D]/g, '"')
+      .replace(/\u2026/g, '...')
+      .replace(/\u2022/g, '*')
+      .replace(/[^\x00-\x7F]/g, '');
+  };
+
   const handleDownloadTranscript = () => {
     if (!c.answers || c.answers.length === 0) return;
 
@@ -544,12 +668,12 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
 
     doc.setFontSize(16);
     doc.setFont("helvetica", "bold");
-    doc.text(`Interview Transcript: ${c.candidate_name || 'Unknown Candidate'}`, margin, y);
+    doc.text(`Interview Transcript: ${cleanForPdf(c.candidate_name) || 'Unknown Candidate'}`, margin, y);
     y += 10;
 
     doc.setFontSize(11);
     doc.setFont("helvetica", "normal");
-    doc.text(`Status: ${c.status || "Completed"}`, margin, y);
+    doc.text(`Status: ${cleanForPdf(c.status) || "Completed"}`, margin, y);
     y += 6;
     if (c.created_at) {
       doc.text(`Date: ${new Date(c.created_at).toLocaleString()}`, margin, y);
@@ -569,7 +693,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
       const qDisplay = (transItem?.isTranslated && transItem.view === 'translated' && transItem.translatedQuestion)
         ? `Q${index + 1}: ${transItem.translatedQuestion}`
         : `Q${index + 1}: ${a.question_text || 'No question recorded'}`;
-      const qLines = doc.splitTextToSize(qDisplay, pageWidth - 2 * margin);
+      const qLines = doc.splitTextToSize(cleanForPdf(qDisplay), pageWidth - 2 * margin);
       checkPageBreak(qLines.length * 5 + 30);
       doc.text(qLines, margin, y);
       y += qLines.length * 5 + 3;
@@ -599,7 +723,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
         doc.text(`Candidate's Answer (English Translation from ${transItem.sourceLangName || 'Original'}):`, margin, y);
         y += 5;
         doc.setFont("helvetica", "normal");
-        const tLines = doc.splitTextToSize(transItem.translatedText, pageWidth - 2 * margin);
+        const tLines = doc.splitTextToSize(cleanForPdf(transItem.translatedText), pageWidth - 2 * margin);
         for (let i = 0; i < tLines.length; i++) {
           checkPageBreak(5);
           doc.text(tLines[i], margin, y);
@@ -620,7 +744,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
 
       doc.setFont("helvetica", "normal");
       const aText = a.answer_text || c.coding_round?.latest_code || 'No answer provided';
-      const aLines = doc.splitTextToSize(aText, pageWidth - 2 * margin);
+      const aLines = doc.splitTextToSize(cleanForPdf(aText), pageWidth - 2 * margin);
 
       for (let i = 0; i < aLines.length; i++) {
         checkPageBreak(5);
@@ -635,7 +759,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
         doc.text("AI Feedback:", margin, y);
         y += 5;
         doc.setFont("helvetica", "normal");
-        const fLines = doc.splitTextToSize(a.ai_feedback, pageWidth - 2 * margin);
+        const fLines = doc.splitTextToSize(cleanForPdf(a.ai_feedback), pageWidth - 2 * margin);
         for (let i = 0; i < fLines.length; i++) {
           checkPageBreak(5);
           doc.text(fLines[i], margin, y);
@@ -650,7 +774,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
       y += 10;
     });
 
-    doc.save(`${c.candidate_name?.replace(/\s+/g, '_') || 'Candidate'}_transcript.pdf`);
+    doc.save(`${cleanForPdf(c.candidate_name)?.replace(/\s+/g, '_') || 'Candidate'}_transcript.pdf`);
   };
 
   const handleDecision = async (newDecision) => {
@@ -825,7 +949,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   }
 
 
-  const tabs = ["overview", "resume", "interview", "evaluation", "timeline"]
+  const tabs = ["overview", "resume", "interview", "evaluation", "previous_history", "timeline"]
 
   // Action handlers
   const handleReject = async () => {
@@ -967,6 +1091,17 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                         <Calendar size={13} className="text-slate-400" /> Attended: {new Date(c.started_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
                       </span>
                     )}
+                    {previousInterviews.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("previous_history")}
+                        className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-md border border-indigo-200 transition-colors shadow-xs cursor-pointer"
+                        title="Click to view candidate's interview history"
+                      >
+                        <RotateCcw size={13} className="text-indigo-600" />
+                        Interview History ({previousInterviews.length})
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="hidden sm:flex flex-col items-center justify-center mr-16">
@@ -985,8 +1120,24 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
             {/* ── Tabs ── */}
             <div className="flex items-center gap-4 px-6 border-b border-slate-100 bg-white overflow-x-auto shrink-0">
               {tabs.map(t => (
-                <button key={t} onClick={() => setActiveTab(t)} className={`capitalize whitespace-nowrap px-1 py-4 text-sm font-bold border-b-2 transition-colors ${activeTab === t ? "border-indigo-600 text-indigo-600" : "border-transparent text-slate-500 hover:text-slate-800"}`}>
-                  {t}
+                <button
+                  key={t}
+                  onClick={() => setActiveTab(t)}
+                  className={`capitalize whitespace-nowrap px-1 py-4 text-sm font-bold border-b-2 transition-colors ${
+                    activeTab === t ? "border-indigo-600 text-indigo-600" : "border-transparent text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  {t === "previous_history" ? (
+                    <span className="flex items-center gap-1.5">
+                      <RotateCcw size={14} className="text-indigo-500" />
+                      Interview History
+                      {previousInterviews.length > 0 && (
+                        <span className="px-1.5 py-0.5 text-[10px] bg-indigo-100 text-indigo-700 rounded-full font-black">
+                          {previousInterviews.length}
+                        </span>
+                      )}
+                    </span>
+                  ) : t}
                 </button>
               ))}
             </div>
@@ -1052,6 +1203,18 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
     </div>
   </section>
 )}
+
+                  <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <h3 className="mb-2 text-sm font-black text-slate-800">Summary</h3>
+                    <p className="text-sm leading-7 text-slate-600">
+                      {summarySections.map(([label, value], index) => (
+                        <React.Fragment key={label}>
+                          {index > 0 && <span className="mx-1.5 text-slate-300">|</span>}
+                          <strong className="font-semibold text-slate-800">{label}:</strong> {value}
+                        </React.Fragment>
+                      ))}
+                    </p>
+                  </section>
 
                   <section className="bg-card rounded-xl border border-border p-5 shadow-sm">
                     <h3 className="text-sm font-black text-foreground mb-3 flex items-center gap-2">
@@ -1180,6 +1343,47 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                       </section>
                     )
                   })()}
+
+                  {/* Interview History Overview Card */}
+                  {previousInterviews.length > 0 && (
+                    <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                        <div className="flex items-center gap-2">
+                          <RotateCcw className="h-4 w-4 text-indigo-600" />
+                          <h3 className="text-sm font-black text-slate-800">Interview History Track Record</h3>
+                          <span className="px-2 py-0.5 text-[11px] font-bold bg-indigo-50 text-indigo-700 rounded-md border border-indigo-200">
+                            {previousInterviews.length} Total Sessions
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('previous_history')}
+                          className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+                        >
+                          View Full Interview History <ArrowRight size={13} />
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                          <div className="text-[10px] font-bold text-slate-400 uppercase">Total Interviews</div>
+                          <div className="text-lg font-black text-slate-800 mt-0.5">{previousSummary?.total ?? previousInterviews.length}</div>
+                        </div>
+                        <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-100">
+                          <div className="text-[10px] font-bold text-emerald-600 uppercase">Attended</div>
+                          <div className="text-lg font-black text-emerald-700 mt-0.5">{previousSummary?.attended ?? 0}</div>
+                        </div>
+                        <div className="p-3 bg-rose-50/60 rounded-xl border border-rose-100">
+                          <div className="text-[10px] font-bold text-rose-600 uppercase">Rejected</div>
+                          <div className="text-lg font-black text-rose-700 mt-0.5">{previousSummary?.rejected ?? 0}</div>
+                        </div>
+                        <div className="p-3 bg-amber-50/60 rounded-xl border border-amber-100">
+                          <div className="text-[10px] font-bold text-amber-600 uppercase">Ignored / No-show</div>
+                          <div className="text-lg font-black text-amber-700 mt-0.5">{previousSummary?.ignored_noshow ?? 0}</div>
+                        </div>
+                      </div>
+                    </section>
+                  )}
                 </div>
               )}
 
@@ -1371,21 +1575,27 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
-                          {(recordingUrl || screenRecordingUrl) && (
-                            <button
-                              onClick={handleDownloadRecording}
-                              className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors shadow-sm"
-                              title="Download Recording"
-                            >
-                              <Download size={16} /> Download
-                            </button>
+                          {recordingUrl || screenRecordingUrl ? (
+                            <>
+                              <button
+                                onClick={handleDownloadRecording}
+                                className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors shadow-sm"
+                                title="Download Recording"
+                              >
+                                <Download size={16} /> Download
+                              </button>
+                              <button
+                                onClick={() => setShowRecordingModal(true)}
+                                className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl hover:bg-emerald-100 transition-colors shadow-sm"
+                              >
+                                <Video size={16} /> Recording <ChevronRight size={14} />
+                              </button>
+                            </>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-400 bg-slate-50 border border-slate-200/60 rounded-xl">
+                              <Video size={14} className="opacity-40" /> Unavailable
+                            </span>
                           )}
-                          <button
-                            onClick={() => setShowRecordingModal(true)}
-                            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl hover:bg-emerald-100 transition-colors shadow-sm"
-                          >
-                            <Video size={16} /> Recording <ChevronRight size={14} />
-                          </button>
                         </div>
                       </div>
                     </section>
@@ -1487,6 +1697,52 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                     );
                   })()}
                 </div>
+              )}
+
+              {/* ─ Interview History Tab ─ */}
+              {activeTab === 'previous_history' && (
+                <InterviewHistorySection
+                  history={previousInterviews}
+                  summary={previousSummary}
+                  loading={previousLoading}
+                  error={previousError}
+                  candidateEmail={email}
+                  candidateName={name}
+                  onIgnoreCandidate={() => {
+                    onOpenChange(false)
+                    const targetRoute = window.location.pathname.startsWith('/admin') && !window.location.pathname.startsWith('/superadmin')
+                      ? '/admin/interviews'
+                      : '/superadmin/interviews'
+                    Swal.fire({
+                      toast: true,
+                      position: 'top-end',
+                      icon: 'info',
+                      title: `Candidate ${email} ignored. Redirecting to interviews.`,
+                      showConfirmButton: false,
+                      timer: 2000,
+                      timerProgressBar: true
+                    })
+                    navigate(targetRoute)
+                  }}
+                  onProceedInterview={() => {
+                    onOpenChange(false)
+                    const targetRoute = window.location.pathname.startsWith('/admin') && !window.location.pathname.startsWith('/superadmin')
+                      ? '/admin/create-interview'
+                      : '/superadmin/create-interview'
+                    const latestHistory = previousInterviews[0] || {}
+                    const latestDet = latestHistory.candidate_details || {}
+                    navigate(targetRoute, {
+                      state: {
+                        candidateData: {
+                          name: latestDet.name || name || '',
+                          email: latestDet.email || email || '',
+                          phone: latestDet.phone || c.candidate_phone || c.phone || '',
+                          resumeText: latestHistory.resume_text || c.resume_text || ''
+                        }
+                      }
+                    })
+                  }}
+                />
               )}
 
               {/* ─ Timeline Tab ─ */}
@@ -1660,13 +1916,27 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                         <div className="text-xs text-slate-400 font-medium">Interview video feed</div>
                       </div>
                     </div>
-                    {recordingUrl ? (
-                      <video controls preload="none" className="w-full aspect-video object-contain rounded-lg border border-slate-200 bg-black" src={recordingUrl}>
-                        Your browser does not support video.
-                      </video>
+                    {recordingUrl && !camVideoError ? (
+                      <div className="flex flex-col gap-2">
+                        <video 
+                          controls 
+                          preload="metadata" 
+                          playsInline 
+                          onError={() => setCamVideoError(true)}
+                          className="w-full aspect-video object-contain rounded-lg border border-slate-200 bg-black" 
+                          src={recordingUrl}
+                        >
+                          Your browser does not support video.
+                        </video>
+                        <div className="flex justify-end">
+                          <a href={recordingUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold text-indigo-600 hover:underline">
+                            Open video in new tab ↗
+                          </a>
+                        </div>
+                      </div>
                     ) : (
                       <div className="w-full aspect-video flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
-                        No camera recording available
+                        {camVideoError ? "Camera recording currently unavailable" : "No camera recording available"}
                       </div>
                     )}
                   </div>
@@ -1679,13 +1949,27 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                         <div className="text-xs text-slate-400 font-medium">Screen share capture</div>
                       </div>
                     </div>
-                    {screenRecordingUrl ? (
-                      <video controls preload="none" className="w-full aspect-video object-contain rounded-lg border border-slate-200 bg-black" src={screenRecordingUrl}>
-                        Your browser does not support video.
-                      </video>
+                    {screenRecordingUrl && !screenVideoError ? (
+                      <div className="flex flex-col gap-2">
+                        <video 
+                          controls 
+                          preload="metadata" 
+                          playsInline 
+                          onError={() => setScreenVideoError(true)}
+                          className="w-full aspect-video object-contain rounded-lg border border-slate-200 bg-black" 
+                          src={screenRecordingUrl}
+                        >
+                          Your browser does not support video.
+                        </video>
+                        <div className="flex justify-end">
+                          <a href={screenRecordingUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold text-emerald-600 hover:underline">
+                            Open video in new tab ↗
+                          </a>
+                        </div>
+                      </div>
                     ) : (
                       <div className="w-full aspect-video flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
-                        No screen recording available
+                        {screenVideoError ? "Screen recording currently unavailable" : "No screen recording available"}
                       </div>
                     )}
                   </div>
@@ -2523,5 +2807,3 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
       </>
     )
   }
-
-

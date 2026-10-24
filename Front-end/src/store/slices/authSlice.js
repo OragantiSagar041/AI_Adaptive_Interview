@@ -64,9 +64,9 @@ const authSlice = createSlice({
       if (state.adminUser) {
         state.adminUser.credits = action.payload
         try {
-          const stored = JSON.parse(sessionStorage.getItem('adminUser')) || {}
+          const stored = JSON.parse(localStorage.getItem('adminUser')) || {}
           stored.credits = action.payload
-          sessionStorage.setItem('adminUser', JSON.stringify(stored))
+          localStorage.setItem('adminUser', JSON.stringify(stored))
         } catch (e) {
           // ignore
         }
@@ -76,9 +76,9 @@ const authSlice = createSlice({
       if (state.adminUser) {
         state.adminUser = { ...state.adminUser, ...action.payload }
         try {
-          const stored = JSON.parse(sessionStorage.getItem('adminUser')) || {}
+          const stored = JSON.parse(localStorage.getItem('adminUser')) || {}
           const updated = { ...stored, ...action.payload }
-          sessionStorage.setItem('adminUser', JSON.stringify(updated))
+          localStorage.setItem('adminUser', JSON.stringify(updated))
         } catch (e) {
           // ignore
         }
@@ -95,9 +95,9 @@ const authSlice = createSlice({
       if (action.payload) {
         state.adminUser = { ...state.adminUser, ...action.payload }
         try {
-          const stored = JSON.parse(sessionStorage.getItem('adminUser')) || {}
+          const stored = JSON.parse(localStorage.getItem('adminUser')) || {}
           const updated = { ...stored, ...action.payload }
-          sessionStorage.setItem('adminUser', JSON.stringify(updated))
+          localStorage.setItem('adminUser', JSON.stringify(updated))
         } catch (e) {}
       }
     })
@@ -110,9 +110,9 @@ const authSlice = createSlice({
         if (!isNaN(numCredits)) {
           state.adminUser.credits = numCredits
           try {
-            const stored = JSON.parse(sessionStorage.getItem('adminUser')) || {}
+            const stored = JSON.parse(localStorage.getItem('adminUser')) || {}
             stored.credits = numCredits
-            sessionStorage.setItem('adminUser', JSON.stringify(stored))
+            localStorage.setItem('adminUser', JSON.stringify(stored))
           } catch (e) {}
         }
       }

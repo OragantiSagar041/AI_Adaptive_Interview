@@ -32,7 +32,7 @@ import { getCompanyRevenueMaster } from '../../utils/api'
 
 export default function CompanyRevenue() {
   const token = useSelector(state => state.auth.token) || ''
-  const adminId = sessionStorage.getItem('adminId') || ''
+  const adminId = localStorage.getItem('adminId') || ''
 
   // Data state
   const [loading, setLoading] = useState(true)

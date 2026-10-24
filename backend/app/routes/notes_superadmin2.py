@@ -141,9 +141,9 @@ from datetime import timedelta
 def get_superadmin_org_stats(current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["master", "super_admin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
-    # Mock data aggregation mixed with DB
+    # Test data aggregation mixed with DB
     total_companies = companies_collection.count_documents({})
-    # Mock some data for the UI
+    # Test some data for the UI
     months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
     growth_data = [{"name": m, "signups": random.randint(10, 50)} for m in months]
     plans_data = [

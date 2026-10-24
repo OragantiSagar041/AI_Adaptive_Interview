@@ -59,7 +59,7 @@ export const useInterviewMedia = ({
   const transcribeInFlightRef = useRef(false)
 
   const MIN_SEGMENT_MS = 700
-  const SEGMENT_MIN_PEAK_RMS = 0.04
+  const SEGMENT_MIN_PEAK_RMS = 0.012
 
   // WebRTC Global Cleanup
   useEffect(() => {
@@ -244,11 +244,12 @@ export const useInterviewMedia = ({
       ].filter(Boolean).map(s => String(s).trim()).filter(s => s.length > 1)
       const cleanKnownTerms = Array.from(new Set(rawTerms)).join(', ')
       if (cleanKnownTerms) {
+        fd.append('known_terms', cleanKnownTerms)
         fd.append('prompt', cleanKnownTerms)
       }
       fd.append('language', langCode)
 
-      const resp = await api.post('/speech-to-text-whisper', fd, {
+      const resp = await api.post('/stt', fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
         timeout: 10000,
       })
@@ -256,7 +257,7 @@ export const useInterviewMedia = ({
       // Second check: discard result if TTS fired while we were waiting for Whisper
       if (isTTSPlayingRef.current) return
 
-      const segmentText = (resp.data?.text || '').trim()
+      const segmentText = (resp.data?.transcript || resp.data?.text || '').trim()
       if (!segmentText) return
 
       // Whisper often hallucinates these phrases when fed background noise
