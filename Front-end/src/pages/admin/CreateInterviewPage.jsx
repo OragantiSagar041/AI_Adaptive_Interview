@@ -1,9 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-<<<<<<< HEAD
-import { useLocation, useNavigate } from 'react-router-dom' 
-=======
 import { useLocation, useNavigate } from 'react-router-dom'
->>>>>>> bc973700569187dc1ff309dec7c51f80b2fba553
 import { useSelector, useDispatch } from 'react-redux'
 import axios from 'axios'
 import Swal from 'sweetalert2'
