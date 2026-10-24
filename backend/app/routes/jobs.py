@@ -97,6 +97,660 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+def extract_job_details_fallback(prompt: str) -> dict:
+    """Robust rule-based and NLP fallback to extract and structure job details from prompt."""
+    prompt_lower = prompt.lower()
+
+    # 1. Title Extraction: Check direct Markdown / Role headers first
+    title = None
+    header_title_match = re.search(
+        r'(?:^|\n)\s*[\*#_]*\s*(?:job\s+description|role|position|job\s+title)[\*#_:\s]*\s*([A-Za-z0-9\-\.\/\s\(\)]{3,60}?)(?=\n|\r|$)',
+        prompt,
+        re.IGNORECASE
+    )
+    if header_title_match:
+        cand_t = header_title_match.group(1).strip()
+        cand_t = re.sub(r'[\*_#]', '', cand_t).strip()
+        if cand_t and len(cand_t) >= 3 and cand_t.lower() not in ["none", "open", "na", "job description"]:
+            title = cand_t
+
+    if not title:
+        # Check for 'I have X requirement' pattern (e.g. 'I have ui-ux requirement')
+        inline_req_match = re.search(
+            r'(?:i have|we have|have)\s+([A-Za-z0-9\-\.\/ ]{2,40}?)\s+requirement',
+            prompt,
+            re.IGNORECASE
+        )
+        if inline_req_match:
+            cand_req = inline_req_match.group(1).strip().lower()
+            if re.search(r'ui[\s\-_/]?ux|ux designer|ui designer', cand_req):
+                title = "UI/UX Designer"
+            elif re.search(r'ai[\s\-_/]?ml|machine learning|ml engineer|ai engineer', cand_req):
+                title = "AI/ML Engineer"
+            elif "full stack" in cand_req or "fullstack" in cand_req:
+                title = "Full Stack Developer"
+            elif "devops" in cand_req:
+                title = "DevOps Engineer"
+            elif "python" in cand_req:
+                title = "Python Developer"
+            elif "java" in cand_req:
+                title = "Software Developer (Java / Microservices)"
+
+    if not title:
+        role_ctx_match = re.search(
+            r'(?:requirement of|role of|position of|hiring (?:for )?|looking for|need (?:an? )?|seeking (?:an? )?|opening for)\s+([A-Za-z0-9\-\./\s]+?)(?=\s+(?:having|with|for |\d+\s*yrs|\d+\s*years|fresher|salary|and\s+salary|skills|roles|experience|,|\.|$))',
+            prompt,
+            re.IGNORECASE
+        )
+        if role_ctx_match:
+            cand = role_ctx_match.group(1).strip().lower()
+            if re.search(r'ai[\s\-_/]?ml|machine learning|ml engineer|ai engineer', cand):
+                title = "AI/ML Engineer"
+            elif "data scientist" in cand:
+                title = "Data Scientist"
+            elif "data engineer" in cand:
+                title = "Data Engineer"
+            elif "full stack" in cand or "fullstack" in cand:
+                title = "Full Stack Developer"
+            elif "frontend" in cand or "front-end" in cand or "react" in cand:
+                title = "Frontend Developer (React)"
+            elif "backend" in cand or "back-end" in cand:
+                title = "Backend Developer"
+            elif "python" in cand:
+                title = "Python Developer"
+            elif "java" in cand or "microservice" in cand:
+                title = "Software Developer (Java / Microservices)"
+            elif "aws" in cand or "cloud" in cand:
+                title = "AWS Cloud Engineer"
+            elif "devops" in cand:
+                title = "DevOps Engineer"
+            elif "qa" in cand or "test" in cand or "quality" in cand:
+                title = "QA Automation Engineer"
+            elif re.search(r'ui[\s\-_/]?ux|ux designer|ui designer|designer', cand):
+                title = "UI/UX Designer"
+            else:
+                title = role_ctx_match.group(1).strip().title()
+
+    # Fallback to keyword matching if contextual indicator didn't match
+    if not title:
+        if re.search(r' ai[\s\-_/]?ml | ai\s*and\s*ml | machine learning engineer | ml engineer | ai engineer ', prompt_lower):
+            title = "AI/ML Engineer"
+        elif re.search(r' data scientist ', prompt_lower):
+            title = "Data Scientist"
+        elif re.search(r' data engineer ', prompt_lower):
+            title = "Data Engineer"
+        elif re.search(r' full\s*stack | fullstack ', prompt_lower):
+            title = "Full Stack Developer"
+        elif re.search(r' devops ', prompt_lower):
+            title = "DevOps Engineer"
+        elif re.search(r' aws | cloud engineer ', prompt_lower):
+            title = "AWS Cloud Engineer"
+        elif re.search(r' qa | test automation | quality assurance | sdet ', prompt_lower):
+            title = "QA Automation Engineer"
+        elif re.search(r' ui[\s\-_/]?ux | ui designer | ux designer | ui/ux ', prompt_lower):
+            title = "UI/UX Designer"
+        elif re.search(r' front[\s\-]?end | react developer ', prompt_lower):
+            title = "Frontend Developer (React)"
+        elif re.search(r' back[\s\-]?end ', prompt_lower):
+            title = "Backend Developer"
+        elif re.search(r' python developer | python engineer ', prompt_lower):
+            title = "Python Developer"
+        elif re.search(r' java developer | java engineer | microservice ', prompt_lower):
+            title = "Software Developer (Java / Microservices)"
+        elif re.search(r' software engineer ', prompt_lower):
+            title = "Software Engineer"
+        elif re.search(r' software developer | developer ', prompt_lower):
+            title = "Software Developer"
+        else:
+            title = "Software Developer"
+
+    # 2. Experience Extraction (e.g. fresher, 3–5 yrs, 2 yrs)
+    exp = "2 – 4 Years"
+    if "fresher" in prompt_lower or "entry level" in prompt_lower or "0 yr" in prompt_lower or "0 year" in prompt_lower:
+        exp = "Fresher (0 – 1 Years)"
+    else:
+        exp_match = re.search(r'(\d+(?:\s*[\-–—to]\s*\d+)?)\s*(?:yrs?|years?|yoe)', prompt_lower)
+        if exp_match:
+            raw_val = exp_match.group(1).strip()
+            m_parts = re.split(r'[\-–—]|(?:\s+to\s+)', raw_val)
+            if len(m_parts) == 2 and m_parts[0].strip() and m_parts[1].strip():
+                exp = f"{m_parts[0].strip()} – {m_parts[1].strip()} Years"
+            else:
+                exp = f"{m_parts[0].strip()} Years"
+
+    # 3. Salary Extraction (e.g. 6 lpa, 8 lpa, 12 LPA)
+    salary = "8 LPA"
+    sal_match = re.search(r'(\d+(?:\.\d+)?)\s*(?:lpa|lac|lakh|inr|per annum)', prompt_lower)
+    if sal_match:
+        salary = f"{sal_match.group(1).upper()} LPA"
+    elif "6 lpa" in prompt_lower or "6lpa" in prompt_lower:
+        salary = "6 LPA"
+    elif "8 lpa" in prompt_lower or "8lpa" in prompt_lower:
+        salary = "8 LPA"
+    elif "10 lpa" in prompt_lower or "10lpa" in prompt_lower:
+        salary = "10 LPA"
+    elif "12 lpa" in prompt_lower or "12lpa" in prompt_lower:
+        salary = "12 LPA"
+
+    # 4. Service Agreement / Bond
+    bond = "2-Year Bond"
+    if "no bond" in prompt_lower or "0 bond" in prompt_lower or "0 yr bond" in prompt_lower or "without bond" in prompt_lower:
+        bond = "No Bond"
+    elif re.search(r'(\d+)\s*(?:yr|year)s?\s*bond', prompt_lower):
+        b_num = re.search(r'(\d+)\s*(?:yr|year)s?\s*bond', prompt_lower).group(1)
+        bond = f"{b_num}-Year Bond"
+    elif "no bond" in prompt_lower or "none" in prompt_lower:
+        bond = "No Bond"
+
+    # 5. Work mode
+    work_mode = "Remote"
+    if "on-site" in prompt_lower or "onsite" in prompt_lower or "office" in prompt_lower:
+        work_mode = "On-site"
+    elif "hybrid" in prompt_lower:
+        work_mode = "Hybrid"
+
+    # 6. Location
+    loc = "Hyderabad / Remote"
+    loc_match = re.search(r' (?:location|located in|based in|city|in)\s+([A-Za-z]{3,20}(?:\s+[A-Za-z]{3,20})?) ', prompt_lower)
+    if loc_match:
+        cand_loc = loc_match.group(1).strip().title()
+        if cand_loc.lower() not in ["this", "our", "the", "software", "developer", "engineer", "remote", "hybrid", "office", "years", "having", "offer", "skills", "jobs"]:
+            loc = f"{cand_loc} / {work_mode}"
+
+    # 7. Check if user provided explicit skills list in prompt (Section-based OR inline)
+    explicit_skills = []
+    # 7a. Section-based skills (e.g. **Required Skills:** \n - AWS \n - Docker)
+    skills_sec_match = re.search(
+        r'(?:^|\n)\s*[\*#_]*\s*(?:required\s+skills?|key\s+skills?|technical\s+skills?|skills\s*&?\s*technologies|skills)[\*#_:\s]*\n+([\s\S]*?)(?=\n\s*(?:[\*#_]*(?:Roles|Responsibilities|Mandatory|Certificat|Education|Experience|Preferred|Job Summary|How to Apply)\b|$))',
+        prompt,
+        re.IGNORECASE
+    )
+    if skills_sec_match:
+        sec_lines = [l.strip() for l in skills_sec_match.group(1).splitlines() if l.strip()]
+        for l in sec_lines:
+            cleaned = re.sub(r'^[•\-\*"\d\.\)]\s*', '', l).strip()
+            cleaned = re.sub(r'[\*_]', '', cleaned).strip()
+            if cleaned and cleaned.lower() not in ['skills', 'roles', 'responsibilities', 'post a job']:
+                explicit_skills.append(cleaned)
+
+    # 7b. Inline skills (e.g. skills: Python, Django, SQL)
+    if not explicit_skills:
+        skills_match = re.search(
+            r"skills(?:\s+roles)?(?:\s+and\s+responsibilities)?\s*(?:are|include|:|is|\n)?\s*([A-Za-z0-9\-\.\,\/\+\(\)\&\s]+?)(?=\s+(?:but\b|and\s+salary\b|salary\b|bond\b|having\b|experience\b|and\s+certification|certifications?\s+are|\bpassout\b|\.\s*$)|\Z)",
+            prompt,
+            re.IGNORECASE
+        )
+        if skills_match:
+            raw_seg = skills_match.group(1).strip()
+            # Strip trailing '. and certifications...' if regex didn't catch it
+            raw_seg = re.sub(r'\.?\s*(?:and\s+)?certifications?.*$', '', raw_seg, flags=re.IGNORECASE).strip()
+            parts = [s.strip() for s in re.split(r"[,|;\n]", raw_seg) if s.strip()]
+            for p in parts:
+                clean = re.sub(r'^(?:and|or)\s+', '', p, flags=re.IGNORECASE).strip()
+                clean = re.sub(r'[\.]$', '', clean).strip()
+                if clean and clean.lower() not in ['and', 'or', 'skills', 'roles', 'responsibilities', 'post a job', 'post', 'job']:
+                    explicit_skills.append(clean)
+
+    # 8. Check if user provided explicit roles & responsibilities
+    explicit_roles = []
+    roles_sec_match = re.search(
+        r'(?:^|\n)\s*[\*#_]*\s*(?:roles?\s*(?:and|&)?\s*responsibilities|key\s+responsibilities|responsibilities)[\*#_:\s]*\n+([\s\S]*?)(?=\n\s*(?:[\*#_]*(?:Mandatory|Certificat|Required Skills|Skills|Education|Experience|Preferred|Job Summary|How to Apply)\b|$))',
+        prompt,
+        re.IGNORECASE
+    )
+    if roles_sec_match:
+        sec_lines = [l.strip() for l in roles_sec_match.group(1).splitlines() if l.strip()]
+        for l in sec_lines:
+            cleaned = re.sub(r'^[•\-\*"\d\.\)]\s*', '', l).strip()
+            cleaned = re.sub(r'[\*_]', '', cleaned).strip()
+            if cleaned and len(cleaned) >= 5:
+                explicit_roles.append(cleaned)
+
+    # 9. Check if user provided explicit Job Summary
+    summary_match = re.search(
+        r'(?:^|\n)\s*[\*#_]*\s*(?:job\s+summary|summary|about\s+the\s+role)[\*#_:\s]*\n*([\s\S]*?)(?=\n\s*(?:[\*#_]*(?:Required Skills|Skills|Roles|Responsibilities|Mandatory|Certificat|Education|Experience|Preferred|How to Apply)\b|$))',
+        prompt,
+        re.IGNORECASE
+    )
+    explicit_summary = summary_match.group(1).strip() if summary_match and len(summary_match.group(1).strip()) >= 15 else None
+
+    # 10. Certifications Extraction (Section & Inline)
+    certifications = []
+    certification_intro = ""
+    cert_sec_match = re.search(
+        r'(?:^|\n)\s*[\*#_]*\s*(?:mandatory\s+)?(?:certifications?|certificates?)(?:\s+requirements?)?[\*#_:\s]*\n+([\s\S]*?)(?=\n\s*(?:[\*#_]*(?:Education|Preferred|Experience|Salary|Roles|Skills|Responsibilities|Qualifications|Job Summary|How to Apply)\b|$))',
+        prompt,
+        re.IGNORECASE
+    )
+    if cert_sec_match:
+        sec_lines = [l.strip() for l in cert_sec_match.group(1).splitlines() if l.strip()]
+        for l in sec_lines:
+            cleaned = re.sub(r'^[•\-\*"\d\.\)]\s*', '', l).strip()
+            cleaned = re.sub(r'[\*_]', '', cleaned).strip()
+            if not cleaned:
+                continue
+            if any(w in cleaned.lower() for w in ['completed at least', 'following certification', 'must have completed', 'mandatory:']) or cleaned.endswith(':'):
+                if not certification_intro:
+                    certification_intro = cleaned
+            else:
+                certifications.append(cleaned)
+    else:
+        inline_cert_match = re.search(
+            r'(?:(?:mandatory\s+)?certifications?(?:\s+requirements?)?|certificates?(?:\s+required)?)\s*(?:are|:|include|is|\n)\s*([A-Za-z0-9\-\.\,\/\+\(\)\&\s]+?)(?=\s+(?:but\b|and\s+salary\b|salary\b|bond\b|having\b|experience\b|skills\b|and\s+must\b|\bpassout\b|\bstream\b|\.\s*$)|\Z)',
+            prompt,
+            re.IGNORECASE
+        )
+        if inline_cert_match:
+            raw_c = inline_cert_match.group(1).strip()
+            # Also strip any trailing 'and must be YEAR, YEAR passout...' text
+            raw_c = re.sub(r'\s+and\s+must\s+be\b.*$', '', raw_c, flags=re.IGNORECASE).strip()
+            raw_c = re.sub(r'\s+must\s+be\b.*$', '', raw_c, flags=re.IGNORECASE).strip()
+            parts = [s.strip() for s in re.split(r'[,|;\n]', raw_c) if s.strip()]
+            for p in parts:
+                clean_p = re.sub(r'^(?:and|or)\s+', '', p, flags=re.IGNORECASE).strip()
+                clean_p = re.sub(r'[\.]$', '', clean_p).strip()
+                # Skip bare year numbers, passout conditions, stream conditions
+                if not clean_p:
+                    continue
+                if re.match(r'^\d{4}$', clean_p):  # bare year like '2024'
+                    continue
+                if re.search(r'\bpassout\b|\bstream\b|\bmust be\b|\bany stream\b', clean_p, re.IGNORECASE):
+                    continue
+                if clean_p.lower() not in ['and', 'or', 'none', 'no', 'skills', 'roles']:
+                    certifications.append(clean_p)
+
+    # 11. Role Profiles: Tailored technical stack, responsibilities, and competencies
+    title_l = title.lower()
+    if "ai" in title_l or "ml" in title_l or "machine learning" in title_l:
+        default_skills = ["Python", "Machine Learning", "Deep Learning", "SQL", "NLP", "Generative AI", "LLMs", "TensorFlow", "PyTorch", "FastAPI", "Docker", "AWS/Azure"]
+        summary = explicit_summary or (
+            f"We are seeking an ambitious {title} ({exp}) to build innovative machine learning, deep learning, and Generative AI solutions. "
+            f"You will design predictive models, fine-tune LLMs, engineer automated data pipelines, and deploy scalable AI microservices into production."
+        )
+        roles = explicit_roles if len(explicit_roles) >= 2 else [
+            "Model Development & Architecture: Design, train, and optimize deep learning, machine learning, and NLP models using PyTorch, TensorFlow, and Scikit-Learn.",
+            "Generative AI & LLMs: Implement state-of-the-art Generative AI applications, prompt engineering, RAG pipelines, and LLM fine-tuning workflows.",
+            "Data Preprocessing & Pipelines: Build robust data ingestion, feature engineering, and high-performance querying pipelines with SQL, Pandas, and NumPy.",
+            "Model Deployment & APIs: Package and deploy machine learning models as high-throughput REST APIs using FastAPI, Flask, and Docker containers.",
+            "Cloud & MLOps: Scale AI workloads, manage model registries, and track production performance across cloud platforms (AWS / Azure).",
+            "Collaborative Engineering: Collaborate actively with data engineers, software developers, and product teams to translate complex business challenges into intelligent AI systems."
+        ]
+        technical_skills = {
+            "Languages": "Python, SQL",
+            "AI & Deep Learning": "TensorFlow, PyTorch, Deep Learning, Neural Networks",
+            "Generative AI & NLP": "LLMs, Generative AI, Prompt Engineering, NLP, Transformers",
+            "Machine Learning": "Scikit-Learn, Pandas, NumPy, Feature Engineering",
+            "API & Deployment": "FastAPI, Flask, REST APIs, Docker, Model Deployment",
+            "Cloud & DevOps": "AWS / Azure, Git, CI/CD"
+        }
+    elif "full stack" in title_l:
+        default_skills = ["React", "Node.js", "TypeScript", "JavaScript", "MongoDB", "PostgreSQL", "Express.js", "REST APIs", "Docker", "Git"]
+        summary = explicit_summary or (
+            f"We are seeking a versatile {title} ({exp}) to build end-to-end web applications. "
+            f"You will design intuitive frontend interfaces with React, develop scalable backend APIs with Node.js/Python, and manage database persistence."
+        )
+        roles = explicit_roles if len(explicit_roles) >= 2 else [
+            "Frontend Engineering: Build responsive, performant user interfaces using React, TypeScript, and modern CSS frameworks.",
+            "Backend Development: Design, develop, and maintain secure, high-throughput RESTful APIs and microservices with Node.js / Express or Python.",
+            "Database Architecture: Model relational and NoSQL schemas, write optimized queries, and manage data persistence with PostgreSQL and MongoDB.",
+            "DevOps & Containerization: Containerize applications with Docker, manage CI/CD pipelines, and deploy on modern cloud platforms.",
+            "Testing & Reliability: Write comprehensive unit, integration, and end-to-end test suites to ensure robust software quality.",
+            "Collaborative Engineering: Participate in architecture reviews, sprint planning, and code reviews across cross-functional engineering teams."
+        ]
+        technical_skills = {
+            "Frontend": "React.js, TypeScript, JavaScript (ES6+), HTML5, CSS3, Tailwind CSS",
+            "Backend": "Node.js, Express.js, RESTful APIs, Microservices",
+            "Databases": "PostgreSQL, MongoDB, Redis",
+            "Tools & DevOps": "Git, Docker, CI/CD Pipelines, Postman",
+            "Testing": "Jest, React Testing Library, Cypress"
+        }
+    elif "ui/ux" in title_l or "designer" in title_l:
+        default_skills = ["Figma", "Adobe XD", "Wireframing", "Prototyping", "User Research", "UI Design", "Design Systems", "Usability Testing"]
+        summary = explicit_summary or (
+            f"We are seeking a creative {title} ({exp}) to craft intuitive, user-centered digital experiences for web and mobile platforms. "
+            f"You will transform complex workflows into elegant user interfaces, wireframes, interactive prototypes, and design systems."
+        )
+        roles = explicit_roles if len(explicit_roles) >= 2 else [
+            "User Research & Personas: Conduct user interviews, competitive analysis, and map comprehensive customer journey flows.",
+            "Wireframing & Prototyping: Create low and high-fidelity wireframes, interactive prototypes, and mockups using Figma and Adobe XD.",
+            "Design Systems & Style Guides: Build, maintain, and scale comprehensive design systems, component libraries, and visual guidelines.",
+            "Developer Handoff: Collaborate closely with frontend engineers to ensure design fidelity and responsive, pixel-perfect implementation.",
+            "Usability & Accessibility: Advocate for user empathy, intuitive interactions, and WCAG accessibility standards across all platforms."
+        ]
+        technical_skills = {
+            "Design Tools": "Figma, Adobe XD, Sketch, Photoshop, Illustrator",
+            "Prototyping": "Figma Interactive Components, ProtoPie, InVision",
+            "UX Methodologies": "User Journey Mapping, Information Architecture, Wireframing, Usability Testing",
+            "Accessibility & Standards": "WCAG 2.1 Accessibility, Responsive Web & Mobile Design Patterns"
+        }
+    elif "python" in title_l:
+        default_skills = ["Python", "FastAPI", "Django", "PostgreSQL", "Docker", "Redis", "REST APIs", "Linux"]
+        summary = explicit_summary or (
+            f"We are seeking an experienced {title} ({exp}) to join our engineering team. "
+            f"You will build, optimize, and maintain high-performance, asynchronous backend services and scalable data pipelines. "
+            f"The ideal candidate possesses strong proficiency in Python, FastAPI, relational databases, and modern cloud deployment practices."
+        )
+        roles = explicit_roles if len(explicit_roles) >= 2 else [
+            "Backend Development: Design, develop, and maintain robust, high-throughput backend services and APIs using Python, FastAPI, and Django.",
+            "Database Architecture & ORM: Model relational schemas, optimize complex queries, and manage data persistence with PostgreSQL and SQLAlchemy / Tortoise ORM.",
+            "API Design & Integrations: Build secure, performant RESTful endpoints, API gateways, and asynchronous task queues with Redis and Celery.",
+            "Linux & Containerization: Containerize applications with Docker, manage microservices configurations, and operate comfortably in Linux server environments.",
+            "Testing & Code Quality: Write unit, integration, and end-to-end test suites using PyTest, ensuring high test coverage, reliability, and security.",
+            "Collaborative Engineering: Actively contribute to code reviews, system design discussions, agile sprint cycles, and technical documentation."
+        ]
+        technical_skills = {
+            "Primary Language": "Python 3.10+ (AsyncIO, Generators, Type Hinting, OOPs)",
+            "Frameworks": "FastAPI, Django, Flask, SQLAlchemy",
+            "Databases": "PostgreSQL, MySQL, Redis, MongoDB",
+            "Architecture": "RESTful APIs, Microservices, Asynchronous Event-Driven",
+            "Operating System": "Linux / Unix (Command line usage, shell scripting, process management)",
+            "Tools & DevOps": "Docker, Git, CI/CD Pipelines, Postman",
+            "Testing": "PyTest, Unittest, Mock"
+        }
+    elif "java" in title_l or "microservice" in prompt_lower:
+        default_skills = ["Java", "Spring Boot", "Microservices", "Hibernate", "SQL", "Linux", "REST APIs", "Docker"]
+        summary = explicit_summary or (
+            f"We are seeking an experienced {title} ({exp}) to join our core engineering team. "
+            f"You will be responsible for building, optimizing, and maintaining scalable enterprise software applications. "
+            f"The ideal candidate possesses strong expertise in Core & Advanced Java, Spring Framework, Hibernate ORM, Microservices, and Linux environments."
+        )
+        roles = explicit_roles if len(explicit_roles) >= 2 else [
+            "Backend Development: Design, build, and maintain high-performance, reusable, and reliable Java code using Spring Boot and Microservices architecture.",
+            "Database Design & Management: Write, optimize, and manage complex SQL queries, stored procedures, and schema designs. Implement Object-Relational Mapping (ORM) using Hibernate / JPA.",
+            "API Development: Create and consume secure, RESTful web services and integrate third-party APIs across modern Microservices workflows.",
+            "Linux Environment: Work comfortably within Linux/Unix operating systems to manage services, inspect logs, automate routine tasks with basic shell scripts, and handle deployments.",
+            "Testing & Quality Assurance: Write clean unit and integration tests (JUnit/Mockito) to ensure software robustness, reliability, and security compliance.",
+            "Collaborative Engineering: Participate actively in code reviews, technical documentation, sprint planning, and debugging in an Agile framework."
+        ]
+        technical_skills = {
+            "Primary Language": "Java (Java 8/11/17 — Multithreading, Streams, OOPs, Collections)",
+            "Frameworks": "Spring, Spring Boot, Spring MVC, Spring Data JPA, Hibernate ORM",
+            "Architecture": "Microservices, REST APIs, API Gateways, Distributed Systems",
+            "Databases": "Relational SQL (MySQL, PostgreSQL, Oracle, or MS SQL Server)",
+            "Operating System": "Linux / Unix (Command line usage, shell scripting, system logs)",
+            "Tools & DevOps": "Docker, Git, Maven / Gradle, Postman",
+            "Testing": "JUnit, Mockito"
+        }
+    elif "aws" in title_l or "devops" in title_l or "cloud" in title_l:
+        default_skills = ["AWS", "Docker", "Kubernetes", "Terraform", "CI/CD", "Linux", "Python", "CloudFormation"]
+        summary = explicit_summary or (
+            f"We are seeking an experienced {title} ({exp}) to design, automate, and maintain resilient cloud infrastructure. "
+            f"You will spearhead continuous integration, container orchestration, and cloud reliability across multi-region environments."
+        )
+        roles = explicit_roles if len(explicit_roles) >= 2 else [
+            "Cloud Infrastructure: Architect, configure, and maintain highly available and resilient infrastructure on AWS using Terraform or CloudFormation.",
+            "Container Orchestration: Deploy, scale, and manage containerized workloads using Docker and Kubernetes (EKS/ECS).",
+            "CI/CD Automation: Build and maintain automated build, test, and deployment pipelines using modern CI/CD tooling.",
+            "Monitoring & Observability: Implement centralized logging, tracing, and metrics with Prometheus, Grafana, and CloudWatch.",
+            "Security & Governance: Enforce cloud security best practices, IAM least privilege access, and infrastructure compliance standards.",
+            "Incident Response & Reliability: Troubleshoot production incidents, optimize infrastructure costs, and ensure high system uptime."
+        ]
+        technical_skills = {
+            "Cloud Platform": "AWS (EC2, S3, RDS, ECS, EKS, Lambda, CloudFront, VPC)",
+            "Infrastructure as Code": "Terraform, CloudFormation",
+            "Containers": "Docker, Kubernetes, Helm",
+            "CI/CD": "GitHub Actions, GitLab CI, Jenkins",
+            "Monitoring": "Prometheus, Grafana, CloudWatch",
+            "Scripting & OS": "Bash, Python, Linux (Ubuntu/Debian, Amazon Linux)",
+            "Testing & Security": "SonarQube, Trivy, IAM policies"
+        }
+    elif "frontend" in title_l or "react" in title_l:
+        default_skills = ["React", "JavaScript", "TypeScript", "Tailwind CSS", "Redux Toolkit", "REST APIs", "HTML5/CSS3"]
+        summary = explicit_summary or (
+            f"We are seeking a talented {title} ({exp}) to craft exceptional, responsive user interfaces and scalable frontend architectures. "
+            f"You will turn complex user workflows into fluid, intuitive web experiences."
+        )
+        roles = explicit_roles if len(explicit_roles) >= 2 else [
+            "UI Development: Build modern, responsive, and accessible user interfaces using React, TypeScript, and Tailwind CSS.",
+            "State Management & Architecture: Architect predictable client-side state using Redux Toolkit, Context API, or TanStack Query.",
+            "API Integration: Consume and integrate RESTful APIs and WebSocket feeds with robust error handling and loading indicators.",
+            "Performance Optimization: Optimize core web vitals, bundle sizes, lazy loading, and rendering performance across browsers.",
+            "Testing & Code Quality: Write unit and component tests using Vitest, Jest, and React Testing Library.",
+            "Collaborative Engineering: Work closely with UI/UX designers and backend engineers in agile iterations."
+        ]
+        technical_skills = {
+            "Primary Languages": "JavaScript (ES6+), TypeScript, HTML5, CSS3",
+            "Frameworks & UI": "React.js, Next.js, Tailwind CSS, Redux Toolkit",
+            "Architecture": "Single Page Applications (SPA), Server-Side Rendering (SSR), RESTful APIs",
+            "Testing": "Jest, React Testing Library, Vitest",
+            "Tools & Build": "Vite, Webpack, Git, npm/yarn"
+        }
+    elif "data scientist" in title_l:
+        default_skills = ["Python", "Machine Learning", "Deep Learning", "TensorFlow", "PyTorch", "Pandas", "Scikit-Learn", "SQL"]
+        summary = explicit_summary or (
+            f"We are seeking a data-driven {title} ({exp}) to develop predictive machine learning models and extract actionable intelligence from complex datasets."
+        )
+        roles = explicit_roles if len(explicit_roles) >= 2 else [
+            "Model Development: Design, train, and evaluate machine learning and deep learning models using Python, Scikit-Learn, and PyTorch / TensorFlow.",
+            "Data Pipeline Engineering: Clean, preprocess, and engineer features from massive structured and unstructured datasets.",
+            "Model Deployment: Deploy predictive models as scalable REST APIs using FastAPI or Docker containers.",
+            "Experimentation & Insights: Design A/B tests, perform rigorous statistical analysis, and present findings to key stakeholders."
+        ]
+        technical_skills = {
+            "Languages": "Python, SQL, R",
+            "ML Frameworks": "TensorFlow, PyTorch, Scikit-Learn, XGBoost",
+            "Data Processing": "Pandas, NumPy, Apache Spark",
+            "Deployment & Tools": "Docker, MLflow, FastAPI, Git"
+        }
+    elif "qa" in title_l or "test" in title_l:
+        default_skills = ["Selenium", "Cypress", "PyTest", "Test Automation", "Postman", "JIRA", "CI/CD", "SQL"]
+        summary = explicit_summary or (
+            f"We are seeking a detail-oriented {title} ({exp}) to build robust test automation frameworks and ensure high software reliability."
+        )
+        roles = explicit_roles if len(explicit_roles) >= 2 else [
+            "Test Framework Engineering: Design and maintain automated UI and API test suites using Selenium, Cypress, and PyTest.",
+            "API Testing: Validate backend services and RESTful endpoints using Postman and automated scripts.",
+            "CI/CD Integration: Integrate automated test suites into continuous integration pipelines to catch regressions early.",
+            "Defect Management: Log, track, and verify software defects using JIRA, collaborating closely with developers."
+        ]
+        technical_skills = {
+            "Automation Tools": "Selenium, Cypress, Playwright",
+            "Testing Frameworks": "PyTest, JUnit, TestNG",
+            "API Testing": "Postman, RestAssured",
+            "CI/CD & Tools": "Jenkins, GitHub Actions, JIRA, Git"
+        }
+    else:
+        default_skills = ["Python", "JavaScript", "SQL", "Docker", "REST APIs", "Linux", "Git"]
+        summary = explicit_summary or (
+            f"We are seeking an experienced {title} ({exp}) to join our core engineering team. "
+            f"You will build, optimize, and maintain scalable software applications and services. "
+            f"The ideal candidate possesses strong expertise in modern programming practices, APIs, and cloud deployments."
+        )
+        roles = explicit_roles if len(explicit_roles) >= 2 else [
+            "Software Development: Design, build, and maintain high-performance, reusable, and reliable code.",
+            "Database Management: Write, optimize, and manage complex SQL queries and relational schema designs.",
+            "API Engineering: Create and consume secure RESTful web services and integrate third-party APIs.",
+            "Environment & DevOps: Work within Linux/Unix environments, manage containerized services with Docker, and handle deployments.",
+            "Testing & Quality: Write clean unit and integration tests to ensure software robustness and security compliance.",
+            "Collaborative Engineering: Participate actively in code reviews, technical documentation, and Agile sprint planning."
+        ]
+        technical_skills = {
+            "Languages": "Python, SQL, JavaScript",
+            "Frameworks": "RESTful APIs, Web Services",
+            "Databases": "PostgreSQL, MySQL, Redis",
+            "Operating System": "Linux / Unix",
+            "Tools & CI/CD": "Git, Docker, Postman",
+            "Testing": "PyTest, Unittest"
+        }
+
+    # If the user explicitly provided skills, use them directly; otherwise use role's default skills
+    skills_list = explicit_skills if len(explicit_skills) >= 2 else default_skills
+
+    # Extract Education & Preferred Candidate if provided in prompt
+    edu_match = re.search(r'(?:^|\n)\s*[\*#_]*\s*Education[\*#_:\s]*\s*([^\n]+)', prompt, re.IGNORECASE)
+    pref_match = re.search(r'(?:^|\n)\s*[\*#_]*\s*Preferred(?:\s+Candidate)?[\*#_:\s]*\s*([^\n]+)', prompt, re.IGNORECASE)
+
+    qualifications = []
+    if edu_match:
+        qualifications.append(f"Education: {edu_match.group(1).strip()}")
+    else:
+        qualifications.append("Education: B.E. / B.Tech / M.C.A. / M.Tech in Computer Science, Information Technology, or a related field.")
+
+    qualifications.append(f"Experience: Minimum {exp} of professional engineering experience.")
+
+    # Extract passout year condition (e.g. 'must be 2024, 2025, 2026 passout and any stream is okay')
+    passout_match = re.search(
+        r'must\s+be\s+([\d\s,\/\-]+(?:and\s+[\d]+)?)\s*(?:passout|pass[\s-]?out|batch)',
+        prompt,
+        re.IGNORECASE
+    )
+    stream_match = re.search(r'any\s+stream\s+(?:is\s+)?okay', prompt, re.IGNORECASE)
+    if passout_match:
+        years_raw = passout_match.group(1).strip().rstrip(',').strip()
+        years_parts = [y.strip() for y in re.split(r'[,\/\s]+', years_raw) if re.match(r'^\d{4}$', y.strip())]
+        if years_parts:
+            passout_str = f"Passout Year: {' / '.join(years_parts)} batch"
+            if stream_match:
+                passout_str += " (Any stream accepted)"
+            qualifications.append(passout_str)
+    elif stream_match:
+        qualifications.append("Stream: Any stream / discipline accepted")
+
+    if pref_match:
+        qualifications.append(f"Preferred Candidate: {pref_match.group(1).strip()}")
+
+    qualifications.extend([
+        "Problem Solving: Strong analytical, algorithmic, and debugging skills.",
+        "Communication: Clear oral and written technical communication skills."
+    ])
+
+    # Clean, non-redundant formatted description (NO "How to Apply", NO duplicate metadata)
+    desc_sections = [
+        f"Job Summary\n{summary}\n",
+        "Key Responsibilities\n" + "\n".join([f"• {r}" for r in roles]) + "\n"
+    ]
+
+    # Only include Mandatory Certification Requirement if certifications were mentioned
+    if certifications:
+        cert_section = "Mandatory Certification Requirement\n"
+        if certification_intro:
+            cert_section += f"{certification_intro}\n"
+        cert_section += "\n".join([f"• {c}" for c in certifications]) + "\n"
+        desc_sections.append(cert_section)
+
+    desc_sections.append("Qualifications & Requirements\n" + "\n".join([f"• {q}" for q in qualifications]))
+
+    full_description = "\n".join(desc_sections).strip()
+
+    return {
+        "title": title,
+        "experience": exp,
+        "salary": salary,
+        "bond": bond,
+        "workMode": work_mode,
+        "location": loc,
+        "skills": ", ".join(skills_list),
+        "certifications": certifications,
+        "certification_intro": certification_intro,
+        "summary": summary,
+        "description": full_description,
+        "roles_and_responsibilities": roles,
+        "technical_skills": technical_skills,
+        "qualifications": qualifications
+    }
+
+@router.post("/api/jobs/generate-ai")
+@router.post("/jobs/generate-ai")
+def generate_job_with_ai(payload: dict, current_admin: dict = Depends(get_current_admin_details)):
+    prompt = payload.get("prompt", "").strip()
+    if not prompt:
+        raise HTTPException(status_code=400, detail="Prompt is required")
+
+    company_name = current_admin.get("company_name") or current_admin.get("name") or "Arah Infotech"
+
+    system_prompt = (
+        "You are an expert HR Director and Technical Hiring Manager.\n"
+        "Given a recruiter's job requirement prompt, extract all specified details (job title, experience, salary, bond, skills, location, workMode, certifications) "
+        "and generate a complete, professional, highly structured, industry-standard job posting in strict JSON format.\n\n"
+        "CRITICAL RULES TO AVOID REPETITION & IRRELEVANT SKILLS:\n"
+        "1. SKILLS RULE: If the recruiter prompt mentions any specific skills/technologies, return ONLY those exact skills in 'skills'. DO NOT add extra skills. If no skills are mentioned in the prompt, only then provide 5-6 standard relevant skills.\n"
+        "2. CERTIFICATION RULE: If the prompt mentions certifications or certificates (e.g. 'Mandatory Certification Requirement', 'AWS Certified...', 'CKA', etc.), extract them into a 'certifications' array AND include a 'Mandatory Certification Requirement' section in 'description' listing them. If NO certifications are mentioned in the prompt, set 'certifications': [] and DO NOT add any certification section.\n"
+        "3. Do NOT include 'How to Apply' in the description text.\n"
+        "4. Do NOT repeat or include metadata lines ('Role:', 'Experience:', 'Fixed Salary:', 'Service Agreement:', 'Location:', 'Employment Type:') inside 'description', as those are already displayed in UI cards.\n"
+        "5. Do NOT include an 'Employment Terms & Service Agreement' section repeating CTC and Bond.\n"
+        "6. Ensure technical skills, responsibilities, and qualifications match the exact technology specified in the prompt.\n\n"
+        "The generated 'description' field MUST contain ONLY:\n"
+        "Job Summary\n<concise 2-3 sentence summary>\n\n"
+        "Key Responsibilities\n• <Category>: <Details>\n\n"
+        "[Mandatory Certification Requirement (ONLY IF CERTIFICATIONS ARE MENTIONED IN PROMPT)]\n\n"
+        "Qualifications & Requirements\n• <Education, Experience, Problem Solving, Communication>\n\n"
+        "JSON Schema:\n"
+        "{\n"
+        '  "title": "Exact job title (e.g. DevOps Engineer)",\n'
+        '  "experience": "e.g. 3 – 5 Years",\n'
+        '  "salary": "e.g. 8 LPA",\n'
+        '  "bond": "e.g. 2-Year Bond",\n'
+        '  "workMode": "Remote, Hybrid, or On-site",\n'
+        '  "location": "e.g. Hyderabad / Remote",\n'
+        '  "skills": "Comma-separated list of skills (ONLY mentioned skills if specified in prompt)",\n'
+        '  "certifications": ["List of extracted certifications from prompt, or empty list if none"],\n'
+        '  "summary": "2-3 sentence executive job summary",\n'
+        '  "description": "Clean description with only Job Summary, Key Responsibilities, [Mandatory Certification Requirement if mentioned], Qualifications",\n'
+        '  "roles_and_responsibilities": ["Cloud Infrastructure: ...", "CI/CD Automation: ..."],\n'
+        '  "technical_skills": {"Primary Language": "...", "Frameworks": "...", "Databases": "...", "Operating System": "...", "Tools & DevOps": "...", "Testing": "..."},\n'
+        '  "qualifications": ["Education: ...", "Experience: ...", "Problem Solving: ...", "Communication: ..."]\n'
+        "}\n\n"
+        "Return ONLY the valid JSON object, without markdown code fences or conversational text."
+    )
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": f"Recruiter requirement prompt: {prompt}\nCompany Name: {company_name}"}
+    ]
+
+    fallback_data = extract_job_details_fallback(prompt)
+
+    try:
+        raw_res = chat_completion(messages=messages, temperature=0.3, timeout=12)
+        parsed = extract_json(raw_res)
+        if isinstance(parsed, dict) and parsed.get("title"):
+            if not parsed.get("experience"): parsed["experience"] = fallback_data.get("experience", "4 – 5 Years")
+            if not parsed.get("workMode"): parsed["workMode"] = fallback_data.get("workMode", "Remote")
+            if not parsed.get("location"): parsed["location"] = fallback_data.get("location", "Hyderabad / Remote")
+            if not parsed.get("salary"): parsed["salary"] = fallback_data.get("salary", "8 LPA")
+            if not parsed.get("bond"): parsed["bond"] = fallback_data.get("bond", "2-Year Bond")
+            if isinstance(parsed.get("skills"), list):
+                parsed["skills"] = ", ".join(parsed["skills"])
+            if parsed.get("description"):
+                parsed["description"] = re.sub(r'How to Apply[\s\S]*$', '', parsed["description"], flags=re.IGNORECASE).strip()
+            
+            # Ensure title consistency
+            if fallback_data.get("title") and fallback_data["title"] != "Software Developer":
+                if ("ai" in fallback_data["title"].lower() or "ml" in fallback_data["title"].lower()) and "python" in parsed.get("title", "").lower():
+                    parsed["title"] = fallback_data["title"]
+                elif "devops" in fallback_data["title"].lower() and "developer" in parsed.get("title", "").lower():
+                    parsed["title"] = fallback_data["title"]
+                elif not parsed.get("title") or parsed.get("title") == "Software Developer":
+                    parsed["title"] = fallback_data["title"]
+
+            if "fresher" in prompt.lower() or "entry level" in prompt.lower():
+                parsed["experience"] = "Fresher (0 – 1 Years)"
+            elif fallback_data.get("experience"):
+                parsed["experience"] = fallback_data["experience"]
+
+            if fallback_data.get("skills"):
+                parsed["skills"] = fallback_data["skills"]
+
+            # Preserve certifications from fallback if user specified them
+            if fallback_data.get("certifications"):
+                parsed["certifications"] = fallback_data["certifications"]
+                parsed["certification_intro"] = fallback_data.get("certification_intro", "")
+                if "certification" not in parsed.get("description", "").lower():
+                    cert_blk = "\n\nMandatory Certification Requirement\n"
+                    if fallback_data.get("certification_intro"):
+                        cert_blk += f"{fallback_data['certification_intro']}\n"
+                    cert_blk += "\n".join([f"• {c}" for c in fallback_data["certifications"]])
+                    parsed["description"] = parsed.get("description", "").strip() + cert_blk
+            else:
+                parsed["certifications"] = []
+                parsed["certification_intro"] = ""
+
+            return {"status": "success", "job": parsed}
+    except Exception as e:
+        logger.warning(f"AI job generation via LLM fallback to rule extractor: {e}")
+
+    return {"status": "success", "job": fallback_data}
+
 @router.post("/api/jobs")
 @router.post("/jobs")
 def create_job(job: JobCreate, current_admin: dict = Depends(get_current_admin_details)):
@@ -153,7 +807,14 @@ def get_admin_jobs(page: int = 1, limit: int = 20, current_admin: dict = Depends
     total_jobs = jobs_collection.count_documents(query)
     jobs = list(jobs_collection.find(query).sort("created_at", -1).skip(skip).limit(limit))
     for j in jobs:
-        j["_id"] = str(j["_id"])
+        raw_id = j["_id"]
+        j["_id"] = str(raw_id)
+        if not j.get("created_at"):
+            try:
+                obj_id = raw_id if isinstance(raw_id, ObjectId) else ObjectId(str(raw_id))
+                j["created_at"] = obj_id.generation_time.isoformat()
+            except Exception:
+                pass
     return {
         "status": "success", 
         "jobs": jobs,
@@ -227,7 +888,14 @@ def get_public_job(job_id: str):
             job = jobs_collection.find_one({"_id": ObjectId(job_id)})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    job["_id"] = str(job["_id"])
+    raw_id = job["_id"]
+    job["_id"] = str(raw_id)
+    if not job.get("created_at"):
+        try:
+            obj_id = raw_id if isinstance(raw_id, ObjectId) else ObjectId(str(raw_id))
+            job["created_at"] = obj_id.generation_time.isoformat()
+        except Exception:
+            pass
     return {"status": "success", "job": job}
 
 @router.get("/api/public/jobs/company/{company_id}")
@@ -269,7 +937,14 @@ def get_public_company_jobs(company_id: str):
     # 4. Clean up jobs for public consumption
     public_jobs = []
     for j in jobs:
-        j["_id"] = str(j["_id"])
+        raw_id = j["_id"]
+        j["_id"] = str(raw_id)
+        if not j.get("created_at"):
+            try:
+                obj_id = raw_id if isinstance(raw_id, ObjectId) else ObjectId(str(raw_id))
+                j["created_at"] = obj_id.generation_time.isoformat()
+            except Exception:
+                pass
         public_jobs.append(j)
         
     return {
