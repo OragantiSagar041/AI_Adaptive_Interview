@@ -27,12 +27,20 @@ export default function CreateInterviewBulkTab({
   inviting,
   handleSendBulkInterviews,
   handlePreviewEmail,
+  propNewBulkQuestion,
+  setPropNewBulkQuestion,
+  propNewBulkInstruction,
+  setPropNewBulkInstruction,
 }) {
   const [bulkCandidateInput, setBulkCandidateInput] = useState({ name: '', email: '' })
   const [bulkCsvLabel, setBulkCsvLabel] = useState('Click to upload or drag and drop Excel or CSV template')
 
-  const [newBulkQuestion, setNewBulkQuestion] = useState('')
-  const [newBulkInstruction, setNewBulkInstruction] = useState('')
+  const [localBulkQuestion, setLocalBulkQuestion] = useState('')
+  const [localBulkInstruction, setLocalBulkInstruction] = useState('')
+  const newBulkQuestion = propNewBulkQuestion !== undefined ? propNewBulkQuestion : localBulkQuestion
+  const setNewBulkQuestion = setPropNewBulkQuestion || setLocalBulkQuestion
+  const newBulkInstruction = propNewBulkInstruction !== undefined ? propNewBulkInstruction : localBulkInstruction
+  const setNewBulkInstruction = setPropNewBulkInstruction || setLocalBulkInstruction
 
   const [editingBulkQuestionIndex, setEditingBulkQuestionIndex] = useState(null)
   const [editingBulkQuestionText, setEditingBulkQuestionText] = useState('')
