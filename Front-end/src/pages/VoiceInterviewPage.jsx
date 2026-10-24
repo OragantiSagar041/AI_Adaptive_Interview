@@ -1128,7 +1128,7 @@ export default function VoiceInterviewPage() {
         const doUpload = (attempt = 0) => {
           setUploadStatusText(`Securing ${type === 'camera' ? 'camera' : 'screen'} recording (attempt ${attempt + 1}/3)...`)
           const xhr = new XMLHttpRequest()
-          const uploadBase = (API_BASE_URL || '').replace(/\/api\/?$/, '')
+          const uploadBase = (API_BASE_URL || '').replace(/\/+$/, '')
           const uploadUrl = `${uploadBase}/upload-full-recording`
           xhr.open('POST', uploadUrl, true)
           xhr.timeout = 5 * 60 * 1000 // 5 minutes

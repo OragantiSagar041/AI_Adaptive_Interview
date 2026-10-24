@@ -558,8 +558,11 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
 
         } else if (msg.type === 'candidate_disconnected') {
           if (mountedRef.current) {
-            setStatus('disconnected')
-            setIsCandidateNetworkDown(true)
+            // Only set disconnected if the peer connection is not actively streaming media
+            if (!pcRef.current || pcRef.current.connectionState !== 'connected') {
+              setStatus('disconnected')
+              setIsCandidateNetworkDown(true)
+            }
           }
         }
       } catch (err) {

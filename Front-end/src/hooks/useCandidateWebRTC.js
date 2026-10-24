@@ -87,6 +87,9 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
         console.log('[CandidateWebRTC] Signaling connected.')
         reconnectDelayRef.current = 2000  // reset back-off on successful connect
         startHeartbeat(ws)
+        try {
+          ws.send(JSON.stringify({ type: 'candidate_connected' }))
+        } catch (_) {}
       }
 
       ws.onerror = (e) => {
@@ -94,15 +97,26 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
       }
 
       ws.onclose = (e) => {
-        console.log(`[CandidateWebRTC] WS closed (${e.code}). Will reconnect...`)
+        console.log(`[CandidateWebRTC] WS closed (${e.code}). Reconnecting signaling...`)
         clearInterval(heartbeatTimerRef.current)
 
-        // Close all peer connections — they're all dead without the signaling channel
-        Object.values(pcsRef.current).forEach(pc => {
-          try { pc.close() } catch (_) {}
-        })
-        pcsRef.current = {}
-        pendingIceCandidatesRef.current = {}
+        // Only close peer connections if component is unmounted or if peer connection failed.
+        // In WebRTC, media continues flowing over peer connection even during transient signaling drops!
+        if (destroyedRef.current) {
+          Object.values(pcsRef.current).forEach(pc => {
+            try { pc.close() } catch (_) {}
+          })
+          pcsRef.current = {}
+          pendingIceCandidatesRef.current = {}
+        } else {
+          Object.entries(pcsRef.current).forEach(([admId, pc]) => {
+            if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+              try { pc.close() } catch (_) {}
+              delete pcsRef.current[admId]
+              delete pendingIceCandidatesRef.current[admId]
+            }
+          })
+        }
 
         if (!destroyedRef.current) {
           const delay = reconnectDelayRef.current

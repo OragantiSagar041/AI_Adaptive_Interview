@@ -2440,7 +2440,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           formData.append('link_id', sessionId || '')
 
           const xhr = new XMLHttpRequest()
-          const uploadBase = (api.defaults.baseURL || '').replace(/\/api\/?$/, '')
+          const uploadBase = (api.defaults.baseURL || '').replace(/\/+$/, '')
           const uploadUrl = `${uploadBase}/upload-full-recording`
           console.log(`[REC_TRACE] Initiating XHR POST ${uploadUrl} for ${type} (interview_id: ${iid}, link_id: ${sessionId})`)
           xhr.open('POST', uploadUrl, true)
