@@ -39,6 +39,8 @@ export default function CreateInterviewSingleTab({
   setPropNewSingleQuestion,
   propNewSingleInstruction,
   setPropNewSingleInstruction,
+  candidateStatusInfo = null,
+  ignoredCandidateEmail = '',
 }) {
   const [localSingleQuestion, setLocalSingleQuestion] = useState('')
   const [localSingleInstruction, setLocalSingleInstruction] = useState('')

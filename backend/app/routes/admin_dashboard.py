@@ -1826,7 +1826,7 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
             except Exception:
                 return val
                 
-        if current_admin.get("role") == "admin":
+        if current_admin.get("role") in ["admin", "recruiter", "subadmin"]:
             admin_doc = await asyncio.to_thread(
                 admins_collection.find_one, {"_id": safe_object_id(current_admin["admin_id"])}
             )
@@ -1840,7 +1840,7 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
         
         # Data Isolation:
         # If the user is a standard admin, force the query to their own admin_id
-        if current_admin.get("role") == "admin":
+        if current_admin.get("role") in ["admin", "recruiter", "subadmin"]:
             query["created_by"] = current_admin["admin_id"]
         elif current_admin.get("role") in ["super_admin", "superadmin"] and not admin_id:
             query["created_by"] = {"$in": _get_authorized_creator_ids(current_admin)}
@@ -1942,7 +1942,7 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
         # Merge stats from AI Calling interested candidates
         try:
             jobs_query = {"company_id": current_admin.get("company_id")}
-            if current_admin.get("role") == "admin":
+            if current_admin.get("role") in ["admin", "recruiter", "subadmin"]:
                 jobs_query["admin_id"] = current_admin["admin_id"]
             elif current_admin.get("role") in ["super_admin", "superadmin"]:
                 jobs_query["admin_id"] = {"$in": _get_authorized_creator_ids(current_admin)}

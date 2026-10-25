@@ -213,7 +213,7 @@ async def get_dashboard_aggregated_data(
         }
         if current_admin.get("role") != "master":
             c_query_filter["company_id"] = current_admin.get("company_id")
-        if current_admin.get("role") == "admin":
+        if current_admin.get("role") in ["admin", "recruiter", "subadmin"]:
             c_query_filter["created_by"] = current_admin["admin_id"]
         elif admin_id:
             c_query_filter["created_by"] = admin_id
@@ -260,7 +260,7 @@ async def get_dashboard_aggregated_data(
         jobs_query = {}
         if current_admin.get("role") != "master":
             jobs_query["company_id"] = current_admin.get("company_id")
-        if current_admin.get("role") == "admin":
+        if current_admin.get("role") in ["admin", "recruiter", "subadmin"]:
             jobs_query["admin_id"] = current_admin["admin_id"]
         elif current_admin.get("role") in ["super_admin", "superadmin"]:
             jobs_query["admin_id"] = {"$in": _get_authorized_creator_ids(current_admin)}
@@ -625,7 +625,7 @@ async def get_dashboard_aggregated_data(
             }
             if current_admin.get("role") != "master":
                 query_filter["company_id"] = current_admin.get("company_id")
-            if current_admin.get("role") == "admin":
+            if current_admin.get("role") in ["admin", "recruiter", "subadmin"]:
                 query_filter["created_by"] = current_admin["admin_id"]
             elif admin_id:
                 query_filter["created_by"] = admin_id
