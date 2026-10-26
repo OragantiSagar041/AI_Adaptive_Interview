@@ -59,7 +59,11 @@ export default function AiJobPostModal({
       );
 
       if (response.data && response.data.job) {
-        setGeneratedJob(response.data.job);
+        const cleanJob = { ...response.data.job };
+        if (cleanJob.location) {
+          cleanJob.location = cleanJob.location.replace(/\s*\/\s*(?:Remote|Hybrid|On-site)/gi, '').trim();
+        }
+        setGeneratedJob(cleanJob);
         setIsEditing(false);
         setPreviewDetailsOpen(false);
       } else {
@@ -85,7 +89,7 @@ export default function AiJobPostModal({
         description: generatedJob.description || generatedJob.summary || '',
         workMode: generatedJob.workMode || 'Remote',
         bond: generatedJob.bond || 'None',
-        location: generatedJob.location || 'Remote',
+        location: (generatedJob.location || 'Hyderabad').replace(/\s*\/\s*(?:Remote|Hybrid|On-site)/gi, '').trim() || 'Hyderabad',
         salary: generatedJob.salary || 'Competitive',
         certifications: generatedJob.certifications || []
       };
@@ -133,10 +137,13 @@ export default function AiJobPostModal({
   };
 
   const handleFieldChange = (field, val) => {
-    setGeneratedJob(prev => ({
-      ...prev,
-      [field]: val
-    }));
+    setGeneratedJob(prev => {
+      const updated = { ...prev, [field]: val };
+      if (field === 'workMode' && (val === 'On-site' || val === 'Hybrid') && updated.location) {
+        updated.location = updated.location.replace(/\s*\/\s*Remote/gi, '').trim();
+      }
+      return updated;
+    });
   };
 
   const parseSkillsList = (skills) => {
@@ -389,7 +396,7 @@ export default function AiJobPostModal({
                         </div>
                         <div className="flex items-center gap-2 mt-1 text-xs text-slate-400 font-medium truncate">
                           <span className="flex items-center gap-1 shrink-0">
-                            <Building2 size={11} /> {generatedJob.location || 'Hyderabad / Remote'}
+                            <Building2 size={11} /> {generatedJob.location || 'Hyderabad'}
                           </span>
                           <span>•</span>
                           <span className="flex items-center gap-1 text-slate-500 dark:text-slate-400 font-semibold truncate">

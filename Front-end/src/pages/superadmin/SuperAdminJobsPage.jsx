@@ -293,7 +293,13 @@ export default function SuperAdminJobsPage() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData(prev => {
+      const updated = { ...prev, [name]: value };
+      if (name === 'workMode' && value === 'On-site' && updated.location) {
+        updated.location = updated.location.replace(/\s*\/\s*Remote/gi, '').trim();
+      }
+      return updated;
+    });
   };
 
   const [jdParsing, setJdParsing] = useState(false);
@@ -395,7 +401,7 @@ export default function SuperAdminJobsPage() {
       description: job.description || '',
       workMode: job.workMode || 'Remote',
       bond: job.bond || '',
-      location: job.location || '',
+      location: (job.location || '').replace(/\s*\/\s*(?:Remote|Hybrid|On-site)/gi, '').trim() || job.location || '',
       salary: job.salary || '',
     });
     // Store the real MongoDB job_id for the PUT call
@@ -609,7 +615,7 @@ export default function SuperAdminJobsPage() {
                         <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider bg-slate-100 dark:bg-slate-800/50 px-1.5 py-0.5 rounded shrink-0">{job.custom_id || job.job_id || 'JOB'}</span>
                       </div>
                       <div className="flex items-center gap-2 mt-1 text-xs text-slate-400 font-medium truncate">
-                        <span className="flex items-center gap-1 shrink-0"><Building2 size={11} /> {job.location}</span>
+                        <span className="flex items-center gap-1 shrink-0"><Building2 size={11} /> {(job.location || '').replace(/\s*\/\s*(?:Remote|Hybrid|On-site)/gi, '').trim() || job.location}</span>
                         <span>•</span>
                         <span className="flex items-center gap-1 text-slate-500 dark:text-slate-400 font-semibold truncate" title={`Created by ${job.created_by_name || job.created_by || 'Admin'} (${job.created_by_role || 'Admin'})`}>
                           <User size={11} className="text-indigo-500 shrink-0" /> {job.created_by_name || job.created_by || 'Admin'}
@@ -769,7 +775,7 @@ export default function SuperAdminJobsPage() {
                     </td>
                     <td className="p-4">
                       <div className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-400 font-medium">
-                        <MapPin size={13} className="text-indigo-400" /> {job.location}
+                        <MapPin size={13} className="text-indigo-400" /> {(job.location || '').replace(/\s*\/\s*(?:Remote|Hybrid|On-site)/gi, '').trim() || job.location}
                       </div>
                     </td>
                     <td className="p-4">
@@ -1386,7 +1392,7 @@ export default function SuperAdminJobsPage() {
                 <div className="overflow-hidden">
                   <h2 className="text-xl font-black text-slate-900 dark:text-slate-100 tracking-tight truncate">{selectedJobDetails.title}</h2>
                   <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                    <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1"><MapPin size={11} /> {selectedJobDetails.location}</span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1"><MapPin size={11} /> {(selectedJobDetails.location || '').replace(/\s*\/\s*(?:Remote|Hybrid|On-site)/gi, '').trim() || selectedJobDetails.location}</span>
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.65rem] font-bold border ${WORK_MODE_STYLES[selectedJobDetails.workMode] || 'bg-slate-50 dark:bg-slate-900/50 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}>
                       <Clock size={10} /> {selectedJobDetails.workMode}
                     </span>
