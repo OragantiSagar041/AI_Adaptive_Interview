@@ -1154,6 +1154,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
               setPropNewSingleQuestion={setNewSingleQuestion}
               propNewSingleInstruction={newSingleInstruction}
               setPropNewSingleInstruction={setNewSingleInstruction}
+              candidateStatusInfo={candidateStatusInfo}
+              ignoredCandidateEmail={ignoredCandidateEmail}
             />
           )}
 

@@ -75,13 +75,13 @@ try:
     from app.ai.typed_ai_layer import parse_resume as _typed_parse_resume
     from app.ai.typed_ai_layer import generate_summary as _typed_generate_summary
     from app.ai.typed_ai_layer import generate_followup as _typed_generate_followup
-    from app.ai.typed_ai_layer import sanitize_spoken_interview_question
+    from app.ai.typed_ai_layer import sanitize_spoken_interview_question, sanitize_verbal_question_text
     _TYPED_LAYER_AVAILABLE = True
-except ImportError:
+except (ImportError, AttributeError):
     _TYPED_LAYER_AVAILABLE = False
     def sanitize_spoken_interview_question(q): return q
-    print("[WARN] typed_ai_layer not available")
     def sanitize_verbal_question_text(t): return t
+    print("[WARN] typed_ai_layer not available")
 
 try:
     from app.data.interview_graphs import run_question_generation_graph, run_followup_graph, run_summary_graph
@@ -313,7 +313,8 @@ def get_admin_plan_context(user: Dict[str, Any]) -> Dict[str, Any]:
     subscription_start = company.get("subscription_start") if company else user.get("subscription_start")
     
     definition = get_plan_definition(subscription_plan)
-    if user.get("role") == "admin":
+    raw_user_role = str(user.get("role") or "").strip().lower()
+    if raw_user_role in ["admin", "recruiter", "subadmin"]:
         if "credits" in user:
             credits = user.get("credits", 0)
         else:
@@ -1837,6 +1838,8 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
 
     return all_questions
 
+generate_interview_questions = generate_mock_questions
+
 
 def _generate_offline_questions(resume_text: str, jd_text: str, total_count: int, interview_type: str = "Technical", industry: str = "General", language: str = "English", ai_instructions: str = "") -> List[Dict[str, str]]:
     """
@@ -2615,7 +2618,15 @@ def get_current_admin_details(credentials: HTTPAuthorizationCredentials = Depend
             
        # MongoDB is authoritative for tenant/company and role.
         company_id = str(admin_doc.get("company_id") or "")
-        actual_role = admin_doc.get("role") or "tenant"
+        raw_role = str(admin_doc.get("role") or "").strip().lower()
+        if raw_role in ["super_admin", "superadmin", "tenant"]:
+            actual_role = "super_admin"
+        elif raw_role in ["admin", "recruiter", "subadmin"]:
+            actual_role = "admin"
+        elif raw_role == "master" or admin_doc.get("is_master"):
+            actual_role = "master"
+        else:
+            actual_role = raw_role or "super_admin"
 
         is_master = bool(admin_doc.get("is_master") or actual_role == "master")
         admin_name = admin_doc.get("name") or admin_doc.get("username") or ("master" if is_master else "Admin")
@@ -2643,7 +2654,12 @@ def require_role(*allowed_roles):
     """Create a dependency that enforces role-based access. Master role always has access."""
     def checker(current_admin: dict = Depends(get_current_admin_details)):
         role = current_admin.get("role", "")
-        if role not in allowed_roles and role != "master":
+        expanded = set(allowed_roles)
+        if any(r in expanded for r in ["super_admin", "superadmin", "tenant"]):
+            expanded.update(["super_admin", "superadmin", "tenant"])
+        if any(r in expanded for r in ["admin", "recruiter", "subadmin"]):
+            expanded.update(["admin", "recruiter", "subadmin"])
+        if role not in expanded and role != "master" and not current_admin.get("is_master"):
             raise HTTPException(status_code=403, detail=f"Access denied. Required role: {', '.join(allowed_roles)}")
         return current_admin
     return checker

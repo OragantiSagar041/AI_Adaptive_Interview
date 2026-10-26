@@ -52,9 +52,10 @@ from app.data.coding_graph import generate_coding_task, observe_coding_intent, r
 from app.data.industry_fallback_data import INDUSTRY_TECHNICAL_QUESTIONS, INDUSTRY_CASE_STUDIES
 from app.db.redis_manager import manager
 import app.services.transcription as transcription
-from app.db.mongo_db import projects_collection, client as mongo_client, omni_call_logs_collection
+from app.db.mongo_db import db, projects_collection, client as mongo_client, omni_call_logs_collection
+from app.services.resume_nlp_extractor import extract_candidate_info_nlp, extract_skills_from_resume_text
 from app.services.services import *
-from app.services.services import require_role
+from app.services.services import require_role, generate_interview_questions, generate_mock_questions
 from app.core.session_store import get_session, set_session, delete_session as delete_cached_session
 from app.schemas.models import *
 from app.db.database import *
@@ -293,6 +294,7 @@ def check_candidate(email: str, current_admin: dict = Depends(get_current_admin_
         sessions = list(interview_sessions_collection.find(query).sort("created_at", -1).limit(5))
         for s in sessions:
             cand_name = (s.get("candidate_name") or "").strip()
+            resume_text = (s.get("resume_text") or "").strip()
             if resume_text:
                 skills_extracted = extract_skills_from_resume_text(resume_text)
                 return {
@@ -1405,7 +1407,7 @@ def create_session(data: CreateSession, http_req: Request, current_admin: dict =
                 admins_collection.update_one({"_id": ObjectId(admin_id_to_charge)}, {"$inc": {"credits": 1}})
                 
             from app.db.mongo_db import projects_collection, db
-            db.credit_ledger.insert_one({
+            credit_ledger_collection.insert_one({
                 "company_id": str(company_id) if company_id else None,
                 "super_admin_id": str(current_admin.get("admin_id") or current_admin.get("_id")),
                 "sub_admin_id": "system",
@@ -1644,7 +1646,7 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
                 admins_collection.update_one({"_id": ObjectId(admin_id_to_charge)}, {"$inc": {"credits": failed}})
                 
             from app.db.mongo_db import projects_collection, db
-            db.credit_ledger.insert_one({
+            credit_ledger_collection.insert_one({
                 "company_id": str(company_id) if company_id else None,
                 "super_admin_id": str(current_admin.get("admin_id") or current_admin.get("_id")),
                 "sub_admin_id": "system",
@@ -1989,6 +1991,8 @@ def check_questions_match_instructions(questions_list, instructions_text):
 
 @router.post("/start-session-interview")
 @router.post("/start_session_interview")
+@router.post("/api/start-session-interview")
+@router.post("/api/start_session_interview")
 async def start_session_interview(link_id: str = Form(...)):
     current_session_id.set(link_id)
     row = interview_sessions_collection.find_one({"link_id": link_id})
@@ -3515,7 +3519,7 @@ def admin_copilot_execute(request: CopilotExecuteRequest, http_req: Request, cur
             
             # Log to credit ledger
             from datetime import datetime, timezone
-            db.credit_ledger.insert_one({
+            credit_ledger_collection.insert_one({
                 "company_id": super_admin_doc.get("company_id"),
                 "super_admin_id": str(super_admin_doc["_id"]),
                 "sub_admin_id": str(target_admin["_id"]),
@@ -3697,7 +3701,7 @@ def admin_copilot_execute(request: CopilotExecuteRequest, http_req: Request, cur
                     
                     from datetime import datetime, timezone
                     from app.db.mongo_db import projects_collection, db
-                    db.credit_ledger.insert_one({
+                    credit_ledger_collection.insert_one({
                         "company_id": str(company_id) if company_id else None,
                         "super_admin_id": str(admin_id),
                         "sub_admin_id": "system",
