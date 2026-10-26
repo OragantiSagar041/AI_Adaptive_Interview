@@ -38,19 +38,49 @@ export const loadAdminProfile = createAsyncThunk(
   }
 )
 
+const getInitialRole = () => {
+  try {
+    const r = localStorage.getItem('adminRole')
+    if (!r) return null
+    const lower = String(r).trim().toLowerCase()
+    if (lower === 'super_admin' || lower === 'superadmin' || lower === 'tenant') return 'superadmin'
+    if (lower === 'admin' || lower === 'recruiter' || lower === 'subadmin') return 'admin'
+    if (lower === 'master') return 'master'
+    return lower
+  } catch {
+    return null
+  }
+}
+
 const authSlice = createSlice({
   name: 'auth',
   initialState: {
-    role: null,
-    token: null,
-    adminUser: null,
+    role: getInitialRole(),
+    token: (() => {
+      try {
+        return localStorage.getItem('adminToken') ||
+          localStorage.getItem('masterToken') ||
+          localStorage.getItem('superadminToken') ||
+          localStorage.getItem('token') ||
+          null
+      } catch {
+        return null
+      }
+    })(),
+    adminUser: (() => {
+      try {
+        return JSON.parse(localStorage.getItem('adminUser')) || null
+      } catch {
+        return null
+      }
+    })(),
     API_BASE_URL: fallbackBaseUrl
   },
   reducers: {
     setCredentials: (state, action) => {
       let role = action.payload.role
-      if (role === 'super_admin') role = 'superadmin'
-      if (role === 'tenant') role = 'admin'
+      if (role === 'super_admin' || role === 'tenant') role = 'superadmin'
+      if (role === 'recruiter' || role === 'subadmin') role = 'admin'
       state.role = role
       state.token = action.payload.token
       state.adminUser = action.payload.adminUser

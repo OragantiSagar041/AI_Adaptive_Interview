@@ -31,6 +31,20 @@ export default function CreateInterviewBulkTab({
   setPropNewBulkQuestion,
   propNewBulkInstruction,
   setPropNewBulkInstruction,
+  projectParsing = false,
+  setProjectParsing,
+  bulkProjectQuestionsAdded = false,
+  setBulkProjectQuestionsAdded,
+  newBulkProjectQuestion = '',
+  setNewBulkProjectQuestion,
+  handleGenerateProjectQuestions,
+  addBulkProjectQuestion: propAddBulkProjectQuestion,
+  deleteBulkProjectQuestion: propDeleteBulkProjectQuestion,
+  parseMultiLineItems,
+  addBulkInstruction: propAddBulkInstruction,
+  deleteBulkInstruction: propDeleteBulkInstruction,
+  addBulkQuestion: propAddBulkQuestion,
+  deleteBulkQuestion: propDeleteBulkQuestion,
 }) {
   const [bulkCandidateInput, setBulkCandidateInput] = useState({ name: '', email: '' })
   const [bulkCsvLabel, setBulkCsvLabel] = useState('Click to upload or drag and drop Excel or CSV template')
@@ -47,23 +61,56 @@ export default function CreateInterviewBulkTab({
   const [editingBulkInstructionIndex, setEditingBulkInstructionIndex] = useState(null)
   const [editingBulkInstructionText, setEditingBulkInstructionText] = useState('')
 
-  const addBulkQuestion = () => {
-    if (!newBulkQuestion.trim()) return
-    handleBulkConfigChange('customQuestions', [...(bulkConfig.customQuestions || []), newBulkQuestion.trim()])
-    setNewBulkQuestion('')
-  }
-  const deleteBulkQuestion = (index) => {
-    handleBulkConfigChange('customQuestions', (bulkConfig.customQuestions || []).filter((_, i) => i !== index))
-  }
+  const addBulkQuestion = (itemsToAdd = null) => {
+    if (propAddBulkQuestion) {
+      propAddBulkQuestion(itemsToAdd);
+      return;
+    }
+    const items = Array.isArray(itemsToAdd) ? itemsToAdd : (parseMultiLineItems ? parseMultiLineItems(newBulkQuestion) : (newBulkQuestion.trim() ? [newBulkQuestion.trim()] : []));
+    if (!items || items.length === 0) return;
+    handleBulkConfigChange('customQuestions', [...(bulkConfig.customQuestions || []), ...items]);
+    setNewBulkQuestion('');
+  };
+  const deleteBulkQuestion = propDeleteBulkQuestion || ((index) => {
+    handleBulkConfigChange('customQuestions', (bulkConfig.customQuestions || []).filter((_, i) => i !== index));
+  });
 
-  const addBulkInstruction = () => {
-    if (!newBulkInstruction.trim()) return
-    handleBulkConfigChange('aiInstructions', [...(bulkConfig.aiInstructions || []), newBulkInstruction.trim()])
-    setNewBulkInstruction('')
-  }
-  const deleteBulkInstruction = (index) => {
-    handleBulkConfigChange('aiInstructions', (bulkConfig.aiInstructions || []).filter((_, i) => i !== index))
-  }
+  const addBulkInstruction = (itemsToAdd = null) => {
+    if (propAddBulkInstruction) {
+      propAddBulkInstruction(itemsToAdd);
+      return;
+    }
+    const items = Array.isArray(itemsToAdd) ? itemsToAdd : (parseMultiLineItems ? parseMultiLineItems(newBulkInstruction) : (newBulkInstruction.trim() ? [newBulkInstruction.trim()] : []));
+    if (!items || items.length === 0) return;
+    handleBulkConfigChange('aiInstructions', [...(bulkConfig.aiInstructions || []), ...items]);
+    setNewBulkInstruction('');
+  };
+  const deleteBulkInstruction = propDeleteBulkInstruction || ((index) => {
+    handleBulkConfigChange('aiInstructions', (bulkConfig.aiInstructions || []).filter((_, i) => i !== index));
+  });
+
+  const addBulkProjectQuestion = (itemsToAdd = null) => {
+    if (propAddBulkProjectQuestion) {
+      propAddBulkProjectQuestion(itemsToAdd);
+      return;
+    }
+    const items = Array.isArray(itemsToAdd) ? itemsToAdd : (parseMultiLineItems ? parseMultiLineItems(newBulkProjectQuestion) : (newBulkProjectQuestion.trim() ? [newBulkProjectQuestion.trim()] : []));
+    if (!items || items.length === 0) return;
+    const current = bulkConfig.projectQuestions || [];
+    const newItems = items.filter(it => !current.includes(it));
+    if (newItems.length > 0) {
+      handleBulkConfigChange('projectQuestions', [...current, ...newItems]);
+    }
+    if (setNewBulkProjectQuestion) setNewBulkProjectQuestion('');
+  };
+  const deleteBulkProjectQuestion = propDeleteBulkProjectQuestion || ((index) => {
+    const current = bulkConfig.projectQuestions || [];
+    const updated = current.filter((_, i) => i !== index);
+    handleBulkConfigChange('projectQuestions', updated);
+    if (updated.length === 0 && setBulkProjectQuestionsAdded) {
+      setBulkProjectQuestionsAdded(false);
+    }
+  });
 
   // Excel template downloader
   const downloadExcelTemplate = () => {
@@ -300,10 +347,7 @@ export default function CreateInterviewBulkTab({
                               })
                               setBulkCustomQuestionsParsing(false)
                             } else {
-                              const lines = (data.text || '')
-                                .split('\n')
-                                .map(line => line.trim())
-                                .filter(Boolean);
+                              const lines = parseMultiLineItems ? parseMultiLineItems(data.text || '') : (data.text || '').split('\n').map(l => l.trim()).filter(Boolean);
                               handleBulkConfigChange('customQuestions', [...(bulkConfig.customQuestions || []), ...lines])
                             }
                           }, setBulkCustomQuestionsParsing)
@@ -322,6 +366,16 @@ export default function CreateInterviewBulkTab({
                         className="flex-1 bg-slate-50 dark:bg-slate-900/50/95 border border-slate-200 dark:border-slate-700 rounded-[5px] px-4 py-2.5 text-slate-900 dark:text-white text-[0.95rem] outline-none transition-all duration-200 focus:border-primary focus:bg-white dark:bg-slate-800/60 focus:shadow-[0_0_0_3px_rgba(99,102,241,0.12)] placeholder:text-slate-400"
                         value={newBulkQuestion}
                         onChange={(e) => setNewBulkQuestion(e.target.value)}
+                        onPaste={(e) => {
+                          const pasteData = e.clipboardData.getData('text');
+                          if (pasteData && (pasteData.includes('\n') || pasteData.includes('\r'))) {
+                            e.preventDefault();
+                            const items = parseMultiLineItems ? parseMultiLineItems(pasteData) : pasteData.split('\n').map(l => l.trim()).filter(Boolean);
+                            if (items.length > 0) {
+                              addBulkQuestion(items);
+                            }
+                          }
+                        }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             e.preventDefault();
@@ -420,10 +474,7 @@ export default function CreateInterviewBulkTab({
                               })
                               setBulkAiInstructionsParsing(false)
                             } else {
-                              const lines = (data.text || '')
-                                .split('\n')
-                                .map(line => line.trim())
-                                .filter(Boolean);
+                              const lines = parseMultiLineItems ? parseMultiLineItems(data.text || '') : (data.text || '').split('\n').map(l => l.trim()).filter(Boolean);
                               handleBulkConfigChange('aiInstructions', [...(bulkConfig.aiInstructions || []), ...lines])
                             }
                           }, setBulkAiInstructionsParsing)
@@ -442,6 +493,16 @@ export default function CreateInterviewBulkTab({
                         className="flex-1 bg-slate-50 dark:bg-slate-900/50/95 border border-slate-200 dark:border-slate-700 rounded-[5px] px-4 py-2.5 text-slate-900 dark:text-white text-[0.95rem] outline-none transition-all duration-200 focus:border-primary focus:bg-white dark:bg-slate-800/60 focus:shadow-[0_0_0_3px_rgba(99,102,241,0.12)] placeholder:text-slate-400"
                         value={newBulkInstruction}
                         onChange={(e) => setNewBulkInstruction(e.target.value)}
+                        onPaste={(e) => {
+                          const pasteData = e.clipboardData.getData('text');
+                          if (pasteData && (pasteData.includes('\n') || pasteData.includes('\r'))) {
+                            e.preventDefault();
+                            const items = parseMultiLineItems ? parseMultiLineItems(pasteData) : pasteData.split('\n').map(l => l.trim()).filter(Boolean);
+                            if (items.length > 0) {
+                              addBulkInstruction(items);
+                            }
+                          }
+                        }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             e.preventDefault();
@@ -459,52 +520,287 @@ export default function CreateInterviewBulkTab({
                       </button>
                     </div>
                     {bulkConfig.aiInstructions && bulkConfig.aiInstructions.length > 0 && (
-                      <ol className="list-decimal pl-5 flex flex-col gap-2 mt-2 max-h-60 overflow-y-auto">
+                      <div className="space-y-2 mt-2 max-h-60 overflow-y-auto">
                         {bulkConfig.aiInstructions.map((inst, idx) => (
-                          <li key={idx} className="text-sm text-slate-700 dark:text-slate-200 font-medium">
-                            {editingBulkInstructionIndex === idx ? (
-                              <div className="flex gap-2 items-center w-full">
-                                <input
-                                  type="text"
-                                  className="flex-1 bg-slate-50 dark:bg-slate-900/50/95 border border-slate-200 dark:border-slate-700 rounded-[5px] px-3 py-1.5 text-slate-900 dark:text-white text-sm outline-none focus:border-primary focus:bg-white dark:bg-slate-800/60"
-                                  value={editingBulkInstructionText}
-                                  onChange={(e) => setEditingBulkInstructionText(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      e.preventDefault();
-                                      if (editingBulkInstructionText.trim()) {
-                                        const updated = [...bulkConfig.aiInstructions];
-                                        updated[idx] = editingBulkInstructionText.trim();
-                                        handleBulkConfigChange('aiInstructions', updated);
+                          <div key={idx} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200 font-medium">
+                            <span className="shrink-0 font-semibold text-slate-500 dark:text-slate-400 w-7 text-right">{idx + 1}.</span>
+                            <div className="flex-1">
+                              {editingBulkInstructionIndex === idx ? (
+                                <div className="flex gap-2 items-center w-full">
+                                  <input
+                                    type="text"
+                                    className="flex-1 bg-slate-50 dark:bg-slate-900/50/95 border border-slate-200 dark:border-slate-700 rounded-[5px] px-3 py-1.5 text-slate-900 dark:text-white text-sm outline-none focus:border-primary focus:bg-white dark:bg-slate-800/60"
+                                    value={editingBulkInstructionText}
+                                    onChange={(e) => setEditingBulkInstructionText(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        if (editingBulkInstructionText.trim()) {
+                                          const updated = [...bulkConfig.aiInstructions];
+                                          updated[idx] = editingBulkInstructionText.trim();
+                                          handleBulkConfigChange('aiInstructions', updated);
+                                        }
+                                        setEditingBulkInstructionIndex(null);
+                                      } else if (e.key === 'Escape') {
+                                        setEditingBulkInstructionIndex(null);
                                       }
-                                      setEditingBulkInstructionIndex(null);
-                                    } else if (e.key === 'Escape') {
-                                      setEditingBulkInstructionIndex(null);
-                                    }
-                                  }}
-                                  autoFocus
-                                  onBlur={() => setEditingBulkInstructionIndex(null)}
-                                />
-                              </div>
-                            ) : (
-                              <div className="flex justify-between items-start gap-4 group" onDoubleClick={() => { setEditingBulkInstructionIndex(idx); setEditingBulkInstructionText(bulkConfig.aiInstructions[idx]); }}>
-                                <span className="break-all">{inst}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => deleteBulkInstruction(idx)}
-                                  className="text-rose-500 hover:text-rose-700 transition-colors p-1 cursor-pointer flex-shrink-0 bg-transparent border-none"
-                                >
-                                  <i className="fas fa-trash"></i>
-                                </button>
-                              </div>
-                            )}
-                          </li>
+                                    }}
+                                    autoFocus
+                                    onBlur={() => setEditingBulkInstructionIndex(null)}
+                                  />
+                                </div>
+                              ) : (
+                                <div className="flex justify-between items-start gap-4 group" onDoubleClick={() => { setEditingBulkInstructionIndex(idx); setEditingBulkInstructionText(bulkConfig.aiInstructions[idx]); }}>
+                                  <span className="break-all">{inst}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => deleteBulkInstruction(idx)}
+                                    className="text-rose-500 hover:text-rose-700 transition-colors p-1 cursor-pointer flex-shrink-0 bg-transparent border-none"
+                                  >
+                                    <i className="fas fa-trash"></i>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         ))}
-                      </ol>
+                      </div>
                     )}
                   </div>
                 </div>
 </FeatureLockOverlay>
+
+                {/* Project (Optional) Section (Bulk) */}
+                <div className="border border-slate-200 dark:border-slate-700/80 rounded-2xl overflow-hidden bg-white dark:bg-slate-800/60/82 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-slate-300">
+                  <div className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-900/50/50 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                      <i className="fas fa-project-diagram text-primary"></i> Project (Optional)
+                    </span>
+                  </div>
+                  <div className="p-5 flex flex-col gap-4 bg-white dark:bg-slate-800/60">
+                    {/* Subbar: Count + Action Buttons */}
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                        Generated {bulkConfig.projectQuestions?.length || 0} project questions
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleGenerateProjectQuestions && handleGenerateProjectQuestions(true)}
+                          disabled={projectParsing}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 rounded-lg cursor-pointer transition-all shadow-sm disabled:opacity-50"
+                        >
+                          <i className={`fas fa-arrows-rotate ${projectParsing ? 'fa-spin' : ''}`}></i>
+                          {bulkConfig.projectQuestions?.length > 0 ? 'Regenerate questions' : 'Generate questions'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => document.getElementById('bulkProjectFileInput').click()}
+                          disabled={projectParsing}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg cursor-pointer transition-all shadow-sm"
+                        >
+                          <i className="fas fa-paperclip"></i>
+                          Upload project
+                        </button>
+                        <input
+                          type="file"
+                          id="bulkProjectFileInput"
+                          accept=".pdf,.docx,.doc,.txt"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files[0];
+                            if (!file) return;
+                            handleParseFile(file, (err, data) => {
+                              if (err) {
+                                Swal.fire({ title: 'Parsing Failed', text: err, icon: 'error' });
+                                if (setProjectParsing) setProjectParsing(false);
+                                return;
+                              }
+                              const extractedText = data.text || '';
+                              handleBulkConfigChange('projectText', extractedText);
+                              handleBulkConfigChange('projectFileName', file.name);
+                              if (handleGenerateProjectQuestions) {
+                                handleGenerateProjectQuestions(true, null, extractedText, file.name);
+                              }
+                            }, setProjectParsing);
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {projectParsing && (
+                      <span className="text-xs text-warning font-semibold flex items-center gap-1">
+                        <i className="fas fa-spinner fa-spin"></i> Processing project data & generating questions...
+                      </span>
+                    )}
+
+                    {/* Difficulty Selection */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        <i className="fas fa-chart-simple text-indigo-500"></i>
+                        <span>Difficulty Level:</span>
+                        <span className="text-slate-400 font-normal">
+                          ({((bulkConfig.projectDifficulty || 'hard').charAt(0).toUpperCase() + (bulkConfig.projectDifficulty || 'hard').slice(1))})
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        {[
+                          { key: 'easy', label: 'Easy', icon: 'fa-seedling' },
+                          { key: 'medium', label: 'Medium', icon: 'fa-scale-balanced' },
+                          { key: 'hard', label: 'Hard', icon: 'fa-fire' }
+                        ].map(d => {
+                          const isActive = (bulkConfig.projectDifficulty || 'hard') === d.key;
+                          return (
+                            <button
+                              key={d.key}
+                              type="button"
+                              onClick={() => {
+                                handleBulkConfigChange('projectDifficulty', d.key);
+                                if (handleGenerateProjectQuestions) {
+                                  handleGenerateProjectQuestions(true, d.key);
+                                }
+                              }}
+                              className={`inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg cursor-pointer transition-all ${
+                                isActive
+                                  ? d.key === 'hard'
+                                    ? 'bg-rose-600 text-white shadow-sm'
+                                    : d.key === 'medium'
+                                    ? 'bg-indigo-600 text-white shadow-sm'
+                                    : 'bg-emerald-600 text-white shadow-sm'
+                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                              }`}
+                            >
+                              <i className={`fas ${d.icon}`}></i>
+                              {d.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Uploaded File Banner */}
+                    {bulkConfig.projectFileName && (
+                      <div className="flex items-center justify-between px-3 py-2 bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50 rounded-xl text-xs text-indigo-900 dark:text-indigo-200 font-medium">
+                        <div className="flex items-center gap-2 truncate">
+                          <i className="fas fa-file-lines text-indigo-600 dark:text-indigo-400"></i>
+                          <span>Uploaded:</span>
+                          <span className="font-bold truncate">
+                            {bulkConfig.projectFileName}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleBulkConfigChange('projectText', '');
+                            handleBulkConfigChange('projectFileName', '');
+                            handleBulkConfigChange('projectQuestions', []);
+                            if (setBulkProjectQuestionsAdded) setBulkProjectQuestionsAdded(false);
+                            const fileInput = document.getElementById('bulkProjectFileInput');
+                            if (fileInput) fileInput.value = '';
+                          }}
+                          className="text-slate-400 hover:text-rose-500 transition-colors p-1"
+                          title="Clear uploaded project"
+                        >
+                          <i className="fas fa-xmark"></i>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Manual Question Input */}
+                    <div className="flex gap-2 items-center w-full">
+                      <input
+                        type="text"
+                        placeholder="Add a project-related question or requirement..."
+                        className="flex-1 bg-slate-50 dark:bg-slate-900/50/95 border border-slate-200 dark:border-slate-700 rounded-[5px] px-4 py-2.5 text-slate-900 dark:text-white text-[0.95rem] outline-none transition-all duration-200 focus:border-primary focus:bg-white dark:bg-slate-800/60 focus:shadow-[0_0_0_3px_rgba(99,102,241,0.12)] placeholder:text-slate-400"
+                        value={newBulkProjectQuestion}
+                        onChange={(e) => setNewBulkProjectQuestion && setNewBulkProjectQuestion(e.target.value)}
+                        onPaste={(e) => {
+                          const pasteData = e.clipboardData.getData('text');
+                          if (pasteData && (pasteData.includes('\n') || pasteData.includes('\r'))) {
+                            e.preventDefault();
+                            const items = parseMultiLineItems ? parseMultiLineItems(pasteData) : pasteData.split('\n').map(l => l.trim()).filter(Boolean);
+                            if (items.length > 0) {
+                              addBulkProjectQuestion(items);
+                            }
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            addBulkProjectQuestion();
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => addBulkProjectQuestion()}
+                        className="text-white text-xs font-bold px-4 py-2.5 rounded-[5px] transition-colors cursor-pointer"
+                        style={{ backgroundColor: '#6366f1' }}
+                      >
+                        Add
+                      </button>
+                    </div>
+
+                    {/* Generated Questions List with [ Clear all ] and [ + Add all ] */}
+                    {bulkConfig.projectQuestions && bulkConfig.projectQuestions.length > 0 && (
+                      <div className="flex flex-col gap-2 mt-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                            <i className="fas fa-list-check text-primary"></i>
+                            Generated Questions ({bulkConfig.projectQuestions.length})
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleBulkConfigChange('projectQuestions', []);
+                                if (setBulkProjectQuestionsAdded) setBulkProjectQuestionsAdded(false);
+                              }}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg cursor-pointer transition-all shadow-sm"
+                            >
+                              <i className="fas fa-trash-alt text-[0.7rem]"></i> Clear all
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (setBulkProjectQuestionsAdded) {
+                                  setBulkProjectQuestionsAdded(!bulkProjectQuestionsAdded);
+                                }
+                              }}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold rounded-lg cursor-pointer transition-all shadow-sm ${
+                                bulkProjectQuestionsAdded
+                                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-600'
+                                  : 'bg-primary hover:bg-primary/90 text-white border border-primary'
+                              }`}
+                            >
+                              <i className={`fas ${bulkProjectQuestionsAdded ? 'fa-check' : 'fa-plus'}`}></i>
+                              {bulkProjectQuestionsAdded ? 'Added' : 'Add all'}
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2 max-h-72 overflow-y-auto pt-2 border-t border-slate-100 dark:border-slate-800">
+                          {bulkConfig.projectQuestions.map((q, idx) => (
+                            <div key={idx} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200 font-medium">
+                              <span className="shrink-0 font-semibold text-slate-500 dark:text-slate-400 w-7 text-right leading-relaxed">{idx + 1}.</span>
+                              <div className="flex justify-between items-start gap-3 group flex-1">
+                                <span className="break-words leading-relaxed">{q}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => deleteBulkProjectQuestion(idx)}
+                                  className="text-rose-500 hover:text-rose-700 transition-colors p-1 cursor-pointer flex-shrink-0 bg-transparent border-none"
+                                  title="Delete question"
+                                >
+                                  <i className="fas fa-trash"></i>
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
 {/* Card 5: Excel/CSV Upload Dropzone */}
               <div className="bg-white dark:bg-slate-800/60/82 backdrop-blur-md border border-[#e5edf7] rounded-2xl p-5 text-slate-800 dark:text-slate-100 flex flex-col gap-4 shadow-[0_18px_40px_rgba(17,24,39,0.06)] hover:border-slate-350 transition-all duration-200">

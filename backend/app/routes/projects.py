@@ -156,29 +156,25 @@ def is_link_or_meta(line: str) -> bool:
     lower = line.strip().lower()
     if any(k in lower for k in ['github', 'git hub', 'gitlab', 'bitbucket', 'live demo', 'link : link', 'link: link', 'link:', 'view project', 'demo:']):
         if '|' in line:
-            left_part = line.split('|')[0].strip()
-            if len(left_part.split()) >= 2 and not any(k in left_part.lower() for k in ['github', 'link', 'demo', 'http']):
+            left_part = [p.strip() for p in line.split('|') if p.strip()]
+            if left_part and len(left_part[0].split()) >= 2 and not any(k in left_part[0].lower() for k in ['github', 'link', 'demo', 'http']):
                 return False
         return True
     if lower in ['developer', 'intern', 'lead', 'engineer', 'team lead', 'data scientist', 'full stack developer']:
         return True
-    if re.match(r'^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|\d{4})\b', line.strip(), re.IGNORECASE):
+    if re.match(r'^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|\d{4})\b', line.strip(' |'), re.IGNORECASE):
         return True
-    if line.strip().isdigit():
+    if line.strip(' |').isdigit():
         return True
-    # Detect pipe-separated resume metadata like "Ratnaraju_01 | Developer | Mar" or "Name | Role | Date"
-    parts = [p.strip() for p in line.strip().split('|')]
+    # Detect pipe-separated resume metadata like 'Ratnaraju_01 | Developer | Mar' or 'Name | Role | Date'
+    parts = [p.strip() for p in line.strip().split('|') if p.strip()]
     if len(parts) >= 2:
         role_words = {'developer', 'intern', 'lead', 'engineer', 'analyst', 'designer', 'manager', 'architect', 'consultant', 'scientist', 'student'}
-        month_words = {'jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'}
-        
-        # If the FIRST part is a project title (e.g. "Deep Learning Chest X-Ray Classification | ..."), this is a project header, NOT pure metadata!
         first_part_lower = parts[0].lower().strip()
         if len(parts[0].split()) >= 2 and not any(r == first_part_lower for r in role_words) and not re.match(r'^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\d{4})\b', first_part_lower):
             return False
-
-        has_role = any(any(r in p.lower() for r in role_words) for p in parts)
-        has_month = any(any(m in p.lower() for m in month_words) for p in parts)
+        has_role = any(any(re.search(rf'\b{re.escape(r)}\b', p.lower()) for r in role_words) for p in parts)
+        has_month = any(re.search(r'\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b', p.lower()) for p in parts)
         has_year = any(re.search(r'\b20\d{2}\b', p) for p in parts)
         if has_role or has_month or has_year:
             return True
@@ -188,20 +184,20 @@ def clean_project_title_and_tech(raw_title: str) -> tuple:
     # Strip literal hex escapes (e.g. \x7f), raw control characters, and bullet glyphs
     cleaned_raw = re.sub(r'\\x[0-9a-fA-F]{2}', '', raw_title)
     cleaned_raw = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\uf000-\uf8ff]', '', cleaned_raw)
-    # If title has pipe-separated handle, link, or date e.g. 'Project Name | Ratnaraju_01 Jan 2026'
-    if '|' in cleaned_raw:
-        cleaned_raw = cleaned_raw.split('|')[0]
-    title = cleaned_raw.strip(" |*_\t-:#")
-    # Strip leading numbered list prefixes like "1.", "2.", "3)", "Project 1:", etc.
+    parts = [p.strip(' |*_\t-:#–—') for p in cleaned_raw.split('|') if p.strip(' |*_\t-:#–—')]
+    if parts:
+        cleaned_raw = parts[0]
+    title = cleaned_raw.strip(' |*_\t-:#–—')
+    # Strip leading numbered list prefixes like '1.', '2.', '3)', 'Project 1:', etc.
     title = re.sub(r'^(?:Project\s*)?(\d+[\.\):\-]\s*)', '', title, flags=re.IGNORECASE).strip()
     title = re.sub(r'^(?:Project\s+)?(?:Title\s*[:\-]?\s*)', '', title, flags=re.IGNORECASE).strip()
-    tech = ""
+    tech = ''
     m = re.search(_FULL_TECH_REGEX, title, re.IGNORECASE)
     if m:
-        tech = m.group(1).strip(" ,-–")
-        title = title[:m.start(1)].strip(" |*_\t-:#–—")
-
-    title = re.sub(r'[\s|_-]*(?:Ratnaraju|Candidate|User|Project|Proj)?[_0-9]+$', '', title, flags=re.IGNORECASE).strip(" |*_\t-:#–—")
+        tech = m.group(1).strip(' ,-–')
+        title = title[:m.start(1)].strip(' |*_\t-:#–—')
+    title = re.sub(r'ClassificationRatnaraju[_0-9]*', 'Classification', title, flags=re.IGNORECASE)
+    title = re.sub(r'[\s|_-]*(?:Ratnaraju|Candidate|User|Project|Proj)?[_0-9]+$', '', title, flags=re.IGNORECASE).strip(' |*_\t-:#–—')
     clean_t = format_project_title(title if len(title) >= 3 else raw_title)
     return clean_t, tech
 
@@ -810,16 +806,27 @@ Return STRICT JSON format:
         )
         data = extract_json(raw) or {}
         generated = data.get("questions", [])
-        if isinstance(generated, list) and len(generated) >= max(3, num_projects * 4):
+        if isinstance(generated, list) and len(generated) >= min_total:
             clean_qs = [sanitize_project_question(q) for q in generated if str(q).strip()]
             clean_qs = [q for q in clean_qs if q and len(q) > 10]
-            if clean_qs:
+            # Guarantee target question count across all detected projects (between 15 and 30 for 3 projects: 7 per project = 21)
+            if len(clean_qs) < total_target_questions:
+                fallback_pool = build_offline_project_questions(projects, q_per_proj=q_per_proj, difficulty=difficulty)
+                fallback_pool = [sanitize_project_question(q) for q in fallback_pool if q and len(q) > 10]
+                for fq in fallback_pool:
+                    if fq not in clean_qs:
+                        clean_qs.append(fq)
+                    if len(clean_qs) >= total_target_questions:
+                        break
+            elif len(clean_qs) > max_total:
+                clean_qs = clean_qs[:max_total]
+            if len(clean_qs) >= min_total:
                 return {
-                    "questions": clean_qs, 
-                    "projects_count": num_projects,
-                    "difficulty": difficulty,
-                    "detected_projects": [format_project_title(t) for t in data.get("detected_projects", detected_titles) if '%' not in t],
-                    "source": "ai_dynamic"
+                    'questions': clean_qs,
+                    'projects_count': num_projects,
+                    'difficulty': difficulty,
+                    'detected_projects': [format_project_title(t) for t in data.get('detected_projects', detected_titles) if '%' not in t],
+                    'source': 'ai_dynamic'
                 }
     except Exception as e:
         print(f"Error calling AI for project questions: {e}")

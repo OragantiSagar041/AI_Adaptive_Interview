@@ -182,12 +182,20 @@ async def global_exception_handler(request: Request, exc: Exception):
     except:
         pass
     
+    origin = request.headers.get("origin")
+    cors_headers = {}
+    if origin:
+        cors_headers["Access-Control-Allow-Origin"] = origin
+        cors_headers["Access-Control-Allow-Credentials"] = "true"
+        cors_headers["Access-Control-Allow-Methods"] = "*"
+        cors_headers["Access-Control-Allow-Headers"] = "*"
+
     # We still want to raise the normal HTTPException if it was one
     from fastapi.exceptions import HTTPException
     if isinstance(exc, HTTPException):
-        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail}, headers=cors_headers)
         
-    return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
+    return JSONResponse(status_code=500, content={"detail": "Internal Server Error"}, headers=cors_headers)
 
 
 import re
