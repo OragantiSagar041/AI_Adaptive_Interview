@@ -1347,6 +1347,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
               setPropNewSingleQuestion={setNewSingleQuestion}
               propNewSingleInstruction={newSingleInstruction}
               setPropNewSingleInstruction={setNewSingleInstruction}
+<<<<<<< HEAD
               ignoredCandidateEmail={ignoredCandidateEmail}
               candidateStatusInfo={candidateStatusInfo}
               projectParsing={projectParsing}
@@ -1363,6 +1364,10 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
               deleteSingleInstruction={deleteSingleInstruction}
               addSingleQuestion={addSingleQuestion}
               deleteSingleQuestion={deleteSingleQuestion}
+=======
+              candidateStatusInfo={candidateStatusInfo}
+              ignoredCandidateEmail={ignoredCandidateEmail}
+>>>>>>> 4711c5e30a5c7d08f04b1ff78e592fcf6b27aa09
             />
           )}
 

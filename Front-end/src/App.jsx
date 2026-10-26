@@ -1,7 +1,8 @@
 import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { useSelector } from 'react-redux'
 // Protected Route Guard
-import ProtectedRoute from './components/ProtectedRoute'
+import ProtectedRoute, { normalizeRole } from './components/ProtectedRoute'
 
 // ─── Lazy-loaded routes ───────────────────────────────────────────────────────
 // ALL routes are now code-split so the initial JS bundle only contains the
@@ -104,6 +105,16 @@ function ThemeEnforcer() {
   return null;
 }
 
+function CreateInterviewRedirect() {
+  const reduxRole = useSelector(state => state.auth?.role);
+  const storedRole = localStorage.getItem('adminRole');
+  const norm = normalizeRole(reduxRole || storedRole);
+  if (norm === 'superadmin') {
+    return <Navigate to="/superadmin/create-interview" replace />;
+  }
+  return <Navigate to="/admin/create-interview" replace />;
+}
+
 function App() {
   return (
     <ThemeProvider>
@@ -126,6 +137,10 @@ function App() {
             <Route path="/careers/:companyId" element={<JobPortalPage />} />
             <Route path="/apply/:jobId" element={<JobApplicationPage />} />
             <Route path="/spectate/:linkId" element={<SpectatorPage />} />
+            <Route path="/create-interview" element={<CreateInterviewRedirect />} />
+            <Route path="/admin/create_interview" element={<Navigate to="/admin/create-interview" replace />} />
+            <Route path="/superadmin/create_interview" element={<Navigate to="/superadmin/create-interview" replace />} />
+
             {/* Master routes */}
             <Route
               path="/master"
@@ -152,7 +167,7 @@ function App() {
             <Route
               path="/superadmin"
               element={
-                <ProtectedRoute allowedRoles={['superadmin']}>
+                <ProtectedRoute allowedRoles={['superadmin', 'super_admin', 'tenant']}>
                   <SuperAdminLayout />
                 </ProtectedRoute>
               }
@@ -188,7 +203,7 @@ function App() {
             <Route
               path="/admin"
               element={
-                <ProtectedRoute allowedRoles={['admin']}>
+                <ProtectedRoute allowedRoles={['admin', 'recruiter', 'subadmin', 'superadmin', 'super_admin', 'tenant']}>
                   <AdminPage />
                 </ProtectedRoute>
               }

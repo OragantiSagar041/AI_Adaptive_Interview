@@ -39,6 +39,7 @@ export default function CreateInterviewSingleTab({
   setPropNewSingleQuestion,
   propNewSingleInstruction,
   setPropNewSingleInstruction,
+<<<<<<< HEAD
   ignoredCandidateEmail = '',
   candidateStatusInfo = null,
   projectParsing = false,
@@ -55,6 +56,10 @@ export default function CreateInterviewSingleTab({
   deleteSingleInstruction: propDeleteSingleInstruction,
   addSingleQuestion: propAddSingleQuestion,
   deleteSingleQuestion: propDeleteSingleQuestion,
+=======
+  candidateStatusInfo = null,
+  ignoredCandidateEmail = '',
+>>>>>>> 4711c5e30a5c7d08f04b1ff78e592fcf6b27aa09
 }) {
   const [localSingleQuestion, setLocalSingleQuestion] = useState('')
   const [localSingleInstruction, setLocalSingleInstruction] = useState('')

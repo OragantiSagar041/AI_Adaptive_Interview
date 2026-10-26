@@ -420,7 +420,7 @@ export default function LoginPage() {
         identifier,
       },
       {
-        timeout: 10000,
+        timeout: 30000,
       }
     )
 
@@ -449,7 +449,7 @@ export default function LoginPage() {
   API_BASE_URL + '/admin/firebase-auth',
   {},
   {
-    timeout: 10000,
+    timeout: 30000,
     headers: {
       Authorization: `Bearer ${idToken}`,
     },
@@ -473,9 +473,9 @@ export default function LoginPage() {
       .trim()
       .toLowerCase()
 
-    if (rawRole === 'super_admin' || rawRole === 'superadmin') {
+    if (rawRole === 'super_admin' || rawRole === 'superadmin' || rawRole === 'tenant') {
       finalRole = 'superadmin'
-    } else if (rawRole === 'tenant' || rawRole === 'admin') {
+    } else if (rawRole === 'admin' || rawRole === 'recruiter' || rawRole === 'subadmin') {
       finalRole = 'admin'
     } else if (rawRole === 'master') {
       finalRole = 'master'
@@ -662,7 +662,7 @@ const response = await axios.post(
   API_BASE_URL + '/admin/verify-2fa',
   { admin_id: tempAdminId, otp: otp2FA },
   {
-    timeout: 10000,
+    timeout: 30000,
     headers: {
       Authorization: `Bearer ${idToken}`,
     },
@@ -673,9 +673,9 @@ const response = await axios.post(
      const rawRole = String(data.role || 'tenant').trim().toLowerCase()
      
      let finalRole
-     if (rawRole === 'super_admin' || rawRole === 'superadmin') {
+     if (rawRole === 'super_admin' || rawRole === 'superadmin' || rawRole === 'tenant') {
       finalRole = 'superadmin'
-      } else if (rawRole === 'tenant' || rawRole === 'admin') {
+      } else if (rawRole === 'admin' || rawRole === 'recruiter' || rawRole === 'subadmin') {
         finalRole = 'admin'
       } else if (rawRole === 'master') {
         finalRole = 'master'
