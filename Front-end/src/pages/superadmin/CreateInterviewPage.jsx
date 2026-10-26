@@ -28,9 +28,10 @@ export default function CreateInterviewPage() {
   const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
 
   const userFeatures = adminUser?.plan_features || []
-  const hasCustomScreening = userFeatures.includes('Custom Screening Questions')
-  const hasCustomAIInstructions = userFeatures.includes('Custom AI Interviewer Instructions')
-  const hasIndustry = userFeatures.includes('Industry Type')
+  const isSuperOrMaster = adminUser?.role === 'super_admin' || adminUser?.role === 'master' || true
+  const hasCustomScreening = isSuperOrMaster || userFeatures.includes('Custom Screening Questions')
+  const hasCustomAIInstructions = isSuperOrMaster || userFeatures.includes('Custom AI Interviewer Instructions')
+  const hasIndustry = isSuperOrMaster || userFeatures.includes('Industry Type')
 
   // Form input states
   const [createTab, setCreateTab] = useState(() => {
@@ -51,6 +52,11 @@ export default function CreateInterviewPage() {
   const [newSingleInstruction, setNewSingleInstruction] = useState('')
   const [newBulkQuestion, setNewBulkQuestion] = useState('')
   const [newBulkInstruction, setNewBulkInstruction] = useState('')
+  const [projectParsing, setProjectParsing] = useState(false)
+  const [singleProjectQuestionsAdded, setSingleProjectQuestionsAdded] = useState(false)
+  const [bulkProjectQuestionsAdded, setBulkProjectQuestionsAdded] = useState(false)
+  const [newProjectQuestion, setNewProjectQuestion] = useState('')
+  const [newBulkProjectQuestion, setNewBulkProjectQuestion] = useState('')
 
   const [singleCandidate, setSingleCandidate] = useState(() => {
     let defaultState = {
@@ -64,6 +70,11 @@ export default function CreateInterviewPage() {
       jobTitle: '',
       customQuestions: [],
       aiInstructions: [],
+      projectQuestions: [],
+      projectText: '',
+      projectFileName: '',
+      projectDifficulty: 'hard',
+      projectResumeDismissed: false,
       industry: 'General',
       interviewFormat: 'Standard',
       interviewType: 'Technical',
@@ -93,6 +104,10 @@ export default function CreateInterviewPage() {
         if (typeof parsed.aiInstructions === 'string') {
           parsed.aiInstructions = parsed.aiInstructions ? parsed.aiInstructions.split('\n').map(i => i.trim()).filter(Boolean) : [];
         }
+        if (!Array.isArray(parsed.projectQuestions)) {
+          parsed.projectQuestions = typeof parsed.projectQuestions === 'string' ? parsed.projectQuestions.split('\n').map(q => q.trim()).filter(Boolean) : [];
+        }
+        if (!parsed.projectDifficulty) parsed.projectDifficulty = 'hard';
         defaultState = { ...defaultState, ...parsed };
       }
     } catch (e) {
@@ -162,6 +177,11 @@ export default function CreateInterviewPage() {
       jobDescription: '',
       customQuestions: [],
       aiInstructions: [],
+      projectQuestions: [],
+      projectText: '',
+      projectFileName: '',
+      projectDifficulty: 'hard',
+      projectResumeDismissed: false,
       industry: 'General',
       interviewFormat: 'Standard',
       interviewType: 'Technical',
@@ -191,6 +211,10 @@ export default function CreateInterviewPage() {
         if (typeof parsed.aiInstructions === 'string') {
           parsed.aiInstructions = parsed.aiInstructions ? parsed.aiInstructions.split('\n').map(i => i.trim()).filter(Boolean) : [];
         }
+        if (!Array.isArray(parsed.projectQuestions)) {
+          parsed.projectQuestions = typeof parsed.projectQuestions === 'string' ? parsed.projectQuestions.split('\n').map(q => q.trim()).filter(Boolean) : [];
+        }
+        if (!parsed.projectDifficulty) parsed.projectDifficulty = 'hard';
         defaultState = { ...defaultState, ...parsed };
       }
     } catch (e) {
@@ -286,6 +310,141 @@ export default function CreateInterviewPage() {
     }))
   }
 
+  const parseMultiLineItems = (text) => {
+    if (!text) return []
+    return text
+      .split(/\r?\n/)
+      .map(line => line.replace(/^[\s\d]+[\.\)\-\:]\s*|^[\s\*\-\•\–\—\>]\s*/, '').trim())
+      .filter(line => line.length > 0)
+  }
+
+  const addSingleQuestion = (itemsToAdd = null) => {
+    const items = Array.isArray(itemsToAdd) ? itemsToAdd : parseMultiLineItems(newSingleQuestion)
+    if (!items || items.length === 0) return
+    handleSingleChange('customQuestions', [...(singleCandidate.customQuestions || []), ...items])
+    setNewSingleQuestion('')
+  }
+  const deleteSingleQuestion = (index) => {
+    handleSingleChange('customQuestions', (singleCandidate.customQuestions || []).filter((_, i) => i !== index))
+  }
+
+  const addSingleInstruction = (itemsToAdd = null) => {
+    const items = Array.isArray(itemsToAdd) ? itemsToAdd : parseMultiLineItems(newSingleInstruction)
+    if (!items || items.length === 0) return
+    handleSingleChange('aiInstructions', [...(singleCandidate.aiInstructions || []), ...items])
+    setNewSingleInstruction('')
+  }
+  const deleteSingleInstruction = (index) => {
+    handleSingleChange('aiInstructions', (singleCandidate.aiInstructions || []).filter((_, i) => i !== index))
+  }
+
+  const addSingleProjectQuestion = (itemsToAdd = null) => {
+    const items = Array.isArray(itemsToAdd) ? itemsToAdd : parseMultiLineItems(newProjectQuestion)
+    if (!items || items.length === 0) return
+    const current = singleCandidate.projectQuestions || []
+    const newItems = items.filter(it => !current.includes(it))
+    if (newItems.length > 0) {
+      handleSingleChange('projectQuestions', [...current, ...newItems])
+    }
+    setNewProjectQuestion('')
+  }
+  const deleteSingleProjectQuestion = (index) => {
+    const current = singleCandidate.projectQuestions || []
+    const updated = current.filter((_, i) => i !== index)
+    handleSingleChange('projectQuestions', updated)
+    if (updated.length === 0) {
+      setSingleProjectQuestionsAdded(false)
+    }
+  }
+
+  const handleGenerateProjectQuestions = async (isBulk = false, overrideDifficulty = null, overrideProjectText = null, overrideFileName = null, overrideResumeText = null) => {
+    const currentDiff = overrideDifficulty || (isBulk ? (bulkConfig.projectDifficulty || 'hard') : (singleCandidate.projectDifficulty || 'hard'))
+    const pText = overrideProjectText !== null ? overrideProjectText : (isBulk ? bulkConfig.projectText : singleCandidate.projectText)
+    const pFileName = overrideFileName !== null ? overrideFileName : (isBulk ? bulkConfig.projectFileName : singleCandidate.projectFileName)
+    const rText = overrideResumeText !== null ? overrideResumeText : (isBulk ? '' : (singleCandidate.resumeText || ''))
+
+    if (!pText && !rText) {
+      Swal.fire({
+        title: 'No Project or Resume Found',
+        text: 'Please upload a project document or candidate resume first to generate project questions.',
+        icon: 'info',
+        confirmButtonColor: '#6366f1'
+      })
+      return
+    }
+
+    setProjectParsing(true)
+    try {
+      const res = await axios.post(`${API_BASE_URL}/projects/generate-questions`, {
+        project_text: pText || '',
+        resume_text: rText || '',
+        file_name: pFileName || '',
+        difficulty: currentDiff
+      })
+      const qs = res.data?.questions || []
+      if (isBulk) {
+        handleBulkConfigChange('projectQuestions', qs)
+        setBulkProjectQuestionsAdded(false)
+      } else {
+        setSingleCandidate(prev => ({
+          ...prev,
+          projectQuestions: qs,
+          projectResumeDismissed: false
+        }))
+        setSingleProjectQuestionsAdded(false)
+      }
+    } catch (err) {
+      console.error('Failed to generate project questions', err)
+      Swal.fire({
+        title: 'Generation Failed',
+        text: err.response?.data?.detail || 'Failed to generate project questions.',
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      })
+    } finally {
+      setProjectParsing(false)
+    }
+  }
+
+  const addBulkQuestion = (itemsToAdd = null) => {
+    const items = Array.isArray(itemsToAdd) ? itemsToAdd : parseMultiLineItems(newBulkQuestion)
+    if (!items || items.length === 0) return
+    handleBulkConfigChange('customQuestions', [...(bulkConfig.customQuestions || []), ...items])
+    setNewBulkQuestion('')
+  }
+  const deleteBulkQuestion = (index) => {
+    handleBulkConfigChange('customQuestions', (bulkConfig.customQuestions || []).filter((_, i) => i !== index))
+  }
+
+  const addBulkInstruction = (itemsToAdd = null) => {
+    const items = Array.isArray(itemsToAdd) ? itemsToAdd : parseMultiLineItems(newBulkInstruction)
+    if (!items || items.length === 0) return
+    handleBulkConfigChange('aiInstructions', [...(bulkConfig.aiInstructions || []), ...items])
+    setNewBulkInstruction('')
+  }
+  const deleteBulkInstruction = (index) => {
+    handleBulkConfigChange('aiInstructions', (bulkConfig.aiInstructions || []).filter((_, i) => i !== index))
+  }
+
+  const addBulkProjectQuestion = (itemsToAdd = null) => {
+    const items = Array.isArray(itemsToAdd) ? itemsToAdd : parseMultiLineItems(newBulkProjectQuestion)
+    if (!items || items.length === 0) return
+    const current = bulkConfig.projectQuestions || []
+    const newItems = items.filter(it => !current.includes(it))
+    if (newItems.length > 0) {
+      handleBulkConfigChange('projectQuestions', [...current, ...newItems])
+    }
+    setNewBulkProjectQuestion('')
+  }
+  const deleteBulkProjectQuestion = (index) => {
+    const current = bulkConfig.projectQuestions || []
+    const updated = current.filter((_, i) => i !== index)
+    handleBulkConfigChange('projectQuestions', updated)
+    if (updated.length === 0) {
+      setBulkProjectQuestionsAdded(false)
+    }
+  }
+
 
   // Parse file content
   const handleParseFile = async (file, onParsed, onLoading, source = 'resume', uploadToCloud = false) => {
@@ -301,7 +460,7 @@ export default function CreateInterviewPage() {
       const response = await axios.post(`${API_BASE_URL}/admin/parse-resume`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
-          'Authorization': `Bearer ${localStorage.getItem('superadminToken') || localStorage.getItem('adminToken')}`
+          'Authorization': `Bearer ${token || localStorage.getItem('token') || localStorage.getItem('superadminToken') || localStorage.getItem('adminToken')}`
         }
       })
       onParsed(null, response.data)
@@ -346,6 +505,7 @@ export default function CreateInterviewPage() {
       email: cleanEmail || prev.email,
       resumeText: autofillData.resume_text || prev.resumeText,
       resumeFileName: hasResume ? 'Existing candidate resume profile' : prev.resumeFileName,
+      projectResumeDismissed: false,
       phone: autofillData.candidate_phone || prev.phone
     }))
 
@@ -890,10 +1050,14 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
         custom_questions: (() => {
           const list = [
             ...(Array.isArray(customQuestions) ? customQuestions : (customQuestions ? [customQuestions] : [])),
-            ...(Array.isArray(singleCandidate.projectQuestions) ? singleCandidate.projectQuestions : [])
           ];
           if (newSingleQuestion && newSingleQuestion.trim() && !list.includes(newSingleQuestion.trim())) {
             list.push(newSingleQuestion.trim());
+          }
+          if (singleProjectQuestionsAdded && singleCandidate.projectQuestions && singleCandidate.projectQuestions.length > 0) {
+            singleCandidate.projectQuestions.forEach(q => {
+              if (q && !list.includes(q)) list.push(q);
+            });
           }
           return list.join('\n');
         })(),
@@ -902,12 +1066,16 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
           if (newSingleInstruction && newSingleInstruction.trim() && !list.includes(newSingleInstruction.trim())) {
             list.push(newSingleInstruction.trim());
           }
-          if (singleCandidate.projectText || (singleCandidate.projectQuestions && singleCandidate.projectQuestions.length > 0)) {
-            const summary = singleCandidate.projectText ? singleCandidate.projectText.slice(0, 2500) : singleCandidate.projectQuestions.join('\n');
+          if (singleProjectQuestionsAdded && (singleCandidate.projectText || (singleCandidate.projectQuestions && singleCandidate.projectQuestions.length > 0))) {
+            const summary = singleCandidate.projectText ? singleCandidate.projectText.slice(0, 2500) : singleCandidate.projectQuestions.slice(0, 5).join('; ');
             list.push(`CRITICAL MANDATORY REQUIREMENT - PROJECT / CASE STUDY EVALUATION:\nYou MUST ask the candidate deep-dive questions based on the following Project / Case Study:\n${summary}\nEvaluate their architecture, technical decisions, implementation challenges, and individual contributions.`);
           }
           return list.join('\n');
         })(),
+        project_questions: singleProjectQuestionsAdded ? (singleCandidate.projectQuestions || []) : [],
+        project_text: singleProjectQuestionsAdded ? (singleCandidate.projectText || '') : '',
+        project_difficulty: singleCandidate.projectDifficulty || 'hard',
+        difficulty: singleCandidate.projectDifficulty || 'hard',
         case_study_count: interviewType === 'Non-Technical' ? Number(caseStudyCount) : 0,
         voice_clone: voiceCloning,
         custom_voice_id: singleCandidate.customVoiceId || "",
@@ -948,13 +1116,25 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
         ...prev,
         name: '',
         email: '',
+        phone: '',
         resumeText: '',
+        resumeFileName: '',
         jobDescription: '',
-        customQuestions: '',
-        aiInstructions: '',
+        jdFileName: '',
+        customQuestions: [],
+        aiInstructions: [],
+        projectQuestions: [],
+        projectText: '',
+        projectFileName: '',
+        projectDifficulty: 'hard',
+        projectResumeDismissed: false,
         scheduledStart: '',
         scheduledEnd: ''
       }))
+      setSingleProjectQuestionsAdded(false)
+      setNewSingleQuestion('')
+      setNewSingleInstruction('')
+      setNewProjectQuestion('')
       setAtsScoreData(null)
       setCustomEmailHtml('')
 
@@ -1052,6 +1232,19 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
       setBulkResultsData(data)
       setBulkResultsModalOpen(true)
       setBulkCandidates([])
+      setBulkConfig(prev => ({
+        ...prev,
+        customQuestions: [],
+        aiInstructions: [],
+        projectQuestions: [],
+        projectText: '',
+        projectFileName: '',
+        projectDifficulty: 'hard'
+      }))
+      setBulkProjectQuestionsAdded(false)
+      setNewBulkQuestion('')
+      setNewBulkInstruction('')
+      setNewBulkProjectQuestion('')
       setCustomEmailHtml('')
       dispatch(loadSuperAdminDashboard())
     } catch (e) {
@@ -1154,8 +1347,22 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
               setPropNewSingleQuestion={setNewSingleQuestion}
               propNewSingleInstruction={newSingleInstruction}
               setPropNewSingleInstruction={setNewSingleInstruction}
-              candidateStatusInfo={candidateStatusInfo}
               ignoredCandidateEmail={ignoredCandidateEmail}
+              candidateStatusInfo={candidateStatusInfo}
+              projectParsing={projectParsing}
+              setProjectParsing={setProjectParsing}
+              singleProjectQuestionsAdded={singleProjectQuestionsAdded}
+              setSingleProjectQuestionsAdded={setSingleProjectQuestionsAdded}
+              newProjectQuestion={newProjectQuestion}
+              setNewProjectQuestion={setNewProjectQuestion}
+              handleGenerateProjectQuestions={handleGenerateProjectQuestions}
+              addSingleProjectQuestion={addSingleProjectQuestion}
+              deleteSingleProjectQuestion={deleteSingleProjectQuestion}
+              parseMultiLineItems={parseMultiLineItems}
+              addSingleInstruction={addSingleInstruction}
+              deleteSingleInstruction={deleteSingleInstruction}
+              addSingleQuestion={addSingleQuestion}
+              deleteSingleQuestion={deleteSingleQuestion}
             />
           )}
 
@@ -1184,6 +1391,20 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
               setPropNewBulkQuestion={setNewBulkQuestion}
               propNewBulkInstruction={newBulkInstruction}
               setPropNewBulkInstruction={setNewBulkInstruction}
+              projectParsing={projectParsing}
+              setProjectParsing={setProjectParsing}
+              bulkProjectQuestionsAdded={bulkProjectQuestionsAdded}
+              setBulkProjectQuestionsAdded={setBulkProjectQuestionsAdded}
+              newBulkProjectQuestion={newBulkProjectQuestion}
+              setNewBulkProjectQuestion={setNewBulkProjectQuestion}
+              handleGenerateProjectQuestions={handleGenerateProjectQuestions}
+              addBulkProjectQuestion={addBulkProjectQuestion}
+              deleteBulkProjectQuestion={deleteBulkProjectQuestion}
+              parseMultiLineItems={parseMultiLineItems}
+              addBulkInstruction={addBulkInstruction}
+              deleteBulkInstruction={deleteBulkInstruction}
+              addBulkQuestion={addBulkQuestion}
+              deleteBulkQuestion={deleteBulkQuestion}
             />
           )}
         </React.Suspense>
