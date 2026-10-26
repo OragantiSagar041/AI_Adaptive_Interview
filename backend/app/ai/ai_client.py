@@ -336,7 +336,7 @@ def _call_groq(
     else:
         active_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 
-    fallback_models = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"]
+    fallback_models = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b", "llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
     
     max_attempts = groq_key_manager.get_total_keys() or 1
     last_error_text = ""
