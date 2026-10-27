@@ -274,7 +274,7 @@ function recomputeFilteredCandidates(state) {
     return new Date(b.created_at) - new Date(a.created_at)
   })
 
-  const pageSize = 10
+  const pageSize = state.pageSize || 50
   state.totalItems = sorted.length
   state.totalPages = Math.ceil(state.totalItems / pageSize)
   if (state.currentPage > state.totalPages && state.totalPages > 0) {
@@ -301,6 +301,7 @@ const candidatesSlice = createSlice({
     pipelineFilter: 'all',
     positionFilter: 'all',
     sortBy: 'date',
+    pageSize: 50,
     totalPages: 1,
     startIndex: 0,
     endIndex: 0,
@@ -352,6 +353,11 @@ const candidatesSlice = createSlice({
     },
     setSelectedIds: (state, action) => {
       state.selectedIds = action.payload
+    },
+    setPageSize: (state, action) => {
+      state.pageSize = Number(action.payload) || 50
+      state.currentPage = 1
+      recomputeFilteredCandidates(state)
     },
     setCurrentPage: (state, action) => {
       state.currentPage = action.payload
@@ -474,7 +480,8 @@ export const {
   setPositionFilter,
   setSortBy,
   setSelectedIds,
-  setCurrentPage
+  setCurrentPage,
+  setPageSize
 } = candidatesSlice.actions
 
 export default candidatesSlice.reducer

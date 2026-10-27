@@ -2,7 +2,7 @@ import json
 from typing import Any, Dict, List, TypedDict, Optional
 from app.ai.ai_client import chat_completion
 from app.ai.ai_schemas import AnswerScore, InterviewQuestion, FollowupQuestion, InterviewSummary
-from app.ai.typed_ai_layer import _parse_with_schema, _extract_json_robust, _truncate, sanitize_spoken_interview_question
+from app.ai.typed_ai_layer import _parse_with_schema, _extract_json_robust, _truncate, sanitize_spoken_interview_question, sanitize_verbal_question_text
 
 try:
     from langgraph.graph import END, StateGraph

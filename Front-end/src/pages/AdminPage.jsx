@@ -1176,7 +1176,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
 
 
   const renderContent = () => {
-    if (role === 'superadmin') {
+    if (tabParam) {
       switch (activeTab) {
         case 'dashboard':
           return <OverviewDashboardPage {...sharedContext} />
@@ -1223,7 +1223,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
           }
         }}
       >
-        {isInitialLoad && loadingData ? (
+        {isInitialLoad && loadingData && pathname === '/admin/dashboard' ? (
           <div className="flex items-center gap-2.5 text-slate-500">
             <RefreshCw size={18} className="animate-spin" />
             <span>Refreshing console workspace...</span>

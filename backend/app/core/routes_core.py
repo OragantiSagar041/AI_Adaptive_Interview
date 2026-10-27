@@ -364,7 +364,7 @@ def _require_admin_session_access(session: Dict[str, Any], current_admin: Dict[s
 def _get_authorized_live_session(link_id: str, current_admin: Dict[str, Any]) -> Dict[str, Any]:
     """Authorize live-monitoring access with tenant isolation."""
     role = current_admin.get("role")
-    if role not in {"admin", "super_admin", "master"}:
+    if role not in {"admin", "recruiter", "subadmin", "super_admin", "superadmin", "tenant", "master"}:
         raise HTTPException(status_code=403, detail="Live monitoring access is required")
 
     query_conditions = [{"link_id": link_id}, {"interview_id": link_id}, {"session_id": link_id}]
@@ -405,7 +405,7 @@ def _decode_dashboard_websocket_admin(token: str) -> Dict[str, str]:
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
         admin_id = str(payload.get("sub") or "")
         role = str(payload.get("role") or "")
-        if not admin_id or role not in {"admin", "super_admin", "master"}:
+        if not admin_id or role not in {"admin", "recruiter", "subadmin", "super_admin", "superadmin", "tenant", "master"}:
             raise ValueError("Invalid dashboard role")
         admin_doc = admins_collection.find_one(
             {"_id": ObjectId(admin_id)},

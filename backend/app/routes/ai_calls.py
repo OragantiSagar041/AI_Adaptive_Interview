@@ -693,6 +693,7 @@ def get_omni_knowledge_base(current_admin: dict = Depends(get_current_admin_deta
 
 @router.get("/api/calls/integrations")
 @router.get("/calls/integrations")
+@router.get("/api/api/calls/integrations")
 def get_omni_integrations(current_admin: dict = Depends(get_current_admin_details)):
     omni_api_key = None
     """Fetch integrations for the agent from Omni Dimension."""
