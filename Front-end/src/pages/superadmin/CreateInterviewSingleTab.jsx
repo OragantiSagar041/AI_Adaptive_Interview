@@ -216,7 +216,7 @@ export default function CreateInterviewSingleTab({
                     value={singleCandidate.name}
                     onChange={(e) => handleSingleChange('name', e.target.value.replace(/[0-9]/g, ''))}
                   />
-
+                                                                                                                                        
                   <div>
                     <Input
                       label="Candidate Email"
