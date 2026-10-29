@@ -141,7 +141,7 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
     setSuccess('')
     try {
       const token = localStorage.getItem('token')
-      const r = await fetch(`${API_BASE_URL}/api/calls/integrations/calendly`, {
+      const r = await fetch(`${API_BASE_URL.replace(/\/api$/, "")}/api/calls/integrations/calendly`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -188,7 +188,7 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
       }
 
       const token = localStorage.getItem('token')
-      const r = await fetch(`${API_BASE_URL}/api/calls/integrations/custom-api`, {
+      const r = await fetch(`${API_BASE_URL.replace(/\/api$/, "")}/api/calls/integrations/custom-api`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -223,7 +223,7 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
     setError('')
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch(`${API_BASE_URL}/api/calls/integrations/calendly`, {
+      const response = await fetch(`${API_BASE_URL.replace(/\/api$/, "")}/api/calls/integrations/calendly`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ name: calComForm.name, cal_api_key: calComForm.apiKey, cal_id: calComForm.eventTypeId, cal_timezone: calComForm.timezone }),
@@ -242,7 +242,7 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
     try {
       const integration = JSON.parse(genericForm)
       const token = localStorage.getItem('token')
-      const response = await fetch(`${API_BASE_URL}/api/calls/integrations/from-json`, {
+      const response = await fetch(`${API_BASE_URL.replace(/\/api$/, "")}/api/calls/integrations/from-json`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ integration }),

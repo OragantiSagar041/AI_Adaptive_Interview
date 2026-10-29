@@ -250,11 +250,11 @@ export function CandidateTable({
 
   return (
     <>
-      <div className="overflow-x-auto w-full">
+      <div className="overflow-x-auto overflow-y-auto w-full max-h-[620px] relative">
         <table className="w-full border-collapse text-left">
-          <thead>
+          <thead className="sticky top-0 z-10 bg-slate-50 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
             <tr className="border-b border-[#e5edf7]">
-              <th className="w-10 pl-6 py-3.5 bg-slate-50 text-slate-500 font-semibold uppercase text-[0.72rem] tracking-wider">
+              <th className="w-10 pl-6 py-3.5 bg-slate-50 text-slate-500 font-semibold uppercase text-[0.72rem] tracking-wider sticky top-0 z-10">
                 <input
                   type="checkbox"
                   checked={paginatedCandidates.length > 0 && paginatedCandidates.every(c => selectedIds.includes(c.link_id || c.id))}
@@ -270,11 +270,11 @@ export function CandidateTable({
                   className="cursor-pointer"
                 />
               </th>
-              <th className="py-3.5 bg-slate-50 text-slate-500 font-semibold uppercase text-[0.72rem] tracking-wider px-4">Candidate</th>
-              <th className="py-3.5 bg-slate-50 text-slate-500 font-semibold uppercase text-[0.72rem] tracking-wider px-4">Date Created</th>
-              <th className="py-3.5 bg-slate-50 text-slate-500 font-semibold uppercase text-[0.72rem] tracking-wider px-4">Status</th>
-              <th className="py-3.5 bg-slate-50 text-slate-500 font-semibold uppercase text-[0.72rem] tracking-wider px-4">Score</th>
-              <th className="py-3.5 bg-slate-50 text-slate-500 font-semibold uppercase text-[0.72rem] tracking-wider pr-6 text-right px-4">Action</th>
+              <th className="py-3.5 bg-slate-50 text-slate-500 font-semibold uppercase text-[0.72rem] tracking-wider px-4 sticky top-0 z-10">Candidate</th>
+              <th className="py-3.5 bg-slate-50 text-slate-500 font-semibold uppercase text-[0.72rem] tracking-wider px-4 sticky top-0 z-10">Date Created</th>
+              <th className="py-3.5 bg-slate-50 text-slate-500 font-semibold uppercase text-[0.72rem] tracking-wider px-4 sticky top-0 z-10">Status</th>
+              <th className="py-3.5 bg-slate-50 text-slate-500 font-semibold uppercase text-[0.72rem] tracking-wider px-4 sticky top-0 z-10">Score</th>
+              <th className="py-3.5 bg-slate-50 text-slate-500 font-semibold uppercase text-[0.72rem] tracking-wider pr-6 text-right px-4 sticky top-0 z-10">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#eef2f7]">
@@ -420,10 +420,11 @@ export function CandidateTable({
         </table>
       </div>
 
-      {totalPages > 1 && (
+      {totalItems > 0 && (
         <div className="flex justify-between items-center px-6 py-4 border-t border-[#e5edf7]">
           <span className="text-xs text-slate-500">Showing {startIndex + 1}-{endIndex} of {totalItems} candidates</span>
-          <div className="flex gap-2">
+          {totalPages > 1 && (
+            <div className="flex gap-2">
             <Button
               disabled={currentPage === 1}
               onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
@@ -441,6 +442,7 @@ export function CandidateTable({
               Next
             </Button>
           </div>
+          )}
         </div>
       )}
 

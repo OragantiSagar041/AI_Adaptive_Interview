@@ -135,7 +135,7 @@ export default function AICallingAgentPage() {
     if (integrations.length) return
     setLoading('integrations', true)
     try {
-      const r = await fetch(`${API_BASE_URL}/api/calls/integrations`, { headers })
+      const r = await fetch(`${API_BASE_URL.replace(/\/api$/, "")}/api/calls/integrations`, { headers })
       const d = await r.json()
       if (r.ok) setIntegrations(d.integrations || [])
     } catch (e) { console.error(e) } finally { setLoading('integrations', false) }
@@ -802,7 +802,7 @@ export default function AICallingAgentPage() {
                     const fetchIntegrations = async () => {
                       try {
                         const token = localStorage.getItem('token');
-                        const r = await fetch(`${API_BASE_URL}/api/calls/integrations`, {
+                        const r = await fetch(`${API_BASE_URL.replace(/\/api$/, "")}/api/calls/integrations`, {
                           headers: {
                             Authorization: `Bearer ${token}`
                           }

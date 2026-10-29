@@ -28,14 +28,19 @@ function CandidateStreamCard({ session, token, onSelectCandidate }) {
   const lastBytesRef = useRef(null)
   const frozenSamplesRef = useRef(0)
   const issueRef = useRef(false)
+  const pendingIceCandidatesRef = useRef([])
+  const isNegotiatingRef = useRef(false)
+  const adminIdRef = useRef('')
 
   useEffect(() => {
     const linkId = sessionLinkId(session)
     if (!linkId || !token) return undefined
     mountedRef.current = true
     const base = API_BASE_URL.replace(/\/$/, '')
+    const adminId = `grid_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    adminIdRef.current = adminId
     const ws = new WebSocket(
-      `${base.replace(/^https?/, value => value === 'https' ? 'wss' : 'ws')}/ws/webrtc/admin/${linkId}?token=${encodeURIComponent(token)}&admin_id=grid_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+      `${base.replace(/^https?/, value => value === 'https' ? 'wss' : 'ws')}/ws/webrtc/admin/${linkId}?token=${encodeURIComponent(token)}&admin_id=${adminId}`
     )
     wsRef.current = ws
 
@@ -48,7 +53,15 @@ function CandidateStreamCard({ session, token, onSelectCandidate }) {
 
     const sendOffer = async () => {
       if (!mountedRef.current || ws.readyState !== WebSocket.OPEN) return
-      if (pcRef.current) pcRef.current.close()
+      if (isNegotiatingRef.current && pcRef.current && pcRef.current.signalingState !== 'closed') {
+        return
+      }
+      isNegotiatingRef.current = true
+      pendingIceCandidatesRef.current = []
+
+      if (pcRef.current) {
+        try { pcRef.current.close() } catch (_) {}
+      }
 
       await initIceServers()
       const pc = new RTCPeerConnection({ iceServers: getIceServers() })
@@ -89,16 +102,21 @@ function CandidateStreamCard({ session, token, onSelectCandidate }) {
         }
       }
 
-      const offer = await pc.createOffer()
-      await pc.setLocalDescription(offer)
+      try {
+        const offer = await pc.createOffer()
+        await pc.setLocalDescription(offer)
 
-      // Explicitly advertise 'low' stream_tier to candidate encoder (360p / 15 FPS)
-      ws.send(JSON.stringify({
-        type: 'webrtc_offer',
-        sdp: offer,
-        admin_id: ws.url.match(/admin_id=([^&]+)/)?.[1],
-        stream_tier: 'low'
-      }))
+        // Explicitly advertise 'low' stream_tier to candidate encoder (360p / 15 FPS)
+        ws.send(JSON.stringify({
+          type: 'webrtc_offer',
+          sdp: offer,
+          admin_id: adminIdRef.current || ws.url.match(/admin_id=([^&]+)/)?.[1],
+          stream_tier: 'low'
+        }))
+      } catch (err) {
+        console.warn('[MultiCandidateStream] Failed to create/set offer:', err)
+        isNegotiatingRef.current = false
+      }
     }
 
     ws.onopen = sendOffer
@@ -106,21 +124,45 @@ function CandidateStreamCard({ session, token, onSelectCandidate }) {
     ws.onmessage = async event => {
       try {
         const message = JSON.parse(event.data)
+        // Strictly ignore SDP answers / ICE meant for other admin instances / tabs
+        if (message.target_admin_id && adminIdRef.current && message.target_admin_id !== adminIdRef.current) {
+          return
+        }
+
         if (message.type === 'telemetry') {
           lastTelemetryAtRef.current = Date.now()
           setTelemetry(message.data || {})
           setIssue(false)
         } else if (message.type === 'candidate_connected') {
-          sendOffer()
+          if (!pcRef.current || pcRef.current.connectionState === 'failed' || pcRef.current.connectionState === 'closed') {
+            sendOffer()
+          }
         } else if (message.type === 'candidate_not_ready') {
           setStatus('waiting_tracks')
         } else if (message.type === 'candidate_disconnected') {
           setStatus('disconnected')
           setIssue(true)
         } else if (message.type === 'webrtc_answer' && pcRef.current) {
-          await pcRef.current.setRemoteDescription(new RTCSessionDescription(message.sdp))
+          const pc = pcRef.current
+          if (pc.signalingState !== 'stable') {
+            await pc.setRemoteDescription(new RTCSessionDescription(message.sdp))
+            const queued = pendingIceCandidatesRef.current || []
+            pendingIceCandidatesRef.current = []
+            for (const cand of queued) {
+              try { await pc.addIceCandidate(new RTCIceCandidate(cand)) } catch (_) {}
+            }
+          }
+          isNegotiatingRef.current = false
         } else if (message.type === 'webrtc_ice_candidate' && pcRef.current) {
-          await pcRef.current.addIceCandidate(new RTCIceCandidate(message.candidate))
+          const pc = pcRef.current
+          if (pc.remoteDescription && pc.remoteDescription.type) {
+            try {
+              await pc.addIceCandidate(new RTCIceCandidate(message.candidate))
+            } catch (_) {}
+          } else {
+            if (!pendingIceCandidatesRef.current) pendingIceCandidatesRef.current = []
+            pendingIceCandidatesRef.current.push(message.candidate)
+          }
         }
       } catch (error) {
         console.warn('[MultiCandidateMonitor] WebRTC message error', error)
@@ -167,7 +209,11 @@ function CandidateStreamCard({ session, token, onSelectCandidate }) {
     return () => {
       mountedRef.current = false
       clearInterval(healthTimer)
-      if (pcRef.current) pcRef.current.close()
+      isNegotiatingRef.current = false
+      pendingIceCandidatesRef.current = []
+      if (pcRef.current) {
+        try { pcRef.current.close() } catch (_) {}
+      }
       if (wsRef.current) { if (wsRef.current.readyState === WebSocket.OPEN) wsRef.current.close(); else wsRef.current.onopen = () => wsRef.current.close(); }
       setStream(null)
     }

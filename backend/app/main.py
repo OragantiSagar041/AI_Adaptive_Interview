@@ -277,7 +277,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers.setdefault("Referrer-Policy", "no-referrer")
         response.headers.setdefault(
             "Permissions-Policy",
-            "camera=(), microphone=(), geolocation=(), payment=()",
+            "camera=(self), microphone=(self), display-capture=(self), geolocation=()",
         )
         if os.getenv("ENV", "local").lower() == "production":
             response.headers.setdefault(

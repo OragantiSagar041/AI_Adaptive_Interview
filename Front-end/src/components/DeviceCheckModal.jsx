@@ -23,7 +23,17 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
     if (platform.includes('linux') || ua.includes('linux') || ua.includes('x11')) return 'linux';
     return 'windows';
   });
-  const [copiedCmd, setCopiedCmd] = useState(false);
+  const [copiedCmd, setCopiedCmd] = useState('');
+  const [linuxTab, setLinuxTab] = useState('quick');
+  const [showTroubleshooting, setShowTroubleshooting] = useState(false);
+
+  const copyToClipboard = (text, key = 'cmd') => {
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(text);
+      setCopiedCmd(key);
+      setTimeout(() => setCopiedCmd(''), 2500);
+    }
+  };
 
   const env = useEnvironmentIsolation({
     enabled: true,
@@ -473,38 +483,62 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
                   </p>
                   {/* Primary Download Button */}
                   <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <a
-                      href={
-                        selectedOS === 'mac'
-                          ? '/downloads/hireiq-agent-mac'
-                          : selectedOS === 'linux'
-                            ? '/downloads/hireiq-agent-linux'
-                            : '/downloads/hireiq-agent.exe'
-                      }
-                      download={
-                        selectedOS === 'mac'
-                          ? 'hireiq-agent-mac'
-                          : selectedOS === 'linux'
-                            ? 'hireiq-agent-linux'
-                            : 'hireiq-agent.exe'
-                      }
-                      className="inline-flex items-center gap-1.5 bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded text-xs font-bold transition-all shadow shadow-amber-600/30"
-                    >
-                      <i className={
-                        selectedOS === 'mac'
-                          ? 'fab fa-apple text-sm'
-                          : selectedOS === 'linux'
-                            ? 'fab fa-linux text-sm'
-                            : 'fab fa-windows text-sm'
-                      }></i>
-                      <span>
-                        {selectedOS === 'mac'
-                          ? 'Download for macOS'
-                          : selectedOS === 'linux'
-                            ? 'Download for Linux'
-                            : 'Download for Windows (.exe)'}
-                      </span>
-                    </a>
+                    {selectedOS === 'windows' ? (
+                      <a
+                        href="/downloads/hireiq-agent.exe"
+                        download="hireiq-agent.exe"
+                        className="inline-flex items-center gap-1.5 bg-amber-600 hover:bg-amber-500 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all shadow shadow-amber-600/30"
+                      >
+                        <i className="fab fa-windows text-sm"></i>
+                        <span>Download for Windows (.exe)</span>
+                      </a>
+                    ) : selectedOS === 'mac' ? (
+                      <a
+                        href="/downloads/hireiq-agent-mac"
+                        download="hireiq-agent-mac"
+                        className="inline-flex items-center gap-1.5 bg-amber-600 hover:bg-amber-500 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all shadow shadow-amber-600/30"
+                      >
+                        <i className="fab fa-apple text-sm"></i>
+                        <span>Download for macOS</span>
+                      </a>
+                    ) : (
+                      /* Linux dynamic button depending on tab */
+                      <div className="flex flex-wrap items-center gap-2">
+                        {linuxTab === 'manual' ? (
+                          <a
+                            href="/downloads/hireiq-agent-linux"
+                            download="hireiq-agent-linux"
+                            className="inline-flex items-center gap-1.5 bg-amber-600 hover:bg-amber-500 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all shadow shadow-amber-600/30"
+                          >
+                            <i className="fab fa-linux text-sm"></i>
+                            <span>Download for Linux (Binary)</span>
+                          </a>
+                        ) : linuxTab === 'python' ? (
+                          <a
+                            href="/downloads/agent.py"
+                            download="agent.py"
+                            className="inline-flex items-center gap-1.5 bg-amber-600 hover:bg-amber-500 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all shadow shadow-amber-600/30"
+                          >
+                            <i className="fab fa-python text-sm"></i>
+                            <span>Download agent.py (Python)</span>
+                          </a>
+                        ) : (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[11px] text-amber-200 font-semibold bg-black/40 px-2 py-1 rounded border border-amber-500/20">
+                              ⚡ No download needed — copy the 1-line command below
+                            </span>
+                            <a
+                              href="/downloads/hireiq-agent-linux"
+                              download="hireiq-agent-linux"
+                              className="inline-flex items-center gap-1 bg-black/40 hover:bg-black/60 text-slate-300 hover:text-white border border-white/10 px-2.5 py-1 rounded text-[10px] font-medium transition-all"
+                            >
+                              <i className="fas fa-file-download text-[10px] text-amber-300"></i>
+                              <span>Direct Binary (.bin)</span>
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Manual Platform Switcher */}
@@ -548,69 +582,256 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
                   {/* Platform-Specific Step-by-Step Run Guidance */}
                   {selectedOS === 'windows' ? (
                     <div className="mt-2.5 p-2 rounded-lg bg-black/40 border border-amber-500/25 text-[10px]">
-                      <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-amber-100 font-medium font-sans">
-                        <span className="bg-amber-500/30 text-amber-200 font-bold px-1.5 py-0.5 rounded text-[9px] border border-amber-400/30">Step 1</span>
-                        <span>Click download above</span>
-                        <span className="text-amber-400 font-bold">→</span>
-                        <span className="bg-amber-500/30 text-amber-200 font-bold px-1.5 py-0.5 rounded text-[9px] border border-amber-400/30">Step 2</span>
-                        <span>Open & double-click <code className="text-amber-300 font-mono font-bold bg-black/60 px-1 py-0.5 rounded">hireiq-agent.exe</code></span>
+                      <div className="space-y-1.5 font-sans">
+                        <div className="flex items-center gap-2 text-amber-100">
+                          <span className="bg-amber-500/30 text-amber-200 font-bold px-1.5 py-0.5 rounded text-[9px] border border-amber-400/30 shrink-0">Step 1</span>
+                          <span>Click the amber <strong>Download for Windows (.exe)</strong> button above.</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-amber-100">
+                          <span className="bg-amber-500/30 text-amber-200 font-bold px-1.5 py-0.5 rounded text-[9px] border border-amber-400/30 shrink-0">Step 2</span>
+                          <span>Open your Downloads folder and double-click <code className="text-amber-300 font-mono font-bold bg-black/60 px-1.5 py-0.5 rounded border border-amber-500/30">hireiq-agent.exe</code>.</span>
+                        </div>
                       </div>
-                      <p className="mt-1 text-[9px] text-amber-300/70 font-sans">
-                        💡 If Chrome warns "Suspicious download blocked": Click download details (arrow) → select "Download suspicious file" / "Keep anyway"
-                      </p>
+                      <div className="mt-2 pt-1.5 border-t border-amber-500/20 text-[9px] text-amber-300/80 space-y-1 font-sans">
+                        <p>💡 <strong>Chrome download warning:</strong> If prompted <em>"Suspicious download blocked"</em>, click download details (arrow) → select <em>"Keep anyway"</em> / <em>"Download suspicious file"</em>.</p>
+                        <p>💡 <strong>Windows SmartScreen prompt:</strong> If prompted <em>"Windows protected your PC"</em>, click <em>"More info"</em> → <em>"Run anyway"</em>.</p>
+                      </div>
                     </div>
-                  ) : (
+                  ) : selectedOS === 'mac' ? (
                     <div className="mt-2.5 p-2 rounded-lg bg-black/40 border border-amber-500/25 text-[10px]">
-                      {/* Explicit 2-Step Visual Flow */}
-                      <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-amber-100 font-medium mb-2 pb-1.5 border-b border-amber-500/20 font-sans">
-                        <span className="bg-amber-500/30 text-amber-200 font-bold px-1.5 py-0.5 rounded text-[9px] border border-amber-400/30">Step 1</span>
-                        <span>Click download above</span>
-                        <span className="text-amber-400 font-bold">→</span>
-                        <span className="bg-amber-500/30 text-amber-200 font-bold px-1.5 py-0.5 rounded text-[9px] border border-amber-400/30">Step 2</span>
-                        <span>{selectedOS === 'linux' ? 'Open Terminal (Ctrl+Alt+T) & paste command:' : 'Open Terminal & paste command:'}</span>
+                      <div className="space-y-1.5 font-sans mb-2">
+                        <div className="flex items-center gap-2 text-amber-100">
+                          <span className="bg-amber-500/30 text-amber-200 font-bold px-1.5 py-0.5 rounded text-[9px] border border-amber-400/30 shrink-0">Step 1</span>
+                          <span>Open Terminal (press <kbd className="bg-black/60 px-1 py-0.5 rounded text-amber-200 font-mono text-[9px] border border-white/15">Cmd + Space</kbd>, type <code>Terminal</code>, press Enter).</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-amber-100">
+                          <span className="bg-amber-500/30 text-amber-200 font-bold px-1.5 py-0.5 rounded text-[9px] border border-amber-400/30 shrink-0">Step 2</span>
+                          <span>Copy and paste this 1-line command into your Terminal:</span>
+                        </div>
                       </div>
 
-                      <div className="flex items-center justify-between text-amber-200/90 mb-1 font-sans">
-                        <span className="font-semibold flex items-center gap-1 text-[10px]">
-                          <i className="fas fa-terminal text-[9px] text-amber-400"></i> Command to run:
-                        </span>
+                      <div className="flex items-center justify-between gap-2 bg-black/60 px-2 py-1.5 rounded font-mono text-[10px] text-amber-200 border border-amber-500/30">
+                        <span className="truncate">{`curl -fsSL ${(typeof window !== 'undefined' ? window.location.origin : '')}/downloads/hireiq-agent-mac -o hireiq-agent && chmod +x hireiq-agent && ./hireiq-agent`}</span>
                         <button
                           type="button"
                           onClick={() => {
-                            const cmd = `cd ~/Downloads && chmod +x hireiq-agent-${selectedOS} && ./hireiq-agent-${selectedOS}`;
-                            if (navigator?.clipboard?.writeText) {
-                              navigator.clipboard.writeText(cmd);
-                              setCopiedCmd(true);
-                              setTimeout(() => setCopiedCmd(false), 2000);
-                            }
+                            const origin = typeof window !== 'undefined' ? window.location.origin : '';
+                            copyToClipboard(`curl -fsSL ${origin}/downloads/hireiq-agent-mac -o hireiq-agent && chmod +x hireiq-agent && ./hireiq-agent`, 'mac-quick');
                           }}
-                          className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-sans text-[10px] shrink-0 cursor-pointer font-bold transition-all"
-                          title="Copy command"
+                          className="px-2.5 py-1 rounded bg-amber-500/30 hover:bg-amber-500/40 text-amber-200 text-[10px] font-bold shrink-0 cursor-pointer transition-all border border-amber-400/40"
                         >
-                          {copiedCmd ? (
-                            <span className="flex items-center gap-1 text-emerald-400"><i className="fas fa-check"></i> Copied</span>
+                          {copiedCmd === 'mac-quick' ? (
+                            <span className="flex items-center gap-1 text-emerald-400"><i className="fas fa-check"></i> Copied!</span>
                           ) : (
                             <span className="flex items-center gap-1"><i className="fas fa-copy"></i> Copy</span>
                           )}
                         </button>
                       </div>
-                      <div className="bg-black/60 px-2 py-1.5 rounded font-mono text-[10px] text-amber-200 break-all select-all">
-                        cd ~/Downloads && chmod +x hireiq-agent-{selectedOS} && ./hireiq-agent-{selectedOS}
+
+                      <div className="mt-2 pt-1.5 border-t border-amber-500/20 text-[9px] text-amber-300/80 space-y-1 font-sans">
+                        <p>💡 <strong>macOS Gatekeeper warning:</strong> If prompted <em>"developer cannot be verified"</em>, run: <code className="bg-black/50 px-1 py-0.5 rounded text-amber-200 font-mono">xattr -d com.apple.quarantine hireiq-agent*</code> or open <strong>System Settings → Privacy & Security → Open Anyway</strong>.</p>
+                        <p>💡 <strong>Manual alternative:</strong> If you downloaded the file via browser above, run: <code className="bg-black/50 px-1 py-0.5 rounded text-amber-200 font-mono">{`cd "$(xdg-user-dir DOWNLOAD 2>/dev/null || echo ~/Downloads)" && chmod +x hireiq-agent-mac* && ./hireiq-agent-mac*`}</code></p>
                       </div>
-                      {selectedOS === 'linux' ? (
-                        <p className="mt-1 text-[9px] text-amber-300/70 font-sans">
-                          💡 Or right-click file in Downloads → Properties → Allow executing as program
-                        </p>
-                      ) : (
-                        <p className="mt-1 text-[9px] text-amber-300/70 font-sans">
-                          💡 If prompted: System Settings → Privacy & Security → Click "Open Anyway"
-                        </p>
+                    </div>
+                  ) : (
+                    /* Linux Detailed Guidance */
+                    <div className="mt-2.5 p-2 rounded-lg bg-black/40 border border-amber-500/25 text-[10px]">
+                      {/* Method Selection Tabs for Linux */}
+                      <div className="flex items-center gap-1 mb-2 pb-1.5 border-b border-amber-500/20">
+                        <span className="text-amber-300/80 font-medium mr-1 text-[9px]">Method:</span>
+                        <button
+                          type="button"
+                          onClick={() => setLinuxTab('quick')}
+                          className={`px-2 py-0.5 rounded text-[9px] font-bold cursor-pointer transition-all ${
+                            linuxTab === 'quick'
+                              ? 'bg-amber-500/40 text-amber-100 border border-amber-400/60 shadow-sm'
+                              : 'bg-black/30 hover:bg-black/50 text-slate-300 border border-white/10'
+                          }`}
+                        >
+                          ⚡ 1-Line Run (Recommended)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setLinuxTab('manual')}
+                          className={`px-2 py-0.5 rounded text-[9px] font-bold cursor-pointer transition-all ${
+                            linuxTab === 'manual'
+                              ? 'bg-amber-500/40 text-amber-100 border border-amber-400/60 shadow-sm'
+                              : 'bg-black/30 hover:bg-black/50 text-slate-300 border border-white/10'
+                          }`}
+                        >
+                          📁 Downloaded File
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setLinuxTab('python')}
+                          className={`px-2 py-0.5 rounded text-[9px] font-bold cursor-pointer transition-all ${
+                            linuxTab === 'python'
+                              ? 'bg-amber-500/40 text-amber-100 border border-amber-400/60 shadow-sm'
+                              : 'bg-black/30 hover:bg-black/50 text-slate-300 border border-white/10'
+                          }`}
+                        >
+                          🐍 Python 3 Fallback
+                        </button>
+                      </div>
+
+                      {/* Tab 1: 1-Line Terminal Run (Most Resilient) */}
+                      {linuxTab === 'quick' && (
+                        <div>
+                          <div className="space-y-1 font-sans mb-2">
+                            <div className="flex items-center gap-2 text-amber-100">
+                              <span className="bg-amber-500/30 text-amber-200 font-bold px-1.5 py-0.5 rounded text-[9px] border border-amber-400/30 shrink-0">Step 1</span>
+                              <span>Open Terminal (<kbd className="bg-black/60 px-1 py-0.5 rounded text-amber-200 font-mono text-[9px] border border-white/15">Ctrl + Alt + T</kbd>).</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-amber-100">
+                              <span className="bg-amber-500/30 text-amber-200 font-bold px-1.5 py-0.5 rounded text-[9px] border border-amber-400/30 shrink-0">Step 2</span>
+                              <span>Paste and run this single command:</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-2 bg-black/60 px-2 py-1.5 rounded font-mono text-[10px] text-amber-200 border border-amber-500/30">
+                            <span className="truncate">{`curl -fsSL ${(typeof window !== 'undefined' ? window.location.origin : '')}/downloads/hireiq-agent.sh | bash`}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const origin = typeof window !== 'undefined' ? window.location.origin : '';
+                                copyToClipboard(`curl -fsSL ${origin}/downloads/hireiq-agent.sh | bash`, 'linux-quick');
+                              }}
+                              className="px-2.5 py-1 rounded bg-amber-500/30 hover:bg-amber-500/40 text-amber-200 text-[10px] font-bold shrink-0 cursor-pointer transition-all border border-amber-400/40"
+                            >
+                              {copiedCmd === 'linux-quick' ? (
+                                <span className="flex items-center gap-1 text-emerald-400"><i className="fas fa-check"></i> Copied!</span>
+                              ) : (
+                                <span className="flex items-center gap-1"><i className="fas fa-copy"></i> Copy</span>
+                              )}
+                            </button>
+                          </div>
+                          <p className="mt-1 text-[9px] text-amber-300/70 font-sans">
+                            💡 Runs from any directory. Automatically checks architecture (x86_64 vs ARM64) and falls back to Python 3 if binary is unsupported.
+                          </p>
+                        </div>
                       )}
+
+                      {/* Tab 2: Manual Browser Download */}
+                      {linuxTab === 'manual' && (
+                        <div>
+                          <div className="space-y-1 font-sans mb-2">
+                            <div className="flex items-center gap-2 text-amber-100">
+                              <span className="bg-amber-500/30 text-amber-200 font-bold px-1.5 py-0.5 rounded text-[9px] border border-amber-400/30 shrink-0">Step 1</span>
+                              <span>Click the amber <strong>Download for Linux (Binary)</strong> button above.</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-amber-100">
+                              <span className="bg-amber-500/30 text-amber-200 font-bold px-1.5 py-0.5 rounded text-[9px] border border-amber-400/30 shrink-0">Step 2</span>
+                              <span>Open Terminal (<kbd className="bg-black/60 px-1 py-0.5 rounded text-amber-200 font-mono text-[9px] border border-white/15">Ctrl + Alt + T</kbd>) and run:</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-2 bg-black/60 px-2 py-1.5 rounded font-mono text-[10px] text-amber-200 border border-amber-500/30">
+                            <span className="truncate">{`cd "$(xdg-user-dir DOWNLOAD 2>/dev/null || echo ~/Downloads)" && chmod +x hireiq-agent-linux* && ./hireiq-agent-linux*`}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const cmd = `cd "$(xdg-user-dir DOWNLOAD 2>/dev/null || echo ~/Downloads)" && chmod +x hireiq-agent-linux* && ./hireiq-agent-linux*`;
+                                copyToClipboard(cmd, 'linux-manual');
+                              }}
+                              className="px-2.5 py-1 rounded bg-amber-500/30 hover:bg-amber-500/40 text-amber-200 text-[10px] font-bold shrink-0 cursor-pointer transition-all border border-amber-400/40"
+                            >
+                              {copiedCmd === 'linux-manual' ? (
+                                <span className="flex items-center gap-1 text-emerald-400"><i className="fas fa-check"></i> Copied!</span>
+                              ) : (
+                                <span className="flex items-center gap-1"><i className="fas fa-copy"></i> Copy</span>
+                              )}
+                            </button>
+                          </div>
+                          <p className="mt-1 text-[9px] text-amber-300/70 font-sans">
+                            💡 Auto-navigates to Downloads in any language (e.g. Descargas/Téléchargements) and handles duplicate downloaded filenames.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Tab 3: Python Fallback */}
+                      {linuxTab === 'python' && (
+                        <div>
+                          <div className="space-y-1 font-sans mb-2">
+                            <div className="flex items-center gap-2 text-amber-100">
+                              <span className="bg-amber-500/30 text-amber-200 font-bold px-1.5 py-0.5 rounded text-[9px] border border-amber-400/30 shrink-0">Python 3</span>
+                              <span>Direct runner for ARM64, Raspberry Pi, or systems without x86_64 glibc:</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-2 bg-black/60 px-2 py-1.5 rounded font-mono text-[10px] text-amber-200 border border-amber-500/30">
+                            <span className="truncate">{`curl -fsSL ${(typeof window !== 'undefined' ? window.location.origin : '')}/downloads/agent.py -o agent.py && pip install fastapi uvicorn psutil && python3 agent.py`}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const origin = typeof window !== 'undefined' ? window.location.origin : '';
+                                copyToClipboard(`curl -fsSL ${origin}/downloads/agent.py -o agent.py && pip install fastapi uvicorn psutil && python3 agent.py`, 'linux-py');
+                              }}
+                              className="px-2.5 py-1 rounded bg-amber-500/30 hover:bg-amber-500/40 text-amber-200 text-[10px] font-bold shrink-0 cursor-pointer transition-all border border-amber-400/40"
+                            >
+                              {copiedCmd === 'linux-py' ? (
+                                <span className="flex items-center gap-1 text-emerald-400"><i className="fas fa-check"></i> Copied!</span>
+                              ) : (
+                                <span className="flex items-center gap-1"><i className="fas fa-copy"></i> Copy</span>
+                              )}
+                            </button>
+                          </div>
+                          <p className="mt-1 text-[9px] text-amber-300/70 font-sans">
+                            💡 Runs on port 28253. Requires Python 3 (<code className="bg-black/50 px-1 py-0.5 rounded font-mono text-amber-200">python3 --version</code>).
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Expandable Troubleshooting Accordion */}
+                      <div className="mt-2 pt-1.5 border-t border-amber-500/20">
+                        <button
+                          type="button"
+                          onClick={() => setShowTroubleshooting(!showTroubleshooting)}
+                          className="flex items-center justify-between w-full text-[9px] font-bold text-amber-300/90 hover:text-amber-200 transition-colors cursor-pointer"
+                        >
+                          <span className="flex items-center gap-1">
+                            <i className="fas fa-question-circle text-amber-400"></i>
+                            Having issues? Common Linux fixes ("no such file in directory", permissions)
+                          </span>
+                          <i className={`fas fa-chevron-${showTroubleshooting ? 'up' : 'down'} text-[8px] transition-transform`}></i>
+                        </button>
+
+                        {showTroubleshooting && (
+                          <div className="mt-1.5 p-2 rounded bg-black/60 border border-amber-500/20 text-[9px] space-y-1.5 text-slate-200">
+                            <div>
+                              <span className="font-bold text-amber-200">Q: Terminal says "no such file in directory"?</span>
+                              <p className="text-slate-300 leading-tight mt-0.5">
+                                • If using browser download, the file may have been saved to another folder or renamed to <code className="text-amber-300 font-mono">hireiq-agent-linux (1)</code>. Use the <strong>⚡ 1-Line Run</strong> tab to bypass this completely.
+                              </p>
+                              <p className="text-slate-300 leading-tight mt-0.5">
+                                • If on ARM64 or missing dynamic libraries, Linux reports "No such file or directory" for missing interpreters. Switch to the <strong>🐍 Python Fallback</strong> tab.
+                              </p>
+                            </div>
+                            <div>
+                              <span className="font-bold text-amber-200">Q: Terminal says "Permission denied"?</span>
+                              <p className="text-slate-300 leading-tight mt-0.5">
+                                • Mark the file executable by running: <code className="text-amber-300 font-mono">chmod +x hireiq-agent-linux*</code> before launching.
+                              </p>
+                            </div>
+                            <div>
+                              <span className="font-bold text-amber-200">Q: How do I know it is working?</span>
+                              <p className="text-slate-300 leading-tight mt-0.5">
+                                • Once running, the terminal will display <em>"HireIQ Security Agent is running successfully"</em>, and this box will automatically change to a green checkmark. Keep the terminal window open.
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
-                  <p className="mt-1.5 text-amber-300/80 font-semibold text-[10px]">
-                    Once running, this check will verify automatically.
-                  </p>
+
+                  {/* Real-time Connection Waiting Indicator */}
+                  <div className="mt-2 flex items-center justify-between p-2 rounded-lg bg-black/40 border border-amber-500/25 text-[10px]">
+                    <div className="flex items-center gap-2 text-amber-200">
+                      <i className="fas fa-circle-notch fa-spin text-amber-400 text-xs shrink-0"></i>
+                      <span className="font-semibold">Waiting for HireIQ agent to start... Keep terminal/app running.</span>
+                    </div>
+                    <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded font-mono font-bold shrink-0">Port: 28253</span>
+                  </div>
                 </div>
               </div>
             </div>

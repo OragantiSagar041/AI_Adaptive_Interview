@@ -2,9 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 // ── Tunable thresholds (Production Calibrated to eliminate false alarms) ──
 const DETECT_INTERVAL_MS = Number(import.meta.env?.VITE_PROCTORING_INTERVAL_MS) || 250          // frame cadence (4 FPS, detects within sub-second)
-const PHONE_ALERT_CONFIDENCE = Number(import.meta.env?.VITE_PROCTORING_PHONE_CONFIDENCE) || 0.38 // calibrated threshold: catches real phones from any angle (front/back camera) while eliminating low-confidence noise
-const PHONE_CONSECUTIVE_FRAMES = 3      // 3 frames (~0.75s) of sustained visibility required to prevent transient blips
-const PHONE_COOLDOWN_MS = 20000         // 20 seconds cooldown between phone alerts to prevent rapid 20-strike termination cascades
+const PHONE_ALERT_CONFIDENCE = Number(import.meta.env?.VITE_PROCTORING_PHONE_CONFIDENCE) || 0.35 // calibrated threshold: catches real phones from any angle (front/back camera) while eliminating low-confidence noise
+const PHONE_CONSECUTIVE_FRAMES = 3      // 3 frames (~0.75s) of sustained visibility required to detect reliably while eliminating glints
+const PHONE_COOLDOWN_MS = 20000         // 20 seconds cooldown between phone alerts to prevent rapid strike termination cascades
 
 const MULTI_FACE_CONSECUTIVE_FRAMES = 6 // 6 consecutive frames (~2.4s) to ignore background posters/glitches
 const NO_FACE_CONSECUTIVE_FRAMES = 12   // 12 consecutive frames (~4.8s) allows sneezing / natural posture shifts
@@ -443,10 +443,9 @@ export function useProctoring({
       console.log(`[useProctoring] 📱 Object detected: ${topPhone.label || 'phone'} (score: ${topPhone.score.toFixed(2)}, threshold: ${PHONE_ALERT_CONFIDENCE}, streak: ${streak.phone})`)
     }
 
-    // Fast-Path: If confidence is very high (>= 0.65), 2 frames (~500ms) triggers.
-    // Otherwise require PHONE_CONSECUTIVE_FRAMES (3 frames, ~750ms).
-    // NEVER trigger on 1 single frame (250ms) to ensure momentary head turns / camera blips never cause strikes.
-    const requiredFrames = (topPhone && topPhone.score >= 0.65) ? 2 : PHONE_CONSECUTIVE_FRAMES
+    // Sub-second phone detection: 3 frames (~750ms) of sustained visibility required.
+    // Avoids triggering on momentary glints (250-500ms) to ensure fairness.
+    const requiredFrames = PHONE_CONSECUTIVE_FRAMES
 
     streak.phone = isPhone ? streak.phone + 1 : Math.max(0, streak.phone - 1)
     if (streak.phone >= requiredFrames) {

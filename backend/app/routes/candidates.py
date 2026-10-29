@@ -105,6 +105,9 @@ def _resolve_frontend_url(http_req: Optional[Request] = None) -> str:
                 from urllib.parse import urlparse
                 parsed = urlparse(origin_hdr)
                 if parsed.scheme and parsed.netloc:
+                    netloc_lower = parsed.netloc.lower()
+                    if "elb.amazonaws.com" in netloc_lower or "compute.amazonaws.com" in netloc_lower:
+                        return FRONTEND_URL or "https://www.hireiq.co.in"
                     return f"{parsed.scheme}://{parsed.netloc}"
             except Exception:
                 pass
@@ -3893,8 +3896,8 @@ Return this EXACT JSON (all score fields are integers 0-100, weighted_total is t
   "summary": "2-3 sentence overall assessment and recommendations for improvement"
 }}"""
 
-                target_model = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
-                candidate_models = [target_model, "llama-3.1-8b-instant", "llama-3.3-70b-versatile", "llama3-70b-8192", "llama3-8b-8192"]
+                target_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+                candidate_models = [target_model, "openai/gpt-oss-20b", "openai/gpt-oss-120b", "qwen/qwen3.8-27b", "llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
                 model_chain = list(dict.fromkeys(candidate_models))
                 
                 raw = None

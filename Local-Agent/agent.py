@@ -54,7 +54,7 @@ NO_WINDOW_FLAG = 0x08000000 if OS_TYPE == "Windows" else 0
 def check_vm():
     global strict_enforcement_failed, vm_detected
     try:
-        vm_keywords = ['vmware', 'virtualbox', 'qemu', 'parallels', 'hyper-v']
+        vm_keywords = ['vmware', 'virtualbox', 'qemu', 'parallels', 'hyper-v', 'kvm']
         output = ""
         if OS_TYPE == "Windows":
             import pythoncom
@@ -64,20 +64,24 @@ def check_vm():
                 output += f"{system.Model} {system.Manufacturer} ".lower()
         elif OS_TYPE == "Darwin":
             output = subprocess.check_output(['system_profiler', 'SPHardwareDataType'], timeout=5).decode().lower()
-        else:
+        else: # Linux
             try:
-                output = subprocess.check_output(['systemd-detect-virt'], timeout=5).decode().lower()
-            except:
-                if os.path.exists('/sys/class/dmi/id/product_name'):
-                    with open('/sys/class/dmi/id/product_name', 'r') as f:
-                        output = f.read().lower()
+                output = subprocess.check_output(['systemd-detect-virt'], timeout=5, stderr=subprocess.DEVNULL).decode().lower()
+            except Exception:
+                try:
+                    if os.path.exists('/sys/class/dmi/id/product_name'):
+                        with open('/sys/class/dmi/id/product_name', 'r', errors='ignore') as f:
+                            output = f.read().lower()
+                except Exception:
+                    pass
         
         for kw in vm_keywords:
             if kw in output:
                 vm_detected = True
                 return
     except Exception:
-        strict_enforcement_failed = True
+        if OS_TYPE in ("Windows", "Darwin"):
+            strict_enforcement_failed = True
 
 # 3. Virtual Camera & Audio Detection
 def check_virtual_media():
@@ -94,15 +98,30 @@ def check_virtual_media():
                     output += pnp.Caption.lower() + " "
         elif OS_TYPE == "Darwin":
             output = subprocess.check_output(['system_profiler', 'SPCameraDataType', 'SPAudioDataType'], timeout=8).decode().lower()
-        else:
-            output = subprocess.check_output(['lsusb'], timeout=5).decode().lower()
+        else: # Linux
+            try:
+                output = subprocess.check_output(['lsusb'], timeout=5, stderr=subprocess.DEVNULL).decode().lower()
+            except FileNotFoundError:
+                # lsusb is optional on minimal Linux; inspect sysfs usb devices if available
+                if os.path.exists('/sys/bus/usb/devices'):
+                    try:
+                        for dev in os.listdir('/sys/bus/usb/devices'):
+                            prod_file = os.path.join('/sys/bus/usb/devices', dev, 'product')
+                            if os.path.isfile(prod_file):
+                                with open(prod_file, 'r', errors='ignore') as pf:
+                                    output += pf.read().lower() + " "
+                    except Exception:
+                        pass
+            except Exception:
+                pass
             
         for kw in media_keywords:
             if kw in output:
                 virtual_media_detected = True
                 return
     except Exception:
-        strict_enforcement_failed = True
+        if OS_TYPE in ("Windows", "Darwin"):
+            strict_enforcement_failed = True
 
 # 4. Clipboard Wiping (Anti-Macro/Pasting)
 def wipe_clipboard_loop():
@@ -114,18 +133,16 @@ def wipe_clipboard_loop():
             elif OS_TYPE == "Darwin":
                 subprocess.run(['pbcopy'], input=b'', check=True)
             else: # Linux
-                try:
-                    subprocess.run(['xclip', '-selection', 'clipboard'], input=b'', check=True, stderr=subprocess.DEVNULL)
-                except:
+                # Try standard clipboard utilities; pass silently if none are installed
+                for cmd in (['xclip', '-selection', 'clipboard'], ['xsel', '--clipboard', '--input'], ['wl-copy']):
                     try:
-                        subprocess.run(['xsel', '--clipboard', '--input'], input=b'', check=True, stderr=subprocess.DEVNULL)
-                    except:
-                        try:
-                            subprocess.run(['wl-copy'], input=b'', check=True, stderr=subprocess.DEVNULL)
-                        except:
-                            strict_enforcement_failed = True
+                        subprocess.run(cmd, input=b'', check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        break
+                    except (FileNotFoundError, subprocess.SubprocessError):
+                        continue
         except Exception:
-            strict_enforcement_failed = True
+            if OS_TYPE in ("Windows", "Darwin"):
+                strict_enforcement_failed = True
         
         time.sleep(2) # Wipe clipboard every 2 seconds continuously
 
@@ -252,4 +269,9 @@ def get_status():
     }
 
 if __name__ == "__main__":
+    print("\n" + "=" * 54)
+    print("  HireIQ Security Agent is running successfully!")
+    print("  Port: 28253 | Status: http://127.0.0.1:28253/status")
+    print("  Keep this terminal window OPEN during the interview.")
+    print("=" * 54 + "\n")
     uvicorn.run(app, host="127.0.0.1", port=28253)
