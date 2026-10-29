@@ -50,6 +50,8 @@ const LANDMARK = {
   EYE_OUTER_RIGHT: 263,
   LIP_UPPER: 13,
   LIP_LOWER: 14,
+  EAR_LEFT: 234,
+  EAR_RIGHT: 454,
 };
 
 /* ── State ─────────────────────────────────────────────────────────────────── */
@@ -113,7 +115,7 @@ function computeIoU(boxA, boxB) {
 
 const BENIGN_OBJECTS = ['bottle', 'cup', 'wine glass', 'bowl', 'mug', 'book', 'mouse', 'apple', 'orange', 'banana'];
 
-function extractPhoneCandidates(detections, faceLandmarks, bitmap) {
+function extractPhoneCandidates(detections, faceLandmarks, bitmap, pose) {
   const candidates = [];
 
   // Identify all high-confidence benign desk/handheld objects (bottles, cups, mugs, books)
@@ -132,6 +134,15 @@ function extractPhoneCandidates(detections, faceLandmarks, bitmap) {
     }
   }
 
+  // Pre-compute candidate turned ear landmark if head is turned (pose.yaw)
+  const isHeadTurned = Boolean(pose && Math.abs(pose.yaw) > 0.18);
+  const activeEar = (isHeadTurned && faceLandmarks && faceLandmarks.length >= 468)
+    ? (pose.yaw > 0.18 ? faceLandmarks[LANDMARK.EAR_LEFT] : faceLandmarks[LANDMARK.EAR_RIGHT])
+    : null;
+  const forehead = (faceLandmarks && faceLandmarks.length >= 468) ? faceLandmarks[LANDMARK.FOREHEAD] : null;
+  const chin = (faceLandmarks && faceLandmarks.length >= 468) ? faceLandmarks[LANDMARK.CHIN] : null;
+  const faceHeight = (forehead && chin) ? Math.max(0.12, Math.abs(chin.y - forehead.y)) : 0.20;
+
   for (const d of detections) {
     for (const cat of d.categories ?? []) {
       const label = `${cat.categoryName ?? ''} ${cat.displayName ?? ''}`.toLowerCase();
@@ -140,6 +151,7 @@ function extractPhoneCandidates(detections, faceLandmarks, bitmap) {
         label.includes('mobile phone') ||
         label.includes('phone') ||
         label.includes('camera') ||
+        label.includes('remote') ||
         label.includes('tablet');
 
       if (isTarget) {
@@ -166,26 +178,29 @@ function extractPhoneCandidates(detections, faceLandmarks, bitmap) {
           continue;
         }
 
-        // 3. Ear / Head-turn Profile Artifact Suppression:
-        // When a candidate turns their head, the ear/hair profile can trigger faint 'camera' blips (< 0.50).
-        // If the bounding box is situated inside the candidate's own facial perimeter, suppress it.
-        if (faceLandmarks && faceLandmarks.length >= 468 && label.includes('camera') && score < 0.50) {
-          if (bitmap && bitmap.width && bitmap.height && d.boundingBox) {
-            const centerX = d.boundingBox.originX + d.boundingBox.width / 2;
-            const centerY = d.boundingBox.originY + d.boundingBox.height / 2;
-            const normX = centerX / bitmap.width;
-            const normY = centerY / bitmap.height;
+        // 3. Head-Turn, Bare Ear Profile & In-Ear Earbud Suppression:
+        // When a candidate turns their head (Math.abs(pose.yaw) > 0.18), the bare ear profile or an in-ear
+        // earbud (AirPods, wired earphones) against the background can trigger weak 'cell phone' / 'camera' blips.
+        // We suppress if the detection is centered directly on the active ear landmark (distToEar < faceHeight * 0.35)
+        // AND either:
+        //   a) The confidence score is < 0.50 (low/moderate artifact), OR
+        //   b) The bounding box is small (< 50% face height), proving it is an earbud/ear and not a handheld phone.
+        // Real phones held to the ear have a large bounding box (>= 60% face height) covering the cheek and jaw.
+        // Handheld phones in front of the camera, lap, chest, or held up at any angle are not centered on the ear!
+        if (activeEar && bitmap && d.boundingBox) {
+          const centerX = (d.boundingBox.originX + d.boundingBox.width / 2) / bitmap.width;
+          const centerY = (d.boundingBox.originY + d.boundingBox.height / 2) / bitmap.height;
+          const distToEar = Math.hypot(centerX - activeEar.x, centerY - activeEar.y);
 
-            const nose = faceLandmarks[LANDMARK.NOSE_TIP];
-            const chin = faceLandmarks[LANDMARK.CHIN];
-            const forehead = faceLandmarks[LANDMARK.FOREHEAD];
-            if (nose && chin && forehead) {
-              const faceRadius = Math.max(Math.abs(chin.y - forehead.y), 0.15);
-              const distToNose = Math.hypot(normX - nose.x, normY - nose.y);
-              if (distToNose < faceRadius * 0.70) {
-                continue; // Suppressed: within the candidate's own head profile
-              }
-            }
+          const boxWidthNorm = d.boundingBox.width / bitmap.width;
+          const boxHeightNorm = d.boundingBox.height / bitmap.height;
+          const boxMaxDim = Math.max(boxWidthNorm, boxHeightNorm);
+
+          const isAtEar = distToEar < faceHeight * 0.35;
+          const isEarbudOrArtifact = score < 0.50 || boxMaxDim < faceHeight * 0.50;
+
+          if (isAtEar && isEarbudOrArtifact) {
+            continue; // Suppressed: ear profile or in-ear earbud during head turn
           }
         }
 
@@ -245,7 +260,7 @@ function extractFrameFeatures(bitmap) {
       downRight: score('eyeLookDownRight'),
       downLeft:  score('eyeLookDownLeft'),
     },
-    phoneCandidates: extractPhoneCandidates(objectResult.detections ?? [], faceLandmarks[0], bitmap),
+    phoneCandidates: extractPhoneCandidates(objectResult.detections ?? [], faceLandmarks[0], bitmap, pose),
     jawOpenScore,
   };
 }

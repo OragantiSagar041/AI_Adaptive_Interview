@@ -330,7 +330,7 @@ def _call_groq(
     """Call Groq API (completions) with active model and automatic fallback on decommissioned models."""
     url = "https://api.groq.com/openai/v1/chat/completions"
     active_model = model if (model and ("gpt-oss" in model or "qwen" in model)) else os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
-    fallback_models = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"]
+    fallback_models = ["openai/gpt-oss-20b", "openai/gpt-oss-120b", "qwen/qwen3.8-27b", "llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
     
     max_attempts = groq_key_manager.get_total_keys() or 1
     last_error_text = ""
@@ -403,7 +403,14 @@ def chat_completion(
     Send a chat completion request.
     Provider chain: Gemini (primary if configured) → OpenRouter → Groq (resilient fast fallback) → HuggingFace.
     """
-    # 0. Primary Fast Path: Google Gemini (if GEMINI_API_KEY is configured and not in cooldown)
+    # 0. Primary High-Speed Path: Groq (via 10 round-robin keys)
+    try:
+        if groq_key_manager.get_total_keys() > 0 or os.getenv("GROQ_API_KEY") or os.getenv("GROQ_API_KEYS"):
+            return _call_groq(messages, temperature=temperature, timeout=min(timeout, 25), max_tokens=max_tokens)
+    except Exception as groq_exc:
+        print(f"Groq completion failed ({groq_exc}). Switching to secondary fallback...")
+
+    # 1. Secondary Fast Path: Google Gemini (if GEMINI_API_KEY is configured and not in cooldown)
     active_gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_API_Key") or GEMINI_API_KEY
     if active_gemini_key and active_gemini_key.strip() and not _is_gemini_in_cooldown():
         try:
@@ -411,9 +418,9 @@ def chat_completion(
         except Exception as gemini_exc:
             global _gemini_quota_hit_at
             _gemini_quota_hit_at = time.time()
-            print(f"Gemini API call failed ({gemini_exc}). Cooldown set for 300s. Falling back to OpenRouter/Groq...")
+            print(f"Gemini API call failed ({gemini_exc}). Cooldown set for 300s. Falling back to OpenRouter...")
 
-    # 1. Secondary path: try OpenRouter if not in cooldown
+    # 2. Tertiary path: try OpenRouter if not in cooldown
     if not _is_in_cooldown() and OPENROUTER_API_KEY:
         try:
             return _call_openrouter(messages, model, temperature, timeout, max_tokens)
@@ -421,22 +428,9 @@ def chat_completion(
             err_msg = str(openrouter_exc)
             if _is_quota_error(openrouter_exc):
                 _mark_quota_exhausted(err_msg)
-                print(f"OpenRouter quota hit: {err_msg}. Switching to Groq fallback...")
+                print(f"OpenRouter quota hit: {err_msg}...")
             else:
-                print(f"OpenRouter failed: {openrouter_exc}. Switching to Groq fallback...")
-    else:
-        if _is_in_cooldown():
-            print("OpenRouter is in cooldown. Using Groq fallback...")
-        else:
-            print("No OpenRouter API key. Using Groq fallback...")
-
-    # 2. Resilient High-Speed Fallback: Groq
-    try:
-        if groq_key_manager.get_total_keys() > 0 or os.getenv("GROQ_API_KEY") or os.getenv("GROQ_API_KEYS"):
-            print("Calling Groq completion model...")
-            return _call_groq(messages, temperature=temperature, timeout=min(timeout, 25), max_tokens=max_tokens)
-    except Exception as groq_exc:
-        print(f"Groq completion failed ({groq_exc}). Switching to HuggingFace fallback...")
+                print(f"OpenRouter failed: {openrouter_exc}...")
 
     # 3. Fallback: HuggingFace
     try:

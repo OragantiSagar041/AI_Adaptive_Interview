@@ -250,12 +250,12 @@ def extract_job_details_fallback(prompt: str) -> dict:
         work_mode = "Hybrid"
 
     # 6. Location
-    loc = "Hyderabad / Remote"
+    loc = "Hyderabad"
     loc_match = re.search(r' (?:location|located in|based in|city|in)\s+([A-Za-z]{3,20}(?:\s+[A-Za-z]{3,20})?) ', prompt_lower)
     if loc_match:
         cand_loc = loc_match.group(1).strip().title()
         if cand_loc.lower() not in ["this", "our", "the", "software", "developer", "engineer", "remote", "hybrid", "office", "years", "having", "offer", "skills", "jobs"]:
-            loc = f"{cand_loc} / {work_mode}"
+            loc = cand_loc
 
     # 7. Check if user provided explicit skills list in prompt (Section-based OR inline)
     explicit_skills = []
@@ -681,7 +681,7 @@ def generate_job_with_ai(payload: dict, current_admin: dict = Depends(get_curren
         '  "salary": "e.g. 8 LPA",\n'
         '  "bond": "e.g. 2-Year Bond",\n'
         '  "workMode": "Remote, Hybrid, or On-site",\n'
-        '  "location": "e.g. Hyderabad / Remote",\n'
+        '  "location": "e.g. Hyderabad",\n'
         '  "skills": "Comma-separated list of skills (ONLY mentioned skills if specified in prompt)",\n'
         '  "certifications": ["List of extracted certifications from prompt, or empty list if none"],\n'
         '  "summary": "2-3 sentence executive job summary",\n'
@@ -706,7 +706,8 @@ def generate_job_with_ai(payload: dict, current_admin: dict = Depends(get_curren
         if isinstance(parsed, dict) and parsed.get("title"):
             if not parsed.get("experience"): parsed["experience"] = fallback_data.get("experience", "4 – 5 Years")
             if not parsed.get("workMode"): parsed["workMode"] = fallback_data.get("workMode", "Remote")
-            if not parsed.get("location"): parsed["location"] = fallback_data.get("location", "Hyderabad / Remote")
+            if not parsed.get("location"): parsed["location"] = fallback_data.get("location", "Hyderabad")
+            if parsed.get("location"): parsed["location"] = re.sub(r'\s*\/\s*(?:Remote|Hybrid|On-site)', '', str(parsed["location"]), flags=re.IGNORECASE).strip()
             if not parsed.get("salary"): parsed["salary"] = fallback_data.get("salary", "8 LPA")
             if not parsed.get("bond"): parsed["bond"] = fallback_data.get("bond", "2-Year Bond")
             if isinstance(parsed.get("skills"), list):
@@ -755,6 +756,9 @@ def generate_job_with_ai(payload: dict, current_admin: dict = Depends(get_curren
 @router.post("/jobs")
 def create_job(job: JobCreate, current_admin: dict = Depends(get_current_admin_details)):
     job_dict = job.dict()
+    if job_dict.get("location"):
+        cleaned_loc = re.sub(r'\s*\/\s*(?:Remote|Hybrid|On-site)', '', str(job_dict["location"]), flags=re.IGNORECASE).strip()
+        job_dict["location"] = cleaned_loc if cleaned_loc else str(job_dict["location"]).strip()
     job_dict["custom_id"] = get_next_sequence_value("job", "JOB")
     
     admin_id = current_admin["admin_id"]
@@ -842,6 +846,9 @@ def update_job(job_id: str, job_update: JobCreate, current_admin: dict = Depends
         raise HTTPException(status_code=403, detail="Access denied")
 
     update_data = {k: v for k, v in job_update.dict().items() if v is not None}
+    if update_data.get("location"):
+        cleaned_loc = re.sub(r'\s*\/\s*(?:Remote|Hybrid|On-site)', '', str(update_data["location"]), flags=re.IGNORECASE).strip()
+        update_data["location"] = cleaned_loc if cleaned_loc else str(update_data["location"]).strip()
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
     
     # Preserve original creator ownership (admin_id & company_id) so job is not disowned or hidden

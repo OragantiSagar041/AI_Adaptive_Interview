@@ -857,7 +857,7 @@ function IntegrationsTab({ integrations, loading, onRefresh }) {
 
       const token = localStorage.getItem('token') || localStorage.getItem('token')
       const omniApiKey = sessionStorage.getItem('omniDimensionApiKey') || ''
-      const r = await fetch(`${API_BASE_URL}/api/calls/integrations/detach`, {
+      const r = await fetch(`${API_BASE_URL.replace(/\/api$/, "")}/api/calls/integrations/detach`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
