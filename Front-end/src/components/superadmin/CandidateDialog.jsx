@@ -90,6 +90,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   const [extractingInfo, setExtractingInfo] = useState(false)
   const [showNotes, setShowNotes] = useState(false)
   const [newNote, setNewNote] = useState("")
+  const [notesSaving, setNotesSaving] = useState(false)
   const [showScheduleModal, setShowScheduleModal] = useState(false)
   const [previousInterviews, setPreviousInterviews] = useState([])
   const [previousSummary, setPreviousSummary] = useState(null)
@@ -1023,16 +1024,17 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
 
     try {
       const noteObj = {
-        text: newNote,
-        added_by: "Admin",
+        text: newNote.trim(),
+        added_by: adminUser?.name || adminUser?.full_name || "Admin",
         added_at: new Date().toISOString()
       };
 
       const updatedNotes = [...(c.notes || []), noteObj]
+      const effectiveToken = token || localStorage.getItem('token') || localStorage.getItem('access_token') || sessionStorage.getItem('token')
 
       // Save to backend database
       await axios.post(`${API_BASE_URL}/admin/interview/${linkId}/notes`, { notes: updatedNotes }, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${effectiveToken}` }
       })
 
       setDetail(prev => ({
