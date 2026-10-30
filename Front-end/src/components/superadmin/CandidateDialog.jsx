@@ -1105,17 +1105,6 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                         <Calendar size={13} className="text-slate-400" /> Attended: {new Date(c.started_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
                       </span>
                     )}
-                    {previousInterviews.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab("previous_history")}
-                        className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-md border border-indigo-200 transition-colors shadow-xs cursor-pointer"
-                        title="Click to view candidate's interview history"
-                      >
-                        <RotateCcw size={13} className="text-indigo-600" />
-                        Interview History ({previousInterviews.length})
-                      </button>
-                    )}
                   </div>
                 </div>
                 <div className="hidden sm:flex flex-col items-center justify-center mr-16">
