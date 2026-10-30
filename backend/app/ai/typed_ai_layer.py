@@ -560,19 +560,61 @@ Return JSON: {{"question": "...", "difficulty": "Medium", "type": "JD-Based", "c
             fb_dict["question"] = sanitize_verbal_question_text(fb_dict["question"])
         return fb_dict
 
+_detected_lang_cache: Dict[str, str] = {}
+
 def detect_spoken_language(text: str) -> str:
     """
-    Detect the spoken language of the candidate's answer text using LLM.
-    Returns the capitalized name of the language (e.g., 'English', 'Hindi', 'Marathi', etc.) or 'Unknown'.
+    Detect the spoken language of the text.
+    Fast path: Deterministic Unicode script detection (Telugu, Tamil, Hindi, Marathi, Kannada, etc.) & ASCII heuristic in 0ms.
+    Slow path: LLM analysis with caching for ambiguous Latin texts.
     """
     if not text or not text.strip():
         return "Unknown"
         
+    cleaned_sample = text.strip()[:600]
+    cache_key = cleaned_sample[:100].lower()
+    if cache_key in _detected_lang_cache:
+        return _detected_lang_cache[cache_key]
+
+    # 1. Deterministic High-Speed Unicode Script Detection (0ms)
+    try:
+        from app.services.language_accent_detector import detect_script_language
+        script_detected = detect_script_language(cleaned_sample)
+        if script_detected:
+            if "Hindi" in script_detected or "Marathi" in script_detected:
+                marathi_markers = ["आहे", "नाही", "करा", "होते", "आणि", "या", "मध्ये"]
+                res = "Marathi" if any(m in cleaned_sample for m in marathi_markers) else "Hindi"
+            else:
+                res = script_detected
+            _detected_lang_cache[cache_key] = res
+            return res
+    except Exception:
+        pass
+
+    # 2. Check pure English / ASCII Latin text (>85% ASCII letters and common English words)
+    ascii_letters = sum(1 for c in cleaned_sample if 'a' <= c.lower() <= 'z')
+    total_chars = max(1, len(cleaned_sample))
+    if ascii_letters / total_chars > 0.65:
+        # Check if known romanized markers (e.g. Hinglish or Telugu words) are present
+        try:
+            from app.services.language_accent_detector import detect_romanized_language
+            rom = detect_romanized_language(cleaned_sample)
+            if rom:
+                res = rom.split(" ")[0]
+                _detected_lang_cache[cache_key] = res
+                return res
+        except Exception:
+            pass
+        # High confidence English
+        _detected_lang_cache[cache_key] = "English"
+        return "English"
+
+    # 3. Fallback: LLM detection with fast timeout (only for ambiguous text)
     prompt = (
         "Identify the primary spoken language of this text. Respond with ONLY the capitalized name of the language "
         "(e.g., 'English', 'Hindi', 'Marathi', 'Telugu', 'Tamil', etc.). If the language is not clear or if it is "
         "gibberish/silence/nonsense, respond with ONLY the word 'Unknown'. No markdown, no punctuation, no extra words.\n\n"
-        f"Text: \"{text}\""
+        f"Text: \"{cleaned_sample}\""
     )
     try:
         response = chat_completion(
@@ -581,23 +623,20 @@ def detect_spoken_language(text: str) -> str:
                 {"role": "user", "content": prompt}
             ],
             model="openai/gpt-4o-mini",
-            temperature=0.0
+            temperature=0.0,
+            timeout=8
         )
         detected = (response or "").strip().replace(".", "").replace('"', '').replace("'", "").capitalize()
         
         canonical_languages = {"English", "Hindi", "Telugu", "Tamil", "Marathi", "Gujarati", "Bengali", "Kannada", "Malayalam", "Punjabi", "Odia", "Assamese", "Urdu", "Sanskrit", "Spanish", "French", "German", "Chinese", "Japanese", "Korean", "Arabic", "Russian", "Portuguese", "Italian"}
         
-        # Robust parsing: check if any canonical language matches as a substring of the cleaned response
-        matched_lang = None
         for lang in canonical_languages:
             if lang.lower() in detected.lower():
-                matched_lang = lang
-                break
-        
-        if matched_lang:
-            return matched_lang
-            
+                _detected_lang_cache[cache_key] = lang
+                return lang
+                
         if len(detected.split()) == 1 and detected in canonical_languages:
+            _detected_lang_cache[cache_key] = detected
             return detected
     except Exception as e:
         print(f"Language detection failed: {e}")
@@ -605,8 +644,10 @@ def detect_spoken_language(text: str) -> str:
     # Offline linguistic & script fallback
     try:
         from app.services.language_accent_detector import detect_language_and_accent
-        l_res = detect_language_and_accent(text)
-        return l_res.get("language") or "English"
+        l_res = detect_language_and_accent(cleaned_sample)
+        res = l_res.get("language") or "English"
+        _detected_lang_cache[cache_key] = res
+        return res
     except Exception as e:
         print(f"Language detection offline fallback error: {e}")
         
