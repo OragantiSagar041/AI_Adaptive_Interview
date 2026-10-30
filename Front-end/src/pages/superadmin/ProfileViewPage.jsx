@@ -9,6 +9,60 @@ import {
 } from 'lucide-react'
 import InterviewHistorySection from '../../components/superadmin/InterviewHistorySection'
 
+const SECTION_HEADING_REGEX = /^(?:summary(\s+of\s+qualifications)?|professional\s+summary|executive\s+summary|career\s+summary|career\s+objective|objective|profile\s+summary|personal\s+summary|profile|about\s+me|bio|biography|career\s+highlights|technical\s+skills|skills\s*(&|and|\/)?\s*(tools|technologies|proficiencies|abilities|competencies|expertise)?|core\s+competencies|key\s+skills|core\s+skills|areas?\s+of\s+expertise|technical\s+expertise|technical\s+proficiencies|technical\s+qualifications|technologies|tech\s+stack|tools\s*(&|and|\/)?\s*technologies|hard\s+skills|soft\s+skills|programming\s+languages|frameworks\s*(&|and|\/)?\s*tools|professional\s+experience|work\s+experience|experience|employment\s+history|work\s+history|career\s+history|relevant\s+experience|internships?|internship\s+experience|practical\s+experience|industry\s+experience|education|academics|academic\s+background|educational\s+background|educational\s+qualifications|qualifications|academic\s+qualifications|academic\s+credentials|key\s+qualifications|core\s+qualifications|education\s*(&|and|\/)?\s*(certifications?|training)?|projects|key\s+projects|personal\s+projects|academic\s+projects|notable\s+projects|selected\s+projects|project\s+work|major\s+projects|certifications?|certificates?|licenses\s*(&|and|\/)?\s*certifications|certifications\s*(&|and|\/)?\s*licenses|professional\s+certifications|training\s*(&|and|\/)?\s*certifications|courses\s*(&|and|\/)?\s*certifications|trainings?|courses|coursework|relevant\s+coursework|achievements|awards|honors\s*(&|and|\/)?\s*awards|honours\s*(&|and|\/)?\s*awards|awards\s*(&|and|\/)?\s*achievements|key\s+achievements|accomplishments|awards\s*(&|and|\/)?\s*honors|publications|research\s*(&|and|\/)?\s*publications|research|research\s+work|patents|papers|languages|language\s+proficiency|languages\s+known|hobbies|interests|hobbies\s*(&|and|\/)?\s*interests|activities|extracurricular\s+activities|co-curricular\s+activities|volunteer\s+experience|volunteering|volunteer\s+work|community\s+involvement|leadership|leadership\s*(&|and|\/)?\s*involvement|affiliations|memberships|professional\s+affiliations|professional\s+memberships|declaration|references|personal\s+details|personal\s+information|contact|contact\s+information|contact\s+details)$/i
+
+const isSectionHeading = (line) => {
+  if (!line || typeof line !== 'string') return false
+  const trimmed = line.trim()
+  if (!trimmed || trimmed.length > 60) return false
+  const clean = trimmed
+    .replace(/^(\*{1,3}|#{1,6})\s*/, '')
+    .replace(/^(\d+[\.\)]|[A-Za-z][\.\)]|[-•*])\s*/, '')
+    .replace(/\s*\([^)]*\)$/, '')
+    .replace(/[:\-_*~]+$/, '')
+    .trim()
+  return SECTION_HEADING_REGEX.test(clean)
+}
+
+const isCandidateName = (line, idx, lines, cName) => {
+  if (!line || typeof line !== 'string') return false
+  const trimmed = line.trim()
+  if (!trimmed) return false
+
+  if (cName && cName.toLowerCase() !== 'candidate' && trimmed.toLowerCase() === cName.trim().toLowerCase()) {
+    return true
+  }
+
+  if (/^(candidate\s+name|name)\s*:\s*[A-Za-z\s.'-]+$/i.test(trimmed)) {
+    return true
+  }
+
+  const nonEmpties = []
+  for (let i = 0; i < lines.length && nonEmpties.length < 3; i++) {
+    if (lines[i].trim().length > 0) {
+      nonEmpties.push(i)
+    }
+  }
+
+  if (nonEmpties.length > 0) {
+    let nameIdx = nonEmpties[0]
+    const firstText = lines[nameIdx].trim().toLowerCase()
+    if ((firstText === 'resume' || firstText === 'curriculum vitae' || firstText === 'cv') && nonEmpties.length > 1) {
+      nameIdx = nonEmpties[1]
+    }
+
+    if (idx === nameIdx) {
+      const hasEmailOrUrl = /@|https?:\/\/|www\.|\.com\b|\.in\b|\.org\b/i.test(trimmed)
+      const hasLotsOfDigits = (trimmed.replace(/\D/g, '').length >= 6)
+      if (!hasEmailOrUrl && !hasLotsOfDigits && trimmed.length <= 60) {
+        return true
+      }
+    }
+  }
+
+  return false
+}
+
 const ScoreBar = ({ label, score }) => {
   const numScore = Number(score) || 0
   const color = numScore >= 75 ? 'bg-emerald-500' : numScore >= 50 ? 'bg-amber-500' : 'bg-rose-500'
@@ -274,7 +328,18 @@ export default function ProfileViewPage() {
               <div className="p-6 flex-1 bg-slate-50 dark:bg-slate-900/50/20">
                 <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-6 h-[500px] overflow-y-auto shadow-inner">
                   <pre className="whitespace-pre-wrap font-sans text-slate-600 dark:text-slate-400 leading-relaxed text-sm">
-                    {resumeText}
+                    {resumeText ? (
+                      resumeText.split(/\r?\n/).map((line, idx, arr) => (
+                        <React.Fragment key={idx}>
+                          {isSectionHeading(line) || isCandidateName(line, idx, arr, cName) ? (
+                            <strong className="font-bold">{line}</strong>
+                          ) : (
+                            line
+                          )}
+                          {idx < arr.length - 1 ? '\n' : ''}
+                        </React.Fragment>
+                      ))
+                    ) : null}
                   </pre>
                 </div>
               </div>
