@@ -254,6 +254,8 @@ export default function VoiceInterviewPage() {
   const hasSpokenThisSessionRef = useRef(false)
   const [countdown, setCountdown] = useState(0)
   const countdownRef = useRef(0)
+  const [isTimeExpired, setIsTimeExpired] = useState(false)
+  const isTimeExpiredRef = useRef(false)
   const [roundDuration, setRoundDuration] = useState(900)
   const [answeredCount, setAnsweredCount] = useState(_savedSession?.answeredCount || 0)
   const [isSaving, setIsSaving] = useState(false)
@@ -2148,10 +2150,10 @@ export default function VoiceInterviewPage() {
                 category: data.category || 'Deep Dive'
               }
 
-              // Insert it at qIdx + 1 and cap total questions to exactly 22
+              // Insert it at qIdx + 1 (unlimited questions)
               const updatedQs = [...qs]
               updatedQs.splice(qIdx + 1, 0, newQ)
-              const cappedQs = updatedQs.slice(0, 22)
+              const cappedQs = updatedQs
               setQuestions(cappedQs)
               questionsRef.current = cappedQs
               setCurrentQIdx(qIdx + 1)
@@ -2176,6 +2178,14 @@ export default function VoiceInterviewPage() {
     }
 
     const proceedToNextQuestion = () => {
+      // Strict Round Progression on Time Expiration (Section 5.2):
+      // When time is expired (countdown <= 0 or pinned at 00:00), candidate finished verbal answer.
+      // Strictly advance to Round 2 or completion. NO new verbal questions may be served!
+      if (isTimeExpiredRef.current || countdownRef.current <= 0) {
+        transitionToNextRoundRef.current?.()
+        return
+      }
+
       // Next question
       setAnsweredCount(p => p + 1)
       const nextIdx = qIdx + 1
@@ -2205,7 +2215,7 @@ export default function VoiceInterviewPage() {
         if (prefetchedQuestionsRef.current.length > 0) {
           const batch = prefetchedQuestionsRef.current
           prefetchedQuestionsRef.current = []
-          const newQs = [...qs, ...batch].slice(0, 22)
+          const newQs = [...qs, ...batch]
           setQuestions(newQs)
           questionsRef.current = newQs
           setCurrentQIdx(nextIdx)
@@ -2577,16 +2587,31 @@ export default function VoiceInterviewPage() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [isSaving])
 
-  // ── Countdown ─────────────────────────────────────────────────────────────
-  // Ticks during both 'verbal' (active Q&A) and 'waiting' (all Qs answered, timer still live)
+  // ── Countdown (Time-Driven Model - Pins at 00:00) ──────────────────────────
+  // Ticks during both 'verbal' (active Q&A) and 'waiting'
   useEffect(() => {
     if ((round !== 'verbal' && round !== 'waiting') || countdown <= 0) return
     const t = setInterval(() => setCountdown(p => {
-      if (p <= 1) { clearInterval(t); transitionToNextRound(true); return 0 }
+      if (p <= 1) {
+        clearInterval(t)
+        setIsTimeExpired(true)
+        isTimeExpiredRef.current = true
+        return 0 // Pin at 00:00! DO NOT trigger abrupt round switch! Keep mic active.
+      }
       return p - 1
     }), 1000)
     return () => clearInterval(t)
-  }, [round, transitionToNextRound])
+  }, [round])
+
+  // Safety Overtime Guardrail: If candidate speaks or remains un-submitted for 120s past 00:00, auto-transition
+  useEffect(() => {
+    if (!isTimeExpired || round !== 'verbal') return
+    const overtimeTimer = setTimeout(() => {
+      console.warn("Safety overtime guardrail (120s) reached at 00:00 in Voice AI. Transitioning round.")
+      transitionToNextRoundRef.current?.()
+    }, 120000)
+    return () => clearTimeout(overtimeTimer)
+  }, [isTimeExpired, round])
 
   // ── Finish Early / Submit handler ─────────────────────────────────────────
   const handleFinishEarly = useCallback(() => {
@@ -3352,8 +3377,15 @@ export default function VoiceInterviewPage() {
           </span>
         </div>
         <div className="flex items-center gap-3">
-          <div className={`text-sm font-mono font-bold px-4 py-1.5 rounded-full border ${countdown < 300 ? 'border-rose-500/50 text-rose-400 bg-rose-500/10' : 'border-indigo-500/30 text-indigo-300 bg-indigo-500/10'}`}>
-            <i className="fas fa-clock mr-2" />{fmt(countdown)}
+          <div className={`text-sm font-mono font-bold px-4 py-1.5 rounded-full border ${
+            isTimeExpired || countdown <= 0
+              ? 'border-amber-500/50 text-amber-400 bg-amber-500/10 animate-pulse'
+              : countdown < 300
+                ? 'border-rose-500/50 text-rose-400 bg-rose-500/10'
+                : 'border-indigo-500/30 text-indigo-300 bg-indigo-500/10'
+          }`}>
+            <i className="fas fa-clock mr-2" />
+            {isTimeExpired || countdown <= 0 ? '00:00 (Finishing current answer)' : fmt(countdown)}
           </div>
           {warningsCount > 0 && (
             <div className="flex items-center gap-1 px-3 py-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-400 text-xs font-bold" title={`${warningsCount} proctoring alert${warningsCount > 1 ? 's' : ''} detected`}>
@@ -3782,7 +3814,7 @@ export default function VoiceInterviewPage() {
         {/* Round badges */}
         <div className="flex flex-wrap gap-2 justify-center">
           <div className="flex items-center gap-2 px-3.5 py-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-xs font-semibold text-indigo-300">
-            <i className="fas fa-comments text-indigo-400" /> Verbal Q&A ({questions.length} questions)
+            <i className="fas fa-comments text-indigo-400" /> Verbal Q&A
           </div>
           {interviewType === 'Technical' && (
             <div className="flex items-center gap-2 px-3.5 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-full text-xs font-semibold text-amber-300">
@@ -3889,7 +3921,7 @@ export default function VoiceInterviewPage() {
               <i className="fas fa-exclamation-triangle text-[10px]" />{warningsCount}
             </div>
           )}
-          <span className="text-sm text-slate-400 font-medium">Q <span className="text-white font-bold">{currentQIdx + 1}</span>/{questions.length}</span>
+          <span className="text-sm text-slate-400 font-medium">Question <span className="text-white font-bold">{currentQIdx + 1}</span></span>
         </div>
       </header>
 
@@ -3901,7 +3933,7 @@ export default function VoiceInterviewPage() {
 
         {/* Question number badge */}
         <div className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 shrink-0">
-          Question {currentQIdx + 1} of {questions.length}
+          Question {currentQIdx + 1}
         </div>
 
         <div className="flex-1" />

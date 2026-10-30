@@ -193,7 +193,7 @@ def _call_gemini(
             "Content-Type": "application/json"
         }
         try:
-            resp = http_requests.post(url, headers=headers, json=payload, timeout=timeout)
+            resp = http_requests.post(url, headers=headers, json=payload, timeout=min(timeout, 10))
             if resp.status_code == 200:
                 data = resp.json()
                 parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
@@ -205,10 +205,16 @@ def _call_gemini(
             elif resp.status_code in (404, 429, 503):
                 last_err = f"HTTP {resp.status_code}: {resp.text[:150]}"
                 continue
+            elif resp.status_code in (400, 401, 403):
+                last_err = f"HTTP {resp.status_code}: {resp.text[:150]}"
+                break
             else:
                 resp.raise_for_status()
         except Exception as e:
             last_err = str(e)
+            err_str = last_err.lower()
+            if any(unrec in err_str for unrec in ["nameresolutionerror", "getaddrinfo failed", "connection refused", "connecttimeout"]):
+                break
             continue
 
     raise RuntimeError(f"All Gemini models failed. Last error: {last_err}")
@@ -276,9 +282,9 @@ def _call_huggingface(
     messages: List[Dict[str, str]],
     model: str = "",
     temperature: float = 0.1,
-    timeout: int = 120,
+    timeout: int = 8,
 ) -> str:
-    """Call HuggingFace Inference API (free tier)."""
+    """Call HuggingFace Inference API (free tier) with fast failover."""
     global _active_hf_model
     hf_model = model or _active_hf_model
 
@@ -295,7 +301,10 @@ def _call_huggingface(
         "stream": False,
     }
 
-    resp = http_requests.post(url, headers=headers, json=payload, timeout=timeout)
+    try:
+        resp = http_requests.post(url, headers=headers, json=payload, timeout=min(timeout, 8))
+    except Exception as hf_req_err:
+        raise RuntimeError(f"HuggingFace request failed: {hf_req_err}")
 
     if resp.status_code == 200:
         data = resp.json()
@@ -324,19 +333,28 @@ def _call_groq(
     messages: List[Dict[str, str]],
     model: Optional[str] = None,
     temperature: float = 0.1,
-    timeout: int = 25,
+    timeout: int = 15,
     max_tokens: int = 4096,
 ) -> str:
-    """Call Groq API (completions) with active model and automatic fallback on decommissioned models."""
+    """Call Groq API (completions) with active model and fast failover on network/decommissioned models."""
     url = "https://api.groq.com/openai/v1/chat/completions"
     active_model = model if (model and ("gpt-oss" in model or "qwen" in model)) else os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
     fallback_models = ["openai/gpt-oss-20b", "openai/gpt-oss-120b", "qwen/qwen3.8-27b", "llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
     
-    max_attempts = groq_key_manager.get_total_keys() or 1
+    # Cap attempts to 2 keys per model to prevent multi-minute retry loops
+    max_attempts = min(groq_key_manager.get_total_keys() or 1, 2)
     last_error_text = ""
     last_status = 500
 
-    for current_model in [active_model] + [m for m in fallback_models if m != active_model]:
+    models_to_try = [active_model]
+    for fm in fallback_models:
+        if fm != active_model and fm not in models_to_try:
+            models_to_try.append(fm)
+    models_to_try = models_to_try[:2]  # Active model + at most 1 fallback
+
+    groq_timeout = min(timeout, 12)
+
+    for current_model in models_to_try:
         payload = {
             "model": current_model,
             "messages": messages,
@@ -353,9 +371,12 @@ def _call_groq(
                 "Content-Type": "application/json",
             }
             try:
-                resp = http_requests.post(url, headers=headers, json=payload, timeout=timeout)
+                resp = http_requests.post(url, headers=headers, json=payload, timeout=groq_timeout)
             except Exception as conn_err:
                 last_error_text = str(conn_err)
+                err_str = last_error_text.lower()
+                if any(unrec in err_str for unrec in ["nameresolutionerror", "getaddrinfo failed", "connection refused"]):
+                    raise RuntimeError(f"Groq network unreachable: {last_error_text}")
                 continue
 
             if resp.status_code == 200:
@@ -379,6 +400,7 @@ def _call_groq(
             else:
                 last_status = resp.status_code
                 last_error_text = resp.text[:300]
+                break
                 
     raise RuntimeError(f"Groq error {last_status} after exhausting models and keys: {last_error_text}")
 
@@ -396,7 +418,7 @@ def chat_completion(
     messages: List[Dict[str, str]],
     model: str = "openai/gpt-4o-mini",
     temperature: float = 0.1,
-    timeout: int = 45,
+    timeout: int = 20,
     max_tokens: int = 4096,
 ) -> str:
     """
