@@ -680,10 +680,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                 <p className="text-sm font-medium text-muted-foreground mt-0.5">{jobTitle}</p>
                 <div className="flex flex-wrap items-center gap-2 mt-3">
                   <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${isQualified ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'}`}>
-                    {isQualified ? 'Hire' : 'Rejected'}
-                  </span>
-                  <span className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary px-2.5 py-1 text-xs font-semibold text-foreground">
-                    {isQualified ? 'Qualified' : 'Rejected'}
+                    {isQualified ? 'Selected' : 'Rejected'}
                   </span>
                   <span className="text-xs font-medium text-muted-foreground">ID: {candidate.link_id || candidate.id}</span>
                   {(c.decision_by_name || c.last_action_by_name) && (
