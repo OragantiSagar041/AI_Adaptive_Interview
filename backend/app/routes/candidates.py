@@ -105,6 +105,9 @@ def _resolve_frontend_url(http_req: Optional[Request] = None) -> str:
                 from urllib.parse import urlparse
                 parsed = urlparse(origin_hdr)
                 if parsed.scheme and parsed.netloc:
+                    netloc_lower = parsed.netloc.lower()
+                    if "elb.amazonaws.com" in netloc_lower or "compute.amazonaws.com" in netloc_lower:
+                        return FRONTEND_URL or "https://www.hireiq.co.in"
                     return f"{parsed.scheme}://{parsed.netloc}"
             except Exception:
                 pass
