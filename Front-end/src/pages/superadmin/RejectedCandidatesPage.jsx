@@ -75,7 +75,7 @@ export default function RejectedCandidatesPage() {
   const hasTalentPool = userFeatures.includes('Talent Pool Management')
   const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
 
-  const candidates = useSelector(state => state.candidates.candidates) || []
+  const candidates = useSelector(state => state.candidates.rejectedCandidates ?? state.candidates.candidates) || []
   const selectedAdminFilter = useSelector(state => state.dashboard.selectedAdminFilter)
   const reqStatus = useSelector(state => state.candidates.status)
   const error = useSelector(state => state.candidates.error)
