@@ -2392,8 +2392,8 @@ export default function VoiceInterviewPage() {
     setRound('submitting')
 
     const message = isTimeout
-      ? "Thank you for the interview. We are saving your interview, please wait."
-      : "We are saving your interview, please wait.";
+      ? "Thank you for completing the interview. Please keep this tab open while we securely upload your video recordings."
+      : "Thank you! Your interview is now complete. Please keep this browser window open while we upload your video recording and finalize your session.";
 
     // Speak asynchronously — fire-and-forget, don't await so we don't block submission
     aiSay(message)
@@ -2576,16 +2576,16 @@ export default function VoiceInterviewPage() {
 
   // ── Tab close protection while saving ────────────────────────────────────
   useEffect(() => {
-    if (!isSaving) return
+    if (!isSaving && round !== 'submitting') return
     const handleBeforeUnload = (e) => {
-      const msg = 'Your interview is still being saved. Please wait before closing this tab.'
+      const msg = 'Your interview recordings are still being uploaded. Closing or refreshing now will abort your video submission. Please wait until upload reaches 100%.'
       e.preventDefault()
       e.returnValue = msg
       return msg
     }
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [isSaving])
+  }, [isSaving, round])
 
   // ── Countdown (Time-Driven Model - Pins at 00:00) ──────────────────────────
   // Ticks during both 'verbal' (active Q&A) and 'waiting'
@@ -3307,7 +3307,7 @@ export default function VoiceInterviewPage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-bold tracking-tight text-white">Saving Interview & Recordings</h2>
+          <h2 className="text-xl font-bold tracking-tight text-white">Uploading Interview & Video Recordings</h2>
           <p className="text-xs text-indigo-300 font-medium mt-1">
             {uploadStatusText || 'Securing your camera and screen telemetry...'}
           </p>
@@ -3328,11 +3328,11 @@ export default function VoiceInterviewPage() {
         </div>
 
         {/* Prominent Safety Notice */}
-        <div className="w-full bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-start gap-3 text-left">
-          <div className="w-2 h-2 rounded-full bg-amber-400 mt-1.5 shrink-0 animate-ping" />
-          <div className="text-xs text-amber-200/90 leading-relaxed">
-            <strong className="text-amber-300 font-semibold block mb-0.5">Do Not Close or Refresh This Page</strong>
-            Your interview answers and video proctoring are currently being uploaded. Closing your browser or laptop now may result in incomplete submission.
+        <div className="w-full bg-amber-500/15 border border-amber-500/40 rounded-2xl p-4 flex items-start gap-3 text-left shadow-lg">
+          <div className="w-2.5 h-2.5 rounded-full bg-amber-400 mt-1 shrink-0 animate-ping" />
+          <div className="text-xs text-amber-200 leading-relaxed">
+            <strong className="text-amber-300 font-bold block mb-1">⚠️ DO NOT CLOSE OR REFRESH THIS TAB</strong>
+            Please wait until the progress bar reaches 100%. Closing your browser or switching off your device now will abort your video recording upload. You will see a green confirmation screen once it is safe to exit.
           </div>
         </div>
       </div>
@@ -3490,7 +3490,8 @@ export default function VoiceInterviewPage() {
           </div>
           <div>
             <h1 className="text-3xl font-black mb-2">Interview Complete! 🎉</h1>
-            <p className="text-slate-400 max-w-md">Excellent work! You answered {answeredCount} question{answeredCount !== 1 ? 's' : ''} across all rounds. Your responses have been sent to the recruiter.</p>
+            <p className="text-emerald-400 font-semibold text-sm mb-1">✅ All recordings and responses have been successfully saved and uploaded.</p>
+            <p className="text-slate-400 max-w-md text-xs">Excellent work! You answered {answeredCount} question{answeredCount !== 1 ? 's' : ''} across all rounds. You may now safely exit or close this window.</p>
           </div>
 
           {/*  Exit button — the only action that is always enabled ── */}
