@@ -90,6 +90,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   const [extractingInfo, setExtractingInfo] = useState(false)
   const [showNotes, setShowNotes] = useState(false)
   const [newNote, setNewNote] = useState("")
+  const [notesSaving, setNotesSaving] = useState(false)
   const [showScheduleModal, setShowScheduleModal] = useState(false)
   const [previousInterviews, setPreviousInterviews] = useState([])
   const [previousSummary, setPreviousSummary] = useState(null)
@@ -1023,16 +1024,17 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
 
     try {
       const noteObj = {
-        text: newNote,
-        added_by: "Admin",
+        text: newNote.trim(),
+        added_by: adminUser?.name || adminUser?.full_name || "Admin",
         added_at: new Date().toISOString()
       };
 
       const updatedNotes = [...(c.notes || []), noteObj]
+      const effectiveToken = token || localStorage.getItem('token') || localStorage.getItem('access_token') || sessionStorage.getItem('token')
 
       // Save to backend database
       await axios.post(`${API_BASE_URL}/admin/interview/${linkId}/notes`, { notes: updatedNotes }, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${effectiveToken}` }
       })
 
       setDetail(prev => ({
@@ -1102,17 +1104,6 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                       <span className="flex items-center gap-1 text-xs font-medium text-slate-500 bg-slate-100/50 px-2.5 py-1 rounded-md border border-slate-200/50">
                         <Calendar size={13} className="text-slate-400" /> Attended: {new Date(c.started_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
                       </span>
-                    )}
-                    {previousInterviews.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab("previous_history")}
-                        className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-md border border-indigo-200 transition-colors shadow-xs cursor-pointer"
-                        title="Click to view candidate's interview history"
-                      >
-                        <RotateCcw size={13} className="text-indigo-600" />
-                        Interview History ({previousInterviews.length})
-                      </button>
                     )}
                   </div>
                 </div>

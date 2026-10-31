@@ -371,6 +371,7 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
                 "total_time_minutes": total_mins
             },
             "admin_notes": app.get("admin_notes", ""),
+            "notes": app.get("notes") or app.get("notes_history") or [],
             "alerts": [],
             "answers": answers,
             "started_at": app.get("applied_at") or app.get("updated_at") or app.get("created_at"),
@@ -973,7 +974,8 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
         "answers": results,
         "candidate_feedback": session_data.get("candidate_feedback", ""),
         "ats_score": session_data.get("ats_score"),
-        "talent_pool_status": session_data.get("talent_pool_status", "archived")
+        "talent_pool_status": session_data.get("talent_pool_status", "archived"),
+        "notes": session_data.get("notes") or session_data.get("notes_history") or []
     }
     
     # Include full question list so admin can see which questions were skipped
