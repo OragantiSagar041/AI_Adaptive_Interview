@@ -247,6 +247,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   const token = useSelector(state => state.auth.token)
   const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
   const adminUser = useSelector(state => state.auth.adminUser)
+  const isSuperAdminOrMaster = ['superadmin', 'super_admin', 'master', 'tenant'].includes(adminUser?.role?.toLowerCase()) || window.location.pathname.startsWith('/superadmin')
   const userFeatures = adminUser?.plan_features || []
 
   // Fetch full candidate details when dialog opens
@@ -483,7 +484,11 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   const phone = c.candidate_phone || c.phone || candidate.candidate_phone || "N/A"
   const overallScoreValue = c.avg_score ?? c.score ?? candidate.score
   const aiScore = Number(overallScoreValue ?? 0)
-  const isQualified = (c.decision || candidate.decision) === 'selected'
+  const decisionVal = String(c.decision || candidate.decision || '').toLowerCase().trim()
+  const isSelected = decisionVal === 'selected' || decisionVal === 'hired' || c.status === 'qualified' || candidate.status === 'qualified'
+  const isRejected = decisionVal === 'rejected'
+  const isUnderReview = !isSelected && !isRejected
+  const isQualified = isSelected
   const status = c.status || candidate.status || ''
   const interviewAnswers = Array.isArray(c.answers) ? c.answers : []
   const answeredInterviewCount = interviewAnswers.filter(answer =>
@@ -582,7 +587,11 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
     { label: "Application Received", done: true },
     { label: "AI Interview Assigned", done: true },
     { label: "Interview Completed", done: status === 'completed' || !!c.answers?.length },
-    { label: isQualified ? "Selected ✓" : "Rejected ✗", done: !!(c.decision || candidate.decision), bad: !isQualified }
+    { 
+      label: isSelected ? "Selected ✓" : isRejected ? "Rejected ✗" : "Under Review", 
+      done: isSelected || isRejected, 
+      bad: isRejected 
+    }
   ]
 
   const formatMediaUrl = (url) => {
@@ -782,7 +791,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
     const linkId = candidate.link_id || candidate.id || candidate._id;
     if (!linkId) return;
 
-    if (newDecision === 'selected' && !userFeatures.includes('Qualified Candidates')) {
+    if (newDecision === 'selected' && !isSuperAdminOrMaster && !userFeatures.includes('Qualified Candidates')) {
       Swal.fire({
         title: 'Feature Locked',
         text: 'Upgrade your plan to unlock Qualified Candidates.',
@@ -799,7 +808,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
       })
       return;
     }
-    if (newDecision === 'rejected' && !userFeatures.includes('Rejected Candidates')) {
+    if (newDecision === 'rejected' && !isSuperAdminOrMaster && !userFeatures.includes('Rejected Candidates')) {
       Swal.fire({
         title: 'Feature Locked',
         text: 'Upgrade your plan to unlock Rejected Candidates.',
@@ -1070,8 +1079,14 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                   <h2 className="text-2xl font-black text-foreground truncate">{name}</h2>
                   <p className="text-sm font-medium text-muted-foreground mt-0.5">{jobTitle}</p>
                   <div className="flex flex-wrap items-center gap-2 mt-3">
-                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${isQualified ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'}`}>
-                      {isQualified ? 'Selected' : 'Rejected'}
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${
+                      isSelected 
+                        ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30' 
+                        : isRejected 
+                        ? 'bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30' 
+                        : 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+                    }`}>
+                      {isSelected ? 'Selected' : isRejected ? 'Rejected' : 'Under Review'}
                     </span>
                     <span className="text-xs font-medium text-muted-foreground">ID: {candidate.link_id || candidate.id}</span>
                     {(c.decision_by_name || c.last_action_by_name) && (
@@ -1145,7 +1160,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
               {/* ─ Overview Tab ─ */}
               {activeTab === 'overview' && (
                 <div className="space-y-6">
-                  {userFeatures.includes('Resume Parsing') ? (
+                  {(isSuperAdminOrMaster || userFeatures.includes('Resume Parsing')) ? (
 <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
                     <h3 className="text-sm font-black text-slate-800 mb-4">Candidate Information</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-5">
@@ -1219,11 +1234,17 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                     </h3>
                     <div className="rounded-xl border border-border bg-secondary p-4">
                       <div className="flex items-center gap-2 mb-3">
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${isQualified ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                          {c.overall_recommendation || (isQualified ? 'Hire' : 'Reject')}
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${
+                          isSelected 
+                            ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30' 
+                            : isRejected 
+                            ? 'bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-400 border border-rose-500/30' 
+                            : 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30'
+                        }`}>
+                          {c.overall_recommendation || (isSelected ? 'Hire' : isRejected ? 'Reject' : 'Under Review')}
                         </span>
                         <span className="text-sm font-medium text-slate-500">
-                          {isQualified ? 'Ready for Technical Round / Hiring' : 'Does not meet required threshold'}
+                          {isSelected ? 'Ready for Technical Round / Hiring' : isRejected ? 'Does not meet required threshold' : 'Awaiting recruiter decision'}
                         </span>
                       </div>
                         {/* TALENT POOL INJECTION */}
