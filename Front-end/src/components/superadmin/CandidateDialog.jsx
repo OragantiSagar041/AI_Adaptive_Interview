@@ -319,6 +319,13 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
           headers: { Authorization: `Bearer ${token}` }
         })
         setDetail(res.data)
+        if (res.data && onStatusUpdate) {
+          const newScore = res.data.avg_score ?? res.data.score
+          const oldScore = candidate.avg_score ?? candidate.score
+          if (newScore != null && oldScore != null && Number(newScore).toFixed(1) !== Number(oldScore).toFixed(1)) {
+            onStatusUpdate()
+          }
+        }
       } catch (e) {
         console.error("Error fetching candidate detail:", e)
         setError("Could not load full details. Showing basic info.")

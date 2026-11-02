@@ -148,7 +148,10 @@ export default function SuperAdminInterviewsPage() {
           candidate={selectedCandidate}
           open={!!selectedCandidate}
           onOpenChange={(v) => {
-            if (!v) setSelectedCandidate(null);
+            if (!v) {
+              setSelectedCandidate(null);
+              dispatch(loadSuperAdminDashboard(selectedAdminFilter));
+            }
           }}
           onStatusUpdate={() => {
             dispatch(loadSuperAdminDashboard(selectedAdminFilter));
