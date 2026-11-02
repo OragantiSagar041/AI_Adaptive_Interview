@@ -1317,26 +1317,20 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                   {/* Integrity */}
                   {c.integrity && (() => {
                     const violationsList = c.violations || c.alerts || []
-                    const tabTypes = ['tab_switch', 'screen_casting', 'screen_share_detected', 'screen_recording', 'screenshare_stopped', 'multiple_displays', 'multi_monitor', 'fullscreen_exit', 'window_blur']
+                    const tabTypes = ['tab_switch', 'screen_casting', 'screen_share_detected', 'screen_recording', 'screenshare_stopped', 'multiple_displays', 'multi_monitor', 'fullscreen_exit']
                     const noiseTypes = ['noise_alert', 'background_noise', 'noise']
                     
-                    let tabSwitches = Number(c.integrity.total_tab_switches || 0)
-                    let faceAlerts = Number(c.integrity.total_face_alerts || 0)
-                    let noiseAlerts = Number(c.integrity.total_noise_alerts || 0)
-                    
-                    if (violationsList.length > 0) {
-                      const screenCount = violationsList.filter(v => tabTypes.includes(v.type || v.violation_type)).length
-                      const noiseCount = violationsList.filter(v => noiseTypes.includes(v.type || v.violation_type)).length
-                      const trueFaceCount = violationsList.filter(v => !tabTypes.includes(v.type || v.violation_type) && !noiseTypes.includes(v.type || v.violation_type)).length
+                    const tabSwitches = c.integrity.total_tab_switches !== undefined
+                      ? Number(c.integrity.total_tab_switches || 0)
+                      : violationsList.filter(v => tabTypes.includes(v.type || v.violation_type)).length
                       
-                      if (screenCount > 0) {
-                        tabSwitches = Math.max(tabSwitches, screenCount)
-                        faceAlerts = trueFaceCount
-                      }
-                      if (noiseCount > 0) {
-                        noiseAlerts = Math.max(noiseAlerts, noiseCount)
-                      }
-                    }
+                    const faceAlerts = c.integrity.total_face_alerts !== undefined
+                      ? Number(c.integrity.total_face_alerts || 0)
+                      : violationsList.filter(v => !tabTypes.includes(v.type || v.violation_type) && !noiseTypes.includes(v.type || v.violation_type) && (v.type || v.violation_type) !== 'window_blur').length
+                      
+                    const noiseAlerts = c.integrity.total_noise_alerts !== undefined
+                      ? Number(c.integrity.total_noise_alerts || 0)
+                      : violationsList.filter(v => noiseTypes.includes(v.type || v.violation_type)).length
 
                     return (
                       <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
@@ -1347,7 +1341,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                           <StatCard label="Tab Switches" value={tabSwitches} />
                           <StatCard label="Face Alerts" value={faceAlerts} />
                           <StatCard label="Noise Alerts" value={noiseAlerts} />
-                          <StatCard label="Total Duration" value={`${c.integrity.total_time_minutes} min`} />
+                          <StatCard label="Total Duration" value={`${c.integrity.total_time_minutes ?? 0} min`} />
                         </div>
                       </section>
                     )

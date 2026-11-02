@@ -2474,17 +2474,22 @@ def log_violation(
     _require_candidate_session(credentials, interview_id=interview_id)
     print(f" VIOLATION detected for session {interview_id}: {violation.type} (#{violation.count}) at {violation.timestamp}")
     try:
+        # If interview is already completed or terminated, do not record post-interview events
+        curr_session = interview_sessions_collection.find_one({"interview_id": interview_id}, {"status": 1})
+        if curr_session and curr_session.get("status") in ("completed", "expired", "terminated"):
+            return {"status": "success", "ignored": "session_already_completed"}
+
         inc_dict = {"violation_count": 1}
         tab_switch_types = {
             "tab_switch", "screen_casting", "screen_share_detected", 
             "screen_recording", "screenshare_stopped", "multiple_displays", 
-            "multi_monitor", "fullscreen_exit", "window_blur"
+            "multi_monitor", "fullscreen_exit"
         }
         if violation.type in tab_switch_types:
             inc_dict["integrity.total_tab_switches"] = 1
         elif violation.type in ("noise_alert", "background_noise", "noise"):
             inc_dict["integrity.total_noise_alerts"] = 1
-        else:
+        elif violation.type != "window_blur":
             inc_dict["integrity.total_face_alerts"] = 1
 
         interview_sessions_collection.update_one(
@@ -2535,17 +2540,27 @@ def log_proctoring_violation(
         else:
             return {"status": "error", "message": "interview_id or link_id required"}
 
+        # If interview is already completed or terminated, do not record post-interview events
+        curr_session = interview_sessions_collection.find_one(query, {"status": 1, "violation_count": 1})
+        if curr_session and curr_session.get("status") in ("completed", "expired", "terminated"):
+            return {
+                "status": "success",
+                "violation_count": curr_session.get("violation_count", 0),
+                "threshold_exceeded": False,
+                "ignored": "session_already_completed"
+            }
+
         inc_dict = {"violation_count": 1}
         tab_switch_types = {
             "tab_switch", "screen_casting", "screen_share_detected", 
             "screen_recording", "screenshare_stopped", "multiple_displays", 
-            "multi_monitor", "fullscreen_exit", "window_blur"
+            "multi_monitor", "fullscreen_exit"
         }
         if data.violation_type in tab_switch_types:
             inc_dict["integrity.total_tab_switches"] = 1
         elif data.violation_type in ("noise_alert", "background_noise", "noise"):
             inc_dict["integrity.total_noise_alerts"] = 1
-        else:
+        elif data.violation_type != "window_blur":
             inc_dict["integrity.total_face_alerts"] = 1
 
         result = interview_sessions_collection.find_one_and_update(

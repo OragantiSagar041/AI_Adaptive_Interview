@@ -337,6 +337,7 @@ export default function VoiceInterviewPage() {
   const accumulatedTranscriptRef = useRef('')
   const currentSessionFinalRef = useRef('')
   const submittingRef = useRef(false)
+  const isInterviewOverRef = useRef(false)
   const currentQIdxRef = useRef(0)
   const questionsRef = useRef([])
   const interviewIdRef = useRef('')
@@ -2371,6 +2372,7 @@ export default function VoiceInterviewPage() {
 
     if (submittingRef.current) return
     submittingRef.current = true
+    isInterviewOverRef.current = true
     setIsSaving(true)
 
     //  Cross-tab dedup flag ───────────────────────────────────────
@@ -2654,6 +2656,9 @@ export default function VoiceInterviewPage() {
   // ── Proctoring: ESC + Tab + Screenshare ──────────────────────────────────
   // Helper to log proctoring events to backend
   const logProctoringAlert = useCallback((alertType, details = '') => {
+    if (isInterviewOverRef.current || submittingRef.current || roundRef.current === 'submitting' || roundRef.current === 'done') {
+      return
+    }
     const alertMessages = {
       'multi_person': '👀 Multiple faces detected in frame!',
       'no_face': '👤 No face detected - please face the camera!',
@@ -2813,7 +2818,7 @@ export default function VoiceInterviewPage() {
       const isHidden = e.type === 'visibilitychange' && document.hidden
       const isBlurred = e.type === 'blur'
 
-      if ((isHidden || isBlurred) && round !== 'done' && round !== 'intro' && round !== 'pre_checks' && round !== 'submitting') {
+      if (!isInterviewOverRef.current && (isHidden || isBlurred) && round !== 'done' && round !== 'intro' && round !== 'pre_checks' && round !== 'submitting') {
         focusLossCount++
         isFocusLossModalOpen = true
         logProctoringAlert('tab_switch', `Focus loss #${focusLossCount}`)
@@ -2925,7 +2930,7 @@ export default function VoiceInterviewPage() {
 
   // ── Browser exam security (copy/paste blocking, DevTools, window blur, multi-monitor) ──
   useExamSecurity({
-    enabled: round !== 'done' && round !== 'pre_checks' && round !== 'intro' && round !== 'submitting',
+    enabled: !isInterviewOverRef.current && round !== 'done' && round !== 'pre_checks' && round !== 'intro' && round !== 'submitting',
     onViolation: ({ type, message }) => {
       logProctoringAlert(type, message)
     },
