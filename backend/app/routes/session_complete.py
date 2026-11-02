@@ -302,7 +302,7 @@ def complete_session(
                             answers = list(answers_collection.find({"interview_id": interview_id}))
                             all_scored = all(a.get("scoring_status") in ("complete", "failed") for a in answers)
 
-                    if all_scored and not session.get("notification_sent"):
+                    if all_scored:
                         # ALWAYS recalculate the final score to include the coding/case-study round
                         avg_score = session.get("avg_score") or 0.0
                         try:

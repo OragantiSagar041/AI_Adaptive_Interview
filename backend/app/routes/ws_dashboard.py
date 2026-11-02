@@ -226,6 +226,8 @@ async def get_dashboard_aggregated_data(
             "interview_title": 1,
             "score": 1,
             "avg_score": 1,
+            "round1_score": 1,
+            "round2_score": 1,
             "status": 1,
             "decision": 1,
             "created_at": 1,
@@ -247,6 +249,9 @@ async def get_dashboard_aggregated_data(
             "screen_recording_path": 1,
             "interview_id": 1,
             "record_video": 1,
+            "interview_type": 1,
+            "pre_generated_questions": 1,
+            "coding_round": 1,
         }
         
         def _load_dashboard_candidates():
@@ -310,6 +315,105 @@ async def get_dashboard_aggregated_data(
         seen_emails = set()
         candidates_list = []
         now = datetime.now(timezone.utc)
+
+        # Batch composite score synchronization for all completed candidates
+        from app.db.mongo_db import interviews_collection, answers_collection
+        from app.ai.score_rounds import compute_session_composite_score
+        import json
+
+        all_completed_candidates = []
+        needed_interview_ids = set()
+
+        for c in candidates_cursor:
+            computed_status = sync_session_status(c, now)
+            if computed_status in ("completed", "qualified") or c.get("started_at"):
+                all_completed_candidates.append(c)
+                if c.get("interview_id"):
+                    needed_interview_ids.add(c["interview_id"])
+                if c.get("link_id"):
+                    needed_interview_ids.add(c["link_id"])
+
+        if all_completed_candidates and needed_interview_ids:
+            try:
+                needed_ids_list = list(needed_interview_ids)
+                iv_list = await asyncio.to_thread(lambda: list(interviews_collection.find(
+                    {"$or": [{"id": {"$in": needed_ids_list}}, {"link_id": {"$in": needed_ids_list}}]},
+                    {"id": 1, "link_id": 1, "questions": 1, "coding_round": 1, "case_study_round": 1, "interview_type": 1, "language": 1, "profile_text": 1}
+                )))
+                iv_map = {}
+                for doc in iv_list:
+                    if doc.get("id"):
+                        iv_map[doc["id"]] = doc
+                    if doc.get("link_id"):
+                        iv_map[doc["link_id"]] = doc
+
+                ans_list = await asyncio.to_thread(lambda: list(answers_collection.find(
+                    {"interview_id": {"$in": needed_ids_list}},
+                    {"interview_id": 1, "question_id": 1, "ai_score": 1}
+                )))
+                ans_map = defaultdict(list)
+                for a in ans_list:
+                    if a.get("interview_id"):
+                        ans_map[a["interview_id"]].append(a)
+
+                for c in all_completed_candidates:
+                    c_link = c.get("link_id")
+                    c_iv_id = c.get("interview_id")
+                    iv_doc = iv_map.get(c_iv_id) or iv_map.get(c_link) or {}
+                    iv_ans = ans_map.get(c_iv_id) or ans_map.get(c_link) or []
+
+                    coding_rd = c.get("coding_round") or iv_doc.get("coding_round")
+                    case_std = iv_doc.get("case_study_round")
+                    iv_type = iv_doc.get("interview_type") or c.get("interview_type") or "Technical"
+
+                    questions = iv_doc.get("questions")
+                    if isinstance(questions, str):
+                        try:
+                            questions = json.loads(questions)
+                        except Exception:
+                            questions = []
+                    if not questions and c.get("pre_generated_questions"):
+                        try:
+                            questions = json.loads(c["pre_generated_questions"])
+                        except Exception:
+                            questions = []
+
+                    ctx_cs = f"Candidate's {iv_doc.get('profile_text', '')}"
+                    lang_cs = iv_doc.get("language", "English")
+                    fallback_s = c.get("avg_score") if c.get("avg_score") is not None else (c.get("score") or 0.0)
+
+                    r1_s, r2_s, final_s = compute_session_composite_score(
+                        interview_type=iv_type,
+                        questions=questions,
+                        answers=iv_ans,
+                        coding_round=coding_rd,
+                        case_study_round=case_std,
+                        context=ctx_cs,
+                        language=lang_cs,
+                        fallback_score=fallback_s
+                    )
+
+                    c["round1_score"] = r1_s
+                    c["round2_score"] = r2_s
+                    c["avg_score"] = final_s
+                    c["score"] = final_s
+
+                    # Update MongoDB in background if db values differed
+                    raw_id = c.get("_id")
+                    if raw_id:
+                        asyncio.create_task(asyncio.to_thread(
+                            interview_sessions_collection.update_one,
+                            {"_id": raw_id},
+                            {"$set": {
+                                "score": final_s,
+                                "avg_score": final_s,
+                                "round1_score": r1_s,
+                                "round2_score": r2_s
+                            }}
+                        ))
+            except Exception as sync_e:
+                logger.warning(f"Error in batch composite score sync: {sync_e}")
+
         for c in candidates_cursor:
             email = c.get("candidate_email") or c.get("email")
             clean_em = email.strip().lower() if email else ""
@@ -319,6 +423,24 @@ async def get_dashboard_aggregated_data(
             c["status"] = sync_session_status(c, now)
             c["interview_count"] = email_counts.get(clean_em, 1) if clean_em else 1
             c["interviews_count"] = c["interview_count"]
+
+            # Ensure score and avg_score are always identical and properly formatted
+            db_avg = c.get("avg_score")
+            db_score = c.get("score")
+            if db_avg is not None and db_score != db_avg:
+                c["score"] = db_avg
+                try:
+                    raw_id = c.get("_id")
+                    if raw_id:
+                        asyncio.create_task(asyncio.to_thread(
+                            interview_sessions_collection.update_one,
+                            {"_id": raw_id},
+                            {"$set": {"score": db_avg}}
+                        ))
+                except Exception:
+                    pass
+            elif db_score is not None and db_avg is None:
+                c["avg_score"] = db_score
             
             creator_id = c.get("created_by")
             creator = admin_map.get(str(creator_id)) if creator_id else None

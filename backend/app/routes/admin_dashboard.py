@@ -564,7 +564,8 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
     ans_face_al = 0
     ans_noise_al = 0
 
-    if actual_interview_id:
+    target_iv_id = actual_interview_id or link_id
+    if target_iv_id:
         ans_projection = {
             "question_id": 1,
             "question_text": 1,
@@ -585,7 +586,8 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
             "face_alerts": 1,
             "noise_alerts": 1,
         }
-        rows = answers_collection.find({"interview_id": actual_interview_id}, ans_projection).sort("question_id", 1)
+        ans_query = {"$or": [{"interview_id": actual_interview_id}, {"interview_id": link_id}]} if actual_interview_id else {"interview_id": link_id}
+        rows = answers_collection.find(ans_query, ans_projection).sort("question_id", 1)
         for row in rows:
             tab_sw = row.get("tab_switches") or 0
             face_al = row.get("face_alerts") or 0
@@ -695,63 +697,47 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
 
     # Blend with coding / case study rounds if present
     try:
-        from app.ai.score_rounds import (
-                compute_case_study_score,
-                calculate_round1_score, calculate_coding_score,
-                calculate_case_study_round2_score, calculate_final_score
-            )
-        interview_record_for_score = interviews_collection.find_one({"id": actual_interview_id}) if actual_interview_id else None
+        from app.ai.score_rounds import compute_session_composite_score
+        target_iv_lookup = actual_interview_id or link_id
+        interview_record_for_score = interviews_collection.find_one({
+            "$or": [{"id": target_iv_lookup}, {"link_id": link_id}, {"link_id": target_iv_lookup}]
+        }) if target_iv_lookup else None
 
-        if interview_record_for_score:
-            interview_format_cs = session_data.get("interview_format", "Standard") if session_data else "Standard"
-            lang_cs = interview_record_for_score.get("language", "English")
-            ctx_cs  = f"Candidate's {interview_record_for_score.get('source','Resume')}: {interview_record_for_score.get('profile_text','')}"
+        coding_rd = (interview_record_for_score or {}).get("coding_round") if interview_record_for_score else None
+        if not coding_rd and session_data:
+            coding_rd = session_data.get("coding_round")
+        case_std = (interview_record_for_score or {}).get("case_study_round") if interview_record_for_score else None
 
-            # Determine interview type for scoring model
-            interview_type = interview_record_for_score.get("interview_type") or \
-                             (session_data.get("interview_type") if session_data else None) or "Technical"
+        questions = (interview_record_for_score or {}).get("questions", []) if interview_record_for_score else []
+        if isinstance(questions, str):
+            import json
+            try:
+                questions = json.loads(questions)
+            except Exception:
+                questions = []
+        if not questions and session_data and session_data.get("pre_generated_questions"):
+            import json
+            try:
+                questions = json.loads(session_data["pre_generated_questions"])
+            except Exception:
+                questions = []
 
-            coding_rd  = interview_record_for_score.get("coding_round")
-            case_std   = interview_record_for_score.get("case_study_round")
-            n_cs_questions = len((case_std or {}).get("questions", []) or []) if case_std else 0
+        interview_type = (interview_record_for_score or {}).get("interview_type") or \
+                         (session_data.get("interview_type") if session_data else None) or "Technical"
 
-            questions  = interview_record_for_score.get("questions", [])
-            if isinstance(questions, str):
-                import json
-                try:
-                    questions = json.loads(questions)
-                except:
-                    questions = []
-            if not questions and session_data and session_data.get("pre_generated_questions"):
-                import json
-                try:
-                    questions = json.loads(session_data["pre_generated_questions"])
-                except:
-                    pass
+        lang_cs = (interview_record_for_score or {}).get("language", "English") if interview_record_for_score else "English"
+        ctx_cs = f"Candidate's {(interview_record_for_score or {}).get('source','Resume')}: {(interview_record_for_score or {}).get('profile_text','')}"
 
-            # Round 1 (Verbal): ALWAYS recalculate because it's fast (O(1)) and uses native math, not the LLM.
-            round1_s = calculate_round1_score(questions, results, interview_type=interview_type, n_case_study_questions=n_cs_questions)
-
-            round2_s = 0.0
-            itype_lower = str(interview_type).strip().lower()
-            if itype_lower == "technical" and coding_rd:
-                # Coding Round: ALWAYS recalculate because it just reads test cases, no LLM cost.
-                round2_s = calculate_coding_score(coding_rd)
-            elif itype_lower in ("non-technical", "non_technical", "non tech", "nontech") and case_std:
-                lang_cs = interview_record_for_score.get("language", "English")
-                ctx_cs = f"Profile: {interview_record_for_score.get('profile_text', '')}"
-                round2_s = calculate_case_study_round2_score(case_std, n_cs_questions, ctx_cs, lang_cs)
-                if actual_interview_id:
-                    interviews_collection.update_one(
-                        {"id": actual_interview_id},
-                        {"$set": {"case_study_round": case_std}}
-                    )
-
-            # Final Score: ALWAYS recalculate mathematically.
-            avg_score = calculate_final_score(round1_s, round2_s)
-        else:
-            round1_s = verbal_avg
-            avg_score = verbal_avg
+        round1_s, round2_s, avg_score = compute_session_composite_score(
+            interview_type=interview_type,
+            questions=questions,
+            answers=results,
+            coding_round=coding_rd,
+            case_study_round=case_std,
+            context=ctx_cs,
+            language=lang_cs,
+            fallback_score=verbal_avg
+        )
     except Exception as blend_err:
         print(f"🚨 complete-session blend error: {blend_err}")
         avg_score = verbal_avg
@@ -774,6 +760,12 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
         job_success_score = saved_job
         job_success_reasoning = saved_job_reason
         detected_accent = saved_accent or "Unknown"
+        sync_payload = {
+            "score": avg_score,
+            "avg_score": avg_score,
+            "round1_score": round1_s,
+            "round2_score": round2_s
+        }
         if not detected_accent or detected_accent.strip().lower() in ["unknown", "none", ""]:
             from app.services.language_accent_detector import detect_language_and_accent
             lang_accent_res = detect_language_and_accent(
@@ -783,42 +775,17 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
             )
             detected_accent = lang_accent_res.get("detected_accent") or "English (Indian Accent)"
             detected_language = lang_accent_res.get("language") or "English"
-            try:
-                interview_sessions_collection.update_one(
-                    {"link_id": link_id},
-                    {"$set": {
-                        "detected_accent": detected_accent,
-                        "detected_language": detected_language,
-                        "language": detected_language
-                    }}
-                )
-            except Exception as e:
-                print(f"Error updating detected accent: {e}")
+            sync_payload["detected_accent"] = detected_accent
+            sync_payload["detected_language"] = detected_language
+            sync_payload["language"] = detected_language
 
-        # Keep session document score in sync with dynamically recalculated score
-        # so the candidate list table and the modal always match 100%
-        db_score_sync = {}
-        if avg_score is not None and session_data.get("score") != avg_score:
-            db_score_sync["score"] = avg_score
-            db_score_sync["avg_score"] = avg_score
-            session_data["score"] = avg_score
-            session_data["avg_score"] = avg_score
-        if round1_s is not None and session_data.get("round1_score") != round1_s:
-            db_score_sync["round1_score"] = round1_s
-            session_data["round1_score"] = round1_s
-        if round2_s is not None and session_data.get("round2_score") != round2_s:
-            db_score_sync["round2_score"] = round2_s
-            session_data["round2_score"] = round2_s
-
-        if db_score_sync:
-            try:
-                interview_sessions_collection.update_one(
-                    {"link_id": link_id},
-                    {"$set": db_score_sync}
-                )
-                sync_session_to_application(link_id)
-            except Exception as e:
-                print(f"Error syncing recalculated score to session: {e}")
+        try:
+            interview_sessions_collection.update_one(
+                {"link_id": link_id},
+                {"$set": sync_payload}
+            )
+        except Exception as e:
+            print(f"Error syncing score/accent to session: {e}")
     else:
         try:
             summary = generate_interview_summary(candidate_name or "Candidate", results)
@@ -1017,6 +984,7 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
         "job_description_text": session_data.get("job_description", ""),
         "date": created_at,
         "source": session_data.get("source") or "Job Description / Resume",
+        "score": avg_score,
         "avg_score": avg_score,
         "round1_score": round1_s,
         "round2_score": round2_s,
