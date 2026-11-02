@@ -510,21 +510,47 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
 
     results = []
     
-    # Calculate integrity totals from the violations array, as it accurately tracks all events
-    # even if the interview terminates before any questions are answered.
     violations = session_data.get("violations", [])
     session_integrity = session_data.get("integrity") or {}
 
-    tab_switch_types = {
+    # Check for the last answered question to determine the true interview cutoff timestamp
+    last_ans = None
+    if actual_interview_id:
+        last_ans = answers_collection.find_one(
+            {"interview_id": actual_interview_id},
+            sort=[("created_at", -1)]
+        )
+
+    # Filter out post-interview violations (e.g. window blur or tab changes hours after completing questions)
+    cutoff_dt = None
+    if last_ans and last_ans.get("created_at"):
+        try:
+            cutoff_dt = datetime.fromisoformat(last_ans["created_at"].replace("Z", "+00:00")) + timedelta(minutes=2)
+        except Exception:
+            cutoff_dt = None
+
+    active_violations = []
+    for v in violations:
+        ts = v.get("timestamp")
+        if cutoff_dt and ts:
+            try:
+                v_dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                if v_dt > cutoff_dt:
+                    continue  # Ignore events logged after interview questions were finished
+            except Exception:
+                pass
+        active_violations.append(v)
+
+    hard_tab_switch_types = {
         "tab_switch", "screen_casting", "screen_share_detected", 
         "screen_recording", "screenshare_stopped", "multiple_displays", 
-        "multi_monitor", "fullscreen_exit", "window_blur"
+        "multi_monitor", "fullscreen_exit"
     }
     noise_types = {"noise_alert", "background_noise", "noise"}
 
-    total_tab_switches = sum(1 for v in violations if v.get("type") in tab_switch_types)
-    total_face_alerts = sum(1 for v in violations if v.get("type") not in tab_switch_types and v.get("type") not in noise_types)
-    total_noise_alerts = sum(1 for v in violations if v.get("type") in noise_types)
+    total_tab_switches = sum(1 for v in active_violations if v.get("type") in hard_tab_switch_types)
+    total_face_alerts = sum(1 for v in active_violations if v.get("type") not in hard_tab_switch_types and v.get("type") not in noise_types and v.get("type") != "window_blur")
+    total_noise_alerts = sum(1 for v in active_violations if v.get("type") in noise_types)
 
     if total_tab_switches == 0 and session_integrity.get("total_tab_switches"):
         total_tab_switches = session_integrity.get("total_tab_switches")
@@ -567,7 +593,11 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
             ans_tab_sw += tab_sw
             ans_face_al += face_al
             ans_noise_al += noise_al
-            total_time += (row.get("time_spent_seconds") or 0)
+            t_spent = row.get("time_spent_seconds") or 0
+            t_limit = row.get("time_limit_seconds") or 180
+            if t_limit and t_spent > (t_limit * 2):
+                t_spent = t_limit
+            total_time += t_spent
             ai_score_val = row.get("ai_score")
             content_score_val = row.get("content_score")
             relevance_score_val = row.get("relevance_score")
@@ -634,38 +664,26 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
     if total_noise_alerts == 0 and ans_noise_al > 0:
         total_noise_alerts = ans_noise_al
 
-    # ── Timestamp-based fallback for older sessions where time_spent_seconds was not stored ──
-    # If total_time is still 0 after reading all answers, calculate from session timestamps.
+    # ── Active Interview Duration Calculation ──
+    # If active answering time was tracked in answers, use it directly as Active Interview Time.
+    # If total_time is still 0 (e.g. legacy sessions without time_spent_seconds), calculate fallback from timestamps.
     if total_time == 0:
-        try:
-            started_str  = session_data.get("started_at")
-            finished_str = (session_data.get("completed_at")
-                            or session_data.get("updated_at")
-                            or session_data.get("submitted_at"))
+        started_str = session_data.get("started_at")
+        if started_str:
+            try:
+                started_dt = datetime.fromisoformat(started_str.replace("Z", "+00:00"))
+                finished_dt = None
+                if last_ans and last_ans.get("created_at"):
+                    finished_dt = datetime.fromisoformat(last_ans["created_at"].replace("Z", "+00:00"))
+                elif session_data.get("submitted_at"):
+                    finished_dt = datetime.fromisoformat(session_data["submitted_at"].replace("Z", "+00:00"))
+                elif session_data.get("completed_at") and not actual_interview_id:
+                    finished_dt = datetime.fromisoformat(session_data["completed_at"].replace("Z", "+00:00"))
 
-            print(f"⏱️ Duration fallback check | link_id={link_id} | started_at={started_str} | finished_str(before ans)={finished_str} | interview_id={actual_interview_id}")
-
-            # For old sessions with no completed_at, use the created_at of the LAST answer
-            if started_str and not finished_str and actual_interview_id:
-                last_ans = answers_collection.find_one(
-                    {"interview_id": actual_interview_id},
-                    sort=[("created_at", -1)]
-                )
-                if last_ans:
-                    finished_str = last_ans.get("created_at")
-                    print(f"⏱️ Using last answer created_at as finish time: {finished_str}")
-
-            if started_str and finished_str:
-                started_dt  = datetime.fromisoformat(started_str.replace("Z", "+00:00"))
-                finished_dt = datetime.fromisoformat(finished_str.replace("Z", "+00:00"))
-                delta_secs  = (finished_dt - started_dt).total_seconds()
-                print(f"⏱️ Calculated duration: {delta_secs:.0f}s = {delta_secs/60:.1f} min")
-                if delta_secs > 0:
-                    total_time = int(delta_secs)
-            else:
-                print(f"⏱️ Cannot compute fallback duration: started_str={started_str}, finished_str={finished_str}")
-        except Exception as _ts_err:
-            print(f"Timestamp fallback error: {_ts_err}")
+                if finished_dt and finished_dt > started_dt:
+                    total_time = int((finished_dt - started_dt).total_seconds())
+            except Exception as _dur_err:
+                print(f"⏱️ Duration calculation error: {_dur_err}")
 
     # 2. Calculate composite AI summary score
     avg_score = 0
@@ -776,6 +794,31 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
                 )
             except Exception as e:
                 print(f"Error updating detected accent: {e}")
+
+        # Keep session document score in sync with dynamically recalculated score
+        # so the candidate list table and the modal always match 100%
+        db_score_sync = {}
+        if avg_score is not None and session_data.get("score") != avg_score:
+            db_score_sync["score"] = avg_score
+            db_score_sync["avg_score"] = avg_score
+            session_data["score"] = avg_score
+            session_data["avg_score"] = avg_score
+        if round1_s is not None and session_data.get("round1_score") != round1_s:
+            db_score_sync["round1_score"] = round1_s
+            session_data["round1_score"] = round1_s
+        if round2_s is not None and session_data.get("round2_score") != round2_s:
+            db_score_sync["round2_score"] = round2_s
+            session_data["round2_score"] = round2_s
+
+        if db_score_sync:
+            try:
+                interview_sessions_collection.update_one(
+                    {"link_id": link_id},
+                    {"$set": db_score_sync}
+                )
+                sync_session_to_application(link_id)
+            except Exception as e:
+                print(f"Error syncing recalculated score to session: {e}")
     else:
         try:
             summary = generate_interview_summary(candidate_name or "Candidate", results)
@@ -1006,9 +1049,9 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
             "total_noise_alerts": total_noise_alerts,
             "total_time_minutes": round(total_time / 60, 1)
         },
-        "violations": session_data.get("violations", session_data.get("alerts", [])),
-        "proctoring_alerts": session_data.get("violations", session_data.get("alerts", [])),
-        "alerts": session_data.get("violations", session_data.get("alerts", [])),
+        "violations": active_violations,
+        "proctoring_alerts": active_violations,
+        "alerts": active_violations,
         "answers": results,
         "candidate_feedback": session_data.get("candidate_feedback", ""),
         "ats_score": session_data.get("ats_score"),
@@ -1072,6 +1115,20 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
     # ── Include coding/case-study round data so the admin transcript shows submitted code ──
     response_payload["coding_round"] = coding_round_data
     response_payload["case_study_round"] = case_study_data
+
+    # Automatically sync / backfill clean integrity metrics back to MongoDB for existing sessions
+    try:
+        interview_sessions_collection.update_one(
+            {"link_id": link_id},
+            {"$set": {
+                "integrity.total_tab_switches": total_tab_switches,
+                "integrity.total_face_alerts": total_face_alerts,
+                "integrity.total_noise_alerts": total_noise_alerts,
+                "integrity.total_time_minutes": round(total_time / 60, 1)
+            }}
+        )
+    except Exception as _sync_err:
+        pass
 
     return response_payload
 

@@ -351,26 +351,20 @@ export function CandidateScorecardModal({
           {/* Proctoring & Integrity */}
           {candidateDetail?.integrity && (() => {
             const violationsList = candidateDetail.violations || candidateDetail.alerts || []
-            const tabTypes = ['tab_switch', 'screen_casting', 'screen_share_detected', 'screen_recording', 'screenshare_stopped', 'multiple_displays', 'multi_monitor', 'fullscreen_exit', 'window_blur']
+            const tabTypes = ['tab_switch', 'screen_casting', 'screen_share_detected', 'screen_recording', 'screenshare_stopped', 'multiple_displays', 'multi_monitor', 'fullscreen_exit']
             const noiseTypes = ['noise_alert', 'background_noise', 'noise']
             
-            let tabSwitches = Number(candidateDetail.integrity.total_tab_switches || 0)
-            let faceAlerts = Number(candidateDetail.integrity.total_face_alerts || 0)
-            let noiseAlerts = Number(candidateDetail.integrity.total_noise_alerts || 0)
-            
-            if (violationsList.length > 0) {
-              const screenCount = violationsList.filter(v => tabTypes.includes(v.type || v.violation_type)).length
-              const noiseCount = violationsList.filter(v => noiseTypes.includes(v.type || v.violation_type)).length
-              const trueFaceCount = violationsList.filter(v => !tabTypes.includes(v.type || v.violation_type) && !noiseTypes.includes(v.type || v.violation_type)).length
+            const tabSwitches = candidateDetail.integrity.total_tab_switches !== undefined
+              ? Number(candidateDetail.integrity.total_tab_switches || 0)
+              : violationsList.filter(v => tabTypes.includes(v.type || v.violation_type)).length
               
-              if (screenCount > 0) {
-                tabSwitches = Math.max(tabSwitches, screenCount)
-                faceAlerts = trueFaceCount
-              }
-              if (noiseCount > 0) {
-                noiseAlerts = Math.max(noiseAlerts, noiseCount)
-              }
-            }
+            const faceAlerts = candidateDetail.integrity.total_face_alerts !== undefined
+              ? Number(candidateDetail.integrity.total_face_alerts || 0)
+              : violationsList.filter(v => !tabTypes.includes(v.type || v.violation_type) && !noiseTypes.includes(v.type || v.violation_type) && (v.type || v.violation_type) !== 'window_blur').length
+              
+            const noiseAlerts = candidateDetail.integrity.total_noise_alerts !== undefined
+              ? Number(candidateDetail.integrity.total_noise_alerts || 0)
+              : violationsList.filter(v => noiseTypes.includes(v.type || v.violation_type)).length
 
             return (
               <div className="flex flex-col gap-4 mt-2 avoid-break">
