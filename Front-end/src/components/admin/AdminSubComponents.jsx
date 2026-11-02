@@ -46,7 +46,7 @@ export function CandidateFilters({
             style={{ padding: '0.5rem 0.75rem 0.5rem 2.25rem' }}
             placeholder="Name or Email..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value.replace(/[0-9]/g, ''))}
+            onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
       </div>
