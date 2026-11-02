@@ -904,7 +904,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
 
     // ── Select / Shortlist ──
     try {
-      await dispatch(handleUpdateDecision({ linkId, decision: newDecision, talent_pool_status: talentPoolStatus })).unwrap()
+      await dispatch(handleUpdateDecision({ linkId, decision: newDecision })).unwrap()
       Swal.fire('Success', `Candidate marked as ${newDecision.toUpperCase()}`, 'success')
       if (onStatusUpdate) onStatusUpdate(newDecision)
       onOpenChange(false)
