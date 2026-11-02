@@ -11,7 +11,7 @@ import {
   Play, FileText, Sparkles, Star, Check, X, Calendar, Send,
   MessageSquare, Video, Scale, Loader2, AlertCircle, Monitor,
   Mic, ShieldAlert, Eye, ChevronRight, Code, UserCheck, User, ExternalLink, ArrowLeft, ArrowRight,
-  Globe, RotateCcw
+  Globe, RotateCcw, Briefcase, Award
 } from "lucide-react"
 import { jsPDF } from 'jspdf'
 import { detectNonEnglishText, translateText, translateQAPairs } from '../../utils/translation'
@@ -1204,16 +1204,38 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   </section>
 )}
 
-                  <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <h3 className="mb-2 text-sm font-black text-slate-800">Summary</h3>
-                    <p className="text-sm leading-7 text-slate-600">
-                      {summarySections.map(([label, value], index) => (
-                        <React.Fragment key={label}>
-                          {index > 0 && <span className="mx-1.5 text-slate-300">|</span>}
-                          <strong className="font-semibold text-slate-800">{label}:</strong> {value}
-                        </React.Fragment>
-                      ))}
-                    </p>
+                  {/* ── Candidate Summary Section ── */}
+                  <section className="rounded-2xl border border-slate-200/80 dark:border-slate-700/80 bg-white dark:bg-slate-800/80 p-5 sm:p-6 shadow-xs transition-all">
+                    {/* Header */}
+                    <div className="flex items-center justify-between pb-3.5 mb-4 border-b border-slate-100 dark:border-slate-700/60">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-100 dark:border-indigo-800/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shadow-xs">
+                          <FileText size={16} />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 tracking-tight">Candidate Summary</h3>
+                          <p className="text-[0.7rem] font-medium text-slate-400 dark:text-slate-400">Comprehensive profile overview & interview evaluation</p>
+                        </div>
+                      </div>
+                      <span className="text-[0.65rem] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider bg-slate-50 dark:bg-slate-900/50 px-2.5 py-1 rounded-lg border border-slate-200/60 dark:border-slate-700">
+                        Summary
+                      </span>
+                    </div>
+
+                    {/* Professional Paragraph Container */}
+                    <div className="rounded-xl bg-slate-50/70 dark:bg-slate-900/40 border border-slate-100/90 dark:border-slate-800/80 p-4 sm:p-5 border-l-4 border-l-indigo-500 dark:border-l-indigo-400">
+                      <p className="text-[0.84rem] leading-8 text-slate-600 dark:text-slate-300">
+                        {summarySections.map(([label, value], index) => (
+                          <React.Fragment key={label}>
+                            {index > 0 && (
+                              <span className="inline-block mx-2 text-indigo-400/80 dark:text-indigo-500 font-bold select-none">•</span>
+                            )}
+                            <strong className="font-bold text-slate-800 dark:text-slate-100">{label}:</strong>{' '}
+                            <span className="text-slate-700 dark:text-slate-200 font-normal">{value}</span>
+                          </React.Fragment>
+                        ))}
+                      </p>
+                    </div>
                   </section>
 
                   <section className="bg-card rounded-xl border border-border p-5 shadow-sm">
