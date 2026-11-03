@@ -125,7 +125,10 @@ export default function AdminInterviewsPage() {
           candidate={selectedCandidate}
           open={!!selectedCandidate}
           onOpenChange={(v) => {
-            if (!v) setSelectedCandidate(null);
+            if (!v) {
+              setSelectedCandidate(null);
+              dispatch(loadDashboardData());
+            }
           }}
           onStatusUpdate={() => {
             dispatch(loadDashboardData());
