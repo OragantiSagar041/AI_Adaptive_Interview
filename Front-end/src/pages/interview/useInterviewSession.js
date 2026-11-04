@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Swal from 'sweetalert2'
 import api from '../../utils/api'
@@ -310,6 +310,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const [activeRightTab, setActiveRightTab] = useState('code')
   const [compiling, setCompiling] = useState(false)
   const [globalCountdown, setGlobalCountdown] = useState(0)
+  const [isTimeExpired, setIsTimeExpired] = useState(false)
+  const isTimeExpiredRef = useRef(false)
   const [totalDuration, setTotalDuration] = useState(0)
   // (isRoundTwo and isRoundTwoRef defined above with session states)
   const [showRound2Confirm, setShowRound2Confirm] = useState(false)
@@ -690,22 +692,33 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     sessionStorage.setItem(_sessionKey, JSON.stringify({ ...existing, codeAnswer, selectedLanguage }))
   }, [codeAnswer, selectedLanguage])
 
-  // Interview Countdown Timer
+  // Interview Countdown Timer (Time-Driven Model - Pins at 00:00)
   useEffect(() => {
     let interval;
     if (isDisclaimerAccepted && !showAllSet && globalCountdown > 0) {
       interval = setInterval(() => {
-        setGlobalCountdown(prev => prev - 1)
+        setGlobalCountdown(prev => {
+          if (prev <= 1) {
+            setIsTimeExpired(true)
+            isTimeExpiredRef.current = true
+            return 0 // Pin at 00:00! DO NOT trigger abrupt round switch! Let candidate finish their response.
+          }
+          return prev - 1
+        })
       }, 1000)
-    } else if (globalCountdown === 0 && isDisclaimerAccepted && !showAllSet && questions.length > 0) {
-      if (!isRoundTwo && totalDuration > 0 && sessionDetail?.interview_type !== 'Normal') {
-        startNextRound()
-      } else {
-        handleSubmitInterview()
-      }
     }
     return () => clearInterval(interval)
-  }, [isDisclaimerAccepted, showAllSet, globalCountdown, questions.length])
+  }, [isDisclaimerAccepted, showAllSet, globalCountdown])
+
+  // Safety Overtime Guardrail: If candidate remains on 00:00 for 120s without submitting, auto-transition
+  useEffect(() => {
+    if (!isTimeExpired || !isDisclaimerAccepted || showAllSet) return
+    const overtimeTimer = setTimeout(() => {
+      console.warn("Safety overtime guardrail (120s) reached at 00:00. Auto-advancing round.")
+      handleNextQuestion()
+    }, 120000)
+    return () => clearTimeout(overtimeTimer)
+  }, [isTimeExpired, isDisclaimerAccepted, showAllSet])
 
   // Tab close protection while saving/uploading
   useEffect(() => {
@@ -902,6 +915,10 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
             const roundDur = isSingleRound ? fullDuration : fullDuration / 2
             const remaining = Math.max(0, roundDur - elapsedSeconds)
             setGlobalCountdown(remaining)
+            if (remaining <= 0) {
+              setIsTimeExpired(true)
+              isTimeExpiredRef.current = true
+            }
             if (_savedSession.isRoundTwo) {
               setIsRoundTwo(true)
               isRoundTwoRef.current = true
@@ -1032,12 +1049,15 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   }
 
   const commitSpeechSessionToAccumulator = () => {
-    const { committed } = mergeTranscripts(
+    const { committed, full } = mergeTranscripts(
       accumulatedTranscriptRef.current,
       currentSessionFinalRef.current,
       interimTextRef.current
     )
-    accumulatedTranscriptRef.current = committed
+    const bestText = (full || committed || '').trim()
+    if (bestText) {
+      accumulatedTranscriptRef.current = bestText
+    }
     currentSessionFinalRef.current = ''
     interimTextRef.current = ''
   }
@@ -1091,14 +1111,15 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           commitSpeechSessionToAccumulator()
           setInterimTranscriptText('')
           liveInterimGhostRef.current = ''
-          // Whisper is the persistent source of truth. Only fall back to the
-          // Web Speech accumulator when Whisper hasn't produced anything yet.
-          const whisperVal = whisperFinalizedTranscriptRef.current.trim()
-          const fallback = accumulatedTranscriptRef.current.trim()
-          if (whisperVal) {
-            setTranscriptionText(formatCandidateName(whisperVal, sessionDetail?.candidate_name || sessionDetail?.name || ''))
-          } else if (fallback) {
-            setTranscriptionText(formatCandidateName(fallback, sessionDetail?.candidate_name || sessionDetail?.name || ''))
+          // Preserve the accurately transcribed candidate answer!
+          const currentText = accumulatedTranscriptRef.current.trim()
+          if (currentText) {
+            setTranscriptionText(formatCandidateName(currentText, sessionDetail?.candidate_name || sessionDetail?.name || ''))
+          } else {
+            const whisperVal = whisperFinalizedTranscriptRef.current.trim()
+            if (whisperVal) {
+              setTranscriptionText(formatCandidateName(whisperVal, sessionDetail?.candidate_name || sessionDetail?.name || ''))
+            }
           }
         } else {
           setInterimTranscriptText('')
@@ -1155,31 +1176,15 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         const ghost = (sessionFinal + ' ' + sessionInterim).trim()
         liveInterimGhostRef.current = ghost
         const cName = sessionDetail?.candidate_name || sessionDetail?.name || ''
-        // Show Web Speech ghost as a LIVE PREVIEW only — it should NOT
-        // modify Whisper's committed transcript (that's done in
-        // `mergeSegmentChunks` when the next Whisper chunk arrives).
-        // We just append it for the user to see, and tolerate that it may
-        // overlap with the Whisper text (Whisper is the persistent source).
+
+        // Merge accumulated transcript with live Web Speech results
+        const { full } = mergeTranscripts(
+          accumulatedTranscriptRef.current,
+          sessionFinal,
+          sessionInterim
+        )
         const whisperVal = whisperFinalizedTranscriptRef.current.trim()
-        let display
-        if (!whisperVal) {
-          display = ghost
-        } else if (!ghost) {
-          display = whisperVal
-        } else {
-          // Show Whisper committed text plus a preview hint for any words
-          // that Web Speech is hearing RIGHT NOW that Whisper hasn't yet
-          // transcribed. Only append ghost words not already in Whisper.
-          const ghostWords = ghost.split(/\s+/).filter(Boolean)
-          const existing = whisperVal.toLowerCase()
-          const newWords = []
-          for (const w of ghostWords) {
-            if (!existing.includes(w.toLowerCase().replace(/[^a-z0-9]/g, ''))) {
-              newWords.push(w)
-            }
-          }
-          display = newWords.length ? `${whisperVal} ${newWords.join(' ')}` : whisperVal
-        }
+        const display = full || ghost || accumulatedTranscriptRef.current.trim() || whisperVal
         if (display) {
           setTranscriptionText(formatCandidateName(display, cName))
         }
@@ -1322,6 +1327,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       }
       tick()
     } catch (e) {
+      const errMsg = e.response?.data?.detail || e.message || 'Unknown error'
       console.warn("Noise proctoring monitor setup fail", e)
     }
   }
@@ -1649,31 +1655,16 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     // Immediately stop any ongoing audio/TTS
     stopAudio()
 
-    const cleanText = (text || '').replace(/^\[[^\]]+\]\s*/, '').trim()
+    const rawText = text || currentQuestion?.text || currentQuestion?.question || currentQuestion?.prompt || ''
+    const cleanText = (rawText || '').replace(/^\[[^\]]+\]\s*/, '').trim()
+    if (!cleanText) return
 
-    // ── STRICT SUPPRESSION: Case Study Round or Coding Round MUST NEVER have TTS in any language ──
-    const qType = currentQuestion?.type || ''
-    const textStr = cleanText.toLowerCase()
-    const itype = String(interviewType || sessionDetail?.interview_type || '').toLowerCase()
-    const isNonTech = itype.includes('non-tech') || itype.includes('non_tech') || itype.includes('case')
-
+    // ── STRICT SUPPRESSION: Case Study Round or Coding Round (Round 2) MUST NEVER have TTS ──
     if (
       isRoundTwoRef.current ||
       isRoundTwo ||
       isStartingRoundTwoRef.current ||
-      (isNonTech && (isRoundTwo || isRoundTwoRef.current)) ||
-      qType === 'coding' ||
-      qType === 'case_study' ||
-      currentQuestion?.caseStudyIndex !== undefined ||
-      textStr.includes('case study') ||
-      textStr.includes('case_study') ||
-      textStr.includes('scenario') ||
-      textStr.includes('📁') ||
-      textStr.includes('केस स्टडी') || // Hindi
-      textStr.includes('కేస్ స్టడీ') || // Telugu
-      textStr.includes('வழக்காய்வு') || // Tamil
-      textStr.includes('കേസ് സ്റ്റഡി') || // Malayalam
-      textStr.includes('ಕೇಸ್ ಸ್ಟಡಿ')    // Kannada
+      currentQuestion?.caseStudyIndex !== undefined
     ) {
       stopAudio()
       return
@@ -1840,9 +1831,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
       // Double check reqId and round 2 state before playing
       if (speakRequestIdRef.current === reqId && !isRoundTwoRef.current && !isRoundTwo) {
-        audio.play().catch((playErr) => {
-          console.warn("Audio autoplay blocked or failed, resuming recognition immediately:", playErr)
-          handleAudioFinished()
+        await audio.play().catch((playErr) => {
+          console.warn("Audio autoplay blocked or failed, falling back to browser TTS:", playErr)
+          throw playErr
         })
       }
       return // Successfully used backend high-quality TTS
@@ -1872,7 +1863,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     if (speakRequestIdRef.current !== reqId || isRoundTwoRef.current || isRoundTwo) return
 
     window.speechSynthesis.cancel()
-    const utterance = new SpeechSynthesisUtterance(text)
+    const utterance = new SpeechSynthesisUtterance(cleanText)
 
     const targetLang = langMap[sessionDetail?.language] || 'en-IN'
     const targetLangPrefix = targetLang.split('-')[0]
@@ -1980,6 +1971,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       if (totalDuration > 0) {
         setGlobalCountdown(totalDuration / 2)
       }
+      setIsTimeExpired(false)
+      isTimeExpiredRef.current = false
     } catch (err) {
       console.error("Failed to start round 2:", err)
       isStartingRoundTwoRef.current = false
@@ -2021,7 +2014,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
     if (activeQuestion?.type !== 'coding') {
       const flushed = await flushWhisperTranscription()
-      if (flushed) safeTranscript = flushed
+      if (flushed && !safeTranscript) safeTranscript = flushed
     }
 
     // ── Save the final verbal answer before transitioning ────────────────────
@@ -2037,24 +2030,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     const token = monitoringTokenRef.current || monitoringToken || getCandidateSessionToken()
     if (token) answerForm.append('monitoring_token', token)
     try {
-      await api.post(`/save-answer`, answerForm, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        }
-      })
+      await api.post(`/save-answer`, answerForm)
     } catch (e) {
-      console.error("Failed to save answer during round transition:", e)
-      await Swal.fire({
-        icon: 'error',
-        title: 'Connection Error',
-        text: 'Your answer could not be saved — please check your connection and try again.',
-        confirmButtonText: 'Retry',
-        allowOutsideClick: false
-      })
-      // Restore the confirm modal so the candidate can retry
-      setShowRound2Confirm(true)
-      return
+      console.warn("Failed to save answer during round transition, continuing to next round:", e)
     }
 
     // Behavioral data save is best-effort; failure must not block transition
@@ -2073,6 +2051,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         noise_alerts: behavioralStatsRef.current.noiseAlerts
       })
     } catch (e) {
+      const errMsg = e.response?.data?.detail || e.message || 'Unknown error'
       console.error("Failed to save behavioral data during round transition:", e)
     }
 
@@ -2110,7 +2089,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
       if (currentQuestion.type !== 'coding') {
         const flushed = await flushWhisperTranscription()
-        if (flushed) safeTranscript = flushed
+        if (flushed && !safeTranscript) safeTranscript = flushed
       }
 
       // ── Low Response Rate Tracking ────────────────────────────────────────
@@ -2150,12 +2129,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         const token = monitoringTokenRef.current || monitoringToken || getCandidateSessionToken()
         if (token) answerForm.append('monitoring_token', token)
 
-        await api.post(`/save-answer`, answerForm, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-            ...(token ? { Authorization: `Bearer ${token}` } : {})
-          }
-        })
+        try {
+          await api.post(`/save-answer`, answerForm)
+        } catch (saveErr) {
+          console.warn("save-answer non-fatal error during question transition:", saveErr)
+        }
       }
 
       // Fire behavioral data save in background so question transition is instant
@@ -2172,23 +2150,32 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       }
       api.post(`/save-behavioral-data`, payload).catch(() => {})
 
-      if (currentQuestionIndex === questions.length - 1) {
-        const isCodingQ = currentQuestion.type === 'coding'
-        const isCaseStudyQ = currentQuestion.type === 'case_study'
+      // 1. Coding Question Submit
+      if (currentQuestion.type === 'coding') {
+        try {
+          await api.post(`/coding-round/submit`, {
+            interview_id: iid,
+            code: codeAnswer,
+            explanation: codeAnswer,
+            language: selectedLanguage
+          })
+        } catch (e) { }
+        handleSubmitInterview()
+        return
+      }
 
-        if (isCodingQ) {
-          try {
-            await api.post(`/coding-round/submit`, {
-              interview_id: iid,
-              code: codeAnswer,
-              explanation: codeAnswer,
-              language: selectedLanguage
-            })
-          } catch (e) { }
-          handleSubmitInterview()
-        } else if (isCaseStudyQ) {
-          handleSubmitInterview()
-        } else if (!isRoundTwo && sessionDetail?.interview_type !== 'Normal') {
+      // 2. Case Study Question (submit is handled in the case study block above)
+      if (currentQuestion.type === 'case_study' && currentQuestionIndex === questions.length - 1) {
+        handleSubmitInterview()
+        return
+      }
+
+      // 3. Strict Round Progression on Time Expiration (Section 5.2)
+      // When time is expired (globalCountdown <= 0 or pinned at 00:00), candidate finished answering.
+      // Strictly advance to Round 2 or Final Submission. NO new verbal questions may be served!
+      if (isTimeExpiredRef.current || (globalCountdown <= 0 && totalDuration > 0)) {
+        const iType = sessionDetail?.interview_type || 'Normal'
+        if (!isRoundTwo && (iType === 'Technical' || iType === 'Non-Technical')) {
           accumulatedTranscriptRef.current = ''
           currentSessionFinalRef.current = ''
           interimTextRef.current = ''
@@ -2203,67 +2190,100 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           behavioralStatsRef.current = { wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0, noiseAlerts: 0 }
           questionStartTimeRef.current = Date.now()
           startNextRound()
+          return
         } else {
-          // Time still remaining? Try to load pre-fetched questions seamlessly
-          if (isPrefetchingRef.current && globalCountdown > 30) {
-            Swal.fire({
-              title: 'Generating Next Question...',
-              html: 'Just a moment...',
-              allowOutsideClick: false,
-              didOpen: () => { Swal.showLoading() },
-              background: '#0f172a',
-              color: '#fff'
-            })
-            let waits = 0;
-            while (isPrefetchingRef.current && waits < 30) {
-              await new Promise(r => setTimeout(r, 500))
-              waits++;
-            }
-            Swal.close()
-          }
-
-          if (prefetchedQuestionsRef.current.length > 0 && globalCountdown > 30) {
-            const batch = prefetchedQuestionsRef.current
-            prefetchedQuestionsRef.current = []
-            const nextIdx = currentQuestionIndex + 1
-            setQuestions(prev => {
-              const updated = [...prev, ...batch]
-              return updated
-            })
-            accumulatedTranscriptRef.current = ''
-            currentSessionFinalRef.current = ''
-            interimTextRef.current = ''
-            whisperAudioChunksRef.current = []
-            whisperFinalizedTranscriptRef.current = ''
-            liveInterimGhostRef.current = ''
-            segmentHasSpeechRef.current = false
-            setTranscriptionText('')
-            setInterimTranscriptText('')
-            setCodeAnswer('')
-            setCodeOutput('')
-            behavioralStatsRef.current = { wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0, noiseAlerts: 0 }
-            setCurrentQuestionIndex(nextIdx)
-            questionStartTimeRef.current = Date.now()
-            const nextQ = questions[nextIdx] || batch[0]
-            if (!isRoundTwoRef.current && !isRoundTwo && !isStartingRoundTwoRef.current && nextQ && nextQ.type !== 'coding' && nextQ.type !== 'case_study' && nextQ.caseStudyIndex === undefined) {
-              speakAIQuestion(nextQ.text || nextQ.question || nextQ.prompt || '')
-            }
-          } else {
-            handleSubmitInterview()
-          }
+          handleSubmitInterview()
+          return
         }
-      } else {
-        // ── Pre-fetch next batch when on second-to-last question ──
-        const qsLen = questions.length
-        if (qsLen < 22 && !isPrefetchingRef.current && qsLen - currentQuestionIndex <= 2 && prefetchedQuestionsRef.current.length === 0) {
+      }
+
+      // 4. Time is NOT expired -> Continuous, Unlimited Adaptive Questions
+      if (currentQuestionIndex === questions.length - 1) {
+        // Candidate reached the end of loaded pool, but has round time remaining!
+        if (isPrefetchingRef.current) {
+          Swal.fire({
+            title: 'Generating Next Question...',
+            html: 'Curating the next domain question for you...',
+            allowOutsideClick: false,
+            didOpen: () => { Swal.showLoading() },
+            background: '#0f172a',
+            color: '#fff'
+          })
+          let waits = 0
+          while (isPrefetchingRef.current && waits < 20) {
+            await new Promise(r => setTimeout(r, 500))
+            waits++
+          }
+          Swal.close()
+        }
+
+        if (prefetchedQuestionsRef.current.length === 0 && !isPrefetchingRef.current) {
+          // Immediately fetch next questions from backend
           isPrefetchingRef.current = true
           const alreadyAskedIds = questions.map(q => String(q.id || '')).join(',')
           const fd = new FormData()
           fd.append('interview_id', iid)
           fd.append('asked_question_ids', alreadyAskedIds)
           fd.append('count', '5')
-          fetch(`${import.meta.env.VITE_API_URL || ''}/generate-more-questions`, { method: 'POST', body: fd })
-            .then(r => r.json())
+          try {
+            const data = await api.post('/generate-more-questions', fd).then(r => r.data)
+            if (data.questions && data.questions.length > 0) {
+              prefetchedQuestionsRef.current = data.questions
+            }
+          } catch (err) {
+            console.error("Failed to generate more questions on demand:", err)
+          } finally {
+            isPrefetchingRef.current = false
+          }
+        }
+
+        if (prefetchedQuestionsRef.current.length > 0) {
+          const batch = prefetchedQuestionsRef.current
+          prefetchedQuestionsRef.current = []
+          const nextIdx = currentQuestionIndex + 1
+          setQuestions(prev => [...prev, ...batch])
+          accumulatedTranscriptRef.current = ''
+          currentSessionFinalRef.current = ''
+          interimTextRef.current = ''
+          whisperAudioChunksRef.current = []
+          whisperFinalizedTranscriptRef.current = ''
+          liveInterimGhostRef.current = ''
+          segmentHasSpeechRef.current = false
+          setTranscriptionText('')
+          setInterimTranscriptText('')
+          setCodeAnswer('')
+          setCodeOutput('')
+          behavioralStatsRef.current = { wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0, noiseAlerts: 0 }
+          setCurrentQuestionIndex(nextIdx)
+          questionStartTimeRef.current = Date.now()
+          const nextQ = batch[0]
+          if (!isRoundTwoRef.current && !isRoundTwo && !isStartingRoundTwoRef.current && nextQ && nextQ.caseStudyIndex === undefined) {
+            speakAIQuestion(nextQ.text || nextQ.question || nextQ.prompt || '')
+          }
+          return
+        } else {
+          // Fallback if AI service cannot provide more: proceed to next round
+          const iType = sessionDetail?.interview_type || 'Normal'
+          if (!isRoundTwo && (iType === 'Technical' || iType === 'Non-Technical')) {
+            startNextRound()
+          } else {
+            handleSubmitInterview()
+          }
+          return
+        }
+      } else {
+        // Candidate is progressing through existing questions.
+        // Maintain Zero Dead-Air Pre-fetch Buffer: when <= 2 questions remain, pre-fetch next batch in background.
+        const qsLen = questions.length
+        if (!isPrefetchingRef.current && qsLen - currentQuestionIndex <= 2 && prefetchedQuestionsRef.current.length === 0) {
+          isPrefetchingRef.current = true
+          const alreadyAskedIds = questions.map(q => String(q.id || '')).join(',')
+          const fd = new FormData()
+          fd.append('interview_id', iid)
+          fd.append('asked_question_ids', alreadyAskedIds)
+          fd.append('count', '5')
+          api.post('/generate-more-questions', fd)
+            .then(r => r.data)
             .then(data => {
               if (data.questions && data.questions.length > 0) {
                 prefetchedQuestionsRef.current = data.questions
@@ -2290,13 +2310,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         setCurrentQuestionIndex(nextIdx)
         questionStartTimeRef.current = Date.now()
 
-        if (!isRoundTwoRef.current && !isRoundTwo && !isStartingRoundTwoRef.current && questions[nextIdx] && questions[nextIdx].type !== 'coding' && questions[nextIdx].type !== 'case_study' && questions[nextIdx].caseStudyIndex === undefined) {
+        if (!isRoundTwoRef.current && !isRoundTwo && !isStartingRoundTwoRef.current && questions[nextIdx] && questions[nextIdx].caseStudyIndex === undefined) {
           speakAIQuestion(questions[nextIdx].text || questions[nextIdx].question || questions[nextIdx].prompt || '')
         }
       }
     } catch (e) {
       const errMsg = e.response?.data?.detail || e.message || 'Unknown error'
-
       // If the session was already completed (e.g. by a concurrent timer or termination), ignore the error silently.
       if (e.response?.status === 403 && errMsg.toLowerCase().includes('completed')) {
         console.warn('Ignored 403 already completed during save-answer.')
@@ -2510,7 +2529,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         let finalAnswer = (transcriptionText || '').trim()
         if (currentQuestion.type !== 'coding') {
           const flushed = await flushWhisperTranscription()
-          if (flushed) finalAnswer = flushed
+          if (flushed && !finalAnswer) finalAnswer = flushed
         }
         const iid = interviewIdRef.current || sessionId
         const answerForm = new FormData()
@@ -2742,6 +2761,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     setCodeOutputState: setCodeOutput,
     globalCountdown,
     totalDuration,
+    isTimeExpired,
     isRoundTwo,
     setIsRoundTwo,
     showRound2Confirm,

@@ -11,11 +11,9 @@ import Swal from 'sweetalert2'
 import '../../Interview.css'
 import { motion } from 'framer-motion'
 import AccessDeniedScreen from '../../components/interview/AccessDeniedScreen'
-
 export const InterviewNonTechnical = () => {
   const interviewType = 'Non-Technical';
   const renderRoundTwoUI = null;
-
   const startRoundTwo = async ({
     verbalQuestionsLength,
     savedIndex,
@@ -35,13 +33,10 @@ export const InterviewNonTechnical = () => {
     })
     try {
       const payload = await api.post(`/case-study/start`, { interview_id: interviewId }, { timeout: 120000 }).then(r => r.data)
-
       const caseStudyQuestions = payload.case_study_round?.questions || payload.questions || []
-
       if (!caseStudyQuestions || caseStudyQuestions.length === 0) {
         throw new Error("No case study questions received from server.")
       }
-
       const formattedQs = caseStudyQuestions.map((q, idx) => {
         const text = `📁 CASE STUDY ROUND: ${q.skill_tested || 'Scenario'}\n\n${q.scenario}\n\nQuestion: ${q.question}`
         return {
@@ -57,7 +52,6 @@ export const InterviewNonTechnical = () => {
           evaluationCriteria: q.evaluation_criteria || []
         }
       })
-
       setQuestions(prev => {
         const nonCaseStudy = prev.filter(q => q.type !== 'case_study')
         return [...nonCaseStudy, ...formattedQs]
@@ -77,12 +71,9 @@ export const InterviewNonTechnical = () => {
       setCodingRoundLoading?.(false)
     }
   }
-
   const [searchParams] = useSearchParams()
   const sessionId = searchParams.get('session_id') || searchParams.get('session')
-
   const session = useInterviewSession(sessionId, interviewType, startRoundTwo)
-
   useEffect(() => {
     const enforceLightMode = () => {
       document.documentElement.classList.remove('dark')
@@ -100,7 +91,6 @@ export const InterviewNonTechnical = () => {
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme'] })
     return () => observer.disconnect()
   }, [])
-
   const {
     loading,
     showAllSet,
@@ -132,6 +122,7 @@ export const InterviewNonTechnical = () => {
     transcriptionText,
     interimTranscriptText,
     globalCountdown,
+    isTimeExpired,
     isRoundTwo,
     showRound2Confirm,
     setShowRound2Confirm,
@@ -160,20 +151,17 @@ export const InterviewNonTechnical = () => {
     promptScreenShare,
     isOnline
   } = session
-
   useEffect(() => {
     return () => {
       stopAudio?.()
     }
   }, [stopAudio])
-
   // ── Voice Cloning Setup State (UI only) ──────────────────────────────────
   const [vcStep, setVcStep] = useState('idle') // 'idle' | 'recording' | 'uploading' | 'done' | 'error'
   const [vcError, setVcError] = useState('')
   const [localVoiceId, setLocalVoiceId] = useState(null)
   const vcMediaRecorderRef = useRef(null)
   const vcChunksRef = useRef([])
-
   const startVcRecording = async () => {
     setVcStep('recording')
     setVcError('')
@@ -208,11 +196,9 @@ export const InterviewNonTechnical = () => {
       setVcStep('error')
     }
   }
-
   // ── Case Study Prep Mode ──────────────────────────────────────────────
   const [isPrepMode, setIsPrepMode] = useState(false)
   const [prepTimeLeft, setPrepTimeLeft] = useState(0)
-
   useEffect(() => {
     if (currentQuestion?.type === 'case_study') {
       setIsPrepMode(true)
@@ -231,7 +217,6 @@ export const InterviewNonTechnical = () => {
       }
     }
   }, [currentQuestionIndex, currentQuestion?.type, recognitionRef, isSpeechRecordingRef])
-
   useEffect(() => {
     let timer
     if (isPrepMode && prepTimeLeft > 0) {
@@ -248,11 +233,9 @@ export const InterviewNonTechnical = () => {
     }
     return () => clearInterval(timer)
   }, [isPrepMode, prepTimeLeft, recognitionRef, isSpeechRecordingRef])
-
   const stopVcRecording = () => {
     if (vcMediaRecorderRef.current?.state === 'recording') vcMediaRecorderRef.current.stop()
   }
-
   if (loading) {
     return (
       <div className="flex justify-center items-center h-screen flex-col gap-4 text-slate-600">
@@ -261,7 +244,6 @@ export const InterviewNonTechnical = () => {
       </div>
     )
   }
-
   if (error) {
     return (
       <AccessDeniedScreen
@@ -272,7 +254,6 @@ export const InterviewNonTechnical = () => {
       />
     )
   }
-
   if (isCompleted) {
     return (
       <div className="flex justify-center items-center h-screen flex-col p-6 text-center">
@@ -295,7 +276,6 @@ export const InterviewNonTechnical = () => {
       </div>
     )
   }
-
   // Render Disclaimer Page first
   if (!isDisclaimerAccepted) {
     return (
@@ -305,7 +285,6 @@ export const InterviewNonTechnical = () => {
             <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Secure Interview Environment</h2>
             <p className="text-slate-500 text-sm mt-1">Acme Proctoring Portal — {sessionDetail?.interview_title}</p>
           </div>
-
           <div className="flex flex-col gap-3.5 bg-slate-50 p-5 rounded-2xl border border-slate-200 text-sm">
             <strong className="text-warning block">⚠️ Security Guidelines & Integrity Checks:</strong>
             <ul className="pl-5 flex flex-col gap-2 text-slate-600 list-disc">
@@ -315,7 +294,6 @@ export const InterviewNonTechnical = () => {
               <li>Please complete the assessment individually in a quiet room.</li>
             </ul>
           </div>
-
           <div className="flex gap-2.5 items-center">
             <input
               type="checkbox"
@@ -326,7 +304,6 @@ export const InterviewNonTechnical = () => {
             />
             <label htmlFor="agree" className="cursor-pointer font-semibold text-sm text-slate-900 select-none">I agree to follow the proctoring guidelines above.</label>
           </div>
-
           <button
             onClick={acceptDisclaimer}
             disabled={!agreeChecked}
@@ -335,7 +312,6 @@ export const InterviewNonTechnical = () => {
             I Understand & Start Interview
           </button>
         </div>
-
         {/* Device Check Modal */}
         {session.showDeviceCheck && (
           <DeviceCheckModal 
@@ -349,7 +325,6 @@ export const InterviewNonTechnical = () => {
       </div>
     )
   }
-
   // ── Voice Clone Setup Screen ──────────────────────────────────────────────
   if (showVoiceCloneSetup) return (
     <div style={{ minHeight: '100vh', background: '#0a0f1e', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white', padding: '24px', fontFamily: "'Inter',sans-serif" }}>
@@ -363,12 +338,10 @@ export const InterviewNonTechnical = () => {
         </div>
         <h1 style={{ fontSize: '28px', fontWeight: '900', marginBottom: '8px' }}>Voice Cloning Setup</h1>
         <p style={{ color: '#94a3b8', marginBottom: '32px', fontSize: '15px' }}>Read the sentence below aloud so we can clone your voice for the AI interviewer.</p>
-
         <div style={{ background: '#0d1117', border: '1px solid rgba(139,92,246,0.3)', borderRadius: '16px', padding: '24px', marginBottom: '28px' }}>
           <p style={{ fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '2px', color: '#a78bfa', marginBottom: '12px' }}>Read this clearly:</p>
           <p style={{ color: 'white', fontSize: '18px', fontWeight: '600', lineHeight: '1.6', fontStyle: 'italic' }}>"The quick brown fox jumps over the lazy dog. Please read this sentence clearly."</p>
         </div>
-
         {vcStep === 'recording' && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', height: '40px' }}>
@@ -380,14 +353,12 @@ export const InterviewNonTechnical = () => {
             </button>
           </div>
         )}
-
         {vcStep === 'uploading' && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
             <div style={{ width: '44px', height: '44px', borderRadius: '50%', border: '4px solid rgba(139,92,246,0.3)', borderTop: '4px solid #7c3aed', animation: 'spin 0.8s linear infinite' }} />
             <p style={{ color: '#a78bfa', fontSize: '14px' }}>Cloning your voice with ElevenLabs AI...</p>
           </div>
         )}
-
         {vcStep === 'done' && (
           <div style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '16px', padding: '20px', marginBottom: '20px', color: '#34d399' }}>
             <div style={{ fontSize: '32px', marginBottom: '8px' }}>✅</div>
@@ -395,14 +366,12 @@ export const InterviewNonTechnical = () => {
             <p style={{ fontSize: '13px', color: '#6ee7b7' }}>The AI will now speak in your voice during the interview.</p>
           </div>
         )}
-
         {vcStep === 'error' && (
           <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '16px', padding: '20px', marginBottom: '20px', color: '#f87171' }}>
             <div style={{ fontSize: '24px', marginBottom: '8px' }}>⚠️</div>
             <p style={{ fontSize: '13px' }}>{vcError || 'An error occurred. The interview will use the default AI voice.'}</p>
           </div>
         )}
-
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {vcStep === 'idle' && (
             <button onClick={startVcRecording} style={{ padding: '16px', background: 'linear-gradient(90deg,#7c3aed,#6366f1)', color: 'white', borderRadius: '12px', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '16px', boxShadow: '0 4px 30px rgba(139,92,246,0.4)' }}>
@@ -423,7 +392,6 @@ export const InterviewNonTechnical = () => {
       </div>
     </div>
   )
-
   // Render Video uploading progress & "All Set!" screen
   if (showAllSet || uploadingText) {
     return (
@@ -433,7 +401,6 @@ export const InterviewNonTechnical = () => {
             <h1 style={{ color: '#6366f1', fontSize: '3rem', marginBottom: '0.5rem', fontWeight: '800' }}>🎉 Thank You!</h1>
             <p style={{ fontSize: '1.25rem', color: '#4b5563', marginBottom: '3rem', fontWeight: '500' }}>Your interview has been successfully submitted.</p>
           </div>
-
           {!showAllSet ? (
             <div style={{ background: '#f8fafc', padding: '2.5rem', borderRadius: '16px', border: '1px dashed #cbd5e1', maxWidth: '500px', margin: '0 auto' }}>
               <div style={{ fontSize: '3rem', marginBottom: '1.5rem', animation: 'spin 2s linear infinite' }}>⏳</div>
@@ -451,7 +418,6 @@ export const InterviewNonTechnical = () => {
                 <div style={{ fontSize: '0.85rem', color: '#6366f1', fontWeight: '700' }}>{uploadingText || 'Preparing video file...'}</div>
                 <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '600' }}>Est: 1-2 mins</div>
               </div>
-
               {showSkipButton && (
                 <div style={{ marginTop: '1.5rem', fontSize: '0.8rem', color: '#64748b', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
                   Taking too long? <a href="#" onClick={(e) => { e.preventDefault(); if (skipCountdown <= 0) handleSkipUpload(); }} style={{ color: skipCountdown <= 0 ? '#6366f1' : '#94a3b8', textDecoration: skipCountdown <= 0 ? 'underline' : 'none', fontWeight: '600', cursor: skipCountdown <= 0 ? 'pointer' : 'not-allowed' }}>Finish & Exit anyway</a>
@@ -481,18 +447,14 @@ export const InterviewNonTechnical = () => {
       </div>
     )
   }
-
   const rawQuestionText = currentQuestion?.text || currentQuestion?.question || currentQuestion?.prompt || ''
   const currentQuestionText = rawQuestionText.replace(/^\[[^\]]+\]\s*/, '').trim()
-
   const displayQuestionNum = currentQuestion?.caseStudyIndex !== undefined 
     ? currentQuestion.caseStudyIndex + 1 
     : currentQuestionIndex + 1
-
   const totalDisplayQuestions = currentQuestion?.type === 'case_study'
     ? questions.filter(q => q.type === 'case_study').length
     : questions.filter(q => q.type !== 'case_study').length
-
   return (
     <div className={currentQuestion?.type === 'coding' ? "w-screen h-screen p-0 m-0 max-w-none overflow-hidden flex flex-col" : "min-h-screen bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-slate-50 via-white to-indigo-50/40 text-slate-900 overflow-hidden flex flex-col relative"}>
       {/* Phase 3: Offline warning banner */}
@@ -502,7 +464,6 @@ export const InterviewNonTechnical = () => {
           <span>You are offline. Reconnecting... Your answers will be saved when connection is restored.</span>
         </div>
       )}
-
       {/* ── Proctoring Alert Pills (portal-mounted, never overlaps page content) ── */}
       <ProctoringAlerts
         faceAlertCount={faceAlertCount}
@@ -512,7 +473,6 @@ export const InterviewNonTechnical = () => {
         proctoringAlert={proctoringAlert}
         modelsFailed={modelsFailed}
       />
-
       {fullscreenWarning && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[99998] flex items-center justify-center p-4">
           <div className="bg-[#161c2d] border border-white/10 rounded-2xl shadow-2xl p-6 max-w-md w-full flex flex-col items-center gap-4 text-center animate-in fade-in zoom-in duration-200">
@@ -542,7 +502,6 @@ export const InterviewNonTechnical = () => {
           </div>
         </div>
       )}
-
       {screenShareWarning && screenShareViolations < 3 && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[99998] flex items-center justify-center p-4">
           <div className="bg-[#161c2d] border border-white/10 rounded-2xl shadow-2xl p-6 max-w-md w-full flex flex-col items-center gap-4 text-center animate-in fade-in zoom-in duration-200">
@@ -567,7 +526,6 @@ export const InterviewNonTechnical = () => {
           </div>
         </div>
       )}
-
       {currentQuestion?.type === 'coding' ? (
         renderRoundTwoUI ? renderRoundTwoUI({ ...session, sessionId }) : null
       ) : (
@@ -580,7 +538,6 @@ export const InterviewNonTechnical = () => {
               </linearGradient>
             </defs>
           </svg>
-
           <div className="ip-left flex flex-col gap-4 h-full overflow-y-auto pr-1 scrollbar-none">
             {/* AI Status Card */}
             <div className="bg-white/60 backdrop-blur-2xl border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-2xl p-5 flex items-center gap-4 transition-all duration-300 hover:shadow-lg hover:border-indigo-50">
@@ -613,7 +570,6 @@ export const InterviewNonTechnical = () => {
                 )}
               </div>
             </div>
-
             {/* Timer Card */}
             <div className="bg-white/60 backdrop-blur-2xl border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-[24px] p-6 flex flex-col items-center gap-4 transition-all duration-300 hover:shadow-lg">
               <div className="relative w-28 h-28">
@@ -622,22 +578,36 @@ export const InterviewNonTechnical = () => {
                   <circle className="fill-none stroke-[8px] stroke-[url(#timerGradient)] [stroke-linecap:round] [stroke-dasharray:295.3] [stroke-dashoffset:0] transition-[stroke-dashoffset] duration-1000 ease-linear" cx="55" cy="55" r="47" />
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-xl font-extrabold text-slate-800 font-mono leading-none">
-                    {Math.floor(globalCountdown / 60).toString().padStart(2, '0')}:{(globalCountdown % 60).toString().padStart(2, '0')}
-                  </span>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">Remaining</span>
+                  {isTimeExpired || globalCountdown <= 0 ? (
+                    <>
+                      <span className="text-xl font-extrabold text-amber-500 font-mono leading-none animate-pulse">
+                        00:00
+                      </span>
+                      <span className="text-[9px] text-amber-600 font-bold tracking-tight mt-1 text-center px-1">
+                        Finishing current answer
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-xl font-extrabold text-slate-800 font-mono leading-none">
+                        {Math.floor(globalCountdown / 60).toString().padStart(2, '0')}:{(globalCountdown % 60).toString().padStart(2, '0')}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">Remaining</span>
+                    </>
+                  )}
                 </div>
               </div>
-
               {!isRoundTwo && sessionDetail?.interview_type !== 'Normal' && (
                 <button
-                  onClick={handleStartRound2Click}
+                  onClick={() => {
+                    stopAudio?.()
+                    handleStartRound2Click()
+                  }}
                   className="w-full py-3 px-4 rounded-xl font-bold text-xs bg-indigo-600 hover:bg-indigo-500 text-white transition-all cursor-pointer border-none shadow-md flex items-center justify-center gap-2 hover:-translate-y-0.5"
                 >
-                  🚀 Start Round 2 &rarr;
+                  📊 Switch to Case Study (Round 2) &rarr;
                 </button>
               )}
-
               <button 
                 className="w-full py-3 px-4 rounded-xl font-bold text-xs transition-all border-none shadow-md flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white cursor-pointer hover:-translate-y-0.5"
                 onClick={(e) => handleFinishEarly(e)}
@@ -646,7 +616,6 @@ export const InterviewNonTechnical = () => {
                 ⏹ Finish Interview
               </button>
             </div>
-
             {/* AI insights Card */}
             <div className="bg-white/60 backdrop-blur-2xl border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-[24px] p-6 transition-all duration-300 hover:shadow-lg">
               <h4 className="m-0 mb-4 text-[13px] font-bold text-slate-800 tracking-wide uppercase">AI Live Evaluation</h4>
@@ -660,7 +629,6 @@ export const InterviewNonTechnical = () => {
                   <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-1000" style={{ width: `${aiInsights.clarity}%` }}></div>
                 </div>
               </div>
-
               <div className="mb-4">
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-[11px] font-extrabold text-slate-500 tracking-wider">
@@ -674,7 +642,6 @@ export const InterviewNonTechnical = () => {
                   <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-1000" style={{ width: `${aiInsights.technicalDepth}%` }}></div>
                 </div>
               </div>
-
               <div>
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-[11px] font-extrabold text-slate-500 tracking-wider">
@@ -689,7 +656,6 @@ export const InterviewNonTechnical = () => {
                 </div>
               </div>
             </div>
-
             {/* Audio canvas visualizer */}
             <div className="bg-white/60 backdrop-blur-2xl border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-[24px] p-6 transition-all duration-300 hover:shadow-lg flex flex-col gap-2">
               <h4 className="m-0 text-[13px] font-bold text-slate-800 tracking-wide uppercase">Voice Monitor</h4>
@@ -698,7 +664,6 @@ export const InterviewNonTechnical = () => {
               </div>
             </div>
           </div>
-
           <div className="ip-right flex flex-col gap-4 h-full min-h-0">
             {isPrepMode ? (
               <div className="bg-white/70 backdrop-blur-3xl border border-white rounded-[2rem] p-8 shadow-[0_8px_40px_rgb(0,0,0,0.08)] flex flex-col gap-6 h-full min-h-0 overflow-y-auto">
@@ -713,7 +678,6 @@ export const InterviewNonTechnical = () => {
                     Question <span className="text-indigo-600 font-black">{displayQuestionNum}</span> of {totalDisplayQuestions}
                   </span>
                 </div>
-
                 <div className="flex flex-col gap-2">
                   <h3 className="text-sm font-bold text-indigo-600 uppercase tracking-widest flex items-center gap-2 m-0">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg> 
@@ -723,7 +687,6 @@ export const InterviewNonTechnical = () => {
                     {currentQuestion?.scenario || 'No scenario details available.'}
                   </div>
                 </div>
-
                 <div className="flex flex-col gap-3">
                   <h3 className="text-sm font-bold text-indigo-600 uppercase tracking-widest flex items-center gap-2 m-0">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
@@ -736,7 +699,6 @@ export const InterviewNonTechnical = () => {
                     </div>
                   </div>
                 </div>
-
                 <div className="bg-[#f8f6ff] border border-indigo-100 rounded-2xl p-5 mt-2">
                   <h3 className="text-[13px] font-bold text-indigo-600 flex items-center gap-2 mb-3 m-0 uppercase tracking-wide">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
@@ -749,7 +711,6 @@ export const InterviewNonTechnical = () => {
                     <li>Present your case like you would in a real interview.</li>
                   </ul>
                 </div>
-
                 <div className="flex items-center justify-center mt-auto pt-4">
                   <button
                     onClick={() => {
@@ -770,7 +731,7 @@ export const InterviewNonTechnical = () => {
                 {/* Question Card */}
                 <div className="bg-white/70 backdrop-blur-2xl border border-white rounded-[24px] p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.06)] relative overflow-hidden transition-all duration-300 hover:shadow-xl">
                   <div className="text-[11px] text-slate-400 font-extrabold tracking-wider uppercase mb-4">
-                    Question <span id="questionNumber" className="text-indigo-600 font-black">{displayQuestionNum}</span> of <span id="totalQuestions">{totalDisplayQuestions}</span>
+                    Question <span id="questionNumber" className="text-indigo-600 font-black">{displayQuestionNum}</span>
                   </div>
                   <div className="flex gap-4 items-start">
                     <div className="w-1.5 bg-indigo-600 self-stretch rounded-full shrink-0 min-h-[60px]" />
@@ -802,7 +763,7 @@ export const InterviewNonTechnical = () => {
                     ) : (
                       <p className="flex-1 text-slate-800 text-base md:text-lg font-semibold leading-relaxed m-0">{currentQuestionText || 'Question is loading...'}</p>
                     )}
-                    {!isRoundTwo && currentQuestion?.type !== 'case_study' && currentQuestion?.type !== 'coding' && (
+                    {!isRoundTwo && currentQuestion?.caseStudyIndex === undefined && (
                       <button 
                         className="bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-indigo-600 border border-slate-200 hover:border-indigo-100 cursor-pointer p-2.5 rounded-full transition-all duration-200 shrink-0" 
                         onClick={() => speakAIQuestion(currentQuestionText)}
@@ -816,7 +777,6 @@ export const InterviewNonTechnical = () => {
                     )}
                   </div>
                 </div>
-
                 {/* Transcript Card */}
                 <div className="bg-white/80 backdrop-blur-3xl border border-white rounded-[32px] p-6 md:p-8 shadow-[0_8px_40px_rgb(0,0,0,0.08)] flex flex-col h-[300px] shrink-0 transition-all duration-300 hover:shadow-xl">
                   <div className="flex items-center justify-between mb-3">
@@ -838,30 +798,42 @@ export const InterviewNonTechnical = () => {
                     {transcriptionText || <span style={{ color: '#94a3b8' }}>Your speech will appear here automatically...</span>}
                   </div>
                 </div>
-
                 {/* Navigation buttons */}
-                <div className="flex gap-3 justify-center items-center mt-2 shrink-0">
-                  {currentQuestionIndex === questions.length - 1 ? (
+                <div className="flex flex-wrap gap-3 justify-center items-center mt-2 shrink-0">
+                  {isTimeExpired || (globalCountdown <= 0 && totalDuration > 0) ? (
                     !isRoundTwo && sessionDetail?.interview_type !== 'Normal' ? (
                       <button
-                        onClick={handleStartRound2Click}
-                        className="px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-600/30 hover:shadow-indigo-600/40 transition-all duration-200 cursor-pointer border-none flex items-center gap-2"
+                        className="px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-600/30 hover:shadow-indigo-600/40 transition-all duration-200 cursor-pointer border-none flex items-center gap-2 animate-pulse"
+                        onClick={() => {
+                          stopAudio?.()
+                          proceedToRoundTwo()
+                        }}
                       >
                         📊 Switch to Case Study (Round 2) &rarr;
                       </button>
                     ) : (
-                      <button 
-                        className="px-8 py-3.5 rounded-xl font-bold text-sm text-white transition-all duration-200 border-none bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/20 hover:shadow-red-500/30 cursor-pointer"
+                      <button
+                        className="px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-red-600 hover:bg-red-700 shadow-lg shadow-red-600/30 hover:shadow-red-600/40 transition-all duration-200 cursor-pointer border-none flex items-center gap-2"
                         onClick={(e) => handleFinishEarly(e)}
-                        title="Finish Interview"
                       >
-                        Finish Interview
+                        Finish & Submit Interview
                       </button>
                     )
+                  ) : currentQuestionIndex === questions.length - 1 && isRoundTwo ? (
+                    <button 
+                      className="px-8 py-3.5 rounded-xl font-bold text-sm text-white transition-all duration-200 border-none bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/20 hover:shadow-red-500/30 cursor-pointer"
+                      onClick={(e) => handleFinishEarly(e)}
+                      title="Finish Interview"
+                    >
+                      Finish Interview
+                    </button>
                   ) : (
                     <button 
                       className="px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30 transition-all duration-200 cursor-pointer border-none"
-                      onClick={handleNextQuestion}
+                      onClick={() => {
+                        stopAudio?.()
+                        handleNextQuestion()
+                      }}
                     >
                       Next &rarr;
                     </button>
@@ -872,7 +844,6 @@ export const InterviewNonTechnical = () => {
           </div>
         </div>
       )}
-
       {/* Floating Camera Preview Widget */}
       {isDisclaimerAccepted && !showAllSet && !loading && (
         <motion.div 
@@ -898,7 +869,6 @@ export const InterviewNonTechnical = () => {
           )}
         </motion.div>
       )}
-
       {showRound2Confirm && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 transform transition-all text-left">

@@ -344,16 +344,18 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     dispatch(loadAdminProfile())
 
     const poll = () => {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState === 'visible' && activeTab === 'dashboard') {
         dispatch(loadDashboardData(selectedAdminId))
       }
     }
 
-    poll() // immediate first fetch
+    if (activeTab === 'dashboard') {
+      poll() // immediate first fetch only when viewing dashboard
+    }
     const statsInterval = setInterval(poll, 60000)
 
     return () => clearInterval(statsInterval)
-  }, [dispatch, token, selectedAdminId])
+  }, [dispatch, token, selectedAdminId, activeTab])
 
   useEffect(() => {
     if (!token || (adminUser?.role !== 'superadmin' && role !== 'superadmin')) return

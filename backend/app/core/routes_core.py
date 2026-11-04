@@ -285,26 +285,52 @@ def _require_candidate_session(
     allow_terminated: bool = False,
 ) -> Dict[str, Any]:
     """Authorize a candidate operation against the session-scoped bearer token."""
+    target_id = link_id or interview_id
     if not credentials:
-        if (allow_completed or allow_terminated) and link_id:
-            # Fall back to validating by link_id if session exists and is active/completed
+        if target_id:
+            query = [
+                {"link_id": str(target_id)},
+                {"interview_id": str(target_id)}
+            ]
+            if ObjectId.is_valid(target_id):
+                query.append({"_id": ObjectId(target_id)})
             session = interview_sessions_collection.find_one(
-                {"link_id": str(link_id)},
-                {"link_id": 1, "interview_id": 1, "status": 1, "is_deactivated": 1},
+                {"$or": query},
+                {"link_id": 1, "interview_id": 1, "status": 1, "is_deactivated": 1, "company_id": 1, "created_by": 1},
             )
             if session and not session.get("is_deactivated"):
+                session_status = str(session.get("status") or "").lower()
+                if session_status in ("cancelled", "expired"):
+                    raise HTTPException(status_code=403, detail="This interview session is no longer active")
+                if not allow_terminated and session_status == "terminated":
+                    raise HTTPException(status_code=403, detail="This interview session was terminated")
+                if not allow_completed and session_status == "completed":
+                    raise HTTPException(status_code=403, detail="This interview session is already completed")
                 return session
         raise HTTPException(status_code=401, detail="Candidate session token is required")
 
     try:
         payload = jwt.decode(credentials.credentials, JWT_SECRET_KEY, algorithms=[ALGORITHM])
     except jwt.PyJWTError as exc:
-        if (allow_completed or allow_terminated) and link_id:
+        if target_id:
+            query = [
+                {"link_id": str(target_id)},
+                {"interview_id": str(target_id)}
+            ]
+            if ObjectId.is_valid(target_id):
+                query.append({"_id": ObjectId(target_id)})
             session = interview_sessions_collection.find_one(
-                {"link_id": str(link_id)},
-                {"link_id": 1, "interview_id": 1, "status": 1, "is_deactivated": 1},
+                {"$or": query},
+                {"link_id": 1, "interview_id": 1, "status": 1, "is_deactivated": 1, "company_id": 1, "created_by": 1},
             )
             if session and not session.get("is_deactivated"):
+                session_status = str(session.get("status") or "").lower()
+                if session_status in ("cancelled", "expired"):
+                    raise HTTPException(status_code=403, detail="This interview session is no longer active")
+                if not allow_terminated and session_status == "terminated":
+                    raise HTTPException(status_code=403, detail="This interview session was terminated")
+                if not allow_completed and session_status == "completed":
+                    raise HTTPException(status_code=403, detail="This interview session is already completed")
                 return session
         raise HTTPException(status_code=401, detail="Invalid or expired candidate session token") from exc
 
@@ -478,9 +504,26 @@ def sync_session_status(session: dict, current_time: datetime = None) -> str:
                 if exp_dt.tzinfo is None:
                     exp_dt = exp_dt.replace(tzinfo=timezone.utc)
                 if current_time > exp_dt:
-                    status = "expired"
-                    if "_id" in session:
-                        interview_sessions_collection.update_one({"_id": session["_id"]}, {"$set": {"status": "expired"}})
+                    has_answers = False
+                    try:
+                        from app.db.mongo_db import answers_collection
+                        int_id = session.get("interview_id") or session.get("link_id")
+                        if int_id and answers_collection.count_documents({"interview_id": int_id}, limit=1) > 0:
+                            has_answers = True
+                    except Exception:
+                        pass
+
+                    if has_answers:
+                        status = "completed"
+                        if "_id" in session:
+                            interview_sessions_collection.update_one(
+                                {"_id": session["_id"]},
+                                {"$set": {"status": "completed", "completion_reason": "auto_completed_timeout"}}
+                            )
+                    else:
+                        status = "expired"
+                        if "_id" in session:
+                            interview_sessions_collection.update_one({"_id": session["_id"]}, {"$set": {"status": "expired"}})
                     session["status"] = status
             except Exception:
                 pass
@@ -514,9 +557,26 @@ def sync_session_status(session: dict, current_time: datetime = None) -> str:
                 duration_mins = int(session.get("interview_duration") or 30)
                 buffer_mins = max(120, duration_mins * 2)
                 if (current_time - time_ref).total_seconds() > (buffer_mins * 60):
-                    status = "expired"
-                    if "_id" in session:
-                        interview_sessions_collection.update_one({"_id": session["_id"]}, {"$set": {"status": "expired"}})
+                    has_answers = False
+                    try:
+                        from app.db.mongo_db import answers_collection
+                        int_id = session.get("interview_id") or session.get("link_id")
+                        if int_id and answers_collection.count_documents({"interview_id": int_id}, limit=1) > 0:
+                            has_answers = True
+                    except Exception:
+                        pass
+
+                    if has_answers:
+                        status = "completed"
+                        if "_id" in session:
+                            interview_sessions_collection.update_one(
+                                {"_id": session["_id"]},
+                                {"$set": {"status": "completed", "completion_reason": "auto_completed_timeout"}}
+                            )
+                    else:
+                        status = "expired"
+                        if "_id" in session:
+                            interview_sessions_collection.update_one({"_id": session["_id"]}, {"$set": {"status": "expired"}})
                     session["status"] = status
             except Exception:
                 pass
@@ -538,26 +598,56 @@ def get_or_create_candidate(name: str) -> str:
 
 
 def load_interview_from_db(interview_id: str) -> Optional[Dict[str, Any]]:
-    row = interviews_collection.find_one({"id": interview_id})
+    from app.db.mongo_db import interviews_collection, interview_sessions_collection
+    row = interviews_collection.find_one({"$or": [{"id": interview_id}, {"link_id": interview_id}]})
+    session_row = None
     if not row:
+        session_row = interview_sessions_collection.find_one({"$or": [{"link_id": interview_id}, {"interview_id": interview_id}]})
+        if session_row:
+            actual_id = session_row.get("interview_id")
+            if actual_id:
+                row = interviews_collection.find_one({"$or": [{"id": actual_id}, {"link_id": actual_id}]})
+    
+    if not row and not session_row:
         return None
 
+    target_doc = row or session_row or {}
     try:
-        loaded_questions = json.loads(row.get("questions", "[]"))
+        raw_q = target_doc.get("questions")
+        if isinstance(raw_q, list):
+            loaded_questions = raw_q
+        elif isinstance(raw_q, str):
+            loaded_questions = json.loads(raw_q)
+        else:
+            loaded_questions = []
     except Exception:
         loaded_questions = []
 
     interview = {
-        "id": interview_id,
-        "source": row.get("source"),
-        "profile_text": row.get("profile_text", ""),
+        "id": (row or {}).get("id") or interview_id,
+        "link_id": (session_row or {}).get("link_id") or target_doc.get("link_id") or interview_id,
+        "source": target_doc.get("source"),
+        "profile_text": target_doc.get("profile_text", "") or target_doc.get("resume_text", "") or target_doc.get("job_description", ""),
+        "job_description": target_doc.get("job_description", ""),
+        "resume_text": target_doc.get("resume_text", ""),
+        "ai_instructions": target_doc.get("ai_instructions", ""),
         "questions": loaded_questions,
         "answers": {},
-        "created_at": row.get("created_at"),
-        "coding_round": row.get("coding_round"),
-        "case_study_round": row.get("case_study_round"),
+        "created_at": target_doc.get("created_at"),
+        "coding_round": target_doc.get("coding_round"),
+        "case_study_round": target_doc.get("case_study_round"),
+        "interview_type": target_doc.get("interview_type", "Technical"),
+        "industry": target_doc.get("industry") or target_doc.get("industry_type") or "General",
+        "language": target_doc.get("language", "English"),
+        "case_study_count": target_doc.get("case_study_count", 3),
     }
     set_session(interview_id, interview)
+    actual_id = interview.get("id")
+    if actual_id and actual_id != interview_id:
+        set_session(actual_id, interview)
+    sess_link_id = interview.get("link_id")
+    if sess_link_id and sess_link_id != interview_id:
+        set_session(sess_link_id, interview)
     return interview
 
 
@@ -595,9 +685,13 @@ def persist_coding_round(interview_id: str, coding_round: Dict[str, Any]) -> Non
     if interview:
         interview["coding_round"] = coding_round
         set_session(interview_id, interview)
+        if interview.get("id"):
+            set_session(interview["id"], interview)
+        if interview.get("link_id"):
+            set_session(interview["link_id"], interview)
     try:
-        interviews_collection.update_one(
-            {"id": interview_id},
+        interviews_collection.update_many(
+            {"$or": [{"id": interview_id}, {"link_id": interview_id}]},
             {"$set": {"coding_round": coding_round}},
             upsert=False,
         )
@@ -605,8 +699,8 @@ def persist_coding_round(interview_id: str, coding_round: Dict[str, Any]) -> Non
         print(f"[persist_coding_round] Error updating interviews_collection: {e}")
 
     try:
-        interview_sessions_collection.update_one(
-            {"$or": [{"link_id": interview_id}, {"id": interview_id}, {"candidate_id": interview_id}]},
+        interview_sessions_collection.update_many(
+            {"$or": [{"link_id": interview_id}, {"interview_id": interview_id}, {"id": interview_id}, {"candidate_id": interview_id}]},
             {"$set": {"coding_round": coding_round}},
             upsert=False,
         )

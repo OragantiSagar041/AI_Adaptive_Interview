@@ -278,7 +278,15 @@ export const useInterviewMedia = ({
 
       // Clear the ghost interim text once committed Whisper catches up
       liveInterimGhostRef.current = ''
-      setTranscriptionText(formatCandidateName(merged, candidateNameRef.current))
+      // Only set text if the candidate does NOT already have a live transcribed answer from Web Speech.
+      // Never overwrite or rewrite an answer that was already correctly transcribed while speaking!
+      setTranscriptionText(prevText => {
+        const existing = (prevText || '').trim()
+        if (!existing) {
+          return formatCandidateName(merged, candidateNameRef.current)
+        }
+        return existing
+      })
     } catch (err) {
       console.warn('[STT] Whisper segment transcribe error:', err?.message)
     }
@@ -308,14 +316,16 @@ export const useInterviewMedia = ({
     return prev + ' ' + next
   }
 
-  // Flushes any in-progress segment and waits for all pending Whisper calls
+  // Flushes any in-progress segment and waits for all pending Whisper calls (fail-safe with timeouts)
   const flushWhisperTranscription = async () => {
     if (segmentRecorderRef.current && segmentRecorderRef.current.state !== 'inactive') {
       const recorder = segmentRecorderRef.current
       const chunksSnapshot = segmentChunksRef.current
       const hadSpeech = segmentHasSpeechRef.current && (segmentPeakRmsRef.current >= SEGMENT_MIN_PEAK_RMS)
       await new Promise(resolve => {
+        const safetyTimer = setTimeout(resolve, 600)
         recorder.onstop = () => {
+          clearTimeout(safetyTimer)
           if (hadSpeech) {
             const blob = new Blob(chunksSnapshot, { type: 'audio/webm' })
             segmentTranscribeChainRef.current = segmentTranscribeChainRef.current
@@ -324,12 +334,15 @@ export const useInterviewMedia = ({
           }
           resolve()
         }
-        try { recorder.stop() } catch (_) { resolve() }
+        try { recorder.stop() } catch (_) { clearTimeout(safetyTimer); resolve() }
       })
     }
-    // Wait for all queued segment transcriptions to settle
+    // Wait for all queued segment transcriptions to settle (with a 1.5s timeout so it never hangs)
     try {
-      await segmentTranscribeChainRef.current
+      await Promise.race([
+        segmentTranscribeChainRef.current,
+        new Promise(resolve => setTimeout(resolve, 1500))
+      ])
     } catch (_) { }
     return whisperFinalizedTranscriptRef.current.trim()
   }

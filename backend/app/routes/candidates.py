@@ -2245,23 +2245,13 @@ async def start_session_interview(link_id: str = Form(...)):
                     }
     
     # Always generate a full pool of questions — exactly 22 questions for the interview
-    num_questions_to_generate = 22
+    # Instant Start: Seed Pool Generation (1 warm-up intro, 2 core skill checks, 1 closing buffer)
+    SEED_POOL_COUNT = 4
+    num_questions_to_generate = SEED_POOL_COUNT
     
     # Generate Questions
     source = "job_description" if job_description and len(job_description) > 50 else "resume"
     content_str = job_description if source == "job_description" else resume_text
-    
-    import asyncio
-    from starlette.concurrency import run_in_threadpool
-    try:
-        profile_analysis = await asyncio.wait_for(
-            run_in_threadpool(analyze_resume_or_jd, content_str), 
-            timeout=15.0
-        )
-    except asyncio.TimeoutError:
-        profile_analysis = {"error": "Analysis timed out"}
-    except Exception as e:
-        profile_analysis = {"error": str(e)}
     
     hr_screening = row.get("hr_screening")
     custom_questions_text = row.get("custom_questions", "")
@@ -2300,8 +2290,9 @@ async def start_session_interview(link_id: str = Form(...)):
     if language != "English":
         ai_instructions_text += f"\n\nCRITICAL REQUIREMENT: You MUST generate all questions and interact STRICTLY in the {language} language. Do NOT use English."
     
-    # ── Strategy 3: Load pre-cached questions if already generated ──────────
+    # ── Strategy 3: Load pre-cached questions if already generated (Fast Path) ──
     pre_cached_questions = row.get("pre_generated_questions")
+    questions = None
     if pre_cached_questions:
         try:
             loaded_qs = json.loads(pre_cached_questions) if isinstance(pre_cached_questions, str) else pre_cached_questions
@@ -2324,32 +2315,51 @@ async def start_session_interview(link_id: str = Form(...)):
                 if loaded_qs:
                     questions = loaded_qs
                     print(f"⚡ Loaded {len(questions)} pre-cached questions instantly (no AI call needed)")
-                else:
-                    questions = None
-            else:
-                questions = None
         except Exception:
             questions = None
-    else:
-        questions = None
 
     session_difficulty = (row.get("project_difficulty") or row.get("difficulty") or "Medium").capitalize()
-    if not questions:
+    
+    import asyncio
+    from starlette.concurrency import run_in_threadpool
+    
+    if questions:
+        # Pre-cached questions found: instant load without waiting for profile analysis
+        profile_analysis = row.get("profile_analysis") or {}
+    else:
+        # Generate questions via threadpool without blocking asyncio event loop
         print("🤖 Generating questions via AI (not pre-cached)...")
-        questions = generate_interview_questions(
-            content_str, 
-            source, 
-            num_questions=num_questions_to_generate, 
-            resume_text=resume_text, 
-            jd_text=job_description,
-            hr_screening=hr_screening,
-            custom_questions=custom_questions_text,
-            ai_instructions=ai_instructions_text,
-            interview_type=interview_type,
-            industry=industry_val,
-            language=language,
-            difficulty=session_difficulty
-        )
+        profile_analysis = row.get("profile_analysis")
+
+        async def _gen_qs():
+            return await run_in_threadpool(
+                generate_interview_questions,
+                content_str, 
+                source, 
+                num_questions=num_questions_to_generate, 
+                resume_text=resume_text, 
+                jd_text=job_description,
+                hr_screening=hr_screening,
+                custom_questions=custom_questions_text,
+                ai_instructions=ai_instructions_text,
+                interview_type=interview_type,
+                industry=industry_val,
+                language=language,
+                difficulty=session_difficulty
+            )
+
+        async def _gen_analysis():
+            try:
+                return await asyncio.wait_for(run_in_threadpool(analyze_resume_or_jd, content_str), timeout=4.0)
+            except Exception as e:
+                return {"error": str(e)}
+
+        if not profile_analysis:
+            res_qs, res_pa = await asyncio.gather(_gen_qs(), _gen_analysis(), return_exceptions=True)
+            questions = res_qs if not isinstance(res_qs, Exception) else None
+            profile_analysis = res_pa if not isinstance(res_pa, Exception) else {"error": str(res_pa)}
+        else:
+            questions = await _gen_qs()
     
     if not questions:
         raise HTTPException(status_code=400, detail="Failed to generate questions")
@@ -2373,6 +2383,8 @@ async def start_session_interview(link_id: str = Form(...)):
         "source": source,
         "profile_text": content_str[:5000],
         "job_description": job_description or "",
+        "resume_text": resume_text or "",
+        "difficulty": session_difficulty,
         "profile_analysis": profile_analysis,
         "questions": questions,
         "answers": {},
@@ -2394,6 +2406,8 @@ async def start_session_interview(link_id: str = Form(...)):
             "source": source,
             "profile_text": content_str[:5000],
             "job_description": job_description or "",
+            "resume_text": resume_text or "",
+            "difficulty": session_difficulty,
             "questions": json.dumps(questions),
             "created_at": datetime.now(timezone.utc).isoformat(),
             "language": language,
@@ -2460,17 +2474,22 @@ def log_violation(
     _require_candidate_session(credentials, interview_id=interview_id)
     print(f" VIOLATION detected for session {interview_id}: {violation.type} (#{violation.count}) at {violation.timestamp}")
     try:
+        # If interview is already completed or terminated, do not record post-interview events
+        curr_session = interview_sessions_collection.find_one({"interview_id": interview_id}, {"status": 1})
+        if curr_session and curr_session.get("status") in ("completed", "expired", "terminated"):
+            return {"status": "success", "ignored": "session_already_completed"}
+
         inc_dict = {"violation_count": 1}
         tab_switch_types = {
             "tab_switch", "screen_casting", "screen_share_detected", 
             "screen_recording", "screenshare_stopped", "multiple_displays", 
-            "multi_monitor", "fullscreen_exit", "window_blur"
+            "multi_monitor", "fullscreen_exit"
         }
         if violation.type in tab_switch_types:
             inc_dict["integrity.total_tab_switches"] = 1
         elif violation.type in ("noise_alert", "background_noise", "noise"):
             inc_dict["integrity.total_noise_alerts"] = 1
-        else:
+        elif violation.type != "window_blur":
             inc_dict["integrity.total_face_alerts"] = 1
 
         interview_sessions_collection.update_one(
@@ -2521,17 +2540,27 @@ def log_proctoring_violation(
         else:
             return {"status": "error", "message": "interview_id or link_id required"}
 
+        # If interview is already completed or terminated, do not record post-interview events
+        curr_session = interview_sessions_collection.find_one(query, {"status": 1, "violation_count": 1})
+        if curr_session and curr_session.get("status") in ("completed", "expired", "terminated"):
+            return {
+                "status": "success",
+                "violation_count": curr_session.get("violation_count", 0),
+                "threshold_exceeded": False,
+                "ignored": "session_already_completed"
+            }
+
         inc_dict = {"violation_count": 1}
         tab_switch_types = {
             "tab_switch", "screen_casting", "screen_share_detected", 
             "screen_recording", "screenshare_stopped", "multiple_displays", 
-            "multi_monitor", "fullscreen_exit", "window_blur"
+            "multi_monitor", "fullscreen_exit"
         }
         if data.violation_type in tab_switch_types:
             inc_dict["integrity.total_tab_switches"] = 1
         elif data.violation_type in ("noise_alert", "background_noise", "noise"):
             inc_dict["integrity.total_noise_alerts"] = 1
-        else:
+        elif data.violation_type != "window_blur":
             inc_dict["integrity.total_face_alerts"] = 1
 
         result = interview_sessions_collection.find_one_and_update(

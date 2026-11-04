@@ -401,7 +401,7 @@ export function IntroScreen({
         {/* Round badges */}
         <div className="flex flex-wrap gap-2 justify-center">
           <div className="flex items-center gap-2 px-3.5 py-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-xs font-semibold text-indigo-300">
-            <i className="fas fa-comments text-indigo-400" /> Verbal Q&A ({questions.length} questions)
+            <i className="fas fa-comments text-indigo-400" /> Verbal Q&A
           </div>
           {interviewType === 'Technical' && (
             <div className="flex items-center gap-2 px-3.5 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-full text-xs font-semibold text-amber-300">

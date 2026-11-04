@@ -254,6 +254,8 @@ export default function VoiceInterviewPage() {
   const hasSpokenThisSessionRef = useRef(false)
   const [countdown, setCountdown] = useState(0)
   const countdownRef = useRef(0)
+  const [isTimeExpired, setIsTimeExpired] = useState(false)
+  const isTimeExpiredRef = useRef(false)
   const [roundDuration, setRoundDuration] = useState(900)
   const [answeredCount, setAnsweredCount] = useState(_savedSession?.answeredCount || 0)
   const [isSaving, setIsSaving] = useState(false)
@@ -335,6 +337,7 @@ export default function VoiceInterviewPage() {
   const accumulatedTranscriptRef = useRef('')
   const currentSessionFinalRef = useRef('')
   const submittingRef = useRef(false)
+  const isInterviewOverRef = useRef(false)
   const currentQIdxRef = useRef(0)
   const questionsRef = useRef([])
   const interviewIdRef = useRef('')
@@ -2148,10 +2151,10 @@ export default function VoiceInterviewPage() {
                 category: data.category || 'Deep Dive'
               }
 
-              // Insert it at qIdx + 1 and cap total questions to exactly 22
+              // Insert it at qIdx + 1 (unlimited questions)
               const updatedQs = [...qs]
               updatedQs.splice(qIdx + 1, 0, newQ)
-              const cappedQs = updatedQs.slice(0, 22)
+              const cappedQs = updatedQs
               setQuestions(cappedQs)
               questionsRef.current = cappedQs
               setCurrentQIdx(qIdx + 1)
@@ -2176,6 +2179,14 @@ export default function VoiceInterviewPage() {
     }
 
     const proceedToNextQuestion = () => {
+      // Strict Round Progression on Time Expiration (Section 5.2):
+      // When time is expired (countdown <= 0 or pinned at 00:00), candidate finished verbal answer.
+      // Strictly advance to Round 2 or completion. NO new verbal questions may be served!
+      if (isTimeExpiredRef.current || countdownRef.current <= 0) {
+        transitionToNextRoundRef.current?.()
+        return
+      }
+
       // Next question
       setAnsweredCount(p => p + 1)
       const nextIdx = qIdx + 1
@@ -2205,7 +2216,7 @@ export default function VoiceInterviewPage() {
         if (prefetchedQuestionsRef.current.length > 0) {
           const batch = prefetchedQuestionsRef.current
           prefetchedQuestionsRef.current = []
-          const newQs = [...qs, ...batch].slice(0, 22)
+          const newQs = [...qs, ...batch]
           setQuestions(newQs)
           questionsRef.current = newQs
           setCurrentQIdx(nextIdx)
@@ -2361,6 +2372,7 @@ export default function VoiceInterviewPage() {
 
     if (submittingRef.current) return
     submittingRef.current = true
+    isInterviewOverRef.current = true
     setIsSaving(true)
 
     //  Cross-tab dedup flag ───────────────────────────────────────
@@ -2382,8 +2394,8 @@ export default function VoiceInterviewPage() {
     setRound('submitting')
 
     const message = isTimeout
-      ? "Thank you for the interview. We are saving your interview, please wait."
-      : "We are saving your interview, please wait.";
+      ? "Thank you for completing the interview. Please keep this tab open while we securely upload your video recordings."
+      : "Thank you! Your interview is now complete. Please keep this browser window open while we upload your video recording and finalize your session.";
 
     // Speak asynchronously — fire-and-forget, don't await so we don't block submission
     aiSay(message)
@@ -2566,27 +2578,42 @@ export default function VoiceInterviewPage() {
 
   // ── Tab close protection while saving ────────────────────────────────────
   useEffect(() => {
-    if (!isSaving) return
+    if (!isSaving && round !== 'submitting') return
     const handleBeforeUnload = (e) => {
-      const msg = 'Your interview is still being saved. Please wait before closing this tab.'
+      const msg = 'Your interview recordings are still being uploaded. Closing or refreshing now will abort your video submission. Please wait until upload reaches 100%.'
       e.preventDefault()
       e.returnValue = msg
       return msg
     }
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [isSaving])
+  }, [isSaving, round])
 
-  // ── Countdown ─────────────────────────────────────────────────────────────
-  // Ticks during both 'verbal' (active Q&A) and 'waiting' (all Qs answered, timer still live)
+  // ── Countdown (Time-Driven Model - Pins at 00:00) ──────────────────────────
+  // Ticks during both 'verbal' (active Q&A) and 'waiting'
   useEffect(() => {
     if ((round !== 'verbal' && round !== 'waiting') || countdown <= 0) return
     const t = setInterval(() => setCountdown(p => {
-      if (p <= 1) { clearInterval(t); transitionToNextRound(true); return 0 }
+      if (p <= 1) {
+        clearInterval(t)
+        setIsTimeExpired(true)
+        isTimeExpiredRef.current = true
+        return 0 // Pin at 00:00! DO NOT trigger abrupt round switch! Keep mic active.
+      }
       return p - 1
     }), 1000)
     return () => clearInterval(t)
-  }, [round, transitionToNextRound])
+  }, [round])
+
+  // Safety Overtime Guardrail: If candidate speaks or remains un-submitted for 120s past 00:00, auto-transition
+  useEffect(() => {
+    if (!isTimeExpired || round !== 'verbal') return
+    const overtimeTimer = setTimeout(() => {
+      console.warn("Safety overtime guardrail (120s) reached at 00:00 in Voice AI. Transitioning round.")
+      transitionToNextRoundRef.current?.()
+    }, 120000)
+    return () => clearTimeout(overtimeTimer)
+  }, [isTimeExpired, round])
 
   // ── Finish Early / Submit handler ─────────────────────────────────────────
   const handleFinishEarly = useCallback(() => {
@@ -2629,6 +2656,9 @@ export default function VoiceInterviewPage() {
   // ── Proctoring: ESC + Tab + Screenshare ──────────────────────────────────
   // Helper to log proctoring events to backend
   const logProctoringAlert = useCallback((alertType, details = '') => {
+    if (isInterviewOverRef.current || submittingRef.current || roundRef.current === 'submitting' || roundRef.current === 'done') {
+      return
+    }
     const alertMessages = {
       'multi_person': '👀 Multiple faces detected in frame!',
       'no_face': '👤 No face detected - please face the camera!',
@@ -2788,7 +2818,7 @@ export default function VoiceInterviewPage() {
       const isHidden = e.type === 'visibilitychange' && document.hidden
       const isBlurred = e.type === 'blur'
 
-      if ((isHidden || isBlurred) && round !== 'done' && round !== 'intro' && round !== 'pre_checks' && round !== 'submitting') {
+      if (!isInterviewOverRef.current && (isHidden || isBlurred) && round !== 'done' && round !== 'intro' && round !== 'pre_checks' && round !== 'submitting') {
         focusLossCount++
         isFocusLossModalOpen = true
         logProctoringAlert('tab_switch', `Focus loss #${focusLossCount}`)
@@ -2900,7 +2930,7 @@ export default function VoiceInterviewPage() {
 
   // ── Browser exam security (copy/paste blocking, DevTools, window blur, multi-monitor) ──
   useExamSecurity({
-    enabled: round !== 'done' && round !== 'pre_checks' && round !== 'intro' && round !== 'submitting',
+    enabled: !isInterviewOverRef.current && round !== 'done' && round !== 'pre_checks' && round !== 'intro' && round !== 'submitting',
     onViolation: ({ type, message }) => {
       logProctoringAlert(type, message)
     },
@@ -3282,7 +3312,7 @@ export default function VoiceInterviewPage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-bold tracking-tight text-white">Saving Interview & Recordings</h2>
+          <h2 className="text-xl font-bold tracking-tight text-white">Uploading Interview & Video Recordings</h2>
           <p className="text-xs text-indigo-300 font-medium mt-1">
             {uploadStatusText || 'Securing your camera and screen telemetry...'}
           </p>
@@ -3303,11 +3333,11 @@ export default function VoiceInterviewPage() {
         </div>
 
         {/* Prominent Safety Notice */}
-        <div className="w-full bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-start gap-3 text-left">
-          <div className="w-2 h-2 rounded-full bg-amber-400 mt-1.5 shrink-0 animate-ping" />
-          <div className="text-xs text-amber-200/90 leading-relaxed">
-            <strong className="text-amber-300 font-semibold block mb-0.5">Do Not Close or Refresh This Page</strong>
-            Your interview answers and video proctoring are currently being uploaded. Closing your browser or laptop now may result in incomplete submission.
+        <div className="w-full bg-amber-500/15 border border-amber-500/40 rounded-2xl p-4 flex items-start gap-3 text-left shadow-lg">
+          <div className="w-2.5 h-2.5 rounded-full bg-amber-400 mt-1 shrink-0 animate-ping" />
+          <div className="text-xs text-amber-200 leading-relaxed">
+            <strong className="text-amber-300 font-bold block mb-1">⚠️ DO NOT CLOSE OR REFRESH THIS TAB</strong>
+            Please wait until the progress bar reaches 100%. Closing your browser or switching off your device now will abort your video recording upload. You will see a green confirmation screen once it is safe to exit.
           </div>
         </div>
       </div>
@@ -3352,8 +3382,15 @@ export default function VoiceInterviewPage() {
           </span>
         </div>
         <div className="flex items-center gap-3">
-          <div className={`text-sm font-mono font-bold px-4 py-1.5 rounded-full border ${countdown < 300 ? 'border-rose-500/50 text-rose-400 bg-rose-500/10' : 'border-indigo-500/30 text-indigo-300 bg-indigo-500/10'}`}>
-            <i className="fas fa-clock mr-2" />{fmt(countdown)}
+          <div className={`text-sm font-mono font-bold px-4 py-1.5 rounded-full border ${
+            isTimeExpired || countdown <= 0
+              ? 'border-amber-500/50 text-amber-400 bg-amber-500/10 animate-pulse'
+              : countdown < 300
+                ? 'border-rose-500/50 text-rose-400 bg-rose-500/10'
+                : 'border-indigo-500/30 text-indigo-300 bg-indigo-500/10'
+          }`}>
+            <i className="fas fa-clock mr-2" />
+            {isTimeExpired || countdown <= 0 ? '00:00 (Finishing current answer)' : fmt(countdown)}
           </div>
           {warningsCount > 0 && (
             <div className="flex items-center gap-1 px-3 py-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-400 text-xs font-bold" title={`${warningsCount} proctoring alert${warningsCount > 1 ? 's' : ''} detected`}>
@@ -3458,7 +3495,8 @@ export default function VoiceInterviewPage() {
           </div>
           <div>
             <h1 className="text-3xl font-black mb-2">Interview Complete! 🎉</h1>
-            <p className="text-slate-400 max-w-md">Excellent work! You answered {answeredCount} question{answeredCount !== 1 ? 's' : ''} across all rounds. Your responses have been sent to the recruiter.</p>
+            <p className="text-emerald-400 font-semibold text-sm mb-1">✅ All recordings and responses have been successfully saved and uploaded.</p>
+            <p className="text-slate-400 max-w-md text-xs">Excellent work! You answered {answeredCount} question{answeredCount !== 1 ? 's' : ''} across all rounds. You may now safely exit or close this window.</p>
           </div>
 
           {/*  Exit button — the only action that is always enabled ── */}
@@ -3782,7 +3820,7 @@ export default function VoiceInterviewPage() {
         {/* Round badges */}
         <div className="flex flex-wrap gap-2 justify-center">
           <div className="flex items-center gap-2 px-3.5 py-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-xs font-semibold text-indigo-300">
-            <i className="fas fa-comments text-indigo-400" /> Verbal Q&A ({questions.length} questions)
+            <i className="fas fa-comments text-indigo-400" /> Verbal Q&A
           </div>
           {interviewType === 'Technical' && (
             <div className="flex items-center gap-2 px-3.5 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-full text-xs font-semibold text-amber-300">
@@ -3889,7 +3927,7 @@ export default function VoiceInterviewPage() {
               <i className="fas fa-exclamation-triangle text-[10px]" />{warningsCount}
             </div>
           )}
-          <span className="text-sm text-slate-400 font-medium">Q <span className="text-white font-bold">{currentQIdx + 1}</span>/{questions.length}</span>
+          <span className="text-sm text-slate-400 font-medium">Question <span className="text-white font-bold">{currentQIdx + 1}</span></span>
         </div>
       </header>
 
@@ -3901,7 +3939,7 @@ export default function VoiceInterviewPage() {
 
         {/* Question number badge */}
         <div className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 shrink-0">
-          Question {currentQIdx + 1} of {questions.length}
+          Question {currentQIdx + 1}
         </div>
 
         <div className="flex-1" />

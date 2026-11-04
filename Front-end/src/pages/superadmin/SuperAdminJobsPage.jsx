@@ -64,6 +64,136 @@ const getDescriptionSnippet = (description, maxLen = 150) => {
   return text.slice(0, maxLen).replace(/\s+\S*$/, '') + '…';
 };
 
+const JobCardSkills = ({ skills, jobId, expandedSkills, setExpandedSkills }) => {
+  const allSkills = useMemo(() => parseSkills(skills), [skills]);
+  const isExpanded = !!expandedSkills[jobId];
+  const measureRef = React.useRef(null);
+  const containerRef = React.useRef(null);
+
+  // Initialize with up to 10 skills so cards display skills normally on first render
+  const [maxFit, setMaxFit] = useState(() => Math.min(allSkills.length, 10));
+
+  const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? React.useLayoutEffect : React.useEffect;
+
+  useIsomorphicLayoutEffect(() => {
+    const measureEl = measureRef.current;
+    if (!measureEl) return;
+
+    const measure = () => {
+      const badges = measureEl.querySelectorAll('[data-measure-badge]');
+      if (!badges.length) return;
+
+      const containerRect = measureEl.getBoundingClientRect();
+      const containerWidth = containerRect.width;
+      if (containerWidth <= 0) return;
+
+      // 3 rows available display space (each row ~30-32px with gap).
+      // Row 1 ~0px, Row 2 ~32px, Row 3 ~64px. Row 4 starts at >= 80px.
+      const MAX_ROW_TOP = 72;
+      let fit = badges.length;
+
+      for (let i = 0; i < badges.length; i++) {
+        const badgeTop = badges[i].getBoundingClientRect().top - containerRect.top;
+        if (badgeTop > MAX_ROW_TOP) {
+          fit = i;
+          break;
+        }
+      }
+
+      // If overflow occurs, ensure "+N" button fits on row 3 without wrapping to row 4
+      if (fit < badges.length && fit > 0) {
+        const lastBadge = badges[fit - 1];
+        const lastBadgeRight = lastBadge.getBoundingClientRect().right - containerRect.left;
+        if (containerWidth - lastBadgeRight < 48) {
+          fit = Math.max(1, fit - 1);
+        }
+      }
+
+      setMaxFit(fit);
+    };
+
+    measure();
+
+    let ro;
+    if (typeof ResizeObserver !== 'undefined' && containerRef.current) {
+      ro = new ResizeObserver(() => measure());
+      ro.observe(containerRef.current);
+    }
+    return () => {
+      if (ro) ro.disconnect();
+    };
+  }, [allSkills]);
+
+  const hasOverflow = !isExpanded && maxFit < allSkills.length;
+  const hiddenCount = allSkills.length - maxFit;
+  const displayedSkills = isExpanded ? allSkills : (hasOverflow ? allSkills.slice(0, maxFit) : allSkills);
+
+  return (
+    <div className="relative">
+      {/* Hidden measurement container containing ALL skills to determine exact spatial fit */}
+      <div
+        ref={measureRef}
+        aria-hidden="true"
+        className="absolute top-0 left-0 right-0 invisible pointer-events-none flex flex-wrap gap-1.5"
+      >
+        {allSkills.map((skill, i) => (
+          <span
+            key={i}
+            data-measure-badge="true"
+            className="px-2.5 py-1 text-[0.68rem] font-bold rounded-lg border border-transparent whitespace-nowrap"
+          >
+            {skill}
+          </span>
+        ))}
+      </div>
+
+      {/* Visible skills display */}
+      <div
+        ref={containerRef}
+        className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1 cursor-default"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {displayedSkills.map((skill, i) => (
+          <span
+            key={i}
+            className="px-2.5 py-1 bg-indigo-50 text-indigo-700 text-[0.68rem] font-bold rounded-lg border border-indigo-100/60"
+          >
+            {skill}
+          </span>
+        ))}
+
+        {hasOverflow && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setExpandedSkills((prev) => ({ ...prev, [jobId]: true }));
+            }}
+            className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800/50 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 text-[0.68rem] font-bold rounded-lg border-0 cursor-pointer transition-colors shadow-xs"
+            title={`Click to show ${hiddenCount} more skills`}
+          >
+            +{hiddenCount}
+          </button>
+        )}
+
+        {isExpanded && allSkills.length > maxFit && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setExpandedSkills((prev) => ({ ...prev, [jobId]: false }));
+            }}
+            className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800/50 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 text-[0.68rem] font-bold rounded-lg border-0 cursor-pointer transition-colors shadow-xs"
+            title="Show less"
+          >
+            Show less
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
 export default function SuperAdminJobsPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -94,6 +224,7 @@ export default function SuperAdminJobsPage() {
   const [jobsLoading, setJobsLoading] = useState(true);
   const [showSchedulePanel, setShowSchedulePanel] = useState(false);
   const [showAiJobModal, setShowAiJobModal] = useState(false);
+  const [expandedSkills, setExpandedSkills] = useState({});
 
   // ── Application viewer state ──────────────────────────────────────────────
   const [applicationData, setApplicationData] = useState({
@@ -687,18 +818,12 @@ export default function SuperAdminJobsPage() {
                 )}
 
                 {/* Skills */}
-                <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
-                  {parseSkills(job.skills).slice(0, 10).map((skill, i) => (
-                    <span key={i} className="px-2.5 py-1 bg-indigo-50 text-indigo-700 text-[0.68rem] font-bold rounded-lg border border-indigo-100/60">
-                      {skill}
-                    </span>
-                  ))}
-                  {parseSkills(job.skills).length > 10 && (
-                    <span className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 text-[0.68rem] font-bold rounded-lg">
-                      +{parseSkills(job.skills).length - 10}
-                    </span>
-                  )}
-                </div>
+                <JobCardSkills
+                  skills={job.skills}
+                  jobId={job.job_id || job._id}
+                  expandedSkills={expandedSkills}
+                  setExpandedSkills={setExpandedSkills}
+                />
 
                 {/* Card Action Buttons (View Applications + Preview/Apply) */}
                 <div className="mt-auto pt-2 flex flex-col gap-2">

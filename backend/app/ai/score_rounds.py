@@ -355,12 +355,7 @@ def calculate_round1_score(questions: list, answers: list, interview_type: str =
     """
     Dynamically distributes Round 1 marks across verbal/technical questions.
     HR Screening questions are excluded from the AI score.
-    Unanswered / skipped / missing answers receive 0.
-
-    Max marks depend on interview_type:
-      - Technical            → 80 marks
-      - Normal               → 100 marks
-      - Non-Technical        → (100 - n_case_study_questions × 10) marks
+    Marks are distributed strictly across the questions the candidate actually answered during their allotted time.
     """
     if not questions:
         return 0.0
@@ -369,38 +364,30 @@ def calculate_round1_score(questions: list, answers: list, interview_type: str =
 
     # Exclude HR Screening questions so they don't count towards marks
     eval_questions = [q for q in questions if str(q.get("type", "")).lower() != "hr screening"]
-
     if not eval_questions:
         return 0.0
 
-    total_weight = 0.0
-    q_weights = {}
-    for q in eval_questions:
-        qid = str(q.get("id"))
-        w = get_question_weight(q)
-        q_weights[qid] = w
-        total_weight += w
+    # 1. Map submitted answers
+    ans_lookup = {str(a.get("question_id")): a for a in answers}
 
+    # 2. Filter strictly to questions presented and answered by the candidate
+    attempted_questions = [q for q in eval_questions if str(q.get("id")) in ans_lookup]
+    active_questions = attempted_questions if attempted_questions else eval_questions
+
+    total_weight = sum(get_question_weight(q) for q in active_questions)
     if total_weight == 0:
         return 0.0
 
-    # Create lookup for answers
-    ans_lookup = {str(a.get("question_id")): a for a in answers}
-
+    # 3. Proportionally distribute marks across attempted questions only
     round1_score = 0.0
-
-    for q in eval_questions:
+    for q in active_questions:
         qid = str(q.get("id"))
-        w = q_weights[qid]
-
-        # Max marks for this specific question (proportional share of round1_max)
+        w = get_question_weight(q)
         q_max_marks = (w / total_weight) * round1_max
-
         ans = ans_lookup.get(qid)
         if ans and ans.get("ai_score") is not None:
-            ai_score_100 = float(ans.get("ai_score", 0))
-            q_marks_obtained = (ai_score_100 / 100.0) * q_max_marks
-            round1_score += q_marks_obtained
+            ai_score_100 = float(ans.get("ai_score", 0))  # Groq or Offline Fallback score
+            round1_score += (ai_score_100 / 100.0) * q_max_marks
 
     return round(min(round1_max, max(0.0, round1_score)), 1)
 
@@ -466,3 +453,54 @@ def calculate_final_score(round1_score: float, round2_score: float = 0.0) -> flo
     final = round1_score + round2_score
     return round(min(100.0, max(0.0, final)), 1)
 
+
+
+def compute_session_composite_score(
+    interview_type: str = "Technical",
+    questions: list = None,
+    answers: list = None,
+    coding_round: dict = None,
+    case_study_round: dict = None,
+    context: str = "",
+    language: str = "English",
+    fallback_score: float = 0.0
+) -> tuple:
+    """
+    Computes (round1_score, round2_score, final_score) safely and deterministically.
+    Guarantees that minimized table score and maximized modal score are always 100% identical.
+    """
+    questions = questions or []
+    answers = answers or []
+    n_cs_questions = len((case_study_round or {}).get("questions", []) or []) if case_study_round else 0
+    round1_max, round2_max = get_marks_split(interview_type, n_cs_questions)
+
+    round1_s = 0.0
+    if questions:
+        round1_s = calculate_round1_score(
+            questions=questions,
+            answers=answers,
+            interview_type=interview_type,
+            n_case_study_questions=n_cs_questions
+        )
+
+    # If calculate_round1_score returned 0.0 or questions was empty, but answers exist with scores
+    if round1_s == 0.0 and answers:
+        scores = [float(a.get("ai_score", 0)) for a in answers if isinstance(a, dict) and a.get("ai_score") is not None]
+        if scores:
+            verbal_avg = sum(scores) / len(scores)
+            round1_s = round((verbal_avg / 100.0) * round1_max, 1)
+
+    round2_s = 0.0
+    itype_lower = str(interview_type).strip().lower()
+    if itype_lower == "technical" and coding_round:
+        round2_s = calculate_coding_score(coding_round)
+    elif itype_lower in ("non-technical", "non_technical", "non tech", "nontech") and case_study_round:
+        round2_s = calculate_case_study_round2_score(case_study_round, n_cs_questions, context, language)
+
+    final_s = calculate_final_score(round1_s, round2_s)
+
+    if final_s == 0.0 and fallback_score > 0.0:
+        final_s = round(fallback_score, 1)
+        round1_s = final_s
+
+    return round(round1_s, 1), round(round2_s, 1), round(final_s, 1)

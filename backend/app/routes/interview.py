@@ -106,8 +106,9 @@ def api_gen_next_question(
     followup_streak = interview.get("followup_streak", 0)
 
     # ── Strict 22-question maximum limit check ──
-    if len(interview.get("questions", [])) >= 22:
-        return {"skip_followup": True, "reason": "Maximum limit of 22 questions reached"}
+    ABSOLUTE_VERBAL_SAFETY_CAP = 100
+    if len(interview.get("questions", [])) >= ABSOLUTE_VERBAL_SAFETY_CAP:
+        return {"skip_followup": True, "reason": "Maximum safety limit reached"}
 
     # ── BUGFIX: Prevent Follow-ups from hijacking the interview ──
     # Find current question and evaluate skip conditions BEFORE calling the AI
@@ -249,21 +250,21 @@ async def parse_resume(
         # Generate interview ID
         interview_id = f"int_{int(datetime.now(timezone.utc).timestamp())}_{uuid.uuid4().hex[:8]}"
 
-        # Analyze the resume
+        # Concurrently generate questions and parse profile (cutting join latency in half)
         import asyncio
         from starlette.concurrency import run_in_threadpool
-        try:
-            profile_analysis = await asyncio.wait_for(
-                run_in_threadpool(analyze_resume_or_jd, content_str), 
-                timeout=15.0
-            )
-        except asyncio.TimeoutError:
-            profile_analysis = {"error": "Analysis timed out"}
-        except Exception as e:
-            profile_analysis = {"error": str(e)}
+        async def _gen_qs():
+            return await run_in_threadpool(generate_interview_questions, content_str, source)
 
-        # Generate questions
-        questions = generate_interview_questions(content_str, source)
+        async def _run_analysis():
+            try:
+                return await asyncio.wait_for(run_in_threadpool(analyze_resume_or_jd, content_str), timeout=4.0)
+            except Exception as e:
+                return {"error": str(e)}
+
+        res_qs, res_pa = await asyncio.gather(_gen_qs(), _run_analysis(), return_exceptions=True)
+        questions = res_qs if not isinstance(res_qs, Exception) else None
+        profile_analysis = res_pa if not isinstance(res_pa, Exception) else {"error": str(res_pa)}
 
         if not questions:
             raise HTTPException(status_code=400, detail="Failed to generate questions")
@@ -316,21 +317,21 @@ async def start_interview(
 
         interview_id = f"int_{int(datetime.now(timezone.utc).timestamp())}_{uuid.uuid4().hex[:8]}"
 
-        # ✅ STEP-3.2 → AI ANALYSIS (CORRECT PLACE)
+        # ✅ STEP-3.2 → AI ANALYSIS & QUESTION GENERATION (CONCURRENT FOR SPEED)
         import asyncio
         from starlette.concurrency import run_in_threadpool
-        try:
-            profile_analysis = await asyncio.wait_for(
-                run_in_threadpool(analyze_resume_or_jd, content), 
-                timeout=15.0
-            )
-        except asyncio.TimeoutError:
-            profile_analysis = {"error": "Analysis timed out"}
-        except Exception as e:
-            profile_analysis = {"error": str(e)}
+        async def _gen_qs():
+            return await run_in_threadpool(generate_interview_questions, content, source)
 
-        # Generate questions based on Source (Resume vs JD)
-        questions = await asyncio.to_thread(generate_interview_questions, content, source)
+        async def _run_analysis():
+            try:
+                return await asyncio.wait_for(run_in_threadpool(analyze_resume_or_jd, content), timeout=4.0)
+            except Exception as e:
+                return {"error": str(e)}
+
+        res_qs, res_pa = await asyncio.gather(_gen_qs(), _run_analysis(), return_exceptions=True)
+        questions = res_qs if not isinstance(res_qs, Exception) else None
+        profile_analysis = res_pa if not isinstance(res_pa, Exception) else {"error": str(res_pa)}
 
         if not questions:
             raise HTTPException(status_code=400, detail="Failed to generate questions")
@@ -394,16 +395,22 @@ async def generate_more_questions_endpoint(
             # Fetch session from RAM or DB
             session = get_session(interview_id)
             if not session:
-                row = await asyncio.to_thread(interviews_collection.find_one, {"id": interview_id})
-                if row:
+                row = await asyncio.to_thread(interviews_collection.find_one, {"$or": [{"id": interview_id}, {"link_id": interview_id}]})
+                session_row = await asyncio.to_thread(interview_sessions_collection.find_one, {"$or": [{"interview_id": interview_id}, {"link_id": interview_id}]}) or {}
+                if not row and session_row.get("interview_id"):
+                    row = await asyncio.to_thread(interviews_collection.find_one, {"id": session_row["interview_id"]})
+                if row or session_row:
                     try:
-                        session_row = await asyncio.to_thread(interview_sessions_collection.find_one, {"interview_id": interview_id}) or {}
                         loaded_questions = json.loads(row.get("questions", "[]"))
                         session = {
                             "id": interview_id,
                             "link_id": session_row.get("link_id"),
                             "source": row.get("source"),
                             "profile_text": row.get("profile_text", ""),
+                            "job_description": row.get("job_description", "") or session_row.get("job_description", ""),
+                            "resume_text": row.get("resume_text", "") or session_row.get("resume_text", ""),
+                            "ai_instructions": row.get("ai_instructions", "") or session_row.get("ai_instructions", ""),
+                            "difficulty": row.get("difficulty") or session_row.get("project_difficulty") or session_row.get("difficulty") or "Medium",
                             "questions": loaded_questions,
                             "answers": {},
                             "industry": row.get("industry") or row.get("industry_type") or session_row.get("industry") or session_row.get("industry_type") or "General",
@@ -420,7 +427,8 @@ async def generate_more_questions_endpoint(
             profile_text = session.get("profile_text", "")
             source = session.get("source", "resume")
             existing_questions = session.get("questions", [])
-            if len(existing_questions) >= 22:
+            ABSOLUTE_VERBAL_SAFETY_CAP = 100
+            if len(existing_questions) >= ABSOLUTE_VERBAL_SAFETY_CAP:
                 return {"questions": []}
 
             # Parse IDs of already-asked questions to avoid repeats
@@ -442,7 +450,12 @@ async def generate_more_questions_endpoint(
                 generate_interview_questions,
                 text=profile_text,
                 source=source,
-                num_questions=count + 8,
+                num_questions=count + 2,
+                resume_text=session.get("resume_text") or (profile_text if source == "resume" else ""),
+                jd_text=session.get("job_description") or (profile_text if source != "resume" else ""),
+                ai_instructions=session.get("ai_instructions", ""),
+                difficulty=session.get("difficulty", "Medium"),
+                is_continuation=True,
                 interview_type=session.get("interview_type", "Technical"),
                 industry=session.get("industry", "General"),
                 language=session.get("language", "English")
@@ -916,6 +929,8 @@ async def start_coding_round(
     # Get industry from the session
     link_id = interview.get("link_id", "")
     session = interview_sessions_collection.find_one({"link_id": link_id}) if link_id else None
+    if not session:
+        session = interview_sessions_collection.find_one({"$or": [{"interview_id": req.interview_id}, {"link_id": req.interview_id}]})
     industry = (session or {}).get("industry", "General")
     language = interview.get("language", "English")
 
@@ -1227,6 +1242,8 @@ async def start_case_study_round(
     # Get the number of questions and industry from the session
     link_id = interview.get("link_id", "")
     session = interview_sessions_collection.find_one({"link_id": link_id}) if link_id else None
+    if not session:
+        session = interview_sessions_collection.find_one({"$or": [{"interview_id": req.interview_id}, {"link_id": req.interview_id}]})
     
     # Try getting case_study_count from RAM first, then DB, default to 3
     num_questions = interview.get("case_study_count")
@@ -1276,8 +1293,12 @@ async def start_case_study_round(
         "started_at": datetime.now(timezone.utc).isoformat(),
     }
     
-    interviews_collection.update_one(
-        {"id": req.interview_id},
+    interviews_collection.update_many(
+        {"$or": [{"id": req.interview_id}, {"link_id": req.interview_id}]},
+        {"$set": {"case_study_round": case_study_round}}
+    )
+    interview_sessions_collection.update_many(
+        {"$or": [{"link_id": req.interview_id}, {"interview_id": req.interview_id}]},
         {"$set": {"case_study_round": case_study_round}}
     )
     if get_session(req.interview_id):

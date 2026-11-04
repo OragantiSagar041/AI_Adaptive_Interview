@@ -237,6 +237,7 @@ export const InterviewNormal = () => {
     transcriptionText,
     interimTranscriptText,
     globalCountdown,
+    isTimeExpired,
     isRoundTwo,
     showRound2Confirm,
     setShowRound2Confirm,
@@ -575,10 +576,23 @@ export const InterviewNormal = () => {
                   <circle className="fill-none stroke-[8px] stroke-[url(#timerGradient)] [stroke-linecap:round] [stroke-dasharray:295.3] [stroke-dashoffset:0] transition-[stroke-dashoffset] duration-1000 ease-linear" cx="55" cy="55" r="47" />
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-xl font-extrabold text-slate-800 font-mono leading-none">
-                    {Math.floor(globalCountdown / 60).toString().padStart(2, '0')}:{(globalCountdown % 60).toString().padStart(2, '0')}
-                  </span>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">Remaining</span>
+                  {isTimeExpired || globalCountdown <= 0 ? (
+                    <>
+                      <span className="text-xl font-extrabold text-amber-500 font-mono leading-none animate-pulse">
+                        00:00
+                      </span>
+                      <span className="text-[9px] text-amber-600 font-bold tracking-tight mt-1 text-center px-1">
+                        Finishing current answer
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-xl font-extrabold text-slate-800 font-mono leading-none">
+                        {Math.floor(globalCountdown / 60).toString().padStart(2, '0')}:{(globalCountdown % 60).toString().padStart(2, '0')}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">Remaining</span>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -715,12 +729,12 @@ export const InterviewNormal = () => {
                 {/* Question Card */}
                 <div className="bg-white/70 backdrop-blur-2xl border border-white rounded-[24px] p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.06)] relative overflow-hidden transition-all duration-300 hover:shadow-xl">
                   <div className="text-[11px] text-slate-400 font-extrabold tracking-wider uppercase mb-4">
-                    Question <span id="questionNumber" className="text-indigo-600 font-black">{displayQuestionNum}</span> of <span id="totalQuestions">{totalDisplayQuestions}</span>
+                    Question <span id="questionNumber" className="text-indigo-600 font-black">{displayQuestionNum}</span>
                   </div>
                   <div className="flex gap-4 items-start">
                     <div className="w-1.5 bg-indigo-600 self-stretch rounded-full shrink-0 min-h-[60px]" />
                     <p className="flex-1 text-slate-800 text-base md:text-lg font-semibold leading-relaxed m-0">{currentQuestionText || 'Question is loading...'}</p>
-                    {!isRoundTwo && currentQuestion?.type !== 'case_study' && currentQuestion?.type !== 'coding' && (
+                    {!isRoundTwo && currentQuestion?.caseStudyIndex === undefined && (
                       <button 
                         className="bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-indigo-600 border border-slate-200 hover:border-indigo-100 cursor-pointer p-2.5 rounded-full transition-all duration-200 shrink-0" 
                         onClick={() => speakAIQuestion(currentQuestionText)}
@@ -759,18 +773,23 @@ export const InterviewNormal = () => {
 
                 {/* Navigation buttons */}
                 <div className="flex gap-3 justify-center items-center mt-2 shrink-0">
-                  {currentQuestionIndex === questions.length - 1 ? (
+                  {isTimeExpired || (globalCountdown <= 0 && totalDuration > 0) ? (
                     <button 
-                      className="px-8 py-3.5 rounded-xl font-bold text-sm text-white transition-all duration-200 border-none bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/20 hover:shadow-red-500/30 cursor-pointer"
-                      onClick={(e) => handleFinishEarly(e)}
-                      title="Finish Interview"
+                      className="px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-600/30 hover:shadow-indigo-600/40 transition-all duration-200 cursor-pointer border-none flex items-center gap-2 animate-pulse"
+                      onClick={() => {
+                        stopAudio?.()
+                        handleNextQuestion()
+                      }}
                     >
-                      Finish Interview
+                      Finish & Submit Interview
                     </button>
                   ) : (
                     <button 
                       className="px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30 transition-all duration-200 cursor-pointer border-none"
-                      onClick={handleNextQuestion}
+                      onClick={() => {
+                        stopAudio?.()
+                        handleNextQuestion()
+                      }}
                     >
                       Next &rarr;
                     </button>

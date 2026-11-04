@@ -290,6 +290,8 @@ const candidatesSlice = createSlice({
   name: 'candidates',
   initialState: {
     candidates: [],
+    qualifiedCandidates: null,
+    rejectedCandidates: null,
     filteredCandidates: [],
     paginatedCandidates: [],
     selectedIds: [],
@@ -369,6 +371,8 @@ const candidatesSlice = createSlice({
       .addCase('auth/logout', (state) => {
         state.selectedIds = []
         state.candidates = []
+        state.qualifiedCandidates = null
+        state.rejectedCandidates = null
         state.paginatedCandidates = []
         state.searchTerm = ''
       })
@@ -414,6 +418,7 @@ const candidatesSlice = createSlice({
       .addCase(loadSuperAdminQualifiedCandidates.fulfilled, (state, action) => {
         state.status = 'succeeded'
         state.candidates = action.payload || []
+        state.qualifiedCandidates = action.payload || []
         recomputeFilteredCandidates(state)
       })
       .addCase(loadSuperAdminQualifiedCandidates.rejected, (state, action) => {
@@ -426,6 +431,7 @@ const candidatesSlice = createSlice({
       .addCase(loadAdminQualifiedCandidates.fulfilled, (state, action) => {
         state.status = 'succeeded'
         state.candidates = action.payload || []
+        state.qualifiedCandidates = action.payload || []
         recomputeFilteredCandidates(state)
       })
       .addCase(loadAdminQualifiedCandidates.rejected, (state, action) => {
@@ -438,6 +444,7 @@ const candidatesSlice = createSlice({
       .addCase(loadSuperAdminRejectedCandidates.fulfilled, (state, action) => {
         state.status = 'succeeded'
         state.candidates = action.payload || []
+        state.rejectedCandidates = action.payload || []
         recomputeFilteredCandidates(state)
       })
       .addCase(loadSuperAdminRejectedCandidates.rejected, (state, action) => {
@@ -450,6 +457,7 @@ const candidatesSlice = createSlice({
       .addCase(loadAdminRejectedCandidates.fulfilled, (state, action) => {
         state.status = 'succeeded'
         state.candidates = action.payload || []
+        state.rejectedCandidates = action.payload || []
         recomputeFilteredCandidates(state)
       })
       .addCase(loadAdminRejectedCandidates.rejected, (state, action) => {

@@ -328,7 +328,11 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
   const email = c.candidate_email || c.email || candidate.candidate_email || candidate.email || "No email provided"
   const phone = c.candidate_phone || c.phone || candidate.candidate_phone || "N/A"
   const aiScore = Number(c.avg_score || c.score || candidate.score || 0)
-  const isQualified = (c.decision || candidate.decision) === 'selected'
+  const decisionVal = String(c.decision || candidate.decision || '').toLowerCase().trim()
+  const isSelected = decisionVal === 'selected' || decisionVal === 'hired' || c.status === 'qualified' || candidate.status === 'qualified'
+  const isRejected = decisionVal === 'rejected'
+  const isUnderReview = !isSelected && !isRejected
+  const isQualified = isSelected
   const status = c.status || candidate.status || ''
   // Resume/profile text from any field available
   const resumeText = c.profile_text || c.resume_text || ''
@@ -347,7 +351,11 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
     { label: "Application Received", done: true },
     { label: "AI Interview Assigned", done: true },
     { label: "Interview Completed", done: status === 'completed' || !!c.answers?.length },
-    { label: isQualified ? "Selected ✓" : "Rejected ✗", done: !!(c.decision || candidate.decision), bad: !isQualified }
+    { 
+      label: isSelected ? "Selected ✓" : isRejected ? "Rejected ✗" : "Under Review", 
+      done: isSelected || isRejected, 
+      bad: isRejected 
+    }
   ]
 
   const formatMediaUrl = (url) => {
@@ -398,7 +406,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
     }
 
     try {
-      await dispatch(handleUpdateDecision({ linkId, decision: newDecision, talent_pool_status: talentPoolStatus })).unwrap()
+      await dispatch(handleUpdateDecision({ linkId, decision: newDecision, ...(talentPoolStatus ? { talent_pool_status: talentPoolStatus } : {}) })).unwrap()
       Swal.fire('Success', `Candidate marked as ${newDecision.toUpperCase()}`, 'success')
       onOpenChange(false)
       const basePath = window.location.pathname.startsWith('/superadmin') ? '/superadmin' : '/admin'
@@ -679,11 +687,14 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                 <h2 className="text-2xl font-black text-foreground truncate">{name}</h2>
                 <p className="text-sm font-medium text-muted-foreground mt-0.5">{jobTitle}</p>
                 <div className="flex flex-wrap items-center gap-2 mt-3">
-                  <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${isQualified ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'}`}>
-                    {isQualified ? 'Hire' : 'Rejected'}
-                  </span>
-                  <span className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary px-2.5 py-1 text-xs font-semibold text-foreground">
-                    {isQualified ? 'Qualified' : 'Rejected'}
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${
+                    isSelected 
+                      ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30' 
+                      : isRejected 
+                      ? 'bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30' 
+                      : 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+                  }`}>
+                    {isSelected ? 'Selected' : isRejected ? 'Rejected' : 'Under Review'}
                   </span>
                   <span className="text-xs font-medium text-muted-foreground">ID: {candidate.link_id || candidate.id}</span>
                   {(c.decision_by_name || c.last_action_by_name) && (
@@ -777,11 +788,17 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                 </h3>
                 <div className="rounded-xl border border-border bg-secondary p-4">
                   <div className="flex items-center gap-2 mb-3">
-                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${isQualified ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'}`}>
-                      {c.overall_recommendation || (isQualified ? 'Hire' : 'Reject')}
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${
+                      isSelected 
+                        ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30' 
+                        : isRejected 
+                        ? 'bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30' 
+                        : 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+                    }`}>
+                      {c.overall_recommendation || (isSelected ? 'Hire' : isRejected ? 'Reject' : 'Under Review')}
                     </span>
                     <span className="text-sm font-medium text-foreground">
-                      {isQualified ? 'Ready for Technical Round / Hiring' : 'Does not meet required threshold'}
+                      {isSelected ? 'Ready for Technical Round / Hiring' : isRejected ? 'Does not meet required threshold' : 'Awaiting recruiter decision'}
                     </span>
                   </div>
                   {c.strengths_summary && (
@@ -805,26 +822,20 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
               {/* Integrity */}
               {c.integrity && (() => {
                 const violationsList = c.violations || c.alerts || []
-                const tabTypes = ['tab_switch', 'screen_casting', 'screen_share_detected', 'screen_recording', 'screenshare_stopped', 'multiple_displays', 'multi_monitor', 'fullscreen_exit', 'window_blur']
+                const tabTypes = ['tab_switch', 'screen_casting', 'screen_share_detected', 'screen_recording', 'screenshare_stopped', 'multiple_displays', 'multi_monitor', 'fullscreen_exit']
                 const noiseTypes = ['noise_alert', 'background_noise', 'noise']
                 
-                let tabSwitches = Number(c.integrity.total_tab_switches || 0)
-                let faceAlerts = Number(c.integrity.total_face_alerts || 0)
-                let noiseAlerts = Number(c.integrity.total_noise_alerts || 0)
-                
-                if (violationsList.length > 0) {
-                  const screenCount = violationsList.filter(v => tabTypes.includes(v.type || v.violation_type)).length
-                  const noiseCount = violationsList.filter(v => noiseTypes.includes(v.type || v.violation_type)).length
-                  const trueFaceCount = violationsList.filter(v => !tabTypes.includes(v.type || v.violation_type) && !noiseTypes.includes(v.type || v.violation_type)).length
+                const tabSwitches = c.integrity.total_tab_switches !== undefined
+                  ? Number(c.integrity.total_tab_switches || 0)
+                  : violationsList.filter(v => tabTypes.includes(v.type || v.violation_type)).length
                   
-                  if (screenCount > 0) {
-                    tabSwitches = Math.max(tabSwitches, screenCount)
-                    faceAlerts = trueFaceCount
-                  }
-                  if (noiseCount > 0) {
-                    noiseAlerts = Math.max(noiseAlerts, noiseCount)
-                  }
-                }
+                const faceAlerts = c.integrity.total_face_alerts !== undefined
+                  ? Number(c.integrity.total_face_alerts || 0)
+                  : violationsList.filter(v => !tabTypes.includes(v.type || v.violation_type) && !noiseTypes.includes(v.type || v.violation_type) && (v.type || v.violation_type) !== 'window_blur').length
+                  
+                const noiseAlerts = c.integrity.total_noise_alerts !== undefined
+                  ? Number(c.integrity.total_noise_alerts || 0)
+                  : violationsList.filter(v => noiseTypes.includes(v.type || v.violation_type)).length
 
                 return (
                   <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
@@ -835,7 +846,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                       <StatCard label="Tab Switches" value={tabSwitches} />
                       <StatCard label="Face Alerts" value={faceAlerts} />
                       <StatCard label="Noise Alerts" value={noiseAlerts} />
-                      <StatCard label="Total Duration" value={`${c.integrity.total_time_minutes} min`} />
+                      <StatCard label="Total Duration" value={`${c.integrity.total_time_minutes ?? 0} min`} />
                     </div>
                   </section>
                 )
