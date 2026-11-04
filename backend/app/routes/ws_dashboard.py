@@ -257,7 +257,7 @@ async def get_dashboard_aggregated_data(
             if summary_only:
                 cursor = cursor.limit(8)
             else:
-                cursor = cursor.limit(500) # Prevent MongoDB NetworkTimeout by setting a generous upper bound
+                cursor = cursor.limit(1000) # Prevent MongoDB NetworkTimeout by setting a generous upper bound
             return list(cursor)
 
         jobs_query = {}
