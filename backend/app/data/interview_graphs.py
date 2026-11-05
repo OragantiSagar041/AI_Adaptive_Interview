@@ -63,6 +63,14 @@ def as_evaluate_answer(state: AnswerScoringState) -> AnswerScoringState:
     cleaned_answer = normalize_stt_technical_terms(raw_answer)
     ai_inst = state.get("ai_instructions", "").strip()
 
+    try:
+        from app.ai.analyze_answer import _normalize_closed_answer
+        norm_closed = _normalize_closed_answer(raw_answer)
+        if norm_closed in ("true", "false", "yes", "no"):
+            cleaned_answer = f"{norm_closed.capitalize()} (STT transcription: '{raw_answer.strip()}')"
+    except Exception:
+        pass
+
     inst_section = ""
     if ai_inst:
         inst_section = (
@@ -72,6 +80,7 @@ def as_evaluate_answer(state: AnswerScoringState) -> AnswerScoringState:
             f"- If the recruiter instructions specify that questions should be answered with a single word or short direct phrase "
             f"(such as 'Yes/No', 'True/False', specific technical terms, keywords, or one-word answers) and award 100% for the correct response:\n"
             f"  * Check if this question is a direct, closed-ended, or one-word answer question.\n"
+            f"  * STT REPETITIONS: Candidates speaking into microphone frequently produce repeated words (e.g. 'true true', 'false false', 'fal false', 'yes yes'). Treat 'true true' identically to 'True', and 'false false' identically to 'False'.\n"
             f"  * If the candidate answered with the correct single word, term, or appropriate Yes/No/True/False (e.g. 'Stack', 'Python', 'Yes', 'No', 'True', 'False', '404', 'Kubernetes'):\n"
             f"    award full credit: content_score = 70, relevance_score = 30, overall_score = 100.\n"
             f"  * If the candidate gave the wrong answer or an incorrect term:\n"
