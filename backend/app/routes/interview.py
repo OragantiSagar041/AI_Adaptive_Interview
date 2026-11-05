@@ -442,18 +442,32 @@ async def generate_more_questions_endpoint(
             already_asked_texts = {
                 str(q.get("question") or q.get("text") or "").lower().strip()
                 for q in existing_questions
-                if str(q.get("id", "")) in asked_ids or asked_ids == set()
             }
 
-            # Generate a new batch of questions — request extra to survive duplicate filtering
+            # Build list of existing questions to pass to the generator so LLM avoids repeating topics
+            base_instructions = session.get("ai_instructions", "") or ""
+            if already_asked_texts:
+                sample_existing = [q for q in already_asked_texts if len(q) > 10][:25]
+                existing_list_str = "\n".join(f"- {s}" for s in sample_existing)
+                diversity_mandate = (
+                    f"\n\nCRITICAL MANDATE - DO NOT REPEAT ANY OF THESE EXISTING QUESTIONS OR CONCEPTS:\n"
+                    f"The candidate has ALREADY answered questions on the following concepts:\n"
+                    f"{existing_list_str}\n\n"
+                    f"You MUST generate completely fresh, new questions covering DIFFERENT aspects/skills from the job description and candidate profile.\n"
+                )
+                effective_instructions = f"{base_instructions}{diversity_mandate}"
+            else:
+                effective_instructions = base_instructions
+
+            # Generate a new batch of questions - request extra to survive duplicate filtering
             new_questions = await run_in_threadpool(
                 generate_interview_questions,
                 text=profile_text,
                 source=source,
-                num_questions=count + 2,
+                num_questions=count + 4,
                 resume_text=session.get("resume_text") or (profile_text if source == "resume" else ""),
                 jd_text=session.get("job_description") or (profile_text if source != "resume" else ""),
-                ai_instructions=session.get("ai_instructions", ""),
+                ai_instructions=effective_instructions,
                 difficulty=session.get("difficulty", "Medium"),
                 is_continuation=True,
                 interview_type=session.get("interview_type", "Technical"),
@@ -461,17 +475,55 @@ async def generate_more_questions_endpoint(
                 language=session.get("language", "English")
             )
 
-            # Filter out questions already asked (text-similarity check)
+            def _is_concept_duplicate(q_new: str, q_existing: str) -> bool:
+                s1 = str(q_new).lower().strip()
+                s2 = str(q_existing).lower().strip()
+                if not s1 or not s2:
+                    return False
+                if s1 in s2 or s2 in s1:
+                    return True
+                import re
+                stop_words = {"true", "false", "or", "in", "a", "an", "the", "is", "are", "can", "be", "to", "of", "and", "for", "with", "by", "that", "it", "which", "used", "when", "does"}
+                c1 = re.sub(r'^(true\s+or\s+false\s*[:\-])', '', s1).strip()
+                c2 = re.sub(r'^(true\s+or\s+false\s*[:\-])', '', s2).strip()
+                tokens1 = set(re.findall(r'[a-zA-Z0-9_]+', c1)) - stop_words
+                tokens2 = set(re.findall(r'[a-zA-Z0-9_]+', c2)) - stop_words
+                if not tokens1 or not tokens2:
+                    return False
+                intersection = tokens1 & tokens2
+                union = tokens1 | tokens2
+                jaccard = len(intersection) / len(union) if union else 0
+                min_len = min(len(tokens1), len(tokens2))
+                overlap_min = len(intersection) / min_len if min_len > 0 else 0
+                if jaccard >= 0.50 or overlap_min >= 0.65:
+                    return True
+                semantic_checks = [
+                    lambda t1, t2: "overfitting" in t1 and "overfitting" in t2,
+                    lambda t1, t2: "supervised" in t1 and "supervised" in t2 and ("labeled" in t1 or "labels" in t1) and ("labeled" in t2 or "labels" in t2),
+                    lambda t1, t2: "unsupervised" in t1 and "unsupervised" in t2 and ("unlabeled" in t1 or "patterns" in t1) and ("unlabeled" in t2 or "patterns" in t2),
+                    lambda t1, t2: "mean" in t1 and "mean" in t2 and "median" in t1 and "median" in t2,
+                    lambda t1, t2: "join" in t1 and "join" in t2 and ("tables" in t1 or "matching" in t1) and ("tables" in t2 or "matching" in t2),
+                    lambda t1, t2: ("list" in t1 or "lists" in t1) and ("list" in t2 or "lists" in t2) and ({"mutable", "immutable"} & t1) and ({"mutable", "immutable"} & t2),
+                    lambda t1, t2: ("string" in t1 or "strings" in t1) and ("string" in t2 or "strings" in t2) and ({"mutable", "immutable"} & t1) and ({"mutable", "immutable"} & t2),
+                    lambda t1, t2: ("tuple" in t1 or "tuples" in t1) and ("tuple" in t2 or "tuples" in t2) and ({"mutable", "immutable"} & t1) and ({"mutable", "immutable"} & t2),
+                ]
+                for check in semantic_checks:
+                    if check(tokens1, tokens2):
+                        return True
+                return False
+
+            # Filter out questions already asked (concept and lexical check)
             fresh_questions = []
             for q in new_questions:
-                q_text = str(q.get("question") or q.get("text") or "").lower().strip()
+                q_text = str(q.get("question") or q.get("text") or "").strip()
                 is_duplicate = any(
-                    q_text in asked or asked in q_text
+                    _is_concept_duplicate(q_text, asked)
                     for asked in already_asked_texts
-                    if len(asked) > 10  # skip very short strings
+                    if len(asked) > 10
                 )
                 if not is_duplicate:
                     fresh_questions.append(q)
+                    already_asked_texts.add(q_text.lower())
                 if len(fresh_questions) >= count:
                     break
 
@@ -481,14 +533,14 @@ async def generate_more_questions_endpoint(
                     offline_fallback = _generate_offline_questions(
                         jd_text=session.get("job_description") or "",
                         resume_text=session.get("resume_text") or "",
-                        target=count * 2,
+                        target=count * 3,
                         ai_instructions=session.get("ai_instructions", "")
                     )
                     for q in offline_fallback:
-                        q_text = str(q.get("question") or q.get("text") or "").lower().strip()
-                        if not any(q_text in asked or asked in q_text for asked in already_asked_texts if len(asked) > 10):
+                        q_text = str(q.get("question") or q.get("text") or "").strip()
+                        if not any(_is_concept_duplicate(q_text, asked) for asked in already_asked_texts if len(asked) > 10):
                             fresh_questions.append(q)
-                            already_asked_texts.add(q_text)
+                            already_asked_texts.add(q_text.lower())
                         if len(fresh_questions) >= count:
                             break
                 except Exception as _off_err:
