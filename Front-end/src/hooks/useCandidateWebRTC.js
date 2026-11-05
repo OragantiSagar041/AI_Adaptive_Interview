@@ -320,7 +320,12 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
                   params.encodings[0].maxFramerate = 24
                   params.encodings[0].maxBitrate = 900000
                 }
-                await cameraSender.setParameters(params)
+                try {
+                  await cameraSender.setParameters(params)
+                } catch (paramInnerErr) {
+                  delete params.encodings[0].scaleResolutionDownBy
+                  await cameraSender.setParameters(params)
+                }
                 console.log(`[CandidateWebRTC] Successfully set ${streamTier.toUpperCase()} tier encoding parameters on camera sender.`)
               } catch (paramErr) {
                 console.warn('[CandidateWebRTC] Could not set camera encoding parameters:', paramErr)

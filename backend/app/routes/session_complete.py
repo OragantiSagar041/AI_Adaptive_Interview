@@ -165,17 +165,18 @@ def complete_session(
             violations = session.get("violations", [])
             existing_integrity = session.get("integrity") or {}
             if violations:
-                tab_switch_types = {
+                hard_tab_switch_types = {
                     "tab_switch", "screen_casting", "screen_share_detected", 
                     "screen_recording", "screenshare_stopped", "multiple_displays", 
-                    "multi_monitor", "fullscreen_exit", "window_blur"
+                    "multi_monitor", "fullscreen_exit"
                 }
                 noise_types = {"noise_alert", "background_noise", "noise"}
-                if update_data["integrity"]["total_tab_switches"] == 0:
-                    update_data["integrity"]["total_tab_switches"] = sum(1 for v in violations if v.get("type") in tab_switch_types)
-                if update_data["integrity"]["total_face_alerts"] == 0:
-                    update_data["integrity"]["total_face_alerts"] = sum(1 for v in violations if v.get("type") not in tab_switch_types and v.get("type") not in noise_types)
-                if update_data["integrity"]["total_noise_alerts"] == 0:
+                # Filter violations up to completion
+                if update_data["integrity"]["total_tab_switches"] == 0 and not payload.total_tab_switches:
+                    update_data["integrity"]["total_tab_switches"] = sum(1 for v in violations if v.get("type") in hard_tab_switch_types)
+                if update_data["integrity"]["total_face_alerts"] == 0 and not payload.total_face_alerts:
+                    update_data["integrity"]["total_face_alerts"] = sum(1 for v in violations if v.get("type") not in hard_tab_switch_types and v.get("type") not in noise_types and v.get("type") != "window_blur")
+                if update_data["integrity"]["total_noise_alerts"] == 0 and not payload.total_noise_alerts:
                     update_data["integrity"]["total_noise_alerts"] = sum(1 for v in violations if v.get("type") in noise_types)
 
             if update_data["integrity"]["total_tab_switches"] == 0 and existing_integrity.get("total_tab_switches"):
@@ -189,18 +190,38 @@ def complete_session(
             if candidate_id and not candidate_id.endswith("IQ"):
                 update_data["candidate_id"] = f"{candidate_id}IQ"
             
-            # Calculate total time for the dashboard
-            started_at = session.get("started_at") or session.get("updated_at")
-            if started_at:
-                try:
-                    s_dt = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
-                    e_dt = datetime.fromisoformat(update_data["completed_at"].replace("Z", "+00:00"))
-                    delta = (e_dt - s_dt).total_seconds()
-                    update_data["integrity"]["total_time_minutes"] = round(delta / 60, 1) if delta > 0 else 0
-                except:
-                    update_data["integrity"]["total_time_minutes"] = 0
+            # Calculate active interview time for the dashboard
+            int_id = session.get("interview_id") or link_id
+            active_secs = 0
+            try:
+                ans_cursor = answers_collection.find({"interview_id": int_id}, {"time_spent_seconds": 1, "time_limit_seconds": 1})
+                for a in ans_cursor:
+                    sp = a.get("time_spent_seconds") or 0
+                    lm = a.get("time_limit_seconds") or 180
+                    if lm and sp > (lm * 2):
+                        sp = lm
+                    active_secs += sp
+            except Exception:
+                active_secs = 0
+
+            if active_secs > 0:
+                update_data["integrity"]["total_time_minutes"] = round(active_secs / 60, 1)
             else:
-                update_data["integrity"]["total_time_minutes"] = 0
+                started_at = session.get("started_at")
+                if started_at:
+                    try:
+                        s_dt = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+                        last_ans = answers_collection.find_one({"interview_id": int_id}, sort=[("created_at", -1)])
+                        if last_ans and last_ans.get("created_at"):
+                            e_dt = datetime.fromisoformat(last_ans["created_at"].replace("Z", "+00:00"))
+                        else:
+                            e_dt = datetime.fromisoformat(update_data["completed_at"].replace("Z", "+00:00"))
+                        delta = (e_dt - s_dt).total_seconds()
+                        update_data["integrity"]["total_time_minutes"] = round(delta / 60, 1) if delta > 0 else 0
+                    except:
+                        update_data["integrity"]["total_time_minutes"] = 0
+                else:
+                    update_data["integrity"]["total_time_minutes"] = 0
                 
         interview_sessions_collection.update_one({"link_id": link_id}, {"$set": update_data})
         sync_session_to_application(link_id)
@@ -281,7 +302,7 @@ def complete_session(
                             answers = list(answers_collection.find({"interview_id": interview_id}))
                             all_scored = all(a.get("scoring_status") in ("complete", "failed") for a in answers)
 
-                    if all_scored and not session.get("notification_sent"):
+                    if all_scored:
                         # ALWAYS recalculate the final score to include the coding/case-study round
                         avg_score = session.get("avg_score") or 0.0
                         try:

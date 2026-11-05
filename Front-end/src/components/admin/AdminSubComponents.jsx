@@ -46,7 +46,7 @@ export function CandidateFilters({
             style={{ padding: '0.5rem 0.75rem 0.5rem 2.25rem' }}
             placeholder="Name or Email..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value.replace(/[0-9]/g, ''))}
+            onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
       </div>
@@ -331,7 +331,7 @@ export function CandidateTable({
                     </td>
                     <td className="px-4 py-3.5 text-sm">
                       {(() => {
-                        const score = c.score ?? c.avg_score
+                        const score = c.avg_score ?? c.score
                         return computedStatus === 'completed' && score != null ? (
                           <strong className={Number(score) >= 60 ? 'text-success' : 'text-rose-500'}>
                             {Number(score).toFixed(1)}/100

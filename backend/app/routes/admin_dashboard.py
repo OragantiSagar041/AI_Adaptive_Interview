@@ -371,6 +371,7 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
                 "total_time_minutes": total_mins
             },
             "admin_notes": app.get("admin_notes", ""),
+            "notes": app.get("notes") or app.get("notes_history") or [],
             "alerts": [],
             "answers": answers,
             "started_at": app.get("applied_at") or app.get("updated_at") or app.get("created_at"),
@@ -509,21 +510,47 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
 
     results = []
     
-    # Calculate integrity totals from the violations array, as it accurately tracks all events
-    # even if the interview terminates before any questions are answered.
     violations = session_data.get("violations", [])
     session_integrity = session_data.get("integrity") or {}
 
-    tab_switch_types = {
+    # Check for the last answered question to determine the true interview cutoff timestamp
+    last_ans = None
+    if actual_interview_id:
+        last_ans = answers_collection.find_one(
+            {"interview_id": actual_interview_id},
+            sort=[("created_at", -1)]
+        )
+
+    # Filter out post-interview violations (e.g. window blur or tab changes hours after completing questions)
+    cutoff_dt = None
+    if last_ans and last_ans.get("created_at"):
+        try:
+            cutoff_dt = datetime.fromisoformat(last_ans["created_at"].replace("Z", "+00:00")) + timedelta(minutes=2)
+        except Exception:
+            cutoff_dt = None
+
+    active_violations = []
+    for v in violations:
+        ts = v.get("timestamp")
+        if cutoff_dt and ts:
+            try:
+                v_dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                if v_dt > cutoff_dt:
+                    continue  # Ignore events logged after interview questions were finished
+            except Exception:
+                pass
+        active_violations.append(v)
+
+    hard_tab_switch_types = {
         "tab_switch", "screen_casting", "screen_share_detected", 
         "screen_recording", "screenshare_stopped", "multiple_displays", 
-        "multi_monitor", "fullscreen_exit", "window_blur"
+        "multi_monitor", "fullscreen_exit"
     }
     noise_types = {"noise_alert", "background_noise", "noise"}
 
-    total_tab_switches = sum(1 for v in violations if v.get("type") in tab_switch_types)
-    total_face_alerts = sum(1 for v in violations if v.get("type") not in tab_switch_types and v.get("type") not in noise_types)
-    total_noise_alerts = sum(1 for v in violations if v.get("type") in noise_types)
+    total_tab_switches = sum(1 for v in active_violations if v.get("type") in hard_tab_switch_types)
+    total_face_alerts = sum(1 for v in active_violations if v.get("type") not in hard_tab_switch_types and v.get("type") not in noise_types and v.get("type") != "window_blur")
+    total_noise_alerts = sum(1 for v in active_violations if v.get("type") in noise_types)
 
     if total_tab_switches == 0 and session_integrity.get("total_tab_switches"):
         total_tab_switches = session_integrity.get("total_tab_switches")
@@ -537,7 +564,8 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
     ans_face_al = 0
     ans_noise_al = 0
 
-    if actual_interview_id:
+    target_iv_id = actual_interview_id or link_id
+    if target_iv_id:
         ans_projection = {
             "question_id": 1,
             "question_text": 1,
@@ -558,7 +586,8 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
             "face_alerts": 1,
             "noise_alerts": 1,
         }
-        rows = answers_collection.find({"interview_id": actual_interview_id}, ans_projection).sort("question_id", 1)
+        ans_query = {"$or": [{"interview_id": actual_interview_id}, {"interview_id": link_id}]} if actual_interview_id else {"interview_id": link_id}
+        rows = answers_collection.find(ans_query, ans_projection).sort("question_id", 1)
         for row in rows:
             tab_sw = row.get("tab_switches") or 0
             face_al = row.get("face_alerts") or 0
@@ -566,19 +595,61 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
             ans_tab_sw += tab_sw
             ans_face_al += face_al
             ans_noise_al += noise_al
-            total_time += (row.get("time_spent_seconds") or 0)
+            t_spent = row.get("time_spent_seconds") or 0
+            t_limit = row.get("time_limit_seconds") or 180
+            if t_limit and t_spent > (t_limit * 2):
+                t_spent = t_limit
+            total_time += t_spent
+            ai_score_val = row.get("ai_score")
+            content_score_val = row.get("content_score")
+            relevance_score_val = row.get("relevance_score")
+            ai_fb = row.get("ai_feedback") or "No feedback provided"
+            corrected_ans = row.get("corrected_answer") or "N/A"
+
+            # On-demand fallback scoring if worker was offline or delayed
+            if ai_score_val is None and row.get("answer_text") and len(row.get("answer_text", "").strip()) > 10:
+                try:
+                    from app.ai.analyze_answer import analyze_answer
+                    scored_res = analyze_answer(
+                        question=row.get("question_text", ""),
+                        answer=row.get("answer_text", ""),
+                        context=session_data.get("job_description", "")[:200] if session_data else "",
+                        time_spent_seconds=row.get("time_spent_seconds") or 0,
+                        time_limit_seconds=row.get("time_limit_seconds") or 120,
+                        language=session_data.get("language", "English") if session_data else "English"
+                    )
+                    ai_score_val = scored_res.get("overall_score", 0)
+                    content_score_val = scored_res.get("content_score", 0)
+                    relevance_score_val = scored_res.get("relevance_score", 0)
+                    ai_fb = scored_res.get("feedback") or ai_fb
+                    corrected_ans = scored_res.get("corrected_answer") or corrected_ans
+                    if "_id" in row:
+                        answers_collection.update_one(
+                            {"_id": row["_id"]},
+                            {"$set": {
+                                "ai_score": ai_score_val,
+                                "content_score": content_score_val,
+                                "relevance_score": relevance_score_val,
+                                "ai_feedback": ai_fb,
+                                "corrected_answer": corrected_ans,
+                                "scoring_status": "complete"
+                            }}
+                        )
+                except Exception as _score_err:
+                    print(f"On-demand evaluation fallback error: {_score_err}")
+
             results.append({
                 "question_id": row.get("question_id"),
                 "question_text": row.get("question_text"),
                 "answer_text": row.get("answer_text") or "(No answer yet)",
-                "ai_score": row.get("ai_score"),
-                "content_score": row.get("content_score"),
-                "relevance_score": row.get("relevance_score"),
+                "ai_score": ai_score_val,
+                "content_score": content_score_val,
+                "relevance_score": relevance_score_val,
                 "time_score": row.get("time_score"),
                 "time_spent_seconds": row.get("time_spent_seconds") or 0,
                 "time_limit_seconds": row.get("time_limit_seconds"),
-                "ai_feedback": row.get("ai_feedback") or "No feedback provided",
-                "corrected_answer": row.get("corrected_answer") or "N/A",
+                "ai_feedback": ai_fb,
+                "corrected_answer": corrected_ans,
                 "wpm": round(row.get("wpm") or 0, 1),
                 "pause_count": row.get("pause_count") or 0,
                 "filler_count": row.get("filler_count") or 0,
@@ -595,38 +666,26 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
     if total_noise_alerts == 0 and ans_noise_al > 0:
         total_noise_alerts = ans_noise_al
 
-    # ── Timestamp-based fallback for older sessions where time_spent_seconds was not stored ──
-    # If total_time is still 0 after reading all answers, calculate from session timestamps.
+    # ── Active Interview Duration Calculation ──
+    # If active answering time was tracked in answers, use it directly as Active Interview Time.
+    # If total_time is still 0 (e.g. legacy sessions without time_spent_seconds), calculate fallback from timestamps.
     if total_time == 0:
-        try:
-            started_str  = session_data.get("started_at")
-            finished_str = (session_data.get("completed_at")
-                            or session_data.get("updated_at")
-                            or session_data.get("submitted_at"))
+        started_str = session_data.get("started_at")
+        if started_str:
+            try:
+                started_dt = datetime.fromisoformat(started_str.replace("Z", "+00:00"))
+                finished_dt = None
+                if last_ans and last_ans.get("created_at"):
+                    finished_dt = datetime.fromisoformat(last_ans["created_at"].replace("Z", "+00:00"))
+                elif session_data.get("submitted_at"):
+                    finished_dt = datetime.fromisoformat(session_data["submitted_at"].replace("Z", "+00:00"))
+                elif session_data.get("completed_at") and not actual_interview_id:
+                    finished_dt = datetime.fromisoformat(session_data["completed_at"].replace("Z", "+00:00"))
 
-            print(f"⏱️ Duration fallback check | link_id={link_id} | started_at={started_str} | finished_str(before ans)={finished_str} | interview_id={actual_interview_id}")
-
-            # For old sessions with no completed_at, use the created_at of the LAST answer
-            if started_str and not finished_str and actual_interview_id:
-                last_ans = answers_collection.find_one(
-                    {"interview_id": actual_interview_id},
-                    sort=[("created_at", -1)]
-                )
-                if last_ans:
-                    finished_str = last_ans.get("created_at")
-                    print(f"⏱️ Using last answer created_at as finish time: {finished_str}")
-
-            if started_str and finished_str:
-                started_dt  = datetime.fromisoformat(started_str.replace("Z", "+00:00"))
-                finished_dt = datetime.fromisoformat(finished_str.replace("Z", "+00:00"))
-                delta_secs  = (finished_dt - started_dt).total_seconds()
-                print(f"⏱️ Calculated duration: {delta_secs:.0f}s = {delta_secs/60:.1f} min")
-                if delta_secs > 0:
-                    total_time = int(delta_secs)
-            else:
-                print(f"⏱️ Cannot compute fallback duration: started_str={started_str}, finished_str={finished_str}")
-        except Exception as _ts_err:
-            print(f"Timestamp fallback error: {_ts_err}")
+                if finished_dt and finished_dt > started_dt:
+                    total_time = int((finished_dt - started_dt).total_seconds())
+            except Exception as _dur_err:
+                print(f"⏱️ Duration calculation error: {_dur_err}")
 
     # 2. Calculate composite AI summary score
     avg_score = 0
@@ -638,63 +697,47 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
 
     # Blend with coding / case study rounds if present
     try:
-        from app.ai.score_rounds import (
-                compute_case_study_score,
-                calculate_round1_score, calculate_coding_score,
-                calculate_case_study_round2_score, calculate_final_score
-            )
-        interview_record_for_score = interviews_collection.find_one({"id": actual_interview_id}) if actual_interview_id else None
+        from app.ai.score_rounds import compute_session_composite_score
+        target_iv_lookup = actual_interview_id or link_id
+        interview_record_for_score = interviews_collection.find_one({
+            "$or": [{"id": target_iv_lookup}, {"link_id": link_id}, {"link_id": target_iv_lookup}]
+        }) if target_iv_lookup else None
 
-        if interview_record_for_score:
-            interview_format_cs = session_data.get("interview_format", "Standard") if session_data else "Standard"
-            lang_cs = interview_record_for_score.get("language", "English")
-            ctx_cs  = f"Candidate's {interview_record_for_score.get('source','Resume')}: {interview_record_for_score.get('profile_text','')}"
+        coding_rd = (interview_record_for_score or {}).get("coding_round") if interview_record_for_score else None
+        if not coding_rd and session_data:
+            coding_rd = session_data.get("coding_round")
+        case_std = (interview_record_for_score or {}).get("case_study_round") if interview_record_for_score else None
 
-            # Determine interview type for scoring model
-            interview_type = interview_record_for_score.get("interview_type") or \
-                             (session_data.get("interview_type") if session_data else None) or "Technical"
+        questions = (interview_record_for_score or {}).get("questions", []) if interview_record_for_score else []
+        if isinstance(questions, str):
+            import json
+            try:
+                questions = json.loads(questions)
+            except Exception:
+                questions = []
+        if not questions and session_data and session_data.get("pre_generated_questions"):
+            import json
+            try:
+                questions = json.loads(session_data["pre_generated_questions"])
+            except Exception:
+                questions = []
 
-            coding_rd  = interview_record_for_score.get("coding_round")
-            case_std   = interview_record_for_score.get("case_study_round")
-            n_cs_questions = len((case_std or {}).get("questions", []) or []) if case_std else 0
+        interview_type = (interview_record_for_score or {}).get("interview_type") or \
+                         (session_data.get("interview_type") if session_data else None) or "Technical"
 
-            questions  = interview_record_for_score.get("questions", [])
-            if isinstance(questions, str):
-                import json
-                try:
-                    questions = json.loads(questions)
-                except:
-                    questions = []
-            if not questions and session_data and session_data.get("pre_generated_questions"):
-                import json
-                try:
-                    questions = json.loads(session_data["pre_generated_questions"])
-                except:
-                    pass
+        lang_cs = (interview_record_for_score or {}).get("language", "English") if interview_record_for_score else "English"
+        ctx_cs = f"Candidate's {(interview_record_for_score or {}).get('source','Resume')}: {(interview_record_for_score or {}).get('profile_text','')}"
 
-            # Round 1 (Verbal): ALWAYS recalculate because it's fast (O(1)) and uses native math, not the LLM.
-            round1_s = calculate_round1_score(questions, results, interview_type=interview_type, n_case_study_questions=n_cs_questions)
-
-            round2_s = 0.0
-            itype_lower = str(interview_type).strip().lower()
-            if itype_lower == "technical" and coding_rd:
-                # Coding Round: ALWAYS recalculate because it just reads test cases, no LLM cost.
-                round2_s = calculate_coding_score(coding_rd)
-            elif itype_lower in ("non-technical", "non_technical", "non tech", "nontech") and case_std:
-                lang_cs = interview_record_for_score.get("language", "English")
-                ctx_cs = f"Profile: {interview_record_for_score.get('profile_text', '')}"
-                round2_s = calculate_case_study_round2_score(case_std, n_cs_questions, ctx_cs, lang_cs)
-                if actual_interview_id:
-                    interviews_collection.update_one(
-                        {"id": actual_interview_id},
-                        {"$set": {"case_study_round": case_std}}
-                    )
-
-            # Final Score: ALWAYS recalculate mathematically.
-            avg_score = calculate_final_score(round1_s, round2_s)
-        else:
-            round1_s = verbal_avg
-            avg_score = verbal_avg
+        round1_s, round2_s, avg_score = compute_session_composite_score(
+            interview_type=interview_type,
+            questions=questions,
+            answers=results,
+            coding_round=coding_rd,
+            case_study_round=case_std,
+            context=ctx_cs,
+            language=lang_cs,
+            fallback_score=verbal_avg
+        )
     except Exception as blend_err:
         print(f"🚨 complete-session blend error: {blend_err}")
         avg_score = verbal_avg
@@ -717,6 +760,12 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
         job_success_score = saved_job
         job_success_reasoning = saved_job_reason
         detected_accent = saved_accent or "Unknown"
+        sync_payload = {
+            "score": avg_score,
+            "avg_score": avg_score,
+            "round1_score": round1_s,
+            "round2_score": round2_s
+        }
         if not detected_accent or detected_accent.strip().lower() in ["unknown", "none", ""]:
             from app.services.language_accent_detector import detect_language_and_accent
             lang_accent_res = detect_language_and_accent(
@@ -726,17 +775,17 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
             )
             detected_accent = lang_accent_res.get("detected_accent") or "English (Indian Accent)"
             detected_language = lang_accent_res.get("language") or "English"
-            try:
-                interview_sessions_collection.update_one(
-                    {"link_id": link_id},
-                    {"$set": {
-                        "detected_accent": detected_accent,
-                        "detected_language": detected_language,
-                        "language": detected_language
-                    }}
-                )
-            except Exception as e:
-                print(f"Error updating detected accent: {e}")
+            sync_payload["detected_accent"] = detected_accent
+            sync_payload["detected_language"] = detected_language
+            sync_payload["language"] = detected_language
+
+        try:
+            interview_sessions_collection.update_one(
+                {"link_id": link_id},
+                {"$set": sync_payload}
+            )
+        except Exception as e:
+            print(f"Error syncing score/accent to session: {e}")
     else:
         try:
             summary = generate_interview_summary(candidate_name or "Candidate", results)
@@ -935,6 +984,7 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
         "job_description_text": session_data.get("job_description", ""),
         "date": created_at,
         "source": session_data.get("source") or "Job Description / Resume",
+        "score": avg_score,
         "avg_score": avg_score,
         "round1_score": round1_s,
         "round2_score": round2_s,
@@ -967,13 +1017,14 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
             "total_noise_alerts": total_noise_alerts,
             "total_time_minutes": round(total_time / 60, 1)
         },
-        "violations": session_data.get("violations", session_data.get("alerts", [])),
-        "proctoring_alerts": session_data.get("violations", session_data.get("alerts", [])),
-        "alerts": session_data.get("violations", session_data.get("alerts", [])),
+        "violations": active_violations,
+        "proctoring_alerts": active_violations,
+        "alerts": active_violations,
         "answers": results,
         "candidate_feedback": session_data.get("candidate_feedback", ""),
         "ats_score": session_data.get("ats_score"),
-        "talent_pool_status": session_data.get("talent_pool_status", "archived")
+        "talent_pool_status": session_data.get("talent_pool_status", "archived"),
+        "notes": session_data.get("notes") or session_data.get("notes_history") or []
     }
     
     # Include full question list so admin can see which questions were skipped
@@ -1032,6 +1083,20 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
     # ── Include coding/case-study round data so the admin transcript shows submitted code ──
     response_payload["coding_round"] = coding_round_data
     response_payload["case_study_round"] = case_study_data
+
+    # Automatically sync / backfill clean integrity metrics back to MongoDB for existing sessions
+    try:
+        interview_sessions_collection.update_one(
+            {"link_id": link_id},
+            {"$set": {
+                "integrity.total_tab_switches": total_tab_switches,
+                "integrity.total_face_alerts": total_face_alerts,
+                "integrity.total_noise_alerts": total_noise_alerts,
+                "integrity.total_time_minutes": round(total_time / 60, 1)
+            }}
+        )
+    except Exception as _sync_err:
+        pass
 
     return response_payload
 
