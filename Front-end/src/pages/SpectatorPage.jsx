@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { API_BASE_URL } from '../apiConfig'
 import { getIceServers, initIceServers } from '../utils/webrtcConfig'
@@ -517,8 +517,8 @@ export default function SpectatorPage() {
                 <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-400 font-semibold bg-indigo-50 dark:bg-indigo-500/10 px-3 py-2 rounded-xl border border-indigo-200 dark:border-indigo-500/20">
                   {getRoundIcon(telemetry.round_type)}
                   <span className="capitalize text-sm font-bold text-black dark:text-indigo-300">{telemetry.round_type ? `${telemetry.round_type.replace('_', ' ')} Round` : 'Interview Round'}</span>
-                  {telemetry.total_questions > 0 && (
-                    <span className="text-xs text-black dark:text-indigo-300 ml-auto font-mono font-bold">Q{telemetry.current_question || 1} of {telemetry.total_questions}</span>
+                  {telemetry.current_question && (
+                    <span className="text-xs text-black dark:text-indigo-300 ml-auto font-mono font-bold">Q{telemetry.current_question}</span>
                   )}
                 </div>
                 {telemetry.question_text && (
