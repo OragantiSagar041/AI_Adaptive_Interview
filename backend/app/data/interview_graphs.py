@@ -46,6 +46,7 @@ class AnswerScoringState(TypedDict, total=False):
     time_context: str
     time_score_hint: str
     language: str
+    ai_instructions: str
     
     # internal
     ideal_answer: str
@@ -60,6 +61,23 @@ def as_evaluate_answer(state: AnswerScoringState) -> AnswerScoringState:
     raw_answer = state.get("answer", "")
     from app.ai.typed_ai_layer import normalize_stt_technical_terms
     cleaned_answer = normalize_stt_technical_terms(raw_answer)
+    ai_inst = state.get("ai_instructions", "").strip()
+
+    inst_section = ""
+    if ai_inst:
+        inst_section = (
+            f"\nCUSTOM RECRUITER INSTRUCTIONS (STRICT OVERRIDE):\n"
+            f"{ai_inst}\n\n"
+            f"SPECIAL FORMAT / SCORING OVERRIDE RULES:\n"
+            f"- If the recruiter instructions specify that questions should be answered with a single word or short direct phrase "
+            f"(such as 'Yes/No', specific technical terms, keywords, or one-word answers) and award 100% for the correct response:\n"
+            f"  * Check if this question is a direct, closed-ended, or one-word answer question.\n"
+            f"  * If the candidate answered with the correct single word, term, or appropriate Yes/No (e.g. 'Stack', 'Python', 'Yes', 'No', '404', 'Kubernetes'):\n"
+            f"    award full credit: content_score = 70, relevance_score = 30, overall_score = 100.\n"
+            f"  * If the candidate gave the wrong answer or an incorrect term:\n"
+            f"    award content_score = 0, relevance_score = 10, overall_score = 10.\n"
+            f"- For all standard open-ended questions where no special format is requested, strictly apply the standard Positive Milestone Rubric.\n"
+        )
 
     sys_prompt = (
         "You are an expert technical interviewer evaluating a live candidate in a verbal/spoken interview conducted over a microphone.\n\n"
@@ -98,7 +116,8 @@ def as_evaluate_answer(state: AnswerScoringState) -> AnswerScoringState:
         f"Question: {state.get('question')}\n"
         f"Context: {state.get('context')}\n"
         f"Candidate Spoken Answer: {cleaned_answer}\n"
-        f"Language: {state.get('language', 'English')}\n\n"
+        f"Language: {state.get('language', 'English')}\n"
+        f"{inst_section}\n"
         "Score the candidate fairly based on spoken interview standards. Return JSON."
     )
     
@@ -150,14 +169,15 @@ def build_answer_scoring_graph():
 
 ANSWER_SCORING_GRAPH = build_answer_scoring_graph()
 
-def run_answer_scoring_graph(question, answer, context, time_spent, time_limit, language, time_context, time_score_hint):
+def run_answer_scoring_graph(question, answer, context, time_spent, time_limit, language, time_context, time_score_hint, ai_instructions=""):
     state: AnswerScoringState = {
         "question": question,
         "answer": answer,
         "context": context,
         "time_context": time_context,
         "time_score_hint": time_score_hint,
-        "language": language
+        "language": language,
+        "ai_instructions": ai_instructions or ""
     }
     final_state = ANSWER_SCORING_GRAPH.invoke(state)
     return final_state.get("result", AnswerScore().to_dict())
@@ -203,6 +223,7 @@ def qg_generate_all(state: QuestionGenerationState) -> QuestionGenerationState:
             f"3. DOMAIN & TOPIC ALLOCATION: If specific topics, percentages, or ratios are requested (e.g., '60% ML, 20% Banking, 20% Real Estate' or 'Focus 100% on Healthcare Compliance'), you MUST STRICTLY allocate the questions to match that exact breakdown across the {num} questions.\n"
             f"4. UNLISTED TOPICS: Even if an instructed topic, domain, or business scenario is NOT mentioned in the candidate's Resume or Job Description, you MUST STILL generate questions directly covering that topic as commanded by the recruiter.\n"
             f"5. TECHNICAL & NON-TECHNICAL ADAPTABILITY: Seamlessly handle both Technical engineering interviews (coding concepts, system architecture) and Non-Technical leadership, management, product, operations, sales, and strategy interviews.\n"
+            f"6. QUESTION FORMAT & STRUCTURE OVERRIDE: If the recruiter specifically instructs questions to be one-word answers or Yes/No (or closed-ended direct format), you MUST frame the questions so they can be answered definitively with a single word or term (e.g., 'What data structure operates on a Last-In, First-Out principle?', 'Have you worked with Kubernetes in production?').\n"
             f"======================================================\n"
         )
     else:

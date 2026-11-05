@@ -1440,7 +1440,7 @@ def generate_jd_questions(jd_text: str, ai_instructions: str = "", interview_typ
     instruction_block = (
         f"\n    CRITICAL MANDATORY INSTRUCTIONS & TOPIC DISTRIBUTION (STRICT OVERRIDE):\n"
         f"    {ai_instructions}\n"
-        f"    STRICT REQUIREMENT: These instructions OVERRIDE any default focus from the Job Description. If specific percentages or domains are requested, you MUST allocate the questions to match that exact breakdown.\n"
+        f"    STRICT REQUIREMENT: These instructions OVERRIDE any default focus from the Job Description. If specific percentages, domains, or question styles (such as Yes/No format) are requested, you MUST allocate and frame the questions to match that exact structure.\n"
     ) if ai_instructions else ""
     
     # Inject language requirement if not English
@@ -1614,7 +1614,13 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
         ]
 
     target_diff = (difficulty or "Medium").capitalize()
-    if is_continuation:
+    lower_ai_inst = (ai_instructions or "").lower()
+    is_one_word_exclusive = (
+        ("yes" in lower_ai_inst and "no" in lower_ai_inst) or
+        ("one word" in lower_ai_inst or "single word" in lower_ai_inst)
+    ) and ("only" in lower_ai_inst or "all" in lower_ai_inst or "must be" in lower_ai_inst or "100" in lower_ai_inst)
+
+    if is_continuation or is_one_word_exclusive:
         opening = []
     elif (custom_questions and custom_questions.strip()) or num_questions <= 4:
         opening = [
