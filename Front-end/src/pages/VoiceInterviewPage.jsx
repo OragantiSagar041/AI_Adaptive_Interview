@@ -2191,20 +2191,26 @@ export default function VoiceInterviewPage() {
       setAnsweredCount(p => p + 1)
       const nextIdx = qIdx + 1
 
-      // ── Pre-fetch next batch when candidate is on second-to-last question ──
+      // ── Lookahead Conveyor Belt: Pre-fetch next batch when <= 5 questions remain ──
       const iid = interviewIdRef.current
-      if (iid && !isPrefetchingRef.current && qs.length - qIdx <= 2 && prefetchedQuestionsRef.current.length === 0) {
+      if (iid && !isPrefetchingRef.current && qs.length - qIdx <= 5) {
         isPrefetchingRef.current = true
         const alreadyAskedIds = qs.map(q => String(q.id || '')).join(',')
         const fd = new FormData()
         fd.append('interview_id', iid)
         fd.append('asked_question_ids', alreadyAskedIds)
-        fd.append('count', '5')
+        fd.append('count', '6')
         candidateFetch(`${API_BASE_URL}/generate-more-questions`, { method: 'POST', body: fd })
           .then(r => r.json())
           .then(data => {
             if (data.questions && data.questions.length > 0) {
-              prefetchedQuestionsRef.current = data.questions
+              setQuestions(prev => {
+                const existingIds = new Set(prev.map(p => String(p.id || '')))
+                const uniqueNew = data.questions.filter(q => !existingIds.has(String(q.id || '')))
+                const updated = uniqueNew.length > 0 ? [...prev, ...uniqueNew] : prev
+                questionsRef.current = updated
+                return updated
+              })
             }
           })
           .catch(() => { })
@@ -2213,10 +2219,10 @@ export default function VoiceInterviewPage() {
 
       if (!qs[nextIdx]) {
         // Check if we have pre-fetched questions ready
-        if (prefetchedQuestionsRef.current.length > 0) {
-          const batch = prefetchedQuestionsRef.current
+        const readyBatch = prefetchedQuestionsRef.current
+        if (readyBatch && readyBatch.length > 0) {
           prefetchedQuestionsRef.current = []
-          const newQs = [...qs, ...batch]
+          const newQs = [...qs, ...readyBatch]
           setQuestions(newQs)
           questionsRef.current = newQs
           setCurrentQIdx(nextIdx)
@@ -2226,9 +2232,33 @@ export default function VoiceInterviewPage() {
           setTimeout(() => {
             aiSay(`${transition}${t.nextQuestion.replace('[X]', nextIdx + 1)}${newQs[nextIdx].text}`, () => startListening(ans => handleAnswer(ans, nextIdx, 0)))
           }, 500)
-        } else {
-          // No pre-fetched questions yet — proceed to next round as usual
+        } else if (isTimeExpiredRef.current || countdown <= 0) {
+          // Time expired — proceed to next round or submission
           transitionToNextRoundRef.current?.()
+        } else {
+          // Time still remains on clock: trigger on-demand fetch without premature transition
+          const alreadyAskedIds = qs.map(q => String(q.id || '')).join(',')
+          const fd = new FormData()
+          fd.append('interview_id', iid)
+          fd.append('asked_question_ids', alreadyAskedIds)
+          fd.append('count', '6')
+          candidateFetch(`${API_BASE_URL}/generate-more-questions`, { method: 'POST', body: fd })
+            .then(r => r.json())
+            .then(data => {
+              if (data.questions && data.questions.length > 0) {
+                const newQs = [...qs, ...data.questions]
+                setQuestions(newQs)
+                questionsRef.current = newQs
+                setCurrentQIdx(nextIdx)
+                const t = VOICE_TRANSLATIONS[languageRef.current] || VOICE_TRANSLATIONS['English']
+                const acks = t.acks
+                const transition = acks[Math.floor(Math.random() * acks.length)] + " "
+                aiSay(`${transition}${t.nextQuestion.replace('[X]', nextIdx + 1)}${newQs[nextIdx].text}`, () => startListening(ans => handleAnswer(ans, nextIdx, 0)))
+              } else {
+                transitionToNextRoundRef.current?.()
+              }
+            })
+            .catch(() => { transitionToNextRoundRef.current?.() })
         }
       } else {
         setCurrentQIdx(nextIdx)

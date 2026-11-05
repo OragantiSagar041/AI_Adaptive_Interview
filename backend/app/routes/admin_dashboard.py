@@ -779,20 +779,11 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
             sync_payload["detected_language"] = detected_language
             sync_payload["language"] = detected_language
 
-        if avg_score is not None:
-            session_data["score"] = avg_score
-            session_data["avg_score"] = avg_score
-        if round1_s is not None:
-            session_data["round1_score"] = round1_s
-        if round2_s is not None:
-            session_data["round2_score"] = round2_s
-
         try:
             interview_sessions_collection.update_one(
                 {"link_id": link_id},
                 {"$set": sync_payload}
             )
-            sync_session_to_application(link_id)
         except Exception as e:
             print(f"Error syncing score/accent to session: {e}")
     else:

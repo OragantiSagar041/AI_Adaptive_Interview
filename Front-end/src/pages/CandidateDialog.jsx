@@ -406,7 +406,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
     }
 
     try {
-      await dispatch(handleUpdateDecision({ linkId, decision: newDecision, talent_pool_status: talentPoolStatus })).unwrap()
+      await dispatch(handleUpdateDecision({ linkId, decision: newDecision, ...(talentPoolStatus ? { talent_pool_status: talentPoolStatus } : {}) })).unwrap()
       Swal.fire('Success', `Candidate marked as ${newDecision.toUpperCase()}`, 'success')
       onOpenChange(false)
       const basePath = window.location.pathname.startsWith('/superadmin') ? '/superadmin' : '/admin'

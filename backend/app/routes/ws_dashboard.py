@@ -250,8 +250,6 @@ async def get_dashboard_aggregated_data(
             "interview_id": 1,
             "record_video": 1,
             "interview_type": 1,
-            "pre_generated_questions": 1,
-            "coding_round": 1,
         }
         
         def _load_dashboard_candidates():
@@ -326,7 +324,7 @@ async def get_dashboard_aggregated_data(
 
         for c in candidates_cursor:
             computed_status = sync_session_status(c, now)
-            if computed_status in ("completed", "qualified") or c.get("started_at"):
+            if (computed_status in ("completed", "qualified") or c.get("started_at")) and (c.get("score") is None or c.get("avg_score") is None):
                 all_completed_candidates.append(c)
                 if c.get("interview_id"):
                     needed_interview_ids.add(c["interview_id"])

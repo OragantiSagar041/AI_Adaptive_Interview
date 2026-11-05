@@ -796,7 +796,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
               {telemetry ? (
                 <>
                   <span className="text-indigo-600">{getRoundIcon(telemetry.round_type)}</span>
-                  Q{telemetry.current_question} of {telemetry.total_questions}
+                  Q{telemetry.current_question || 1}
                 </>
               ) : '--'}
             </div>

@@ -2244,18 +2244,29 @@ async def start_session_interview(link_id: str = Form(...)):
                         ),
                     }
     
-    # Always generate a full pool of questions — exactly 22 questions for the interview
-    # Instant Start: Seed Pool Generation (1 warm-up intro, 2 core skill checks, 1 closing buffer)
-    SEED_POOL_COUNT = 4
-    num_questions_to_generate = SEED_POOL_COUNT
+    hr_screening = row.get("hr_screening")
+    custom_questions_text = row.get("custom_questions", "")
+    ai_instructions_text = row.get("ai_instructions", "")
+
+    # Dynamic Initial Pool Sizing based on Duration and Question Format:
+    # Closed format (True/False, Yes/No, One-word) are answered rapidly (10-15s each).
+    # Open-ended spoken technical questions take 60-90s each.
+    ai_inst_str = (ai_instructions_text or "").lower()
+    is_closed_fmt = (
+        ("yes" in ai_inst_str and "no" in ai_inst_str) or
+        ("true" in ai_inst_str and "false" in ai_inst_str) or
+        ("one word" in ai_inst_str or "single word" in ai_inst_str or "1 word" in ai_inst_str or "one-word" in ai_inst_str)
+    )
+    if is_closed_fmt:
+        # Rapid answering: 5 min -> 15 qs, 10 min -> 25 qs, 15+ min -> up to 30 initial
+        num_questions_to_generate = min(30, max(15, interview_duration * 3))
+    else:
+        # Standard spoken: 5 min -> 6 qs, 15 min -> 8 qs, 30+ min -> 12-15 qs
+        num_questions_to_generate = min(15, max(6, max(4, interview_duration // 3)))
     
     # Generate Questions
     source = "job_description" if job_description and len(job_description) > 50 else "resume"
     content_str = job_description if source == "job_description" else resume_text
-    
-    hr_screening = row.get("hr_screening")
-    custom_questions_text = row.get("custom_questions", "")
-    ai_instructions_text = row.get("ai_instructions", "")
     
     # ── Project / Case Study Questions Integration ──────────
     proj_qs = row.get("project_questions")
