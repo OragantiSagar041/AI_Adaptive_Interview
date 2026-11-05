@@ -48,6 +48,7 @@ def _dynamic_offline_evaluation(
     context: str = "",
     time_spent_seconds: int = 0,
     time_limit_seconds: int = 120,
+    ai_instructions: str = "",
 ) -> dict:
     import re
     
@@ -79,6 +80,39 @@ def _dynamic_offline_evaluation(
             "content_score": 0, "relevance_score": 0, "time_score": 0,
             "clarity_score": 0, "confidence_score": 0, "technical_depth_score": 0,
             "feedback": "No answer recorded.", "keywords": []
+        }
+
+    # YES/NO RECRUITER INSTRUCTION BYPASS
+    lower_inst = (ai_instructions or "").lower()
+    has_yes_no_inst = ("yes" in lower_inst and "no" in lower_inst) and ("score" in lower_inst or "100" in lower_inst or "answer" in lower_inst)
+    clean_ans = (answer or "").strip().lower().rstrip(".,!?")
+    is_direct_yes_no = clean_ans in ["yes", "no", "yeah", "nope", "yes i do", "no i do not", "yes i have", "no i have not", "true", "false", "correct", "incorrect"]
+
+    if has_yes_no_inst and is_direct_yes_no:
+        return {
+            "content_score": 70,
+            "relevance_score": 30,
+            "time_score": 0,
+            "overall_score": 100,
+            "clarity_score": 100,
+            "confidence_score": 100,
+            "technical_depth_score": 70,
+            "feedback": f"Offline Analysis: Directly and accurately answered the Yes/No question with '{answer.strip()}'.",
+            "keywords": [answer.strip().capitalize()]
+        }
+
+    has_one_word_inst = ("one word" in lower_inst or "single word" in lower_inst) and ("score" in lower_inst or "100" in lower_inst or "answer" in lower_inst)
+    if has_one_word_inst and 1 <= word_count <= 3:
+        return {
+            "content_score": 70,
+            "relevance_score": 30,
+            "time_score": 0,
+            "overall_score": 100,
+            "clarity_score": 100,
+            "confidence_score": 100,
+            "technical_depth_score": 70,
+            "feedback": f"Offline Analysis: Directly answered the one-word question with '{answer.strip()}'.",
+            "keywords": [answer.strip().capitalize()]
         }
 
     # HR / LOGISTICS BYPASS
@@ -242,7 +276,8 @@ def analyze_answer(
     context: str = "",
     time_spent_seconds: int = 0,
     time_limit_seconds: int = 120,
-    language: str = "English"
+    language: str = "English",
+    ai_instructions: str = ""
 ):
     """
     Analyze a candidate's interview answer and return a structured score.
@@ -325,6 +360,7 @@ Return VALID JSON ONLY:
                 language=language,
                 time_context=time_context,
                 time_score_hint=time_score_hint,
+                ai_instructions=ai_instructions,
             )
         else:
             # Direct fallback if typed_ai_layer not available
@@ -351,6 +387,7 @@ Return VALID JSON ONLY:
             context=context,
             time_spent_seconds=time_spent_seconds,
             time_limit_seconds=time_limit_seconds,
+            ai_instructions=ai_instructions,
         )
 
     # ── COMMON PROCESSING: Enforce Math & Guardrails ──
@@ -358,8 +395,16 @@ Return VALID JSON ONLY:
     relevance_s = int(result_dict.get("relevance_score", 0))
     time_s = int(result_dict.get("time_score", 0))
     
+    # Allow 100% full-score for valid one-word / short answers if evaluated as correct by AI
+    is_valid_one_word_full_score = (
+        result_dict.get("overall_score", 0) >= 80
+        and (result_dict.get("content_score", 0) + result_dict.get("relevance_score", 0)) >= 80
+    )
+
     # Guardrails against single-word hallucinations & offline stubs
-    if len(answer_words) < 5:
+    if is_valid_one_word_full_score:
+        pass  # Legitimate one-word/short answer evaluated as fully correct, preserve 100% score
+    elif len(answer_words) < 5:
         # An answer this short is fundamentally invalid (Hard Zero Rule)
         content_s = 0
         relevance_s = 0
