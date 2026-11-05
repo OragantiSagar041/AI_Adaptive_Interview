@@ -2200,35 +2200,27 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       // 4. Time is NOT expired -> Continuous, Unlimited Adaptive Questions
       if (currentQuestionIndex === questions.length - 1) {
         // Candidate reached the end of loaded pool, but has round time remaining!
+        // Silent wait for in-flight prefetch without disruptive loading modals
         if (isPrefetchingRef.current) {
-          Swal.fire({
-            title: 'Generating Next Question...',
-            html: 'Curating the next domain question for you...',
-            allowOutsideClick: false,
-            didOpen: () => { Swal.showLoading() },
-            background: '#0f172a',
-            color: '#fff'
-          })
           let waits = 0
-          while (isPrefetchingRef.current && waits < 20) {
-            await new Promise(r => setTimeout(r, 500))
+          while (isPrefetchingRef.current && waits < 10) {
+            await new Promise(r => setTimeout(r, 400))
             waits++
           }
-          Swal.close()
         }
 
-        if (prefetchedQuestionsRef.current.length === 0 && !isPrefetchingRef.current) {
-          // Immediately fetch next questions from backend
+        let candidateBatch = prefetchedQuestionsRef.current
+        if ((!candidateBatch || candidateBatch.length === 0) && !isPrefetchingRef.current) {
           isPrefetchingRef.current = true
           const alreadyAskedIds = questions.map(q => String(q.id || '')).join(',')
           const fd = new FormData()
           fd.append('interview_id', iid)
           fd.append('asked_question_ids', alreadyAskedIds)
-          fd.append('count', '5')
+          fd.append('count', '6')
           try {
             const data = await api.post('/generate-more-questions', fd).then(r => r.data)
             if (data.questions && data.questions.length > 0) {
-              prefetchedQuestionsRef.current = data.questions
+              candidateBatch = data.questions
             }
           } catch (err) {
             console.error("Failed to generate more questions on demand:", err)
@@ -2237,11 +2229,14 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           }
         }
 
-        if (prefetchedQuestionsRef.current.length > 0) {
-          const batch = prefetchedQuestionsRef.current
+        if (candidateBatch && candidateBatch.length > 0) {
           prefetchedQuestionsRef.current = []
           const nextIdx = currentQuestionIndex + 1
-          setQuestions(prev => [...prev, ...batch])
+          setQuestions(prev => {
+            const existingIds = new Set(prev.map(p => String(p.id || '')))
+            const uniqueNew = candidateBatch.filter(q => !existingIds.has(String(q.id || '')))
+            return uniqueNew.length > 0 ? [...prev, ...uniqueNew] : [...prev, ...candidateBatch]
+          })
           accumulatedTranscriptRef.current = ''
           currentSessionFinalRef.current = ''
           interimTextRef.current = ''
@@ -2256,37 +2251,43 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           behavioralStatsRef.current = { wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0, noiseAlerts: 0 }
           setCurrentQuestionIndex(nextIdx)
           questionStartTimeRef.current = Date.now()
-          const nextQ = batch[0]
+          const nextQ = candidateBatch[0]
           if (!isRoundTwoRef.current && !isRoundTwo && !isStartingRoundTwoRef.current && nextQ && nextQ.caseStudyIndex === undefined) {
             speakAIQuestion(nextQ.text || nextQ.question || nextQ.prompt || '')
           }
           return
         } else {
-          // Fallback if AI service cannot provide more: proceed to next round
+          // Fallback: proceed to next round if multi-round; NEVER auto-submit if time remains on clock
           const iType = sessionDetail?.interview_type || 'Normal'
           if (!isRoundTwo && (iType === 'Technical' || iType === 'Non-Technical')) {
             startNextRound()
-          } else {
+          } else if (isTimeExpiredRef.current || (globalCountdown <= 0 && totalDuration > 0)) {
             handleSubmitInterview()
+          } else {
+            console.warn("Time remains on clock; preventing premature interview auto-submit.")
           }
           return
         }
       } else {
         // Candidate is progressing through existing questions.
-        // Maintain Zero Dead-Air Pre-fetch Buffer: when <= 2 questions remain, pre-fetch next batch in background.
+        // Lookahead Conveyor Belt: When <= 6 questions remain, pre-fetch next batch and immediately append to questions
         const qsLen = questions.length
-        if (!isPrefetchingRef.current && qsLen - currentQuestionIndex <= 2 && prefetchedQuestionsRef.current.length === 0) {
+        if (!isPrefetchingRef.current && qsLen - currentQuestionIndex <= 6) {
           isPrefetchingRef.current = true
           const alreadyAskedIds = questions.map(q => String(q.id || '')).join(',')
           const fd = new FormData()
           fd.append('interview_id', iid)
           fd.append('asked_question_ids', alreadyAskedIds)
-          fd.append('count', '5')
+          fd.append('count', '6')
           api.post('/generate-more-questions', fd)
             .then(r => r.data)
             .then(data => {
               if (data.questions && data.questions.length > 0) {
-                prefetchedQuestionsRef.current = data.questions
+                setQuestions(prev => {
+                  const existingIds = new Set(prev.map(p => String(p.id || '')))
+                  const uniqueNew = data.questions.filter(q => !existingIds.has(String(q.id || '')))
+                  return uniqueNew.length > 0 ? [...prev, ...uniqueNew] : prev
+                })
               }
             })
             .catch(() => { })

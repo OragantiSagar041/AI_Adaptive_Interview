@@ -475,6 +475,25 @@ async def generate_more_questions_endpoint(
                 if len(fresh_questions) >= count:
                     break
 
+            if len(fresh_questions) < count:
+                try:
+                    from app.services.services import _generate_offline_questions
+                    offline_fallback = _generate_offline_questions(
+                        jd_text=session.get("job_description") or "",
+                        resume_text=session.get("resume_text") or "",
+                        target=count * 2,
+                        ai_instructions=session.get("ai_instructions", "")
+                    )
+                    for q in offline_fallback:
+                        q_text = str(q.get("question") or q.get("text") or "").lower().strip()
+                        if not any(q_text in asked or asked in q_text for asked in already_asked_texts if len(asked) > 10):
+                            fresh_questions.append(q)
+                            already_asked_texts.add(q_text)
+                        if len(fresh_questions) >= count:
+                            break
+                except Exception as _off_err:
+                    print(f"Offline question replenishment fallback: {_off_err}")
+
             # Assign fresh IDs starting after the last existing question
             start_id = len(existing_questions) + 1
             for i, q in enumerate(fresh_questions):
