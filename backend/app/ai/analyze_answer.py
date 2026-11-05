@@ -42,6 +42,33 @@ RULES:
 
 
 
+def _normalize_closed_answer(ans: str) -> str:
+    """Normalize repeated STT tokens (e.g. 'true true', 'false false', 'fal false') to single canonical tokens."""
+    if not ans:
+        return ""
+    import re
+    words = re.sub(r'[^\w\s]', ' ', ans.lower()).split()
+    if not words:
+        return ""
+    meaningful = [w for w in words if w not in ("uh", "um", "ah", "like", "i", "think", "it", "is", "the", "that", "answer")]
+    if not meaningful:
+        meaningful = words
+
+    has_pos = any(w in ("true", "correct", "right", "yes", "yeah", "yep", "sure") for w in meaningful)
+    has_neg = any(w in ("false", "incorrect", "wrong", "fal", "no", "nope", "not") for w in meaningful)
+
+    if has_pos and not has_neg:
+        if any(w in ("true", "correct", "right") for w in meaningful):
+            return "true"
+        return "yes"
+    if has_neg and not has_pos:
+        if any(w in ("false", "incorrect", "wrong", "fal") for w in meaningful):
+            return "false"
+        return "no"
+
+    return " ".join(words)
+
+
 def _dynamic_offline_evaluation(
     question: str,
     answer: str,
@@ -82,16 +109,25 @@ def _dynamic_offline_evaluation(
             "feedback": "No answer recorded.", "keywords": []
         }
 
-    # YES/NO RECRUITER INSTRUCTION BYPASS
+    # YES/NO & TRUE/FALSE RECRUITER INSTRUCTION BYPASS
     lower_inst = (ai_instructions or "").lower()
+    lower_q = (question or "").lower()
+    is_closed_q = lower_q.startswith("true or false") or "yes or no" in lower_q
     has_yes_no_inst = (
         ("yes" in lower_inst and "no" in lower_inst) or
-        ("true" in lower_inst and "false" in lower_inst)
-    ) and ("score" in lower_inst or "100" in lower_inst or "answer" in lower_inst)
+        ("true" in lower_inst and "false" in lower_inst) or
+        is_closed_q
+    ) and ("score" in lower_inst or "100" in lower_inst or "answer" in lower_inst or is_closed_q)
+    
+    norm_ans = _normalize_closed_answer(answer)
     clean_ans = (answer or "").strip().lower().rstrip(".,!?")
-    is_direct_yes_no = clean_ans in ["yes", "no", "yeah", "nope", "yes i do", "no i do not", "yes i have", "no i have not", "true", "false", "correct", "incorrect"]
+    is_direct_yes_no = (
+        clean_ans in ["yes", "no", "yeah", "nope", "yes i do", "no i do not", "yes i have", "no i have not", "true", "false", "correct", "incorrect"]
+        or norm_ans in ["yes", "no", "true", "false", "correct", "incorrect"]
+    )
 
     if has_yes_no_inst and is_direct_yes_no:
+        disp_ans = norm_ans.capitalize() if norm_ans in ["yes", "no", "true", "false"] else answer.strip()
         return {
             "content_score": 70,
             "relevance_score": 30,
@@ -100,8 +136,8 @@ def _dynamic_offline_evaluation(
             "clarity_score": 100,
             "confidence_score": 100,
             "technical_depth_score": 70,
-            "feedback": f"Offline Analysis: Directly and accurately answered the Yes/No question with '{answer.strip()}'.",
-            "keywords": [answer.strip().capitalize()]
+            "feedback": f"Offline Analysis: Directly and accurately answered with '{disp_ans}'.",
+            "keywords": [disp_ans]
         }
 
     has_one_word_inst = ("one word" in lower_inst or "single word" in lower_inst) and ("score" in lower_inst or "100" in lower_inst or "answer" in lower_inst)
@@ -401,6 +437,16 @@ Return VALID JSON ONLY:
     relevance_s = int(result_dict.get("relevance_score", 0))
     time_s = int(result_dict.get("time_score", 0))
     
+    lower_inst = (ai_instructions or "").lower()
+    lower_q = (question or "").lower()
+    is_closed_format_active = (
+        ("yes" in lower_inst and "no" in lower_inst)
+        or ("true" in lower_inst and "false" in lower_inst)
+        or ("one word" in lower_inst or "single word" in lower_inst or "1 word" in lower_inst or "one-word" in lower_inst)
+        or lower_q.startswith("true or false")
+        or "yes or no" in lower_q
+    )
+
     # Allow 100% full-score for valid one-word / short answers if evaluated as correct by AI
     is_valid_one_word_full_score = (
         result_dict.get("overall_score", 0) >= 80
@@ -408,15 +454,15 @@ Return VALID JSON ONLY:
     )
 
     # Guardrails against single-word hallucinations & offline stubs
-    if is_valid_one_word_full_score:
-        pass  # Legitimate one-word/short answer evaluated as fully correct, preserve 100% score
+    if is_valid_one_word_full_score or is_closed_format_active:
+        pass  # Legitimate one-word / True-False / Yes-No answer, NEVER penalize for being under 5 words!
     elif len(answer_words) < 5:
-        # An answer this short is fundamentally invalid (Hard Zero Rule)
+        # An answer this short is fundamentally invalid (Hard Zero Rule for essay answers)
         content_s = 0
         relevance_s = 0
         time_s = 0
         result_dict["feedback"] = "Answer is too short to evaluate. Please provide a full, detailed explanation."
-    elif len(answer_words) < 10:
+    elif len(answer_words) < 10 and not is_closed_format_active:
         content_s = min(content_s, 8)
         relevance_s = min(relevance_s, 5)
         if "too short" not in result_dict.get("feedback", "").lower():
