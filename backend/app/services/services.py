@@ -1440,7 +1440,7 @@ def generate_jd_questions(jd_text: str, ai_instructions: str = "", interview_typ
     instruction_block = (
         f"\n    CRITICAL MANDATORY INSTRUCTIONS & TOPIC DISTRIBUTION (STRICT OVERRIDE):\n"
         f"    {ai_instructions}\n"
-        f"    STRICT REQUIREMENT: These instructions OVERRIDE any default focus from the Job Description. If specific percentages or domains are requested, you MUST allocate the questions to match that exact breakdown.\n"
+        f"    STRICT REQUIREMENT: These instructions OVERRIDE any default focus from the Job Description. If specific percentages, domains, or question styles (such as Yes/No format) are requested, you MUST allocate and frame the questions to match that exact structure.\n"
     ) if ai_instructions else ""
     
     # Inject language requirement if not English
@@ -1614,7 +1614,14 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
         ]
 
     target_diff = (difficulty or "Medium").capitalize()
-    if is_continuation:
+    lower_ai_inst = (ai_instructions or "").lower()
+    is_closed_format = (
+        ("yes" in lower_ai_inst and "no" in lower_ai_inst) or
+        ("true" in lower_ai_inst and "false" in lower_ai_inst) or
+        ("one word" in lower_ai_inst or "single word" in lower_ai_inst or "1 word" in lower_ai_inst or "one-word" in lower_ai_inst or "single-word" in lower_ai_inst)
+    )
+
+    if is_continuation or is_closed_format:
         opening = []
     elif (custom_questions and custom_questions.strip()) or num_questions <= 4:
         opening = [
@@ -1652,7 +1659,7 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
         ]
     
     closing = []
-    if is_continuation:
+    if is_continuation or is_closed_format:
         closing = []
     elif num_questions <= 4:
         closing = [
@@ -1861,109 +1868,72 @@ def _generate_offline_questions(resume_text: str, jd_text: str, total_count: int
     """
     import re, random
     questions = []
+    target = max(10, total_count + 15)
 
-    # ── Instruction-driven offline questions ──
-    if ai_instructions and str(ai_instructions).strip():
-        inst_lower = str(ai_instructions).lower()
-        extracted_topics = []
-        topic_types = {}  # topic -> "ml" | "data" | "code" | "api" | "general"
+    inst_lower = str(ai_instructions or "").lower()
+    is_tf_mode = "true" in inst_lower and "false" in inst_lower
+    is_yn_mode = "yes" in inst_lower and "no" in inst_lower
+    is_ow_mode = "one word" in inst_lower or "single word" in inst_lower or "1 word" in inst_lower or "one-word" in inst_lower or "single-word" in inst_lower
 
-        if "python" in inst_lower:
-            extracted_topics.append("Python Programming & Optimization")
-            topic_types["Python Programming & Optimization"] = "code"
-        if "preprocessing" in inst_lower or "data preprocessing" in inst_lower:
-            extracted_topics.append("Data Preprocessing & Cleaning")
-            topic_types["Data Preprocessing & Cleaning"] = "data"
-        if "feature engineering" in inst_lower:
-            extracted_topics.append("Feature Engineering & Transformation")
-            topic_types["Feature Engineering & Transformation"] = "ml"
-        if "deployment" in inst_lower or "model deployment" in inst_lower:
-            extracted_topics.append("Model Deployment & Serving")
-            topic_types["Model Deployment & Serving"] = "api"
-        if "api" in inst_lower or "microservice" in inst_lower:
-            extracted_topics.append("API Integration & Backend Architecture")
-            topic_types["API Integration & Backend Architecture"] = "api"
-        if "regression" in inst_lower:
-            extracted_topics.append("Regression Models & Analysis")
-            topic_types["Regression Models & Analysis"] = "ml"
-        if "classification" in inst_lower:
-            extracted_topics.append("Classification Models & Metrics")
-            topic_types["Classification Models & Metrics"] = "ml"
-        if "sql" in inst_lower or "query optimization" in inst_lower:
-            extracted_topics.append("SQL Query Optimization")
-            topic_types["SQL Query Optimization"] = "data"
-        if "etl" in inst_lower or "pipeline" in inst_lower:
-            extracted_topics.append("ETL Pipelines & Data Workflows")
-            topic_types["ETL Pipelines & Data Workflows"] = "data"
-        if "rag" in inst_lower or "llm" in inst_lower:
-            extracted_topics.append("RAG Architecture & LLM Engineering")
-            topic_types["RAG Architecture & LLM Engineering"] = "ml"
+    # ── Dedicated 100% Closed-Format Engine (Yes/No, True/False, One-Word) ──
+    if is_tf_mode or is_yn_mode or is_ow_mode:
+        has_res = bool(resume_text and len(resume_text.strip()) > 50)
+        tech_pool = [
+            "Python", "Java", "JavaScript", "TypeScript", "React", "Node.js", "Django", "FastAPI",
+            "SQL", "PostgreSQL", "MongoDB", "Redis", "Docker", "Kubernetes", "AWS", "Git",
+            "Machine Learning", "Deep Learning", "Data Structures", "Algorithms", "CI/CD", "Linux"
+        ]
+        found_skills = [kw for kw in tech_pool if kw.lower() in jd_text.lower()]
+        if has_res:
+            res_skills = [kw for kw in tech_pool if kw.lower() in resume_text.lower()]
+            found_skills = list(dict.fromkeys(found_skills + res_skills))
+        if not found_skills:
+            found_skills = ["Software Engineering", "System Architecture", "Data Processing", "API Integration", "Database Management", "Version Control", "Quality Assurance", "Testing"]
 
-        if not extracted_topics:
-            raw_phrases = re.findall(r'focus\s+(?:on\s+)?([a-zA-Z0-9\s,\/]+?)(?:rather|than|and|\.|$)', inst_lower)
-            for rp in raw_phrases:
-                for part in rp.split(','):
-                    cleaned = part.strip()
-                    if len(cleaned) > 3 and cleaned not in ["basic theory", "general concepts"]:
-                        top_title = cleaned.title()
-                        extracted_topics.append(top_title)
-                        topic_types[top_title] = "general"
-
-        ml_templates = [
-            "Based on your hands-on experience with {topic}, walk me through your model selection, validation, and training workflow.",
-            "How do you rigorously evaluate {topic} to detect and prevent overfitting, data leakage, and distribution drift?",
-            "What feature transformations and evaluation metrics do you rely on when tuning {topic} for production?",
-            "Describe a situation where a {topic} model underperformed in production. How did you isolate and resolve the root cause?"
-        ]
-        api_templates = [
-            "Walk me through your production architecture for {topic}, focusing on latency, concurrency, and serialization overhead.",
-            "In your experience with {topic}, what are the most critical production edge cases, scaling bottlenecks, or failover mechanisms you have handled?",
-            "How do you design, version, and monitor endpoints for {topic} to ensure backward compatibility and high availability?",
-            "Describe how you test and debug API performance regressions or timeout spikes in a {topic} deployment."
-        ]
-        code_templates = [
-            "In {topic}, how do you manage memory consumption, vectorization, and concurrency bottlenecks when processing high-volume workloads?",
-            "What are common debugging pitfalls or performance anti-patterns you encounter in {topic}, and how do you architect around them?",
-            "Walk me through how you structure unit testing, type safety, and code maintainability in a production codebase.",
-            "Describe an advanced optimization you implemented in {topic} to reduce execution time or resource footprint."
-        ]
-        data_templates = [
-            "How do you handle schema variations, missing data, and idempotency in {topic} across real-world data pipelines?",
-            "Walk me through your strategy for optimizing query execution plans, indexing, or batch transformations in {topic}.",
-            "In your experience with {topic}, what are the biggest data quality or bottleneck risks in production, and how do you mitigate them?",
-            "Describe how you validate and test {topic} to ensure data integrity without causing downtime."
-        ]
-        general_templates = [
-            "In your experience with {topic}, what are the most critical production edge cases, performance bottlenecks, or debugging challenges you have tackled?",
-            "Can you describe an advanced project where you designed or optimized the implementation of {topic}?",
-            "What architectural trade-offs do you weigh when taking {topic} from development into a real-time production system?",
-            "Walk me through a situation where a {topic} implementation failed under load. How did you isolate and resolve the root cause?"
-        ]
-
-        is_strict = "strict" in inst_lower or "senior" in inst_lower
-        for topic in extracted_topics:
-            t_kind = topic_types.get(topic, "general")
-            if t_kind == "ml":
-                tmpls = ml_templates
-            elif t_kind == "api":
-                tmpls = api_templates
-            elif t_kind == "code":
-                tmpls = code_templates
-            elif t_kind == "data":
-                tmpls = data_templates
+        for skill in found_skills:
+            if is_tf_mode:
+                tmpls = [
+                    f"True or False: In {skill}, data transformations and operations can be executed asynchronously to optimize responsiveness.",
+                    f"True or False: {skill} provides native capabilities for state management and exception isolation.",
+                    f"True or False: In production architectures, {skill} is commonly paired with automated CI/CD validation pipelines.",
+                    f"True or False: {skill} components should be decoupled to maintain modularity and avoid tight architectural coupling."
+                ]
+            elif is_yn_mode:
+                tmpls = [
+                    f"Have you worked with {skill} in a production or project environment?",
+                    f"Do you have hands-on experience optimizing and debugging issues in {skill}?",
+                    f"Have you integrated {skill} with external APIs, cloud services, or databases?",
+                    f"Are you comfortable applying industry best practices when working with {skill}?"
+                ]
             else:
-                tmpls = general_templates
+                tmpls = [
+                    f"What primary programming language or runtime executes {skill}?",
+                    f"What data interchange format (such as JSON or SQL) is most commonly manipulated using {skill}?",
+                    f"What core architectural paradigm is most associated with {skill}?",
+                    f"What tool or package manager is standard for managing {skill} dependencies?"
+                ]
 
-            for tmpl in tmpls:
+            for t in tmpls:
                 questions.append({
-                    "question": tmpl.format(topic=topic),
-                    "difficulty": "Hard" if is_strict else "Medium",
+                    "question": t,
+                    "difficulty": "Medium",
                     "type": "Technical",
-                    "category": f"{topic} Deep-Dive",
-                    "_generation_origin": "instruction_offline"
+                    "category": f"{skill} Verification",
+                    "_generation_origin": "closed_format_offline"
                 })
 
-    has_resume = bool(resume_text and len(resume_text.strip()) > 50)
+        seen = set()
+        unique_closed = []
+        for q in questions:
+            key = q.get("question", "").strip().lower()
+            if key and key not in seen:
+                seen.add(key)
+                unique_closed.append(q)
+        return unique_closed[:target]
+
+    # ── Instruction-driven offline questions for open-ended interviews ──
+    if ai_instructions and str(ai_instructions).strip():
+        has_resume = bool(resume_text and len(resume_text.strip()) > 50)
     jd_lower = jd_text.lower()
 
     tech_keywords = [

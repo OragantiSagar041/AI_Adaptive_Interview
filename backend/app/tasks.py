@@ -120,9 +120,25 @@ def score_answer_task(
     time_limit_seconds: int,
     language: str,
     answer_version: str = "",
+    ai_instructions: str = "",
 ):
     try:
         logger.info(f"Scoring answer for interview {interview_id}, Q{question_id} (Attempt {self.request.retries + 1})")
+        if not ai_instructions:
+            try:
+                s_rec = interview_sessions_collection.find_one(
+                    {"$or": [{"link_id": interview_id}, {"interview_id": interview_id}, {"id": interview_id}]},
+                    {"ai_instructions": 1}
+                )
+                if s_rec and s_rec.get("ai_instructions"):
+                    ai_instructions = str(s_rec.get("ai_instructions") or "")
+                if not ai_instructions:
+                    i_rec = interviews_collection.find_one({"id": interview_id}, {"ai_instructions": 1})
+                    if i_rec and i_rec.get("ai_instructions"):
+                        ai_instructions = str(i_rec.get("ai_instructions") or "")
+            except Exception:
+                pass
+
         ai_result = analyze_answer(
             question_text,
             answer_text,
@@ -130,6 +146,7 @@ def score_answer_task(
             time_spent_seconds=time_spent_seconds,
             time_limit_seconds=time_limit_seconds,
             language=language,
+            ai_instructions=ai_instructions,
         )
 
         # Spoken language and accent detection - runs with full NLP / LLM multi-tier engine

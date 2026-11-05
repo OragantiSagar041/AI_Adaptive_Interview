@@ -42,12 +42,40 @@ RULES:
 
 
 
+def _normalize_closed_answer(ans: str) -> str:
+    """Normalize repeated STT tokens (e.g. 'true true', 'false false', 'fal false') to single canonical tokens."""
+    if not ans:
+        return ""
+    import re
+    words = re.sub(r'[^\w\s]', ' ', ans.lower()).split()
+    if not words:
+        return ""
+    meaningful = [w for w in words if w not in ("uh", "um", "ah", "like", "i", "think", "it", "is", "the", "that", "answer")]
+    if not meaningful:
+        meaningful = words
+
+    has_pos = any(w in ("true", "correct", "right", "yes", "yeah", "yep", "sure") for w in meaningful)
+    has_neg = any(w in ("false", "incorrect", "wrong", "fal", "no", "nope", "not") for w in meaningful)
+
+    if has_pos and not has_neg:
+        if any(w in ("true", "correct", "right") for w in meaningful):
+            return "true"
+        return "yes"
+    if has_neg and not has_pos:
+        if any(w in ("false", "incorrect", "wrong", "fal") for w in meaningful):
+            return "false"
+        return "no"
+
+    return " ".join(words)
+
+
 def _dynamic_offline_evaluation(
     question: str,
     answer: str,
     context: str = "",
     time_spent_seconds: int = 0,
     time_limit_seconds: int = 120,
+    ai_instructions: str = "",
 ) -> dict:
     import re
     
@@ -81,15 +109,63 @@ def _dynamic_offline_evaluation(
             "feedback": "No answer recorded.", "keywords": []
         }
 
+    # YES/NO & TRUE/FALSE RECRUITER INSTRUCTION BYPASS
+    lower_inst = (ai_instructions or "").lower()
+    lower_q = (question or "").lower()
+    is_closed_q = lower_q.startswith("true or false") or "yes or no" in lower_q
+    has_yes_no_inst = (
+        ("yes" in lower_inst and "no" in lower_inst) or
+        ("true" in lower_inst and "false" in lower_inst) or
+        is_closed_q
+    ) and ("score" in lower_inst or "100" in lower_inst or "answer" in lower_inst or is_closed_q)
+    
+    norm_ans = _normalize_closed_answer(answer)
+    clean_ans = (answer or "").strip().lower().rstrip(".,!?")
+    is_direct_yes_no = (
+        clean_ans in ["yes", "no", "yeah", "nope", "yes i do", "no i do not", "yes i have", "no i have not", "true", "false", "correct", "incorrect"]
+        or norm_ans in ["yes", "no", "true", "false", "correct", "incorrect"]
+    )
+
+    if has_yes_no_inst and is_direct_yes_no:
+        disp_ans = norm_ans.capitalize() if norm_ans in ["yes", "no", "true", "false"] else answer.strip()
+        return {
+            "content_score": 70,
+            "relevance_score": 30,
+            "time_score": 0,
+            "overall_score": 100,
+            "clarity_score": 100,
+            "confidence_score": 100,
+            "technical_depth_score": 70,
+            "feedback": f"Offline Analysis: Directly and accurately answered with '{disp_ans}'.",
+            "keywords": [disp_ans]
+        }
+
+    has_one_word_inst = ("one word" in lower_inst or "single word" in lower_inst) and ("score" in lower_inst or "100" in lower_inst or "answer" in lower_inst)
+    if has_one_word_inst and 1 <= word_count <= 3:
+        return {
+            "content_score": 70,
+            "relevance_score": 30,
+            "time_score": 0,
+            "overall_score": 100,
+            "clarity_score": 100,
+            "confidence_score": 100,
+            "technical_depth_score": 70,
+            "feedback": f"Offline Analysis: Directly answered the one-word question with '{answer.strip()}'.",
+            "keywords": [answer.strip().capitalize()]
+        }
+
     # HR / LOGISTICS BYPASS
-    # Simple questions (like relocation, on-site, notice period) do not require technical essays.
+    # Simple questions (like relocation, on-site, notice period, bond) do not require technical essays.
     lower_q = question.lower()
-    hr_keywords = ["comfortable", "willing to", "relocate", "on-site", "onsite", "remote", "hybrid", "notice period", "salary", "shift", "located"]
+    hr_keywords = ["comfortable", "willing to", "relocate", "on-site", "onsite", "remote", "hybrid", "notice period", "salary", "shift", "located", "bond", "service agreement"]
     is_hr_question = any(kw in lower_q for kw in hr_keywords)
 
-    if is_hr_question and word_count >= 4:
+    is_closed_inst = has_yes_no_inst or has_one_word_inst
+    min_hr_words = 1 if is_closed_inst else 4
+
+    if is_hr_question and word_count >= min_hr_words:
         lower_ans = answer.lower()
-        positive_words = {"yes", "yeah", "okay", "sure", "ready", "fine", "agree", "can", "will", "am", "do"}
+        positive_words = {"yes", "yeah", "okay", "sure", "ready", "fine", "agree", "can", "will", "am", "do", "no", "nope", "none", "immediate", "month", "months", "days", "week", "weeks"}
         if any(pw in lower_ans for pw in positive_words):
             return {
                 "content_score": 45,  # 45/50
@@ -242,7 +318,8 @@ def analyze_answer(
     context: str = "",
     time_spent_seconds: int = 0,
     time_limit_seconds: int = 120,
-    language: str = "English"
+    language: str = "English",
+    ai_instructions: str = ""
 ):
     """
     Analyze a candidate's interview answer and return a structured score.
@@ -325,6 +402,7 @@ Return VALID JSON ONLY:
                 language=language,
                 time_context=time_context,
                 time_score_hint=time_score_hint,
+                ai_instructions=ai_instructions,
             )
         else:
             # Direct fallback if typed_ai_layer not available
@@ -351,6 +429,7 @@ Return VALID JSON ONLY:
             context=context,
             time_spent_seconds=time_spent_seconds,
             time_limit_seconds=time_limit_seconds,
+            ai_instructions=ai_instructions,
         )
 
     # ── COMMON PROCESSING: Enforce Math & Guardrails ──
@@ -358,14 +437,32 @@ Return VALID JSON ONLY:
     relevance_s = int(result_dict.get("relevance_score", 0))
     time_s = int(result_dict.get("time_score", 0))
     
+    lower_inst = (ai_instructions or "").lower()
+    lower_q = (question or "").lower()
+    is_closed_format_active = (
+        ("yes" in lower_inst and "no" in lower_inst)
+        or ("true" in lower_inst and "false" in lower_inst)
+        or ("one word" in lower_inst or "single word" in lower_inst or "1 word" in lower_inst or "one-word" in lower_inst)
+        or lower_q.startswith("true or false")
+        or "yes or no" in lower_q
+    )
+
+    # Allow 100% full-score for valid one-word / short answers if evaluated as correct by AI
+    is_valid_one_word_full_score = (
+        result_dict.get("overall_score", 0) >= 80
+        and (result_dict.get("content_score", 0) + result_dict.get("relevance_score", 0)) >= 80
+    )
+
     # Guardrails against single-word hallucinations & offline stubs
-    if len(answer_words) < 5:
-        # An answer this short is fundamentally invalid (Hard Zero Rule)
+    if is_valid_one_word_full_score or is_closed_format_active:
+        pass  # Legitimate one-word / True-False / Yes-No answer, NEVER penalize for being under 5 words!
+    elif len(answer_words) < 5:
+        # An answer this short is fundamentally invalid (Hard Zero Rule for essay answers)
         content_s = 0
         relevance_s = 0
         time_s = 0
         result_dict["feedback"] = "Answer is too short to evaluate. Please provide a full, detailed explanation."
-    elif len(answer_words) < 10:
+    elif len(answer_words) < 10 and not is_closed_format_active:
         content_s = min(content_s, 8)
         relevance_s = min(relevance_s, 5)
         if "too short" not in result_dict.get("feedback", "").lower():
