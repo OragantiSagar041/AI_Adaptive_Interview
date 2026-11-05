@@ -84,7 +84,10 @@ def _dynamic_offline_evaluation(
 
     # YES/NO RECRUITER INSTRUCTION BYPASS
     lower_inst = (ai_instructions or "").lower()
-    has_yes_no_inst = ("yes" in lower_inst and "no" in lower_inst) and ("score" in lower_inst or "100" in lower_inst or "answer" in lower_inst)
+    has_yes_no_inst = (
+        ("yes" in lower_inst and "no" in lower_inst) or
+        ("true" in lower_inst and "false" in lower_inst)
+    ) and ("score" in lower_inst or "100" in lower_inst or "answer" in lower_inst)
     clean_ans = (answer or "").strip().lower().rstrip(".,!?")
     is_direct_yes_no = clean_ans in ["yes", "no", "yeah", "nope", "yes i do", "no i do not", "yes i have", "no i have not", "true", "false", "correct", "incorrect"]
 
@@ -116,14 +119,17 @@ def _dynamic_offline_evaluation(
         }
 
     # HR / LOGISTICS BYPASS
-    # Simple questions (like relocation, on-site, notice period) do not require technical essays.
+    # Simple questions (like relocation, on-site, notice period, bond) do not require technical essays.
     lower_q = question.lower()
-    hr_keywords = ["comfortable", "willing to", "relocate", "on-site", "onsite", "remote", "hybrid", "notice period", "salary", "shift", "located"]
+    hr_keywords = ["comfortable", "willing to", "relocate", "on-site", "onsite", "remote", "hybrid", "notice period", "salary", "shift", "located", "bond", "service agreement"]
     is_hr_question = any(kw in lower_q for kw in hr_keywords)
 
-    if is_hr_question and word_count >= 4:
+    is_closed_inst = has_yes_no_inst or has_one_word_inst
+    min_hr_words = 1 if is_closed_inst else 4
+
+    if is_hr_question and word_count >= min_hr_words:
         lower_ans = answer.lower()
-        positive_words = {"yes", "yeah", "okay", "sure", "ready", "fine", "agree", "can", "will", "am", "do"}
+        positive_words = {"yes", "yeah", "okay", "sure", "ready", "fine", "agree", "can", "will", "am", "do", "no", "nope", "none", "immediate", "month", "months", "days", "week", "weeks"}
         if any(pw in lower_ans for pw in positive_words):
             return {
                 "content_score": 45,  # 45/50

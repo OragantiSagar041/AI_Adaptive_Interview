@@ -70,9 +70,9 @@ def as_evaluate_answer(state: AnswerScoringState) -> AnswerScoringState:
             f"{ai_inst}\n\n"
             f"SPECIAL FORMAT / SCORING OVERRIDE RULES:\n"
             f"- If the recruiter instructions specify that questions should be answered with a single word or short direct phrase "
-            f"(such as 'Yes/No', specific technical terms, keywords, or one-word answers) and award 100% for the correct response:\n"
+            f"(such as 'Yes/No', 'True/False', specific technical terms, keywords, or one-word answers) and award 100% for the correct response:\n"
             f"  * Check if this question is a direct, closed-ended, or one-word answer question.\n"
-            f"  * If the candidate answered with the correct single word, term, or appropriate Yes/No (e.g. 'Stack', 'Python', 'Yes', 'No', '404', 'Kubernetes'):\n"
+            f"  * If the candidate answered with the correct single word, term, or appropriate Yes/No/True/False (e.g. 'Stack', 'Python', 'Yes', 'No', 'True', 'False', '404', 'Kubernetes'):\n"
             f"    award full credit: content_score = 70, relevance_score = 30, overall_score = 100.\n"
             f"  * If the candidate gave the wrong answer or an incorrect term:\n"
             f"    award content_score = 0, relevance_score = 10, overall_score = 10.\n"
@@ -223,19 +223,46 @@ def qg_generate_all(state: QuestionGenerationState) -> QuestionGenerationState:
             f"3. DOMAIN & TOPIC ALLOCATION: If specific topics, percentages, or ratios are requested (e.g., '60% ML, 20% Banking, 20% Real Estate' or 'Focus 100% on Healthcare Compliance'), you MUST STRICTLY allocate the questions to match that exact breakdown across the {num} questions.\n"
             f"4. UNLISTED TOPICS: Even if an instructed topic, domain, or business scenario is NOT mentioned in the candidate's Resume or Job Description, you MUST STILL generate questions directly covering that topic as commanded by the recruiter.\n"
             f"5. TECHNICAL & NON-TECHNICAL ADAPTABILITY: Seamlessly handle both Technical engineering interviews (coding concepts, system architecture) and Non-Technical leadership, management, product, operations, sales, and strategy interviews.\n"
-            f"6. QUESTION FORMAT & STRUCTURE OVERRIDE: If the recruiter specifically instructs questions to be one-word answers or Yes/No (or closed-ended direct format), you MUST frame the questions so they can be answered definitively with a single word or term (e.g., 'What data structure operates on a Last-In, First-Out principle?', 'Have you worked with Kubernetes in production?').\n"
+            f"6. QUESTION FORMAT & STRUCTURE OVERRIDE: If the recruiter specifically instructs questions to be one-word answers, Yes/No, or True/False (or closed-ended direct format), you MUST frame the questions so they can be answered definitively with a single word or boolean (e.g., 'True or False: In Python, strings are immutable?', 'What data structure operates on a Last-In, First-Out principle?', 'Have you worked with Kubernetes in production?').\n"
             f"======================================================\n"
         )
     else:
         inst_block = ""
 
-    spoken_format_constraint = (
-        "\nCRITICAL INTERVIEW FORMAT - SPOKEN/ORAL ONLY:\n"
-        "- This is an oral conversational interview where the candidate speaks verbally (speech-to-text).\n"
-        "- There is NO code editor, IDE, compiler, or code-writing box available in the interview platform.\n"
-        "- NEVER ask the candidate to 'write code', 'write a function', 'write a script', 'provide code examples', 'sketch code', or provide syntax snippets.\n"
-        "- ALWAYS frame every question to be verbally answerable: ask the candidate to explain their step-by-step logic, architectural workflow, trade-offs between approaches, debugging methodology, or performance optimization strategies.\n"
+    lower_ai = (ai_inst or "").lower()
+    is_closed_format = (
+        ("yes" in lower_ai and "no" in lower_ai) or
+        ("true" in lower_ai and "false" in lower_ai) or
+        ("one word" in lower_ai or "single word" in lower_ai or "1 word" in lower_ai or "one-word" in lower_ai or "single-word" in lower_ai)
     )
+
+    if is_closed_format:
+        if "true" in lower_ai and "false" in lower_ai:
+            target_fmt = "True or False"
+            ex_q = "True or False: In Python, strings are immutable."
+        elif "yes" in lower_ai and "no" in lower_ai:
+            target_fmt = "Yes or No"
+            ex_q = "Have you worked with Kubernetes in production?"
+        else:
+            target_fmt = "One-Word / Direct Factual Answer"
+            ex_q = "What data structure operates on a Last-In, First-Out principle?"
+
+        spoken_format_constraint = (
+            f"\nCRITICAL FORMAT MANDATE - 100% OF QUESTIONS MUST BE {target_fmt.upper()}:\n"
+            f"- The recruiter has explicitly instructed that ALL questions in this interview MUST be {target_fmt} questions.\n"
+            f"- You MUST generate EVERY SINGLE ONE of the {num} questions strictly in {target_fmt} format.\n"
+            f"- DO NOT generate open-ended questions, self-introduction questions, career goals, or discussion questions.\n"
+            f"- Every question must have an unequivocal, definitive {target_fmt} answer based on the candidate's domain/JD.\n"
+            f"- Example valid question: '{ex_q}'\n"
+        )
+    else:
+        spoken_format_constraint = (
+            "\nCRITICAL INTERVIEW FORMAT - SPOKEN/ORAL ONLY:\n"
+            "- This is an oral conversational interview where the candidate speaks verbally (speech-to-text).\n"
+            "- There is NO code editor, IDE, compiler, or code-writing box available in the interview platform.\n"
+            "- NEVER ask the candidate to 'write code', 'write a function', 'write a script', 'provide code examples', 'sketch code', or provide syntax snippets.\n"
+            "- ALWAYS frame every question to be verbally answerable: ask the candidate to explain their step-by-step logic, architectural workflow, trade-offs between approaches, debugging methodology, or performance optimization strategies.\n"
+        )
 
     sys = (
         f"You are an elite, executive-caliber recruiter and interviewer for the {industry} industry. "
@@ -247,6 +274,12 @@ def qg_generate_all(state: QuestionGenerationState) -> QuestionGenerationState:
         "Return JSON."
     )
 
+    gen_instruction = (
+        f"Generate EXACTLY {num} {target_fmt} questions based on the candidate's skills and JD where each question can be answered definitively in a single word or boolean.\n"
+        if is_closed_format else
+        f"Generate {num} highly relevant questions in {lang} that the candidate can explain verbally without writing code.\n"
+    )
+
     usr = (
         f"{inst_block}\n"
         f"Industry: {industry}\n"
@@ -255,7 +288,7 @@ def qg_generate_all(state: QuestionGenerationState) -> QuestionGenerationState:
         f"Resume: {state.get('resume_text', '')}\n"
         f"Topics: {state.get('extracted_topics', [])}\n"
         f"{spoken_format_constraint}\n"
-        f"Generate {num} highly relevant questions in {lang} that the candidate can explain verbally without writing code.\n"
+        f"{gen_instruction}"
         f"FINAL CHECK: Ensure the generated questions STRICTLY fulfill all Custom Recruiter Instructions (including any requested topic percentages or domains)!\n"
         "Return JSON: {'questions': [{'question':'...', 'difficulty':'Medium', 'type':'Technical/Behavioral', 'category':'Core'}]}"
     )
@@ -279,7 +312,21 @@ def qg_validate_format(state: QuestionGenerationState) -> QuestionGenerationStat
 
     for i, d in enumerate(drafts):
         try:
-            default_q = "Could you describe a challenging situation in your previous role and how you handled it?" if is_non_tech else "Could you describe your experience with technology?"
+            lower_ai = (state.get("ai_instructions") or "").lower()
+            is_closed = (
+                ("yes" in lower_ai and "no" in lower_ai) or
+                ("true" in lower_ai and "false" in lower_ai) or
+                ("one word" in lower_ai or "single word" in lower_ai or "1 word" in lower_ai or "one-word" in lower_ai or "single-word" in lower_ai)
+            )
+            if is_closed:
+                if "true" in lower_ai and "false" in lower_ai:
+                    default_q = "True or False: In modern software architectures, components should be decoupled to promote maintainability."
+                elif "yes" in lower_ai and "no" in lower_ai:
+                    default_q = "Have you worked with core production technologies in this domain?"
+                else:
+                    default_q = "What is the primary programming language or runtime utilized in this domain?"
+            else:
+                default_q = "Could you describe a challenging situation in your previous role and how you handled it?" if is_non_tech else "Could you describe your experience with technology?"
             if lang != "English":
                 try:
                     from app.data.offline_language_fallback import OFFLINE_LANGUAGE_TECHNICAL_QUESTIONS
