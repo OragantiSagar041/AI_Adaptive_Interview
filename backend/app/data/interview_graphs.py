@@ -278,6 +278,7 @@ def qg_generate_all(state: QuestionGenerationState) -> QuestionGenerationState:
         f"Generate {num} {int_type} interview questions. {inst_block}\n"
         f"Format and Rules:\n"
         f"- Tailor questions specifically to the candidate's Resume and Job Description, BUT STRICTLY ADHERE to all recruiter instructions, seniority calibrations, and topic percentages above.\n"
+        f"- MAXIMUM TOPIC DIVERSITY: Every single question MUST test a completely DISTINCT skill, tool, or concept from the JD/Resume. DO NOT repeat or rephrase the same concept across questions.\n"
         f"{spoken_format_constraint}"
         f"CRITICAL: All questions MUST be generated strictly in {lang}. Do NOT use English unless the selected language is English. "
         "Return JSON."
