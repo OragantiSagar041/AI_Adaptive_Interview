@@ -355,12 +355,7 @@ def calculate_round1_score(questions: list, answers: list, interview_type: str =
     """
     Dynamically distributes Round 1 marks across verbal/technical questions.
     HR Screening questions are excluded from the AI score.
-    Unanswered / skipped / missing answers receive 0.
-
-    Max marks depend on interview_type:
-      - Technical            → 80 marks
-      - Normal               → 100 marks
-      - Non-Technical        → (100 - n_case_study_questions × 10) marks
+    Marks are distributed strictly across the questions the candidate actually answered during their allotted time.
     """
     if not questions:
         return 0.0
@@ -369,38 +364,30 @@ def calculate_round1_score(questions: list, answers: list, interview_type: str =
 
     # Exclude HR Screening questions so they don't count towards marks
     eval_questions = [q for q in questions if str(q.get("type", "")).lower() != "hr screening"]
-
     if not eval_questions:
         return 0.0
 
-    total_weight = 0.0
-    q_weights = {}
-    for q in eval_questions:
-        qid = str(q.get("id"))
-        w = get_question_weight(q)
-        q_weights[qid] = w
-        total_weight += w
+    # 1. Map submitted answers
+    ans_lookup = {str(a.get("question_id")): a for a in answers}
 
+    # 2. Filter strictly to questions presented and answered by the candidate
+    attempted_questions = [q for q in eval_questions if str(q.get("id")) in ans_lookup]
+    active_questions = attempted_questions if attempted_questions else eval_questions
+
+    total_weight = sum(get_question_weight(q) for q in active_questions)
     if total_weight == 0:
         return 0.0
 
-    # Create lookup for answers
-    ans_lookup = {str(a.get("question_id")): a for a in answers}
-
+    # 3. Proportionally distribute marks across attempted questions only
     round1_score = 0.0
-
-    for q in eval_questions:
+    for q in active_questions:
         qid = str(q.get("id"))
-        w = q_weights[qid]
-
-        # Max marks for this specific question (proportional share of round1_max)
+        w = get_question_weight(q)
         q_max_marks = (w / total_weight) * round1_max
-
         ans = ans_lookup.get(qid)
         if ans and ans.get("ai_score") is not None:
-            ai_score_100 = float(ans.get("ai_score", 0))
-            q_marks_obtained = (ai_score_100 / 100.0) * q_max_marks
-            round1_score += q_marks_obtained
+            ai_score_100 = float(ans.get("ai_score", 0))  # Groq or Offline Fallback score
+            round1_score += (ai_score_100 / 100.0) * q_max_marks
 
     return round(min(round1_max, max(0.0, round1_score)), 1)
 

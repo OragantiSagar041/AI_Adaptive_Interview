@@ -371,6 +371,7 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
                 "total_time_minutes": total_mins
             },
             "admin_notes": app.get("admin_notes", ""),
+            "notes": app.get("notes") or app.get("notes_history") or [],
             "alerts": [],
             "answers": answers,
             "started_at": app.get("applied_at") or app.get("updated_at") or app.get("created_at"),
@@ -567,18 +568,56 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
             ans_face_al += face_al
             ans_noise_al += noise_al
             total_time += (row.get("time_spent_seconds") or 0)
+            ai_score_val = row.get("ai_score")
+            content_score_val = row.get("content_score")
+            relevance_score_val = row.get("relevance_score")
+            ai_fb = row.get("ai_feedback") or "No feedback provided"
+            corrected_ans = row.get("corrected_answer") or "N/A"
+
+            # On-demand fallback scoring if worker was offline or delayed
+            if ai_score_val is None and row.get("answer_text") and len(row.get("answer_text", "").strip()) > 10:
+                try:
+                    from app.ai.analyze_answer import analyze_answer
+                    scored_res = analyze_answer(
+                        question=row.get("question_text", ""),
+                        answer=row.get("answer_text", ""),
+                        context=session_data.get("job_description", "")[:200] if session_data else "",
+                        time_spent_seconds=row.get("time_spent_seconds") or 0,
+                        time_limit_seconds=row.get("time_limit_seconds") or 120,
+                        language=session_data.get("language", "English") if session_data else "English"
+                    )
+                    ai_score_val = scored_res.get("overall_score", 0)
+                    content_score_val = scored_res.get("content_score", 0)
+                    relevance_score_val = scored_res.get("relevance_score", 0)
+                    ai_fb = scored_res.get("feedback") or ai_fb
+                    corrected_ans = scored_res.get("corrected_answer") or corrected_ans
+                    if "_id" in row:
+                        answers_collection.update_one(
+                            {"_id": row["_id"]},
+                            {"$set": {
+                                "ai_score": ai_score_val,
+                                "content_score": content_score_val,
+                                "relevance_score": relevance_score_val,
+                                "ai_feedback": ai_fb,
+                                "corrected_answer": corrected_ans,
+                                "scoring_status": "complete"
+                            }}
+                        )
+                except Exception as _score_err:
+                    print(f"On-demand evaluation fallback error: {_score_err}")
+
             results.append({
                 "question_id": row.get("question_id"),
                 "question_text": row.get("question_text"),
                 "answer_text": row.get("answer_text") or "(No answer yet)",
-                "ai_score": row.get("ai_score"),
-                "content_score": row.get("content_score"),
-                "relevance_score": row.get("relevance_score"),
+                "ai_score": ai_score_val,
+                "content_score": content_score_val,
+                "relevance_score": relevance_score_val,
                 "time_score": row.get("time_score"),
                 "time_spent_seconds": row.get("time_spent_seconds") or 0,
                 "time_limit_seconds": row.get("time_limit_seconds"),
-                "ai_feedback": row.get("ai_feedback") or "No feedback provided",
-                "corrected_answer": row.get("corrected_answer") or "N/A",
+                "ai_feedback": ai_fb,
+                "corrected_answer": corrected_ans,
                 "wpm": round(row.get("wpm") or 0, 1),
                 "pause_count": row.get("pause_count") or 0,
                 "filler_count": row.get("filler_count") or 0,
@@ -973,7 +1012,8 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
         "answers": results,
         "candidate_feedback": session_data.get("candidate_feedback", ""),
         "ats_score": session_data.get("ats_score"),
-        "talent_pool_status": session_data.get("talent_pool_status", "archived")
+        "talent_pool_status": session_data.get("talent_pool_status", "archived"),
+        "notes": session_data.get("notes") or session_data.get("notes_history") or []
     }
     
     # Include full question list so admin can see which questions were skipped

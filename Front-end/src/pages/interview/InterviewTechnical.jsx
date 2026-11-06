@@ -12,7 +12,6 @@ import { motion } from 'framer-motion'
 import AccessDeniedScreen from '../../components/interview/AccessDeniedScreen'
 import { setupMonacoIntelliSense, MONACO_EDITOR_OPTIONS } from '../../utils/monacoConfig'
 const MonacoEditor = lazy(() => import('@monaco-editor/react'))
-
 export const InterviewTechnical = () => {
   const interviewType = 'Technical';
   const codeAnswersRef = useRef({})
@@ -21,7 +20,6 @@ export const InterviewTechnical = () => {
   const [aiFeedbackModalOpen, setAiFeedbackModalOpen] = useState(false)
   const [latestAIFeedback, setLatestAIFeedback] = useState(null)
   const [limitExceededToast, setLimitExceededToast] = useState(false)
-
   const startRoundTwo = async ({
     verbalQuestionsLength,
     savedIndex,
@@ -37,12 +35,10 @@ export const InterviewTechnical = () => {
     try {
       // LLM task generation can take 30-90s — override the default 50s timeout
       const payload = await api.post(`/coding-round/start`, { interview_id: interviewId }, { timeout: 120000 }).then(r => r.data)
-
       const task = payload.coding_round?.task || {}
       const recommendedLang = task.recommended_language || 'python'
       setSelectedLanguage(recommendedLang)
       setCodingRoundData(payload)
-
       const constraintsArray = Array.isArray(task.constraints) ? task.constraints : (task.constraints ? [task.constraints] : [])
       const constraintsText = constraintsArray.join(' | ')
       const questionText = [
@@ -53,7 +49,6 @@ export const InterviewTechnical = () => {
         task.output_format ? `Output: ${task.output_format}` : '',
         constraintsText ? `\nConstraints: ${constraintsText}` : '',
       ].filter(Boolean).join('\n')
-
       const codingQ = {
         id: verbalQuestionsLength + 1,
         text: questionText,
@@ -71,7 +66,6 @@ export const InterviewTechnical = () => {
         codingTests: payload.tests || []
       }
       setQuestions(prev => [...prev, codingQ])
-
       const targetIndex = (savedIndex !== null && savedIndex >= verbalQuestionsLength) ? savedIndex : verbalQuestionsLength
       setCurrentQuestionIndex(targetIndex)
     } catch (err) {
@@ -81,7 +75,6 @@ export const InterviewTechnical = () => {
       setCodingRoundLoading(false)
     }
   }
-
   const renderRoundTwoUI = (session) => {
     const {
       globalCountdown,
@@ -116,19 +109,16 @@ export const InterviewTechnical = () => {
       setShowDeviceCheck,
       promptScreenShare
     } = session
-
     const handleRunCode = async () => {
       if (compiling) return
       setCompiling(true)
       setCodeOutputState("Compiling and executing code...")
       setRunResultData(null)
       setConsoleOutput(`Compiling and executing code...\nLanguage: ${selectedLanguage}\nRunning tests...`)
-
       const extractStdout = (code, lang) => {
         let outputs = []
         if (!code) return ""
         const lines = code.split('\n')
-
         if (lang === 'python') {
           for (let line of lines) {
             const match = line.match(/^\s*print\s*\(\s*(['"`])(.*?)\1\s*\)/)
@@ -204,11 +194,9 @@ export const InterviewTechnical = () => {
         }
         return outputs.length > 0 ? outputs.join('\n') : null
       }
-
       const iid = interviewId || sessionDetail?.interview_id || sessionId
       const userStdout = extractStdout(codeAnswer, selectedLanguage)
       let errorText = ''
-
       try {
         const payload = await api.post(`/coding-round/run`, {
           interview_id: iid,
@@ -216,26 +204,20 @@ export const InterviewTechnical = () => {
           language: selectedLanguage,
           explanation: transcriptionText
         }).then(r => r.data)
-
         setRunResultData(payload.run_result || null)
-
         let passedOutputStr = "Code Execution Result:\n";
         let executionError = payload?.run_result?.runtime_error || payload?.run_result?.compiler_error || '';
-
         const totalTests = codingRoundData?.coding_round?.task?.test_cases?.length || 14;
         let realTestOutput = '';
-
         if (executionError) {
           realTestOutput = `❌ Execution Error\nPassed 0 / ${totalTests} Test Cases\n\nError:\n${executionError}\n\n--------------------------------------------------\n\n`;
         } else if (payload?.run_result?.visible_results?.length) {
           const passedCount = payload.run_result.visible_results.filter(r => r.passed).length + (payload.run_result.hidden_summary?.passed || 0);
           const allPassed = passedCount === totalTests;
-
           realTestOutput = `${allPassed ? '✅ All Tests Passed!' : '❌ Some Tests Failed'}\nPassed ${passedCount} / ${totalTests} Test Cases\n\n`;
           realTestOutput += payload.run_result.visible_results.map(r =>
             `Test ${r.id} (Visible): ${r.passed ? 'PASSED ✅' : 'FAILED ❌'}\nInput: ${JSON.stringify(r.input)}\nExpected: ${JSON.stringify(r.expected)}\nGot: ${JSON.stringify(r.output)}`
           ).join('\n\n');
-
           if (payload.run_result.hidden_summary) {
             realTestOutput += `\n\nHidden Tests: ${payload.run_result.hidden_summary.passed} / ${payload.run_result.hidden_summary.total} Passed`;
           }
@@ -246,18 +228,15 @@ export const InterviewTechnical = () => {
           realTestOutput = `No output\n\n--------------------------------------------------\n\n`;
         }
         passedOutputStr += realTestOutput;
-
         const isNativeDisabled = payload?.run_result?.runtime_error?.includes("Native code execution is disabled")
         if (isNativeDisabled) {
           setCodeOutputState("Native runner is unavailable. Getting AI feedback on your solution instead...")
-
           const aiPayload = await api.post(`/coding-round/checkpoint`, {
             interview_id: iid,
             code: codeAnswer,
             language: selectedLanguage,
             explanation: transcriptionText
           }).then(r => r.data)
-
           const fb = aiPayload.feedback
           if (fb && typeof fb === 'object') {
             let formattedFeedback = "AI Code Evaluation Feedback:\n\n"
@@ -280,7 +259,6 @@ export const InterviewTechnical = () => {
               formattedFeedback += `• Communication: ${fb.scorecard.communication ?? '--'}/100\n`
               formattedFeedback += `• Overall: ${fb.scorecard.overall ?? '--'}/100\n`
             }
-
             if (errorText) {
               setCodeOutputState(`Code Execution Result:\n❌ Some Tests Failed / Execution Error\n\nError:\n${errorText}\n\n--------------------------------------------------\n\n${formattedFeedback}`)
             } else {
@@ -300,16 +278,13 @@ export const InterviewTechnical = () => {
           setConsoleOutput(simulatedConsoleOutput)
           return
         }
-
         const res = payload.run_result
         if (res?.compiler_error) {
           errorText = res.compiler_error
         } else if (res?.runtime_error) {
           errorText = res.runtime_error
         }
-
         setCodeOutputState(passedOutputStr.replace("\n\n--------------------------------------------------\n\n", ""))
-
         let simulatedConsoleOutput = `Current Output:\n${userStdout || res?.output || ''}`
         if (errorText) {
           simulatedConsoleOutput += `\n\nError:\n${errorText}`
@@ -327,26 +302,20 @@ export const InterviewTechnical = () => {
         setCompiling(false)
       }
     }
-
     const aiFeedbackRemaining = Math.max(0, 2 - aiFeedbackCount);
-
     const handleGetAIFeedback = async () => {
       if (aiFeedbackRemaining <= 0) {
         setLimitExceededToast(true);
         setTimeout(() => setLimitExceededToast(false), 5000);
         return;
       }
-
       if (gettingAIFeedback) return;
-
       if (!codeAnswer || codeAnswer.trim().length < 5) {
         alert("Please write your code solution first before requesting AI feedback.");
         return;
       }
-
       setGettingAIFeedback(true);
       const iid = interviewId || sessionDetail?.interview_id || sessionId;
-
       try {
         const res = await api.post('/coding-round/checkpoint', {
           interview_id: iid,
@@ -354,14 +323,12 @@ export const InterviewTechnical = () => {
           language: selectedLanguage,
           explanation: transcriptionText || ""
         });
-
         const data = res.data;
         const fb = data?.feedback;
         const newCount = data?.ai_feedback_count ?? (aiFeedbackCount + 1);
         setAiFeedbackCount(newCount);
         setLatestAIFeedback(fb);
         setAiFeedbackModalOpen(true);
-
         // Also populate Console tab with structured feedback
         let formattedFeedback = `🤖 AI CODE FEEDBACK (Request ${newCount}/2):\n==================================================\n\n`;
         if (fb && typeof fb === 'object') {
@@ -402,7 +369,6 @@ export const InterviewTechnical = () => {
         setGettingAIFeedback(false);
       }
     };
-
     const handleSubmitCodingAndInterview = async () => {
       const iid = interviewId || sessionDetail?.interview_id || sessionId
       try {
@@ -418,7 +384,6 @@ export const InterviewTechnical = () => {
       // Always submit the interview once the coding round is done.
       handleSubmitInterview(false)
     }
-
     return (
       <div id="codingRoundSection" className="coding-round-shell" style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', padding: '16px', boxSizing: 'border-box', overflow: 'hidden' }}>
         <div className="coding-round-header" style={{ marginBottom: '12px', flexShrink: 0 }}>
@@ -463,7 +428,6 @@ export const InterviewTechnical = () => {
             <button className="ip-btn-next" onClick={handleSubmitCodingAndInterview}>Submit Code</button>
           </div>
         </div>
-
         <div className="coding-round-grid" style={{ flexGrow: 1, display: 'grid', gridTemplateColumns: 'minmax(360px, 0.95fr) minmax(520px, 1.25fr)', gap: '16px', minHeight: '0', overflow: 'hidden' }}>
           <div className="coding-problem-card" style={{ position: 'relative', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
             <div className="coding-problem-topbar" style={{ flexShrink: 0 }}>
@@ -480,20 +444,17 @@ export const InterviewTechnical = () => {
                 1. {codingTask.title || 'Technical Assessment'}
               </h3>
               <div style={{ height: '1px', backgroundColor: '#eef2f6', margin: '12px 0 20px 0' }}></div>
-
               {codingTask.description ? (
                 <div style={{ color: '#3c4d57', fontSize: '14.5px', lineHeight: '1.6', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
                   <div style={{ marginBottom: '20px', whiteSpace: 'pre-line' }}>
                     {codingTask.description}
                   </div>
-
                   {codingTask.input_format && (
                     <div style={{ marginBottom: '20px' }}>
                       <h4 style={{ fontWeight: '700', color: '#2c3e50', fontSize: '15px', marginTop: '20px', marginBottom: '8px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>Input Format</h4>
                       <p style={{ margin: 0, color: '#3c4d57', fontSize: '14px', lineHeight: '1.6', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>{codingTask.input_format}</p>
                     </div>
                   )}
-
                   {codingTask.constraints && (Array.isArray(codingTask.constraints) ? codingTask.constraints.length > 0 : true) && (
                     <div style={{ marginBottom: '20px' }}>
                       <h4 style={{ fontWeight: '700', color: '#2c3e50', fontSize: '15px', marginTop: '20px', marginBottom: '8px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>Constraints</h4>
@@ -508,14 +469,12 @@ export const InterviewTechnical = () => {
                       </ul>
                     </div>
                   )}
-
                   {codingTask.output_format && (
                     <div style={{ marginBottom: '20px' }}>
                       <h4 style={{ fontWeight: '700', color: '#2c3e50', fontSize: '15px', marginTop: '20px', marginBottom: '8px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>Output Format</h4>
                       <p style={{ margin: 0, color: '#3c4d57', fontSize: '14px', lineHeight: '1.6', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>{codingTask.output_format}</p>
                     </div>
                   )}
-
                   {Array.isArray(codingTask.examples) && codingTask.examples.length > 0 && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '20px' }}>
                       {codingTask.examples.map((ex, idx) => (
@@ -546,10 +505,8 @@ export const InterviewTechnical = () => {
               ) : (
                 <p style={{ color: '#475569', lineHeight: '1.6', marginBottom: '24px' }}>{codingTask.text || codingTask.question || ''}</p>
               )}
-
             </div>
           </div>
-
           <div className="coding-editor-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
             <div className="coding-toolbar" style={{ padding: '12px 16px', display: 'flex', gap: '16px', alignItems: 'center', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
               <label style={{ fontSize: '13px', color: '#475569', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Language</label>
@@ -583,7 +540,6 @@ export const InterviewTechnical = () => {
               </select>
               <button className="ip-btn-next" style={{ padding: '8px 20px', marginLeft: 'auto', background: '#10b981', color: '#fff', fontWeight: '700', borderRadius: '8px', border: 'none', cursor: 'pointer' }} onClick={handleRunCode}>Run & Evaluate</button>
             </div>
-
             <div className="coding-editor-wrap" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: '400px', overflow: 'hidden', position: 'relative' }}>
               <Suspense fallback={
                 <div style={{ height: '400px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: '13px', background: '#f8fafc', fontWeight: '500' }}>
@@ -614,7 +570,6 @@ export const InterviewTechnical = () => {
                   </div>
                 )}
               </Suspense>
-
               <div className="coding-console-shell" style={{ borderTop: activeRightTab === 'code' ? '1px solid #e2e8f0' : 'none', background: '#f8fafc', display: 'flex', flexDirection: 'column', maxHeight: activeRightTab === 'code' ? '40%' : '100%', minHeight: activeRightTab === 'code' ? '160px' : '0', flexGrow: activeRightTab === 'code' ? 0 : 1 }}>
                 <div className="coding-console-tabs" style={{ display: 'flex', gap: '2px', background: '#e2e8f0', padding: '8px 8px 0 8px', flexShrink: 0 }}>
                   <button
@@ -665,14 +620,12 @@ export const InterviewTechnical = () => {
                                 const visibleLen = runResultData.visible_results?.length || 0;
                                 const hiddenLen = runResultData.hidden_summary?.total || 0;
                                 const allCount = visibleLen + hiddenLen;
-
                                 return Array.from({ length: allCount }).map((_, i) => {
                                   const isHidden = i >= visibleLen;
                                   const tc = isHidden ? null : runResultData.visible_results[i];
                                   const passed = isHidden
                                     ? (i - visibleLen < runResultData.hidden_summary.passed)
                                     : tc?.passed;
-
                                   if (i >= evaluatedCount) {
                                     return (
                                       <div key={i} className="px-4 py-3 flex items-center gap-2 border-b border-slate-200 text-[11px] font-bold text-slate-500 bg-slate-50">
@@ -680,7 +633,6 @@ export const InterviewTechnical = () => {
                                       </div>
                                     );
                                   }
-
                                   return (
                                     <button
                                       key={i}
@@ -699,10 +651,8 @@ export const InterviewTechnical = () => {
                                 if (selectedTestCase >= evaluatedCount) {
                                   return <div className="text-slate-500 text-sm italic flex items-center gap-2"><i className="fas fa-spinner fa-spin" /> Evaluating...</div>;
                                 }
-
                                 const visibleLen = runResultData.visible_results?.length || 0;
                                 const isHidden = selectedTestCase >= visibleLen;
-
                                 if (isHidden) {
                                   const passed = (selectedTestCase - visibleLen) < runResultData.hidden_summary?.passed;
                                   return (
@@ -716,10 +666,8 @@ export const InterviewTechnical = () => {
                                     </div>
                                   );
                                 }
-
                                 const tc = runResultData.visible_results?.[selectedTestCase];
                                 if (!tc) return null;
-
                                 return (
                                   <div className="space-y-4 text-xs">
                                     <div className="font-bold text-lg mb-2 flex items-center gap-2">
@@ -778,7 +726,6 @@ export const InterviewTechnical = () => {
             </div>
           </div>
         </div>
-
         {/* Limit Exceeded Toast Alert */}
         {limitExceededToast && (
           <div style={{
@@ -812,7 +759,6 @@ export const InterviewTechnical = () => {
             </button>
           </div>
         )}
-
         {/* Dedicated AI Feedback Modal */}
         {aiFeedbackModalOpen && latestAIFeedback && (
           <div style={{
@@ -887,7 +833,6 @@ export const InterviewTechnical = () => {
                   <X style={{ width: '18px', height: '18px' }} />
                 </button>
               </div>
-
               {/* Modal Body */}
               <div style={{ padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '18px' }}>
                 {/* Coach summary message */}
@@ -906,7 +851,6 @@ export const InterviewTechnical = () => {
                     </p>
                   </div>
                 )}
-
                 {/* Strengths */}
                 {latestAIFeedback.strengths && latestAIFeedback.strengths.length > 0 && (
                   <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', padding: '14px 18px' }}>
@@ -921,7 +865,6 @@ export const InterviewTechnical = () => {
                     </ul>
                   </div>
                 )}
-
                 {/* Risks & Bugs */}
                 {latestAIFeedback.risks && latestAIFeedback.risks.length > 0 && (
                   <div style={{ background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: '10px', padding: '14px 18px' }}>
@@ -936,7 +879,6 @@ export const InterviewTechnical = () => {
                     </ul>
                   </div>
                 )}
-
                 {/* Next Steps & Hints */}
                 {latestAIFeedback.next_steps && latestAIFeedback.next_steps.length > 0 && (
                   <div style={{ background: '#fefce8', border: '1px solid #fef08a', borderRadius: '10px', padding: '14px 18px' }}>
@@ -951,7 +893,6 @@ export const InterviewTechnical = () => {
                     </ul>
                   </div>
                 )}
-
                 {/* Scorecard */}
                 {latestAIFeedback.scorecard && (
                   <div style={{ background: '#faf5ff', border: '1px solid #e9d5ff', borderRadius: '10px', padding: '14px 18px' }}>
@@ -982,7 +923,6 @@ export const InterviewTechnical = () => {
                   </div>
                 )}
               </div>
-
               {/* Modal Footer */}
               <div style={{
                 padding: '14px 24px',
@@ -1017,12 +957,9 @@ export const InterviewTechnical = () => {
       </div>
     )
   }
-
   const [searchParams] = useSearchParams()
   const sessionId = searchParams.get('session_id') || searchParams.get('session')
-
   const session = useInterviewSession(sessionId, interviewType, startRoundTwo)
-
   useEffect(() => {
     const enforceLightMode = () => {
       document.documentElement.classList.remove('dark')
@@ -1040,7 +977,6 @@ export const InterviewTechnical = () => {
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme'] })
     return () => observer.disconnect()
   }, [])
-
   const {
     loading,
     showAllSet,
@@ -1072,6 +1008,7 @@ export const InterviewTechnical = () => {
     transcriptionText,
     interimTranscriptText,
     globalCountdown,
+    isTimeExpired,
     isRoundTwo,
     showRound2Confirm,
     setShowRound2Confirm,
@@ -1097,27 +1034,23 @@ export const InterviewTechnical = () => {
     isSpeechRecordingRef,
     isOnline
   } = session
-
   useEffect(() => {
     return () => {
       stopAudio?.()
     }
   }, [stopAudio])
-
   useEffect(() => {
     const remoteCount = session?.codingRoundData?.coding_round?.ai_feedback_count;
     if (typeof remoteCount === 'number') {
       setAiFeedbackCount(remoteCount);
     }
   }, [session?.codingRoundData]);
-
   // ── Voice Cloning Setup State (UI only) ──────────────────────────────────
   const [vcStep, setVcStep] = useState('idle') // 'idle' | 'recording' | 'uploading' | 'done' | 'error'
   const [vcError, setVcError] = useState('')
   const [localVoiceId, setLocalVoiceId] = useState(null)
   const vcMediaRecorderRef = useRef(null)
   const vcChunksRef = useRef([])
-
   const startVcRecording = async () => {
     setVcStep('recording')
     setVcError('')
@@ -1152,11 +1085,9 @@ export const InterviewTechnical = () => {
       setVcStep('error')
     }
   }
-
   // ── Case Study Prep Mode ──────────────────────────────────────────────
   const [isPrepMode, setIsPrepMode] = useState(false)
   const [prepTimeLeft, setPrepTimeLeft] = useState(0)
-
   useEffect(() => {
     if (currentQuestion?.type === 'case_study') {
       setIsPrepMode(true)
@@ -1175,7 +1106,6 @@ export const InterviewTechnical = () => {
       }
     }
   }, [currentQuestionIndex, currentQuestion?.type, recognitionRef, isSpeechRecordingRef])
-
   useEffect(() => {
     let timer
     if (isPrepMode && prepTimeLeft > 0) {
@@ -1192,11 +1122,9 @@ export const InterviewTechnical = () => {
     }
     return () => clearInterval(timer)
   }, [isPrepMode, prepTimeLeft, recognitionRef, isSpeechRecordingRef])
-
   const stopVcRecording = () => {
     if (vcMediaRecorderRef.current?.state === 'recording') vcMediaRecorderRef.current.stop()
   }
-
   if (loading) {
     return (
       <div className="flex justify-center items-center h-screen flex-col gap-4 text-slate-600">
@@ -1205,7 +1133,6 @@ export const InterviewTechnical = () => {
       </div>
     )
   }
-
   if (error) {
     return (
       <AccessDeniedScreen
@@ -1216,7 +1143,6 @@ export const InterviewTechnical = () => {
       />
     )
   }
-
   if (isCompleted) {
     return (
       <div className="flex justify-center items-center h-screen flex-col p-6 text-center">
@@ -1239,7 +1165,6 @@ export const InterviewTechnical = () => {
       </div>
     )
   }
-
   // Render Disclaimer Page first
   if (!isDisclaimerAccepted) {
     return (
@@ -1249,7 +1174,6 @@ export const InterviewTechnical = () => {
             <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Secure Interview Environment</h2>
             <p className="text-slate-500 text-sm mt-1">Acme Proctoring Portal — {sessionDetail?.interview_title}</p>
           </div>
-
           <div className="flex flex-col gap-3.5 bg-slate-50 p-5 rounded-2xl border border-slate-200 text-sm">
             <strong className="text-warning block">⚠️ Security Guidelines & Integrity Checks:</strong>
             <ul className="pl-5 flex flex-col gap-2 text-slate-600 list-disc">
@@ -1259,7 +1183,6 @@ export const InterviewTechnical = () => {
               <li>Please complete the assessment individually in a quiet room.</li>
             </ul>
           </div>
-
           <div className="flex gap-2.5 items-center">
             <input
               type="checkbox"
@@ -1270,7 +1193,6 @@ export const InterviewTechnical = () => {
             />
             <label htmlFor="agree" className="cursor-pointer font-semibold text-sm text-slate-900 select-none">I agree to follow the proctoring guidelines above.</label>
           </div>
-
           <button
             onClick={acceptDisclaimer}
             disabled={!agreeChecked}
@@ -1279,7 +1201,6 @@ export const InterviewTechnical = () => {
             I Understand & Start Interview
           </button>
         </div>
-
         {/* Device Check Modal */}
         {session.showDeviceCheck && (
           <DeviceCheckModal
@@ -1293,7 +1214,6 @@ export const InterviewTechnical = () => {
       </div>
     )
   }
-
   // ── Voice Clone Setup Screen ──────────────────────────────────────────────
   if (showVoiceCloneSetup) return (
     <div style={{ minHeight: '100vh', background: '#0a0f1e', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white', padding: '24px', fontFamily: "'Inter',sans-serif" }}>
@@ -1307,12 +1227,10 @@ export const InterviewTechnical = () => {
         </div>
         <h1 style={{ fontSize: '28px', fontWeight: '900', marginBottom: '8px' }}>Voice Cloning Setup</h1>
         <p style={{ color: '#94a3b8', marginBottom: '32px', fontSize: '15px' }}>Read the sentence below aloud so we can clone your voice for the AI interviewer.</p>
-
         <div style={{ background: '#0d1117', border: '1px solid rgba(139,92,246,0.3)', borderRadius: '16px', padding: '24px', marginBottom: '28px' }}>
           <p style={{ fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '2px', color: '#a78bfa', marginBottom: '12px' }}>Read this clearly:</p>
           <p style={{ color: 'white', fontSize: '18px', fontWeight: '600', lineHeight: '1.6', fontStyle: 'italic' }}>"The quick brown fox jumps over the lazy dog. Please read this sentence clearly."</p>
         </div>
-
         {vcStep === 'recording' && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', height: '40px' }}>
@@ -1324,14 +1242,12 @@ export const InterviewTechnical = () => {
             </button>
           </div>
         )}
-
         {vcStep === 'uploading' && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
             <div style={{ width: '44px', height: '44px', borderRadius: '50%', border: '4px solid rgba(139,92,246,0.3)', borderTop: '4px solid #7c3aed', animation: 'spin 0.8s linear infinite' }} />
             <p style={{ color: '#a78bfa', fontSize: '14px' }}>Cloning your voice with ElevenLabs AI...</p>
           </div>
         )}
-
         {vcStep === 'done' && (
           <div style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '16px', padding: '20px', marginBottom: '20px', color: '#34d399' }}>
             <div style={{ fontSize: '32px', marginBottom: '8px' }}>✅</div>
@@ -1339,14 +1255,12 @@ export const InterviewTechnical = () => {
             <p style={{ fontSize: '13px', color: '#6ee7b7' }}>The AI will now speak in your voice during the interview.</p>
           </div>
         )}
-
         {vcStep === 'error' && (
           <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '16px', padding: '20px', marginBottom: '20px', color: '#f87171' }}>
             <div style={{ fontSize: '24px', marginBottom: '8px' }}>⚠️</div>
             <p style={{ fontSize: '13px' }}>{vcError || 'An error occurred. The interview will use the default AI voice.'}</p>
           </div>
         )}
-
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {vcStep === 'idle' && (
             <button onClick={startVcRecording} style={{ padding: '16px', background: 'linear-gradient(90deg,#7c3aed,#6366f1)', color: 'white', borderRadius: '12px', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '16px', boxShadow: '0 4px 30px rgba(139,92,246,0.4)' }}>
@@ -1367,7 +1281,6 @@ export const InterviewTechnical = () => {
       </div>
     </div>
   )
-
   // Render Video uploading progress & "All Set!" screen
   if (showAllSet || uploadingText) {
     return (
@@ -1377,7 +1290,6 @@ export const InterviewTechnical = () => {
             <h1 style={{ color: '#6366f1', fontSize: '3rem', marginBottom: '0.5rem', fontWeight: '800' }}>🎉 Thank You!</h1>
             <p style={{ fontSize: '1.25rem', color: '#4b5563', marginBottom: '3rem', fontWeight: '500' }}>Your interview has been successfully submitted.</p>
           </div>
-
           {!showAllSet ? (
             <div style={{ background: '#f8fafc', padding: '2.5rem', borderRadius: '16px', border: '1px dashed #cbd5e1', maxWidth: '500px', margin: '0 auto' }}>
               <div style={{ fontSize: '3rem', marginBottom: '1.5rem', animation: 'spin 2s linear infinite' }}>⏳</div>
@@ -1395,7 +1307,6 @@ export const InterviewTechnical = () => {
                 <div style={{ fontSize: '0.85rem', color: '#6366f1', fontWeight: '700' }}>{uploadingText || 'Preparing video file...'}</div>
                 <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '600' }}>Est: 1-2 mins</div>
               </div>
-
               {showSkipButton && (
                 <div style={{ marginTop: '1.5rem', fontSize: '0.8rem', color: '#64748b', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
                   Taking too long? <a href="#" onClick={(e) => { e.preventDefault(); if (skipCountdown <= 0) handleSkipUpload(); }} style={{ color: skipCountdown <= 0 ? '#6366f1' : '#94a3b8', textDecoration: skipCountdown <= 0 ? 'underline' : 'none', fontWeight: '600', cursor: skipCountdown <= 0 ? 'pointer' : 'not-allowed' }}>Finish & Exit anyway</a>
@@ -1426,18 +1337,14 @@ export const InterviewTechnical = () => {
       </div>
     )
   }
-
   const rawQuestionText = currentQuestion?.text || currentQuestion?.question || currentQuestion?.prompt || ''
   const currentQuestionText = rawQuestionText.replace(/^\[[^\]]+\]\s*/, '').trim()
-
   const displayQuestionNum = currentQuestion?.caseStudyIndex !== undefined
     ? currentQuestion.caseStudyIndex + 1
     : currentQuestionIndex + 1
-
   const totalDisplayQuestions = currentQuestion?.type === 'case_study'
     ? questions.filter(q => q.type === 'case_study').length
     : questions.filter(q => q.type !== 'case_study').length
-
   return (
     <div className={currentQuestion?.type === 'coding' ? "w-screen h-screen p-0 m-0 max-w-none overflow-hidden flex flex-col" : "min-h-screen bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-slate-50 via-white to-indigo-50/40 text-slate-900 overflow-hidden flex flex-col relative"}>
       {/* Phase 3: Offline warning banner */}
@@ -1447,7 +1354,6 @@ export const InterviewTechnical = () => {
           <span>You are offline. Reconnecting... Your answers will be saved when connection is restored.</span>
         </div>
       )}
-
       {/* ── Proctoring Alert Pills (portal-mounted, never overlaps page content) ── */}
       <ProctoringAlerts
         faceAlertCount={faceAlertCount}
@@ -1457,7 +1363,6 @@ export const InterviewTechnical = () => {
         proctoringAlert={proctoringAlert}
         modelsFailed={modelsFailed}
       />
-
       {fullscreenWarning && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[99998] flex items-center justify-center p-4">
           <div className="bg-[#161c2d] border border-white/10 rounded-2xl shadow-2xl p-6 max-w-md w-full flex flex-col items-center gap-4 text-center animate-in fade-in zoom-in duration-200">
@@ -1487,7 +1392,6 @@ export const InterviewTechnical = () => {
           </div>
         </div>
       )}
-
       {screenShareWarning && screenShareViolations < 3 && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[99998] flex items-center justify-center p-4">
           <div className="bg-[#161c2d] border border-white/10 rounded-2xl shadow-2xl p-6 max-w-md w-full flex flex-col items-center gap-4 text-center animate-in fade-in zoom-in duration-200">
@@ -1512,7 +1416,6 @@ export const InterviewTechnical = () => {
           </div>
         </div>
       )}
-
       {currentQuestion?.type === 'coding' ? (
         renderRoundTwoUI ? renderRoundTwoUI({ ...session, sessionId }) : null
       ) : (
@@ -1525,7 +1428,6 @@ export const InterviewTechnical = () => {
               </linearGradient>
             </defs>
           </svg>
-
           <div className="ip-left flex flex-col gap-4 h-full overflow-y-auto pr-1 scrollbar-none">
             {/* AI Analyzing Status Card */}
             <div className="bg-white/60 backdrop-blur-2xl border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-2xl p-5 flex items-center gap-4 transition-all duration-300 hover:shadow-lg hover:border-indigo-50">
@@ -1546,7 +1448,6 @@ export const InterviewTechnical = () => {
                 <span className="w-1 bg-emerald-500 rounded-full h-5 animate-[audioBar_0.8s_ease-in-out_infinite_alternate_0.1s]"></span>
               </div>
             </div>
-
             {/* Timer Card */}
             <div className="bg-white/60 backdrop-blur-2xl border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-[24px] p-6 flex flex-col items-center gap-4 transition-all duration-300 hover:shadow-lg">
               <div className="relative w-28 h-28">
@@ -1555,13 +1456,25 @@ export const InterviewTechnical = () => {
                   <circle className="fill-none stroke-[8px] stroke-[url(#timerGradient)] [stroke-linecap:round] [stroke-dasharray:295.3] [stroke-dashoffset:0] transition-[stroke-dashoffset] duration-1000 ease-linear" cx="55" cy="55" r="47" />
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-xl font-extrabold text-slate-800 font-mono leading-none">
-                    {Math.floor(globalCountdown / 60).toString().padStart(2, '0')}:{(globalCountdown % 60).toString().padStart(2, '0')}
-                  </span>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">Remaining</span>
+                  {isTimeExpired || globalCountdown <= 0 ? (
+                    <>
+                      <span className="text-xl font-extrabold text-amber-500 font-mono leading-none animate-pulse">
+                        00:00
+                      </span>
+                      <span className="text-[9px] text-amber-600 font-bold tracking-tight mt-1 text-center px-1">
+                        Finishing current answer
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-xl font-extrabold text-slate-800 font-mono leading-none">
+                        {Math.floor(globalCountdown / 60).toString().padStart(2, '0')}:{(globalCountdown % 60).toString().padStart(2, '0')}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">Remaining</span>
+                    </>
+                  )}
                 </div>
               </div>
-
               {!isRoundTwo && sessionDetail?.interview_type !== 'Normal' && (
                 <button
                   onClick={() => {
@@ -1570,10 +1483,9 @@ export const InterviewTechnical = () => {
                   }}
                   className="w-full py-3 px-4 rounded-xl font-bold text-xs bg-indigo-600 hover:bg-indigo-500 text-white transition-all cursor-pointer border-none shadow-md flex items-center justify-center gap-2 hover:-translate-y-0.5"
                 >
-                  🚀 Start Round 2 &rarr;
+                  🚀 Switch to Coding Round (Round 2) &rarr;
                 </button>
               )}
-
               <button
                 className="w-full py-3 px-4 rounded-xl font-bold text-xs transition-all border-none shadow-md flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white cursor-pointer hover:-translate-y-0.5"
                 onClick={(e) => handleFinishEarly(e)}
@@ -1582,11 +1494,9 @@ export const InterviewTechnical = () => {
                 ⏹ Finish Interview
               </button>
             </div>
-
             {/* AI insights Card */}
             <div className="bg-white/60 backdrop-blur-2xl border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-[24px] p-6 transition-all duration-300 hover:shadow-lg">
               <h4 className="m-0 mb-4 text-[13px] font-bold text-slate-800 tracking-wide uppercase">AI Live Evaluation</h4>
-
               <div className="mb-4">
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-[11px] font-extrabold text-slate-500 tracking-wider">CLARITY & COMMUNICATION</span>
@@ -1596,7 +1506,6 @@ export const InterviewTechnical = () => {
                   <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-1000" style={{ width: `${aiInsights.clarity}%` }}></div>
                 </div>
               </div>
-
               <div className="mb-4">
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-[11px] font-extrabold text-slate-500 tracking-wider">
@@ -1610,7 +1519,6 @@ export const InterviewTechnical = () => {
                   <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-1000" style={{ width: `${aiInsights.technicalDepth}%` }}></div>
                 </div>
               </div>
-
               <div>
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-[11px] font-extrabold text-slate-500 tracking-wider">
@@ -1625,7 +1533,6 @@ export const InterviewTechnical = () => {
                 </div>
               </div>
             </div>
-
             {/* Audio canvas visualizer */}
             <div className="bg-white/60 backdrop-blur-2xl border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-[24px] p-6 transition-all duration-300 hover:shadow-lg flex flex-col gap-2">
               <h4 className="m-0 text-[13px] font-bold text-slate-800 tracking-wide uppercase">Voice Monitor</h4>
@@ -1634,7 +1541,6 @@ export const InterviewTechnical = () => {
               </div>
             </div>
           </div>
-
           <div className="ip-right flex flex-col gap-4 h-full min-h-0">
             {isPrepMode ? (
               <div className="bg-white/70 backdrop-blur-3xl border border-white rounded-[2rem] p-8 shadow-[0_8px_40px_rgb(0,0,0,0.08)] flex flex-col gap-6 h-full min-h-0 overflow-y-auto">
@@ -1649,7 +1555,6 @@ export const InterviewTechnical = () => {
                     Question <span className="text-indigo-600 font-black">{displayQuestionNum}</span> of {totalDisplayQuestions}
                   </span>
                 </div>
-
                 <div className="flex flex-col gap-2">
                   <h3 className="text-sm font-bold text-indigo-600 uppercase tracking-widest flex items-center gap-2 m-0">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
@@ -1659,7 +1564,6 @@ export const InterviewTechnical = () => {
                     {currentQuestion?.scenario || 'No scenario details available.'}
                   </div>
                 </div>
-
                 <div className="flex flex-col gap-3">
                   <h3 className="text-sm font-bold text-indigo-600 uppercase tracking-widest flex items-center gap-2 m-0">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
@@ -1672,7 +1576,6 @@ export const InterviewTechnical = () => {
                     </div>
                   </div>
                 </div>
-
                 <div className="bg-[#f8f6ff] border border-indigo-100 rounded-2xl p-5 mt-2">
                   <h3 className="text-[13px] font-bold text-indigo-600 flex items-center gap-2 mb-3 m-0 uppercase tracking-wide">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
@@ -1685,7 +1588,6 @@ export const InterviewTechnical = () => {
                     <li>Present your case like you would in a real interview.</li>
                   </ul>
                 </div>
-
                 <div className="flex items-center justify-center mt-auto pt-4">
                   <button
                     onClick={() => {
@@ -1706,12 +1608,12 @@ export const InterviewTechnical = () => {
                 {/* Question Card */}
                 <div className="bg-white/70 backdrop-blur-2xl border border-white rounded-[24px] p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.06)] relative overflow-hidden transition-all duration-300 hover:shadow-xl">
                   <div className="text-[11px] text-slate-400 font-extrabold tracking-wider uppercase mb-4">
-                    Question <span id="questionNumber" className="text-indigo-600 font-black">{displayQuestionNum}</span> of <span id="totalQuestions">{totalDisplayQuestions}</span>
+                    Question <span id="questionNumber" className="text-indigo-600 font-black">{displayQuestionNum}</span>
                   </div>
                   <div className="flex gap-4 items-start">
                     <div className="w-1.5 bg-indigo-600 self-stretch rounded-full shrink-0 min-h-[60px]" />
                     <p className="flex-1 text-slate-800 text-base md:text-lg font-semibold leading-relaxed m-0">{currentQuestionText || 'Question is loading...'}</p>
-                    {!isRoundTwo && currentQuestion?.type !== 'coding' && currentQuestion?.type !== 'case_study' && (
+                    {!isRoundTwo && currentQuestion?.caseStudyIndex === undefined && (
                       <button
                         className="bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-indigo-600 border border-slate-200 hover:border-indigo-100 cursor-pointer p-2.5 rounded-full transition-all duration-200 shrink-0"
                         onClick={() => speakAIQuestion(currentQuestionText)}
@@ -1725,7 +1627,6 @@ export const InterviewTechnical = () => {
                     )}
                   </div>
                 </div>
-
                 {/* Transcript Card */}
                 <div className="bg-white/80 backdrop-blur-3xl border border-white rounded-[32px] p-6 md:p-8 shadow-[0_8px_40px_rgb(0,0,0,0.08)] flex flex-col h-[300px] shrink-0 transition-all duration-300 hover:shadow-xl">
                   <div className="flex items-center justify-between mb-3">
@@ -1747,29 +1648,35 @@ export const InterviewTechnical = () => {
                     {transcriptionText || <span style={{ color: '#94a3b8' }}>Your speech will appear here automatically...</span>}
                   </div>
                 </div>
-
                 {/* Navigation buttons */}
-                <div className="flex gap-3 justify-center items-center mt-2 shrink-0">
-                  {currentQuestionIndex === questions.length - 1 ? (
+                <div className="flex flex-wrap gap-3 justify-center items-center mt-2 shrink-0">
+                  {isTimeExpired || (globalCountdown <= 0 && totalDuration > 0) ? (
                     !isRoundTwo && sessionDetail?.interview_type !== 'Normal' ? (
                       <button
+                        className="px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-600/30 hover:shadow-indigo-600/40 transition-all duration-200 cursor-pointer border-none flex items-center gap-2 animate-pulse"
                         onClick={() => {
                           stopAudio?.()
-                          handleStartRound2Click()
+                          proceedToRoundTwo()
                         }}
-                        className="px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-600/30 hover:shadow-indigo-600/40 transition-all duration-200 cursor-pointer border-none flex items-center gap-2"
                       >
                         🚀 Switch to Coding Round (Round 2) &rarr;
                       </button>
                     ) : (
                       <button
-                        className="px-8 py-3.5 rounded-xl font-bold text-sm text-white transition-all duration-200 border-none bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/20 hover:shadow-red-500/30 cursor-pointer"
+                        className="px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-red-600 hover:bg-red-700 shadow-lg shadow-red-600/30 hover:shadow-red-600/40 transition-all duration-200 cursor-pointer border-none flex items-center gap-2"
                         onClick={(e) => handleFinishEarly(e)}
-                        title="Finish Interview"
                       >
-                        Finish Interview
+                        Finish & Submit Interview
                       </button>
                     )
+                  ) : currentQuestionIndex === questions.length - 1 && isRoundTwo ? (
+                    <button
+                      className="px-8 py-3.5 rounded-xl font-bold text-sm text-white transition-all duration-200 border-none bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/20 hover:shadow-red-500/30 cursor-pointer"
+                      onClick={(e) => handleFinishEarly(e)}
+                      title="Finish Interview"
+                    >
+                      Finish Interview
+                    </button>
                   ) : (
                     <button
                       className="px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30 transition-all duration-200 cursor-pointer border-none"
@@ -1787,7 +1694,6 @@ export const InterviewTechnical = () => {
           </div>
         </div>
       )}
-
       {/* Floating Camera Preview Widget */}
       {isDisclaimerAccepted && !showAllSet && !loading && (
         <motion.div
@@ -1813,7 +1719,6 @@ export const InterviewTechnical = () => {
           )}
         </motion.div>
       )}
-
       {showRound2Confirm && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 transform transition-all text-left">

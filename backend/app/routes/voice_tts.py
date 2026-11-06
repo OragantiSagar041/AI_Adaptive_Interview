@@ -242,6 +242,37 @@ async def voice_clone_instant(
         if os.path.exists(temp_audio):
             os.remove(temp_audio)
 
+from collections import OrderedDict
+_tts_cache: OrderedDict[str, bytes] = OrderedDict()
+_MAX_TTS_CACHE = 150
+_last_env_mtime = 0.0
+_env_file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+
+def _ensure_env_synced():
+    """Sync environment variables only if .env file has been modified on disk."""
+    global _last_env_mtime
+    try:
+        if os.path.exists(_env_file_path):
+            current_mtime = os.path.getmtime(_env_file_path)
+            if current_mtime != _last_env_mtime:
+                load_dotenv(_env_file_path, override=True)
+                _last_env_mtime = current_mtime
+    except Exception:
+        pass
+
+def _get_cached_audio(cache_key: str) -> Optional[bytes]:
+    if cache_key in _tts_cache:
+        _tts_cache.move_to_end(cache_key)
+        return _tts_cache[cache_key]
+    return None
+
+def _put_cached_audio(cache_key: str, data: bytes):
+    if not data or len(data) > 4 * 1024 * 1024:
+        return
+    _tts_cache[cache_key] = data
+    if len(_tts_cache) > _MAX_TTS_CACHE:
+        _tts_cache.popitem(last=False)
+
 @router.post("/tts")
 async def generate_tts(
     req: TTSRequest,
@@ -258,7 +289,7 @@ async def generate_tts(
     - If Cartesia quota is exceeded, the API key is missing, or any other error
       occurs, the system silently falls back to the free Microsoft Edge TTS voice.
     """
-    load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"), override=True)
+    _ensure_env_synced()
     cartesia_api_key = os.getenv("CARTESIA_API_KEY", "").strip()
     default_cartesia_voice = os.getenv("CARTESIA_VOICE_ID", "").strip()
     session_cloned_voice = str(candidate_session.get("cloned_voice_id") or "").strip()
@@ -326,6 +357,12 @@ async def generate_tts(
     normalised_lang = bcp47_to_lang_name.get(raw_lang.lower(), raw_lang.title())
     requested_lang = normalised_lang
     edge_voice = edge_language_map.get(requested_lang, base_edge_voice)
+
+    # Fast in-memory TTS audio cache lookup (instant 0ms response for repeated questions/greetings)
+    tts_cache_key = f"{requested_lang}:{target_voice_id or edge_voice}:{hashlib.md5(req.text.strip().encode('utf-8')).hexdigest()}"
+    cached_audio = _get_cached_audio(tts_cache_key)
+    if cached_audio:
+        return StreamingResponse(io.BytesIO(cached_audio), media_type="audio/mpeg")
 
     # Cartesia multilingual language code mapping
     cartesia_language_map = {
@@ -415,6 +452,7 @@ async def generate_tts(
 
             if audio_bytes:
                 print(f"[TTS] Cartesia: OK ({len(audio_bytes)} bytes) | voice={target_voice_id} | lang={cartesia_lang}")
+                _put_cached_audio(tts_cache_key, audio_bytes)
                 return StreamingResponse(io.BytesIO(audio_bytes), media_type="audio/mpeg")
             else:
                 print(f"[TTS] Cartesia error: No audio returned. Falling back to next TTS provider.")
@@ -462,6 +500,7 @@ async def generate_tts(
                         audio_data = await resp.read()
                         if audio_data:
                             print(f"[TTS] Azure Speech: OK ({len(audio_data)} bytes) | voice={azure_voice_name} | lang={requested_lang}")
+                            _put_cached_audio(tts_cache_key, audio_data)
                             return StreamingResponse(io.BytesIO(audio_data), media_type="audio/mpeg")
                     else:
                         resp_text = await resp.text()
@@ -483,6 +522,7 @@ async def generate_tts(
                 audio_chunks.append(chunk["data"])
         audio_bytes = b"".join(audio_chunks)
         if audio_bytes:
+            _put_cached_audio(tts_cache_key, audio_bytes)
             return StreamingResponse(io.BytesIO(audio_bytes), media_type="audio/mpeg")
     except Exception as edge_err:
         logger.warning(f"[TTS] Edge TTS Error: {edge_err}. Falling back to client-side Web Speech API.")

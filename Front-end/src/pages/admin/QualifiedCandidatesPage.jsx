@@ -52,7 +52,7 @@ export default function QualifiedCandidatesPage() {
   const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
   const adminUser = useSelector(state => state.auth.adminUser)
 
-  const candidates = useSelector(state => state.candidates.candidates) || []
+  const candidates = useSelector(state => state.candidates.qualifiedCandidates ?? state.candidates.candidates) || []
   const reqStatus = useSelector(state => state.candidates.status)
   const reqError = useSelector(state => state.candidates.error)
 

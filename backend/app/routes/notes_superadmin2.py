@@ -93,41 +93,93 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.put("/admin/interview/{link_id}/notes")
+@router.post("/admin/interview/{link_id}/notes")
+@router.put("/api/admin/interview/{link_id}/notes")
+@router.post("/api/admin/interview/{link_id}/notes")
 def update_interview_notes(link_id: str, payload: dict, current_admin: dict = Depends(get_current_admin_details)):
-    if current_admin.get("role") not in ["master", "superadmin", "admin", "tenant"]:
+    if current_admin.get("role") not in ["master", "superadmin", "super_admin", "admin", "tenant", "recruiter"]:
         raise HTTPException(status_code=403, detail="Not authorized")
-    note_text = payload.get("notes", "").strip()
+
+    clean_id = link_id.replace("ai_call_", "") if link_id.startswith("ai_call_") else link_id
+    oid = None
+    try:
+        oid = ObjectId(clean_id)
+    except Exception:
+        oid = None
+
+    raw_notes = payload.get("notes")
+
+    if isinstance(raw_notes, list):
+        # Frontend sent a list of note objects: [{ text, added_by, added_at }, ...]
+        normalized_notes = []
+        for n in raw_notes:
+            if isinstance(n, dict):
+                normalized_notes.append({
+                    "text": str(n.get("text") or "").strip(),
+                    "added_by": n.get("added_by") or current_admin.get("name") or current_admin.get("role", "Admin"),
+                    "added_at": n.get("added_at") or datetime.now(timezone.utc).isoformat()
+                })
+            elif isinstance(n, str) and n.strip():
+                normalized_notes.append({
+                    "text": n.strip(),
+                    "added_by": current_admin.get("name") or current_admin.get("role", "Admin"),
+                    "added_at": datetime.now(timezone.utc).isoformat()
+                })
+
+        session_query = [{"link_id": link_id}, {"interview_id": link_id}]
+        if oid:
+            session_query.append({"_id": oid})
+
+        result = interview_sessions_collection.update_one(
+            {"$or": session_query},
+            {"$set": {"notes": normalized_notes, "notes_history": normalized_notes}}
+        )
+        if result.matched_count == 0:
+            app_query = [{"omni_call_id": link_id}, {"link_id": link_id}, {"interview_id": link_id}]
+            if oid:
+                app_query.append({"_id": oid})
+            result2 = job_applications_collection.update_one(
+                {"$or": app_query},
+                {"$set": {"notes": normalized_notes, "notes_history": normalized_notes}}
+            )
+            if result2.matched_count == 0:
+                raise HTTPException(status_code=404, detail="Session not found")
+
+        return {"status": "success", "message": "Notes updated successfully", "notes": normalized_notes}
+
+    # Otherwise payload is a single note string
+    note_text = str(raw_notes or payload.get("text") or payload.get("note") or "").strip()
     if not note_text:
         return {"status": "success", "message": "No note to add"}
-        
+
     new_note = {
         "text": note_text,
         "author_id": current_admin.get("admin_id"),
         "role": current_admin.get("role"),
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "added_by": current_admin.get("name") or current_admin.get("role", "Admin"),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "added_at": datetime.now(timezone.utc).isoformat()
     }
-    
-    from bson import ObjectId
+
+    session_query = [{"link_id": link_id}, {"interview_id": link_id}]
+    if oid:
+        session_query.append({"_id": oid})
+
     result = interview_sessions_collection.update_one(
-        {"link_id": link_id},
-        {"$push": {"notes_history": new_note}}
+        {"$or": session_query},
+        {"$push": {"notes": new_note, "notes_history": new_note}}
     )
     if result.matched_count == 0:
-        # Also check job_applications for AI calls
-        try:
-            oid = ObjectId(link_id.replace("ai_call_", "")) if link_id.startswith("ai_call_") else None
-        except Exception:
-            oid = None
-        or_cond = [{"omni_call_id": link_id}]
+        app_query = [{"omni_call_id": link_id}, {"link_id": link_id}, {"interview_id": link_id}]
         if oid:
-            or_cond.append({"_id": oid})
+            app_query.append({"_id": oid})
         result2 = job_applications_collection.update_one(
-            {"$or": or_cond},
-            {"$push": {"notes_history": new_note}}
+            {"$or": app_query},
+            {"$push": {"notes": new_note, "notes_history": new_note}}
         )
         if result2.matched_count == 0:
             raise HTTPException(status_code=404, detail="Session not found")
-            
+
     return {"status": "success", "message": "Note added successfully", "note": new_note}
 
 # ==========================================

@@ -41,7 +41,7 @@ export default function RejectedCandidatesPage() {
   const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
   const adminUser = useSelector(state => state.auth.adminUser)
 
-  const candidates = useSelector(state => state.candidates.candidates) || []
+  const candidates = useSelector(state => state.candidates.rejectedCandidates ?? state.candidates.candidates) || []
     const reqStatus = useSelector(state => state.candidates.status)
   const error = useSelector(state => state.candidates.error)
 

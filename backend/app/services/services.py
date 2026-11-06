@@ -1582,7 +1582,7 @@ def generate_jd_questions(jd_text: str, ai_instructions: str = "", interview_typ
 
     return questions
 
-def generate_mock_questions(text: str, source: str, num_questions: int = 6, resume_text: str = None, jd_text: str = None, hr_screening: dict = None, custom_questions: str = "", ai_instructions: str = "", interview_type: str = "Technical", industry: str = "General", language: str = "English", difficulty: str = "Medium") -> List[Dict[str, str]]:
+def generate_mock_questions(text: str, source: str, num_questions: int = 6, resume_text: str = None, jd_text: str = None, hr_screening: dict = None, custom_questions: str = "", ai_instructions: str = "", interview_type: str = "Technical", industry: str = "General", language: str = "English", difficulty: str = "Medium", is_continuation: bool = False) -> List[Dict[str, str]]:
     """
     Generate structured interview questions.
     Structure: Self-Intro → Technical Middle → HR Screening (if enabled) → Closing
@@ -1593,7 +1593,7 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
     hr_screening: dict with keys ask_work_mode, ask_preferred_location, ask_current_location, ask_bond.
     When any is True, additional HR screening questions are appended before closing.
     """
-    num_questions = max(4, num_questions)
+    num_questions = max(1 if is_continuation else 4, num_questions)
     
     intro_q_text = "Can you please introduce yourself and tell us why you are interested in this specific role?"
     if language != "English":
@@ -1614,7 +1614,9 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
         ]
 
     target_diff = (difficulty or "Medium").capitalize()
-    if custom_questions and custom_questions.strip():
+    if is_continuation:
+        opening = []
+    elif (custom_questions and custom_questions.strip()) or num_questions <= 4:
         opening = [
             {
                 "id": 1,
@@ -1650,7 +1652,18 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
         ]
     
     closing = []
-    if str(interview_type).lower() != "technical":
+    if is_continuation:
+        closing = []
+    elif num_questions <= 4:
+        closing = [
+            {
+                "question": "Where do you see yourself in the next few years, and how does this role fit into that vision?",
+                "difficulty": target_diff,
+                "type": "Career Goals",
+                "category": "Future Plans"
+            }
+        ]
+    elif str(interview_type).lower() != "technical":
         closing = [
             {
                 "question": "What do you consider your biggest strengths and weaknesses?",
@@ -1816,7 +1829,7 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
         idx += 1
     
     # ── HR SCREENING QUESTIONS (inserted before closing) ──
-    if hr_screening:
+    if hr_screening and not is_continuation:
         screening_questions = _generate_hr_screening_questions(hr_screening, jd_text or text, language=language)
         for q in screening_questions:
             q["id"] = idx
