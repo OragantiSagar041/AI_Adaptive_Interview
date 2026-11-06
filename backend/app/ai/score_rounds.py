@@ -453,3 +453,54 @@ def calculate_final_score(round1_score: float, round2_score: float = 0.0) -> flo
     final = round1_score + round2_score
     return round(min(100.0, max(0.0, final)), 1)
 
+
+
+def compute_session_composite_score(
+    interview_type: str = "Technical",
+    questions: list = None,
+    answers: list = None,
+    coding_round: dict = None,
+    case_study_round: dict = None,
+    context: str = "",
+    language: str = "English",
+    fallback_score: float = 0.0
+) -> tuple:
+    """
+    Computes (round1_score, round2_score, final_score) safely and deterministically.
+    Guarantees that minimized table score and maximized modal score are always 100% identical.
+    """
+    questions = questions or []
+    answers = answers or []
+    n_cs_questions = len((case_study_round or {}).get("questions", []) or []) if case_study_round else 0
+    round1_max, round2_max = get_marks_split(interview_type, n_cs_questions)
+
+    round1_s = 0.0
+    if questions:
+        round1_s = calculate_round1_score(
+            questions=questions,
+            answers=answers,
+            interview_type=interview_type,
+            n_case_study_questions=n_cs_questions
+        )
+
+    # If calculate_round1_score returned 0.0 or questions was empty, but answers exist with scores
+    if round1_s == 0.0 and answers:
+        scores = [float(a.get("ai_score", 0)) for a in answers if isinstance(a, dict) and a.get("ai_score") is not None]
+        if scores:
+            verbal_avg = sum(scores) / len(scores)
+            round1_s = round((verbal_avg / 100.0) * round1_max, 1)
+
+    round2_s = 0.0
+    itype_lower = str(interview_type).strip().lower()
+    if itype_lower == "technical" and coding_round:
+        round2_s = calculate_coding_score(coding_round)
+    elif itype_lower in ("non-technical", "non_technical", "non tech", "nontech") and case_study_round:
+        round2_s = calculate_case_study_round2_score(case_study_round, n_cs_questions, context, language)
+
+    final_s = calculate_final_score(round1_s, round2_s)
+
+    if final_s == 0.0 and fallback_score > 0.0:
+        final_s = round(fallback_score, 1)
+        round1_s = final_s
+
+    return round(round1_s, 1), round(round2_s, 1), round(final_s, 1)

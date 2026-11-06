@@ -11,7 +11,7 @@ import {
   Play, FileText, Sparkles, Star, Check, X, Calendar, Send,
   MessageSquare, Video, Scale, Loader2, AlertCircle, Monitor,
   Mic, ShieldAlert, Eye, ChevronRight, Code, UserCheck, User, ExternalLink, ArrowLeft, ArrowRight,
-  Globe, RotateCcw
+  Globe, RotateCcw, Briefcase, Award
 } from "lucide-react"
 import { jsPDF } from 'jspdf'
 import { detectNonEnglishText, translateText, translateQAPairs } from '../../utils/translation'
@@ -319,6 +319,13 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
           headers: { Authorization: `Bearer ${token}` }
         })
         setDetail(res.data)
+        if (res.data && onStatusUpdate) {
+          const newScore = res.data.avg_score ?? res.data.score
+          const oldScore = candidate.avg_score ?? candidate.score
+          if (newScore != null && oldScore != null && Number(newScore).toFixed(1) !== Number(oldScore).toFixed(1)) {
+            onStatusUpdate()
+          }
+        }
       } catch (e) {
         console.error("Error fetching candidate detail:", e)
         setError("Could not load full details. Showing basic info.")
@@ -904,7 +911,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
 
     // ── Select / Shortlist ──
     try {
-      await dispatch(handleUpdateDecision({ linkId, decision: newDecision, talent_pool_status: talentPoolStatus })).unwrap()
+      await dispatch(handleUpdateDecision({ linkId, decision: newDecision })).unwrap()
       Swal.fire('Success', `Candidate marked as ${newDecision.toUpperCase()}`, 'success')
       if (onStatusUpdate) onStatusUpdate(newDecision)
       onOpenChange(false)
@@ -1207,16 +1214,38 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   </section>
 )}
 
-                  <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <h3 className="mb-2 text-sm font-black text-slate-800">Summary</h3>
-                    <p className="text-sm leading-7 text-slate-600">
-                      {summarySections.map(([label, value], index) => (
-                        <React.Fragment key={label}>
-                          {index > 0 && <span className="mx-1.5 text-slate-300">|</span>}
-                          <strong className="font-semibold text-slate-800">{label}:</strong> {value}
-                        </React.Fragment>
-                      ))}
-                    </p>
+                  {/* ── Candidate Summary Section ── */}
+                  <section className="rounded-2xl border border-slate-200/80 dark:border-slate-700/80 bg-white dark:bg-slate-800/80 p-5 sm:p-6 shadow-xs transition-all">
+                    {/* Header */}
+                    <div className="flex items-center justify-between pb-3.5 mb-4 border-b border-slate-100 dark:border-slate-700/60">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-100 dark:border-indigo-800/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shadow-xs">
+                          <FileText size={16} />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 tracking-tight">Candidate Summary</h3>
+                          <p className="text-[0.7rem] font-medium text-slate-400 dark:text-slate-400">Comprehensive profile overview & interview evaluation</p>
+                        </div>
+                      </div>
+                      <span className="text-[0.65rem] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider bg-slate-50 dark:bg-slate-900/50 px-2.5 py-1 rounded-lg border border-slate-200/60 dark:border-slate-700">
+                        Summary
+                      </span>
+                    </div>
+
+                    {/* Professional Paragraph Container */}
+                    <div className="rounded-xl bg-slate-50/70 dark:bg-slate-900/40 border border-slate-100/90 dark:border-slate-800/80 p-4 sm:p-5 border-l-4 border-l-indigo-500 dark:border-l-indigo-400">
+                      <p className="text-[0.84rem] leading-8 text-slate-600 dark:text-slate-300">
+                        {summarySections.map(([label, value], index) => (
+                          <React.Fragment key={label}>
+                            {index > 0 && (
+                              <span className="inline-block mx-2 text-indigo-400/80 dark:text-indigo-500 font-bold select-none">•</span>
+                            )}
+                            <strong className="font-bold text-slate-800 dark:text-slate-100">{label}:</strong>{' '}
+                            <span className="text-slate-700 dark:text-slate-200 font-normal">{value}</span>
+                          </React.Fragment>
+                        ))}
+                      </p>
+                    </div>
                   </section>
 
                   <section className="bg-card rounded-xl border border-border p-5 shadow-sm">
@@ -1317,26 +1346,20 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                   {/* Integrity */}
                   {c.integrity && (() => {
                     const violationsList = c.violations || c.alerts || []
-                    const tabTypes = ['tab_switch', 'screen_casting', 'screen_share_detected', 'screen_recording', 'screenshare_stopped', 'multiple_displays', 'multi_monitor', 'fullscreen_exit', 'window_blur']
+                    const tabTypes = ['tab_switch', 'screen_casting', 'screen_share_detected', 'screen_recording', 'screenshare_stopped', 'multiple_displays', 'multi_monitor', 'fullscreen_exit']
                     const noiseTypes = ['noise_alert', 'background_noise', 'noise']
                     
-                    let tabSwitches = Number(c.integrity.total_tab_switches || 0)
-                    let faceAlerts = Number(c.integrity.total_face_alerts || 0)
-                    let noiseAlerts = Number(c.integrity.total_noise_alerts || 0)
-                    
-                    if (violationsList.length > 0) {
-                      const screenCount = violationsList.filter(v => tabTypes.includes(v.type || v.violation_type)).length
-                      const noiseCount = violationsList.filter(v => noiseTypes.includes(v.type || v.violation_type)).length
-                      const trueFaceCount = violationsList.filter(v => !tabTypes.includes(v.type || v.violation_type) && !noiseTypes.includes(v.type || v.violation_type)).length
+                    const tabSwitches = c.integrity.total_tab_switches !== undefined
+                      ? Number(c.integrity.total_tab_switches || 0)
+                      : violationsList.filter(v => tabTypes.includes(v.type || v.violation_type)).length
                       
-                      if (screenCount > 0) {
-                        tabSwitches = Math.max(tabSwitches, screenCount)
-                        faceAlerts = trueFaceCount
-                      }
-                      if (noiseCount > 0) {
-                        noiseAlerts = Math.max(noiseAlerts, noiseCount)
-                      }
-                    }
+                    const faceAlerts = c.integrity.total_face_alerts !== undefined
+                      ? Number(c.integrity.total_face_alerts || 0)
+                      : violationsList.filter(v => !tabTypes.includes(v.type || v.violation_type) && !noiseTypes.includes(v.type || v.violation_type) && (v.type || v.violation_type) !== 'window_blur').length
+                      
+                    const noiseAlerts = c.integrity.total_noise_alerts !== undefined
+                      ? Number(c.integrity.total_noise_alerts || 0)
+                      : violationsList.filter(v => noiseTypes.includes(v.type || v.violation_type)).length
 
                     return (
                       <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
@@ -1347,7 +1370,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                           <StatCard label="Tab Switches" value={tabSwitches} />
                           <StatCard label="Face Alerts" value={faceAlerts} />
                           <StatCard label="Noise Alerts" value={noiseAlerts} />
-                          <StatCard label="Total Duration" value={`${c.integrity.total_time_minutes} min`} />
+                          <StatCard label="Total Duration" value={`${c.integrity.total_time_minutes ?? 0} min`} />
                         </div>
                       </section>
                     )

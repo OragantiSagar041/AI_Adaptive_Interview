@@ -11,22 +11,20 @@ import Button from '../Button';
 // Safe Alert Parser - Extracts exact breakdown of Tab Switches, Face Alerts, and Audio Alerts
 const getAlertBreakdown = (c) => {
   const violationsList = c.violations || c.alerts || [];
-  const tabTypes = ['tab_switch', 'screen_casting', 'screen_share_detected', 'screen_recording', 'screenshare_stopped', 'multiple_displays', 'multi_monitor', 'fullscreen_exit', 'window_blur'];
+  const tabTypes = ['tab_switch', 'screen_casting', 'screen_share_detected', 'screen_recording', 'screenshare_stopped', 'multiple_displays', 'multi_monitor', 'fullscreen_exit'];
   const noiseTypes = ['noise_alert', 'background_noise', 'noise'];
 
-  let tabSwitches = Number(c.integrity?.total_tab_switches || 0);
-  let faceAlerts = Number(c.integrity?.total_face_alerts || 0);
-  let noiseAlerts = Number(c.integrity?.total_noise_alerts || 0);
+  let tabSwitches = c.integrity?.total_tab_switches !== undefined
+    ? Number(c.integrity.total_tab_switches || 0)
+    : violationsList.filter(v => tabTypes.includes(v.type || v.violation_type)).length;
 
-  if (violationsList.length > 0) {
-    const screenCount = violationsList.filter(v => tabTypes.includes(v.type || v.violation_type)).length;
-    const noiseCount = violationsList.filter(v => noiseTypes.includes(v.type || v.violation_type)).length;
-    const trueFaceCount = violationsList.filter(v => !tabTypes.includes(v.type || v.violation_type) && !noiseTypes.includes(v.type || v.violation_type)).length;
+  let faceAlerts = c.integrity?.total_face_alerts !== undefined
+    ? Number(c.integrity.total_face_alerts || 0)
+    : violationsList.filter(v => !tabTypes.includes(v.type || v.violation_type) && !noiseTypes.includes(v.type || v.violation_type) && (v.type || v.violation_type) !== 'window_blur').length;
 
-    if (screenCount > 0) tabSwitches = Math.max(tabSwitches, screenCount);
-    if (trueFaceCount > 0) faceAlerts = Math.max(faceAlerts, trueFaceCount);
-    if (noiseCount > 0) noiseAlerts = Math.max(noi  seAlerts, noiseCount);
-  }
+  let noiseAlerts = c.integrity?.total_noise_alerts !== undefined
+    ? Number(c.integrity.total_noise_alerts || 0)
+    : violationsList.filter(v => noiseTypes.includes(v.type || v.violation_type)).length;
 
   // Fallback to top-level fields
   if (tabSwitches === 0 && c.tab_switches) tabSwitches = Number(c.tab_switches) || 0;

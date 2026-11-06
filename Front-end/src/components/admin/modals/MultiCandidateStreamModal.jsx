@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { Activity, AlertTriangle, Camera, Mic, RefreshCw, Maximize2 } from 'lucide-react'
 import Modal from '../../Modal'
 import { API_BASE_URL } from '../../../apiConfig'
@@ -20,6 +20,8 @@ function CandidateStreamCard({ session, token, onSelectCandidate }) {
   const [stream, setStream] = useState(null)
   const [networkIssue, setNetworkIssue] = useState(false)
   const [telemetry, setTelemetry] = useState(null)
+  const [retryTrigger, setRetryTrigger] = useState(0)
+
   const videoRef = useRef(null)
   const wsRef = useRef(null)
   const pcRef = useRef(null)
@@ -29,19 +31,28 @@ function CandidateStreamCard({ session, token, onSelectCandidate }) {
   const frozenSamplesRef = useRef(0)
   const issueRef = useRef(false)
   const pendingIceCandidatesRef = useRef([])
-  const isNegotiatingRef = useRef(false)
   const adminIdRef = useRef('')
+  const streamTimeoutRef = useRef(null)
+  const heartbeatTimerRef = useRef(null)
+  const reconnectTimerRef = useRef(null)
+  const statusRef = useRef(status)
+
+  useEffect(() => {
+    statusRef.current = status
+  }, [status])
 
   useEffect(() => {
     const linkId = sessionLinkId(session)
     if (!linkId || !token) return undefined
     mountedRef.current = true
+    let disposed = false
+
     const base = API_BASE_URL.replace(/\/$/, '')
     const adminId = `grid_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     adminIdRef.current = adminId
-    const ws = new WebSocket(
-      `${base.replace(/^https?/, value => value === 'https' ? 'wss' : 'ws')}/ws/webrtc/admin/${linkId}?token=${encodeURIComponent(token)}&admin_id=${adminId}`
-    )
+
+    const wsUrl = `${base.replace(/^https?/, value => value === 'https' ? 'wss' : 'ws')}/ws/webrtc/admin/${linkId}?token=${encodeURIComponent(token)}&admin_id=${adminId}`
+    const ws = new WebSocket(wsUrl)
     wsRef.current = ws
 
     const setIssue = value => {
@@ -51,79 +62,135 @@ function CandidateStreamCard({ session, token, onSelectCandidate }) {
       }
     }
 
-    const sendOffer = async () => {
-      if (!mountedRef.current || ws.readyState !== WebSocket.OPEN) return
-      if (isNegotiatingRef.current && pcRef.current && pcRef.current.signalingState !== 'closed') {
-        return
-      }
-      isNegotiatingRef.current = true
+    const closePc = () => {
+      clearTimeout(streamTimeoutRef.current)
       pendingIceCandidatesRef.current = []
-
       if (pcRef.current) {
         try { pcRef.current.close() } catch (_) {}
+        pcRef.current = null
       }
+    }
 
-      await initIceServers()
-      const pc = new RTCPeerConnection({ iceServers: getIceServers() })
-      console.log('[MultiCandidateStream] RTCPeerConnection created with', getIceServers().length, 'ICE servers')
-      pcRef.current = pc
+    const updateStreamFromReceivers = () => {
+      const pc = pcRef.current
+      if (!pc) return
 
-      // Low Layer Grid Optimization:
-      // In the thumbnail grid, only request 1 video transceiver (camera feed).
-      // Screen share and audio tracks are omitted in grid mode to eliminate decoder contention
-      // and cut network downlink consumption by >90% (360p @ 15 FPS / ~200 kbps).
-      pc.addTransceiver('video', { direction: 'recvonly' })
+      const isConnected = pc.connectionState === 'connected'
+      const receiverTracks = pc.getReceivers()
+        .map(r => r.track)
+        .filter(t => t && t.readyState === 'live')
 
-      pc.onicecandidate = event => {
-        if (event.candidate && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({
-            type: 'webrtc_ice_candidate',
-            candidate: event.candidate,
-            stream_tier: 'low'
-          }))
-        }
-      }
+      if (receiverTracks.length === 0) return
 
-      pc.ontrack = () => {
-        const tracks = pc.getReceivers().map(receiver => receiver.track).filter(Boolean)
-        const nextStream = new MediaStream(tracks)
-        if (mountedRef.current) {
-          setStream(nextStream)
+      const nextStream = new MediaStream(receiverTracks)
+      if (mountedRef.current) {
+        setStream(nextStream)
+        if (isConnected) {
           setStatus('streaming')
           setIssue(false)
         }
       }
+    }
 
-      pc.onconnectionstatechange = () => {
-        if (!mountedRef.current) return
-        if (['failed', 'closed'].includes(pc.connectionState)) {
-          setStatus('disconnected')
-          setIssue(true)
-        }
-      }
+    const sendOffer = async () => {
+      if (!mountedRef.current || ws.readyState !== WebSocket.OPEN) return
+
+      closePc()
 
       try {
+        await initIceServers()
+        const pc = new RTCPeerConnection({ iceServers: getIceServers() })
+        console.log('[MultiCandidateStream] RTCPeerConnection created with', getIceServers().length, 'ICE servers')
+        pcRef.current = pc
+
+        // Low Layer Grid Optimization:
+        // In the thumbnail grid, only request 1 video transceiver (camera feed).
+        // Screen share and audio tracks are omitted in grid mode to eliminate decoder contention
+        // and cut network downlink consumption by >90% (360p @ 15 FPS / ~200 kbps).
+        pc.addTransceiver('video', { direction: 'recvonly' })
+
+        pc.onicecandidate = event => {
+          if (event.candidate && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+              type: 'webrtc_ice_candidate',
+              candidate: event.candidate,
+              admin_id: adminIdRef.current,
+              stream_tier: 'low'
+            }))
+          }
+        }
+
+        pc.ontrack = (event) => {
+          console.log('[MultiCandidateStream] Remote track received:', event.track?.kind)
+          if (event.track) {
+            event.track.onunmute = () => {
+              console.log('[MultiCandidateStream] Remote track unmuted')
+              updateStreamFromReceivers()
+            }
+          }
+          updateStreamFromReceivers()
+          clearTimeout(streamTimeoutRef.current)
+          if (mountedRef.current) {
+            setStatus('streaming')
+            setIssue(false)
+          }
+        }
+
+        pc.onconnectionstatechange = () => {
+          if (!mountedRef.current) return
+          console.log('[MultiCandidateStream] PC state:', pc.connectionState)
+          if (pc.connectionState === 'connected') {
+            updateStreamFromReceivers()
+            setStatus('streaming')
+            setIssue(false)
+          } else if (['failed', 'closed'].includes(pc.connectionState)) {
+            setStatus('disconnected')
+            setIssue(true)
+          }
+        }
+
         const offer = await pc.createOffer()
         await pc.setLocalDescription(offer)
 
-        // Explicitly advertise 'low' stream_tier to candidate encoder (360p / 15 FPS)
         ws.send(JSON.stringify({
           type: 'webrtc_offer',
           sdp: offer,
-          admin_id: adminIdRef.current || ws.url.match(/admin_id=([^&]+)/)?.[1],
+          admin_id: adminIdRef.current,
           stream_tier: 'low'
         }))
+
+        // Auto-retry offer after 12s if stream has not begun flowing
+        clearTimeout(streamTimeoutRef.current)
+        streamTimeoutRef.current = setTimeout(() => {
+          if (mountedRef.current && statusRef.current !== 'streaming') {
+            console.warn('[MultiCandidateStream] No stream in 12s - retrying offer for', linkId)
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+              sendOffer()
+            }
+          }
+        }, 12000)
+
       } catch (err) {
         console.warn('[MultiCandidateStream] Failed to create/set offer:', err)
-        isNegotiatingRef.current = false
       }
     }
 
-    ws.onopen = sendOffer
+    ws.onopen = () => {
+      console.log('[MultiCandidateStream] WS connected for session', linkId)
+      clearInterval(heartbeatTimerRef.current)
+      heartbeatTimerRef.current = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'ping' }))
+        }
+      }, 15000)
+      sendOffer()
+    }
 
     ws.onmessage = async event => {
       try {
         const message = JSON.parse(event.data)
+        if (message.type === 'pong' || message.type === 'ping') return
+
         // Strictly ignore SDP answers / ICE meant for other admin instances / tabs
         if (message.target_admin_id && adminIdRef.current && message.target_admin_id !== adminIdRef.current) {
           return
@@ -134,14 +201,17 @@ function CandidateStreamCard({ session, token, onSelectCandidate }) {
           setTelemetry(message.data || {})
           setIssue(false)
         } else if (message.type === 'candidate_connected') {
-          if (!pcRef.current || pcRef.current.connectionState === 'failed' || pcRef.current.connectionState === 'closed') {
+          console.log('[MultiCandidateStream] Candidate connected/ready, refreshing offer for', linkId)
+          if (mountedRef.current && ws.readyState === WebSocket.OPEN && statusRef.current !== 'streaming') {
             sendOffer()
           }
         } else if (message.type === 'candidate_not_ready') {
           setStatus('waiting_tracks')
         } else if (message.type === 'candidate_disconnected') {
-          setStatus('disconnected')
-          setIssue(true)
+          if (!pcRef.current || pcRef.current.connectionState !== 'connected') {
+            setStatus('disconnected')
+            setIssue(true)
+          }
         } else if (message.type === 'webrtc_answer' && pcRef.current) {
           const pc = pcRef.current
           if (pc.signalingState !== 'stable') {
@@ -152,7 +222,13 @@ function CandidateStreamCard({ session, token, onSelectCandidate }) {
               try { await pc.addIceCandidate(new RTCIceCandidate(cand)) } catch (_) {}
             }
           }
-          isNegotiatingRef.current = false
+          // Attach onunmute listeners to all receiver tracks
+          pc.getReceivers().forEach(r => {
+            if (r.track) {
+              r.track.onunmute = () => updateStreamFromReceivers()
+            }
+          })
+          updateStreamFromReceivers()
         } else if (message.type === 'webrtc_ice_candidate' && pcRef.current) {
           const pc = pcRef.current
           if (pc.remoteDescription && pc.remoteDescription.type) {
@@ -170,12 +246,35 @@ function CandidateStreamCard({ session, token, onSelectCandidate }) {
     }
 
     ws.onerror = () => setIssue(true)
-    ws.onclose = () => {
+    ws.onclose = (e) => {
+      console.log(`[MultiCandidateStream] WS closed (${e.code}) for session`, linkId)
+      clearInterval(heartbeatTimerRef.current)
+      clearTimeout(streamTimeoutRef.current)
+      if (disposed) return
       if (mountedRef.current) {
         setStatus('disconnected')
         setIssue(true)
+        // Auto-reconnect after 3s
+        reconnectTimerRef.current = setTimeout(() => {
+          if (mountedRef.current) {
+            setRetryTrigger(c => c + 1)
+          }
+        }, 3000)
       }
     }
+
+    // Auto-recover stream when admin switches back to the tab/window
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && mountedRef.current) {
+        if (wsRef.current?.readyState !== WebSocket.OPEN) {
+          setRetryTrigger(c => c + 1)
+        } else if (statusRef.current !== 'streaming') {
+          sendOffer()
+        }
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleVisibilityChange)
 
     const healthTimer = setInterval(async () => {
       const pc = pcRef.current
@@ -207,17 +306,21 @@ function CandidateStreamCard({ session, token, onSelectCandidate }) {
     }, HEALTH_INTERVAL_MS)
 
     return () => {
+      disposed = true
       mountedRef.current = false
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleVisibilityChange)
       clearInterval(healthTimer)
-      isNegotiatingRef.current = false
-      pendingIceCandidatesRef.current = []
-      if (pcRef.current) {
-        try { pcRef.current.close() } catch (_) {}
+      clearInterval(heartbeatTimerRef.current)
+      clearTimeout(streamTimeoutRef.current)
+      clearTimeout(reconnectTimerRef.current)
+      closePc()
+      if (wsRef.current) {
+        try { wsRef.current.close() } catch (_) {}
       }
-      if (wsRef.current) { if (wsRef.current.readyState === WebSocket.OPEN) wsRef.current.close(); else wsRef.current.onopen = () => wsRef.current.close(); }
       setStream(null)
     }
-  }, [sessionLinkId(session), token])
+  }, [sessionLinkId(session), token, retryTrigger])
 
   useEffect(() => {
     if (videoRef.current && stream) {
@@ -234,13 +337,32 @@ function CandidateStreamCard({ session, token, onSelectCandidate }) {
     setNetworkIssue(false)
     setTelemetry(null)
     setStream(null)
-    if (wsRef.current) { if (wsRef.current.readyState === WebSocket.OPEN) wsRef.current.close(); else wsRef.current.onopen = () => wsRef.current.close(); }
+    setRetryTrigger(c => c + 1)
   }
 
   const handleCardClick = () => {
     if (onSelectCandidate && session) {
       onSelectCandidate(session)
     }
+  }
+
+  const statusBadge = () => {
+    if (status === 'streaming' && !networkIssue) {
+      return <span className="font-bold text-emerald-400 bg-emerald-500/20 px-1.5 py-0.5 rounded">LIVE</span>
+    }
+    if (status === 'waiting_tracks') {
+      return <span className="font-bold text-sky-400 bg-sky-500/20 px-1.5 py-0.5 rounded">WAITING</span>
+    }
+    if (status === 'connecting') {
+      return <span className="font-bold text-indigo-400 bg-indigo-500/20 px-1.5 py-0.5 rounded">CONNECTING</span>
+    }
+    return <span className="font-bold text-amber-400 bg-amber-500/20 px-1.5 py-0.5 rounded">ISSUE</span>
+  }
+
+  const placeholderText = () => {
+    if (status === 'waiting_tracks') return 'Candidate camera initializing...'
+    if (status === 'disconnected') return 'Connection lost (reconnecting...)'
+    return 'Connecting stream...'
   }
 
   return (
@@ -275,11 +397,11 @@ function CandidateStreamCard({ session, token, onSelectCandidate }) {
       {!stream && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-slate-400">
           <Activity size={24} className="animate-pulse text-indigo-400" />
-          <span className="text-xs">{status === 'connecting' ? 'Connecting stream...' : 'Stream unavailable'}</span>
+          <span className="text-xs">{placeholderText()}</span>
         </div>
       )}
 
-      {networkIssue && (
+      {networkIssue && status === 'streaming' && (
         <div className="absolute inset-0 z-15 flex flex-col items-center justify-center bg-black/75 p-3 text-center">
           <AlertTriangle size={22} className="mb-1 text-amber-400" />
           <span className="text-xs font-semibold text-amber-300">Network issue from candidate</span>
@@ -296,9 +418,7 @@ function CandidateStreamCard({ session, token, onSelectCandidate }) {
           </div>
         </div>
         <div className="flex items-center gap-2 text-[10px] shrink-0">
-          <span className={`font-bold ${status === 'streaming' && !networkIssue ? 'text-emerald-400' : 'text-amber-400'}`}>
-            {status === 'streaming' && !networkIssue ? 'LIVE' : 'ISSUE'}
-          </span>
+          {statusBadge()}
           <span className="flex items-center gap-0.5 text-slate-300 bg-white/10 px-1.5 py-0.5 rounded">
             <Mic size={10} className={telemetry?.audio_level > 5 ? 'text-emerald-400' : 'text-slate-400'} />
             {Math.round(telemetry?.audio_level || 0)}%
@@ -306,7 +426,7 @@ function CandidateStreamCard({ session, token, onSelectCandidate }) {
         </div>
       </div>
 
-      {networkIssue && (
+      {(networkIssue || status === 'disconnected') && (
         <button
           type="button"
           onClick={retry}

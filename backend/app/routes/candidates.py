@@ -2244,18 +2244,29 @@ async def start_session_interview(link_id: str = Form(...)):
                         ),
                     }
     
-    # Always generate a full pool of questions — exactly 22 questions for the interview
-    # Instant Start: Seed Pool Generation (1 warm-up intro, 2 core skill checks, 1 closing buffer)
-    SEED_POOL_COUNT = 4
-    num_questions_to_generate = SEED_POOL_COUNT
+    hr_screening = row.get("hr_screening")
+    custom_questions_text = row.get("custom_questions", "")
+    ai_instructions_text = row.get("ai_instructions", "")
+
+    # Dynamic Initial Pool Sizing based on Duration and Question Format:
+    # Closed format (True/False, Yes/No, One-word) are answered rapidly (10-15s each).
+    # Open-ended spoken technical questions take 60-90s each.
+    ai_inst_str = (ai_instructions_text or "").lower()
+    is_closed_fmt = (
+        ("yes" in ai_inst_str and "no" in ai_inst_str) or
+        ("true" in ai_inst_str and "false" in ai_inst_str) or
+        ("one word" in ai_inst_str or "single word" in ai_inst_str or "1 word" in ai_inst_str or "one-word" in ai_inst_str)
+    )
+    if is_closed_fmt:
+        # Rapid answering: 5 min -> 15 qs, 10 min -> 25 qs, 15+ min -> up to 30 initial
+        num_questions_to_generate = min(30, max(15, interview_duration * 3))
+    else:
+        # Standard spoken: 5 min -> 6 qs, 15 min -> 8 qs, 30+ min -> 12-15 qs
+        num_questions_to_generate = min(15, max(6, max(4, interview_duration // 3)))
     
     # Generate Questions
     source = "job_description" if job_description and len(job_description) > 50 else "resume"
     content_str = job_description if source == "job_description" else resume_text
-    
-    hr_screening = row.get("hr_screening")
-    custom_questions_text = row.get("custom_questions", "")
-    ai_instructions_text = row.get("ai_instructions", "")
     
     # ── Project / Case Study Questions Integration ──────────
     proj_qs = row.get("project_questions")
@@ -2474,17 +2485,22 @@ def log_violation(
     _require_candidate_session(credentials, interview_id=interview_id)
     print(f" VIOLATION detected for session {interview_id}: {violation.type} (#{violation.count}) at {violation.timestamp}")
     try:
+        # If interview is already completed or terminated, do not record post-interview events
+        curr_session = interview_sessions_collection.find_one({"interview_id": interview_id}, {"status": 1})
+        if curr_session and curr_session.get("status") in ("completed", "expired", "terminated"):
+            return {"status": "success", "ignored": "session_already_completed"}
+
         inc_dict = {"violation_count": 1}
         tab_switch_types = {
             "tab_switch", "screen_casting", "screen_share_detected", 
             "screen_recording", "screenshare_stopped", "multiple_displays", 
-            "multi_monitor", "fullscreen_exit", "window_blur"
+            "multi_monitor", "fullscreen_exit"
         }
         if violation.type in tab_switch_types:
             inc_dict["integrity.total_tab_switches"] = 1
         elif violation.type in ("noise_alert", "background_noise", "noise"):
             inc_dict["integrity.total_noise_alerts"] = 1
-        else:
+        elif violation.type != "window_blur":
             inc_dict["integrity.total_face_alerts"] = 1
 
         interview_sessions_collection.update_one(
@@ -2535,17 +2551,27 @@ def log_proctoring_violation(
         else:
             return {"status": "error", "message": "interview_id or link_id required"}
 
+        # If interview is already completed or terminated, do not record post-interview events
+        curr_session = interview_sessions_collection.find_one(query, {"status": 1, "violation_count": 1})
+        if curr_session and curr_session.get("status") in ("completed", "expired", "terminated"):
+            return {
+                "status": "success",
+                "violation_count": curr_session.get("violation_count", 0),
+                "threshold_exceeded": False,
+                "ignored": "session_already_completed"
+            }
+
         inc_dict = {"violation_count": 1}
         tab_switch_types = {
             "tab_switch", "screen_casting", "screen_share_detected", 
             "screen_recording", "screenshare_stopped", "multiple_displays", 
-            "multi_monitor", "fullscreen_exit", "window_blur"
+            "multi_monitor", "fullscreen_exit"
         }
         if data.violation_type in tab_switch_types:
             inc_dict["integrity.total_tab_switches"] = 1
         elif data.violation_type in ("noise_alert", "background_noise", "noise"):
             inc_dict["integrity.total_noise_alerts"] = 1
-        else:
+        elif data.violation_type != "window_blur":
             inc_dict["integrity.total_face_alerts"] = 1
 
         result = interview_sessions_collection.find_one_and_update(
