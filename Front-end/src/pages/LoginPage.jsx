@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+﻿import React, { useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useDispatch } from 'react-redux'
@@ -38,7 +38,7 @@ const CSS = `
       radial-gradient(circle at 1px 1px, rgba(255,255,255,0.022) 1px, transparent 0);
   }
 
-  /* ── Waves: ambient background layer elevated up the page ── */
+  /* ---- Waves: ambient background layer elevated up the page ---- */
   .lp-waves-bg {
     position: absolute; bottom: 0; left: 0; right: 0;
     height: 55vh; pointer-events: none; z-index: 1; overflow: hidden;
@@ -54,7 +54,7 @@ const CSS = `
   @keyframes wS2 { from { transform: translateX(-50%); } to { transform: translateX(0); } }
   @keyframes wS3 { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 
-  /* ── Page layout ── */
+  /* ---- Page layout ---- */
   .lp-content {
     position: relative; z-index: 10; flex: 1;
     display: flex; align-items: center; justify-content: center;
@@ -66,7 +66,7 @@ const CSS = `
     gap: 72px; align-items: center;
   }
 
-  /* ── Left panel ── */
+  /* ---- Left panel ---- */
   .lp-left { animation: fadeUp 0.65s cubic-bezier(0.16,1,0.3,1) both; }
   @keyframes fadeUp {
     from { opacity: 0; transform: translateY(24px); }
@@ -85,7 +85,7 @@ const CSS = `
   }
   .dark .lp-sub { color: rgba(203,213,225,0.58); }
 
-  /* ── Card ── */
+  /* ---- Card ---- */
   .lp-card {
     width: 100%;
     max-width: 420px;
@@ -200,7 +200,7 @@ const CSS = `
   }
   .lp-error i { color: #f87171; flex-shrink: 0; }
 
-  /* ── Submit button ── */
+  /* ---- Submit button ---- */
   .lp-btn {
     width: 100%; padding: 14px 24px; border-radius: 14px; border: none;
     font-family: inherit; font-size: 0.95rem; font-weight: 700; color: #ffffff; cursor: pointer;
@@ -219,7 +219,7 @@ const CSS = `
   @keyframes spin { to { transform: rotate(360deg); } }
   .lp-spinner { animation: spin 0.9s linear infinite; width: 16px; height: 16px; }
 
-  /* ── Trust badge ── */
+  /* ---- Trust badge ---- */
   .lp-trust {
     margin-top: 24px; display: inline-flex; align-items: center; gap: 10px;
     background: rgba(15, 23, 42, 0.04); border: 1px solid rgba(15, 23, 42, 0.08);
@@ -235,7 +235,7 @@ const CSS = `
   .dark .lp-trust-text { color: rgba(203,213,225,0.55); }
   .dark .lp-trust-text strong { color: rgba(203,213,225,0.85); }
 
-  /* ── Right panel ── */
+  /* ---- Right panel ---- */
   .lp-right {
     display: flex; align-items: center; justify-content: center; position: relative;
     animation: fadeUp 0.8s 0.1s cubic-bezier(0.16,1,0.3,1) both;
@@ -268,7 +268,7 @@ const CSS = `
   }
   .lp-chip span { font-size: 0.78rem; font-weight: 600; color: #e2e8f0; white-space: nowrap; }
 
-  /* ── Footer ── */
+  /* ---- Footer ---- */
   .lp-footer {
     position: relative; z-index: 10; height: 48px;
     background: rgba(4,4,10,0.7); border-top: 1px solid rgba(255,255,255,0.04);
@@ -276,7 +276,7 @@ const CSS = `
   }
   .lp-footer span { font-size: 0.72rem; color: rgba(203,213,225,0.3); letter-spacing: 0.04em; }
 
-  /* ── Modal ── */
+  /* ---- Modal ---- */
   .lp-modal-backdrop {
     position: fixed; inset: 0; z-index: 999;
     display: flex; align-items: center; justify-content: center;
@@ -355,7 +355,7 @@ const CSS = `
   }
 `
 
-// Wave paths — higher amplitude, starts higher up the page
+// Wave paths - higher amplitude, starts higher up the page
 const W1 = 'M0,40 C200,120 400,-20 600,60 C800,140 1000,0 1200,80 C1300,115 1370,60 1440,80 L1440,160 L0,160 Z'
 const W2 = 'M0,80 C150,20 350,140 550,70 C750,0 950,120 1150,60 C1280,30 1380,90 1440,70 L1440,160 L0,160 Z'
 const W3 = 'M0,100 C180,50 380,150 580,90 C780,30 980,130 1180,75 C1310,45 1390,100 1440,90 L1440,160 L0,160 Z'
@@ -409,15 +409,16 @@ export default function LoginPage() {
     let data = null
     let finalRole = null
 
-    // ── Firebase Login ─────────────────────────────────────────
+    // ---- Firebase Login ----------------------------------------------------------------------------------
 
     const identifier = username.trim()
 
-    // 1. Resolve normal username/email to internal Firebase login email
+    // 1. Resolve normal username/email to internal Firebase login email (with JIT fallback)
     const identifierResponse = await axios.post(
       API_BASE_URL + '/admin/firebase-login-identifier',
       {
         identifier,
+        password,
       },
       {
         timeout: 30000,
@@ -458,7 +459,7 @@ export default function LoginPage() {
 
     data = response.data
 
-    // ── Handle 2FA ─────────────────────────────────────────────
+    // ---- Handle 2FA ------------------------------------------------------------------------------------------
 
     if (data.status === '2fa_required') {
       setTempAdminId(data.admin_id || data.master_id)
@@ -467,7 +468,7 @@ export default function LoginPage() {
       return
     }
 
-    // ── Resolve account role ───────────────────────────────────
+    // ---- Resolve account role ----------------------------------------------------------------------
 
     const rawRole = String(data.role || 'tenant')
       .trim()
@@ -493,7 +494,7 @@ export default function LoginPage() {
       return
     }
 
-    // ── Persist credentials ────────────────────────────────────
+    // ---- Persist credentials ------------------------------------------------------------------------
 
     const adminId = data.admin_id || data.master_id
     const adminEmail = data.email || ''
@@ -549,7 +550,7 @@ export default function LoginPage() {
       data.company_name || ''
     )
 
-    // ── Navigate to dashboard ──────────────────────────────────
+    // ---- Navigate to dashboard --------------------------------------------------------------------
 
     if (finalRole === 'superadmin') {
       navigate('/superadmin/new-dashboard')
@@ -567,7 +568,7 @@ export default function LoginPage() {
 
     console.error('LOGIN ERROR:', error)
 
-    // ── Firebase errors ────────────────────────────────────────
+    // ---- Firebase errors --------------------------------------------------------------------------------
 
     const firebaseErrorCode = error?.code || ''
 
@@ -596,7 +597,7 @@ export default function LoginPage() {
         'Your account has been disabled. Please contact support.'
       )
 
-    // ── Request timeout ────────────────────────────────────────
+    // ---- Request timeout --------------------------------------------------------------------------------
 
     } else if (
       error?.code === 'ECONNABORTED' ||
@@ -604,7 +605,7 @@ export default function LoginPage() {
     ) {
       setLoginError('Request timed out.')
 
-    // ── FastAPI validation errors ──────────────────────────────
+    // ---- FastAPI validation errors ------------------------------------------------------------
 
     } else if (
       Array.isArray(error?.response?.data?.detail)
@@ -617,21 +618,21 @@ export default function LoginPage() {
           .join(', ')
       )
 
-    // ── FastAPI string error ───────────────────────────────────
+    // ---- FastAPI string error ----------------------------------------------------------------------
 
     } else if (
       typeof error?.response?.data?.detail === 'string'
     ) {
       setLoginError(error.response.data.detail)
 
-    // ── Generic backend message ────────────────────────────────
+    // ---- Generic backend message ----------------------------------------------------------------
 
     } else if (
       typeof error?.response?.data?.message === 'string'
     ) {
       setLoginError(error.response.data.message)
 
-    // ── Generic Firebase / JavaScript error ────────────────────
+    // ---- Generic Firebase / JavaScript error ----------------------------------------
 
     } else {
       setLoginError(
@@ -771,7 +772,7 @@ const response = await axios.post(
           <ThemeToggle />
         </div>
 
-        {/* Waves — elevated ambient background layer */}
+        {/* Waves - elevated ambient background layer */}
         <div className="lp-waves-bg">
           <div className="lp-wave lp-w3">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 160" preserveAspectRatio="none">
@@ -860,7 +861,15 @@ const response = await axios.post(
                         </svg>
                         Signing In...
                       </>
-                    ) : 'Sign In →'}
+                    ) : (
+                      <>
+                        Sign In
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: '4px' }}>
+                          <line x1="5" y1="12" x2="19" y2="12"></line>
+                          <polyline points="12 5 19 12 12 19"></polyline>
+                        </svg>
+                      </>
+                    )}
                   </button>
 
                 </form>
@@ -902,7 +911,7 @@ const response = await axios.post(
 
         {/* Footer */}
         <div className="lp-footer">
-          <span>© {new Date().getFullYear()} Hire IQ — Built for AI-powered recruiting</span>
+          <span>&copy; {new Date().getFullYear()} Hire IQ &mdash; Built for AI-powered recruiting</span>
         </div>
 
       </div>
@@ -941,7 +950,7 @@ const response = await axios.post(
                   <label className="lp-mlabel">OTP Code</label>
                   <input type="text" className="lp-minput lp-otp-input"
                     value={resetOTP} onChange={e => setResetOTP(e.target.value)}
-                    placeholder="● ● ● ● ● ●" maxLength={6}
+                    placeholder="0 0 0 0 0 0" maxLength={6}
                   />
                 </div>
                 <button className="lp-modal-btn" onClick={handleVerifyOTP} disabled={resetLoading}>
@@ -1002,7 +1011,7 @@ const response = await axios.post(
               <label className="lp-mlabel">Security Code</label>
               <input type="text" className="lp-minput lp-otp-input"
                 value={otp2FA} onChange={e => setOtp2FA(e.target.value)}
-                placeholder="● ● ● ● ● ●" maxLength={6} autoFocus
+                placeholder="0 0 0 0 0 0" maxLength={6} autoFocus
               />
             </div>
             
