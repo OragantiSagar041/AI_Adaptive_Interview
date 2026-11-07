@@ -1,6 +1,6 @@
 """
-app/routes_split/admin_dashboard.py — Admin dashboard, stats, copilot
-Auto-split from routes.py lines 2052–4009.
+app/routes_split/admin_dashboard.py â€” Admin dashboard, stats, copilot
+Auto-split from routes.py lines 2052â€“4009.
 """
 
 # ---------------------------------------------------------------------------
@@ -90,6 +90,7 @@ from app.core.routes_core import (
 )
 
 from app.routes.interview import UpdateAgentFlowRequest, normalize_agent_flow_read_item, generate_interview_summary, sync_session_to_application, normalize_agent_flow_write_item
+from app.services.firebase_auth_service import sync_firebase_password
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -666,7 +667,7 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
     if total_noise_alerts == 0 and ans_noise_al > 0:
         total_noise_alerts = ans_noise_al
 
-    # ── Active Interview Duration Calculation ──
+    # â”€â”€ Active Interview Duration Calculation â”€â”€
     # If active answering time was tracked in answers, use it directly as Active Interview Time.
     # If total_time is still 0 (e.g. legacy sessions without time_spent_seconds), calculate fallback from timestamps.
     if total_time == 0:
@@ -685,7 +686,7 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
                 if finished_dt and finished_dt > started_dt:
                     total_time = int((finished_dt - started_dt).total_seconds())
             except Exception as _dur_err:
-                print(f"⏱️ Duration calculation error: {_dur_err}")
+                print(f"â±ï¸ Duration calculation error: {_dur_err}")
 
     # 2. Calculate composite AI summary score
     avg_score = 0
@@ -739,7 +740,7 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
             fallback_score=verbal_avg
         )
     except Exception as blend_err:
-        print(f"🚨 complete-session blend error: {blend_err}")
+        print(f"ðŸš¨ complete-session blend error: {blend_err}")
         avg_score = verbal_avg
 
     # Use cached values if available, else generate
@@ -866,7 +867,7 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
                 print(f"Summary cache error: {e}")
             sync_session_to_application(link_id)
 
-    # ── Auto-enrich candidate profile via NLP from resume text if fields missing ──
+    # â”€â”€ Auto-enrich candidate profile via NLP from resume text if fields missing â”€â”€
     resume_text_content = session_data.get("resume_text") or session_data.get("profile_text") or ""
     if not resume_text_content and actual_interview_id:
         iv_doc = interviews_collection.find_one({"id": actual_interview_id})
@@ -946,7 +947,7 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
                     {"$set": db_updates}
                 )
         except Exception as nlp_err:
-            print(f"⚠️ Resume NLP extraction error in get_candidate_detail: {nlp_err}")
+            print(f"âš ï¸ Resume NLP extraction error in get_candidate_detail: {nlp_err}")
 
     resume_url_val = session_data.get("resume_url", "")
     resume_filename_val = session_data.get("resume_filename", "")
@@ -1080,7 +1081,7 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
                     interview_record.get("job_title", "")
                 )
 
-    # ── Include coding/case-study round data so the admin transcript shows submitted code ──
+    # â”€â”€ Include coding/case-study round data so the admin transcript shows submitted code â”€â”€
     response_payload["coding_round"] = coding_round_data
     response_payload["case_study_round"] = case_study_data
 
@@ -1591,7 +1592,7 @@ def generate_report(
         
         story.append(Spacer(1, 15))
 
-    # ── AI EVALUATION & RECOMMENDATION ──
+    # â”€â”€ AI EVALUATION & RECOMMENDATION â”€â”€
     if session_rec:
         recommendation = session_rec.get("overall_recommendation") or session_rec.get("recommendation")
         strengths = session_rec.get("strengths_summary")
@@ -1618,7 +1619,7 @@ def generate_report(
             
             story.append(Spacer(1, 15))
 
-    # ── CODING ROUND ──
+    # â”€â”€ CODING ROUND â”€â”€
     coding_round = interview_data.get("coding_round")
     if coding_round and (coding_round.get("latest_code") or coding_round.get("final_evaluation")):
         story.append(Spacer(1, 20))
@@ -1644,7 +1645,7 @@ def generate_report(
             story.append(Paragraph(safe_eval, normal_style))
             story.append(Spacer(1, 15))
             
-    # ── CASE STUDY ROUND ──
+    # â”€â”€ CASE STUDY ROUND â”€â”€
     case_study = interview_data.get("case_study_round")
     if case_study and case_study.get("answers"):
         story.append(Spacer(1, 20))
@@ -1697,7 +1698,7 @@ def preview_email(data: EmailPreviewRequest, current_admin: dict = Depends(requi
     }
 
 
-# ── Task 3: Submission Notification Email ────────────────────────────────────
+# â”€â”€ Task 3: Submission Notification Email â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def preview_email_v2(data: EmailPreviewRequest):
     return {
         "html": build_default_interview_email_html(
@@ -1830,14 +1831,14 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
         res = requests.post(url, json={
             "sender": {"name": sender_name, "email": sender_email_addr},
             "to": [{"email": candidate_email, "name": candidate_name}],
-            "subject": "Your Interview Has Been Submitted — HireIQ",
+            "subject": "Your Interview Has Been Submitted â€” HireIQ",
             "htmlContent": candidate_html
         }, headers=headers, timeout=10)
         if res.status_code >= 300:
-            print(f"❌ [BREVO ERROR candidate submission] {res.status_code}: {res.text}")
+            print(f"âŒ [BREVO ERROR candidate submission] {res.status_code}: {res.text}")
         results.append(res.status_code < 300)
     except Exception as e:
-        print(f"❌ [BREVO EXCEPTION candidate submission]: {e}")
+        print(f"âŒ [BREVO EXCEPTION candidate submission]: {e}")
         results.append(False)
 
     # Send to admin
@@ -1850,16 +1851,16 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
                 "htmlContent": admin_html
             }, headers=headers, timeout=10)
             if res.status_code >= 300:
-                print(f"❌ [BREVO ERROR admin notification] {res.status_code}: {res.text}")
+                print(f"âŒ [BREVO ERROR admin notification] {res.status_code}: {res.text}")
             results.append(res.status_code < 300)
         except Exception as e:
-            print(f"❌ [BREVO EXCEPTION admin notification]: {e}")
+            print(f"âŒ [BREVO EXCEPTION admin notification]: {e}")
             results.append(False)
 
     return all(results)
 
 
-# ── Task 8: Dashboard Stats Endpoint ────────────────────────────────────────
+# â”€â”€ Task 8: Dashboard Stats Endpoint â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @router.get("/admin/dashboard-stats")
 @router.get("/api/admin/dashboard-stats")
 async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dict = Depends(get_current_admin_details)):
@@ -2163,7 +2164,7 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
         return {"error": str(e)}
 
 
-# ── Task 2: Export Sessions Data Endpoint ───────────────────────────────────
+# â”€â”€ Task 2: Export Sessions Data Endpoint â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @router.get("/admin/export-sessions")
 def export_sessions(current_admin: dict = Depends(get_current_admin_details), status_filter: str = ""):
     """Return session data for Excel export, filtered by status."""
@@ -2369,6 +2370,9 @@ def reset_password(data: ResetPasswordRequest):
     hashed_pw = hash_password(data.new_password)
     admins_collection.update_one({"_id": row["_id"]}, {"$set": {"password": hashed_pw}, "$unset": {"otp": "", "otp_expiry": "", "otp_attempts": ""}})
     
+    # Rule 3: Sync new password to Firebase Auth (auto-provisions legacy accounts)
+    sync_firebase_password(row, data.new_password)
+
     return {"status": "success", "message": "Password updated successfully. You can now login."}
 
 def send_otp_email(email: str, name: str, otp: str):
@@ -2404,10 +2408,10 @@ def send_otp_email(email: str, name: str, otp: str):
         headers = {"accept": "application/json", "api-key": api_key, "content-type": "application/json"}
         response = requests.post(url, json=payload, headers=headers, timeout=10)
         if response.status_code >= 300:
-            print(f"❌ [BREVO ERROR reset otp] {response.status_code}: {response.text}")
+            print(f"âŒ [BREVO ERROR reset otp] {response.status_code}: {response.text}")
         return response.status_code < 300
     except Exception as e:
-        print(f"❌ [BREVO EXCEPTION reset otp]: {e}")
+        print(f"âŒ [BREVO EXCEPTION reset otp]: {e}")
         return False
 
 
@@ -2475,6 +2479,8 @@ def update_profile(data: UpdateProfileRequest, current_admin: str = Depends(get_
             if not verify_password(data.old_password, admin["password"]):
                 raise HTTPException(status_code=400, detail="Incorrect old password")
             update_fields["password"] = hash_password(data.new_password)
+            # Rule 3: Sync updated password to Firebase Auth
+            sync_firebase_password(admin, data.new_password)
             
         if data.email:
             update_fields["email"] = data.email

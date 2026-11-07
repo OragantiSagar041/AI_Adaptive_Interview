@@ -1,6 +1,6 @@
 """
-app/routes_split/payments.py — Razorpay, Stripe, plans
-Auto-split from routes.py lines 7821–8681.
+app/routes_split/payments.py â€” Razorpay, Stripe, plans
+Auto-split from routes.py lines 7821â€“8681.
 """
 
 # ---------------------------------------------------------------------------
@@ -86,6 +86,7 @@ from app.core.routes_core import (
 )
 
 from app.routes.auth import RazorpayUpgradeVerifyRequest, RazorpayUpgradeOrderRequest, StripeCheckoutRequest, validate_signup_form, RazorpayVerifyRequest, get_razorpay_credentials
+from app.services.firebase_auth_service import provision_firebase_user
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -109,11 +110,26 @@ def create_razorpay_order(data: RazorpayOrderRequest):
     if int(plan_info.get("price", 0)) <= 0:
         raise HTTPException(status_code=400, detail="This plan does not require payment")
 
+    fb_uid = None
+    fb_email = None
+    try:
+        fb_user, _ = provision_firebase_user(
+            email=signup["email"],
+            password=signup["password"],
+            display_name=signup.get("name") or signup.get("company_name") or signup["email"]
+        )
+        fb_uid = fb_user.uid
+        fb_email = fb_user.email
+    except Exception as fb_err:
+        logger.warning(f"Failed to pre-provision Firebase user during Razorpay checkout: {fb_err}")
+
     pending_signup_id = uuid.uuid4().hex
     pending_signups_collection.insert_one({
         "_id": pending_signup_id,
         "name": signup["name"],
         "email": signup["email"],
+        "firebase_uid": fb_uid,
+        "firebase_email": fb_email,
         "password_hash": hash_password(signup["password"]),
         "phone": signup["phone"],
         "company_name": signup["company_name"],
@@ -351,6 +367,8 @@ def _verify_razorpay_signup_payment(data: RazorpayVerifyRequest, key_id: str, ke
             "username": pending_signup["email"],
             "password": pending_signup["password_hash"],
             "email": pending_signup["email"],
+            "firebase_uid": pending_signup.get("firebase_uid"),
+            "firebase_email": pending_signup.get("firebase_email", pending_signup["email"]),
             "name": pending_signup["name"],
             "phone": pending_signup.get("phone", ""),
             "company_name": pending_signup.get("company_name", ""),
@@ -487,11 +505,26 @@ def verify_razorpay_payment(data: RazorpayVerifyRequest):
     company_insert = companies_collection.insert_one(new_company)
     company_id = str(company_insert.inserted_id)
 
+    fb_uid = None
+    fb_email = None
+    try:
+        fb_user, _ = provision_firebase_user(
+            email=signup["email"],
+            password=signup["password"],
+            display_name=signup.get("name") or signup.get("company_name") or signup["email"]
+        )
+        fb_uid = fb_user.uid
+        fb_email = fb_user.email
+    except Exception as fb_err:
+        logger.warning(f"Could not provision Firebase user during direct Razorpay activation: {fb_err}")
+
     admins_collection.insert_one({
         "custom_id": get_next_sequence_value("recruiter", "RC"),
         "username": signup["email"],
         "password": hash_password(signup["password"]),
         "email": signup["email"],
+        "firebase_uid": fb_uid,
+        "firebase_email": fb_email or signup["email"],
         "name": signup["name"],
         "phone": signup["phone"],
         "company_name": signup["company_name"],
@@ -780,11 +813,26 @@ def create_stripe_checkout(data: StripeCheckoutRequest):
         raise HTTPException(status_code=400, detail="Free plans don't require payment")
     
     frontend_url = os.getenv("FRONTEND_URL", "https://localhost:3000")
+    fb_uid = None
+    fb_email = None
+    try:
+        fb_user, _ = provision_firebase_user(
+            email=signup["email"],
+            password=signup["password"],
+            display_name=signup.get("name") or signup.get("company_name") or signup["email"]
+        )
+        fb_uid = fb_user.uid
+        fb_email = fb_user.email
+    except Exception as fb_err:
+        logger.warning(f"Failed to pre-provision Firebase user during Stripe checkout: {fb_err}")
+
     pending_signup_id = uuid.uuid4().hex
     pending_signups_collection.insert_one({
         "_id": pending_signup_id,
         "name": signup["name"],
         "email": signup["email"],
+        "firebase_uid": fb_uid,
+        "firebase_email": fb_email,
         "password_hash": hash_password(signup["password"]),
         "phone": signup["phone"],
         "company_name": signup["company_name"],
@@ -923,6 +971,8 @@ async def stripe_webhook(request):
                 "username": email,
                 "password": password_hash,
                 "email": email,
+                "firebase_uid": pending_signup.get("firebase_uid"),
+                "firebase_email": pending_signup.get("firebase_email", email),
                 "name": name,
                 "phone": pending_signup.get("phone", ""),
                 "company_name": pending_signup.get("company_name", ""),
