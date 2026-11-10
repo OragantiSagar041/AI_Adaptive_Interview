@@ -221,10 +221,10 @@ export const handleSuperAdminExportExcel = createAsyncThunk(
 
 function recomputeFilteredCandidates(state) {
   const filtered = state.candidates.filter(c => {
-    const name = (c.candidate_name || '').toLowerCase()
-    const email = (c.candidate_email || '').toLowerCase()
-    const position = (c.interview_title || '').toLowerCase()
-    const query = state.searchTerm.toLowerCase()
+    const name = (c.candidate_name || c.name || '').toLowerCase()
+    const email = (c.candidate_email || c.email || '').toLowerCase()
+    const position = (c.interview_title || c.role || c.job_title || '').toLowerCase()
+    const query = (state.searchTerm || '').toLowerCase()
 
     const matchesSearch = name.includes(query) || email.includes(query) || position.includes(query)
     if (!matchesSearch) return false

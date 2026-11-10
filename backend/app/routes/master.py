@@ -1,6 +1,6 @@
 """
-app/routes_split/master.py — Master login, companies, tenants
-Auto-split from routes.py lines 7108–7321.
+app/routes_split/master.py â€” Master login, companies, tenants
+Auto-split from routes.py lines 7108â€“7321.
 """
 
 # ---------------------------------------------------------------------------
@@ -13,6 +13,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Union
 from firebase_admin import auth as firebase_auth_admin
+from app.services.firebase_auth_service import provision_firebase_user, rollback_firebase_user
 
 
 # ---------------------------------------------------------------------------
@@ -131,7 +132,7 @@ def master_login(data: AdminLogin, request: Request):
         
     admins_collection.update_one({"_id": user["_id"]}, {"$set": {"last_ip": client_ip}})
     
-    # 2. 2FA Check — Account-specific 2FA preference ONLY
+    # 2. 2FA Check â€” Account-specific 2FA preference ONLY
     user_2fa_enabled = bool(user.get("two_factor_enabled") or user.get("require_2fa") or user.get("is_2fa_enabled") or user.get("totp_enabled"))
 
     if user_2fa_enabled:
@@ -152,11 +153,11 @@ def master_login(data: AdminLogin, request: Request):
     # 3. Master always gets a 7-day token.
     # Global security policies (strict_session_timeout etc.) are meant for
     # SuperAdmin accounts only and must NEVER apply to the master/owner account.
-    expires_delta = None  # None → 7 days (see create_access_token default)
+    expires_delta = None  # None â†’ 7 days (see create_access_token default)
 
     access_token = create_access_token(data={"sub": str(user["_id"]), "role": user["role"], "company_id": str(user.get("company_id", ""))}, expires_delta=expires_delta)
 
-    # Log successful master login — stored with role so security dashboard can filter it out
+    # Log successful master login â€” stored with role so security dashboard can filter it out
     security_logs_collection.insert_one({
         "event_type": "SUCCESSFUL_LOGIN",
         "username": user["username"],
@@ -325,7 +326,7 @@ def get_master_dashboard_stats(
     total_interviews = interview_sessions_collection.count_documents(session_filter)
     completed_interviews = interview_sessions_collection.count_documents({**session_filter, "status": "completed"})
     
-    # 3. Total Revenue — use ACTUAL verified payment orders (same as company-revenue endpoint)
+    # 3. Total Revenue â€” use ACTUAL verified payment orders (same as company-revenue endpoint)
     all_companies = list(companies_collection.find())
     filtered_companies = []
     active_companies_count = 0
@@ -511,7 +512,7 @@ def get_master_dashboard_stats(
         "data": {
             "mrr_inr": total_sales_inr,
             "currency": "INR",
-            "currency_symbol": "₹",
+            "currency_symbol": "â‚¹",
             "growth_pct": growth_pct,
             "total_companies": len(filtered_companies) if is_custom_range else len(all_companies),
             "active_companies": active_companies_count,
@@ -537,7 +538,7 @@ def migrate_existing_account_features(master_id: str = Depends(get_current_admin
     One-time migration: for every company that has features=null (inheriting from the
     global plan dynamically), snapshot the current effective plan features onto the
     company document.  After this, editing the global plan template will NOT change
-    any existing account — only newly-created accounts (via Create Tenant) will pick
+    any existing account â€” only newly-created accounts (via Create Tenant) will pick
     up the plan's features at the moment of creation.
     """
     require_master_user(master_id)
@@ -579,7 +580,7 @@ def migrate_existing_account_features(master_id: str = Depends(get_current_admin
         "message": (
             f"Migrated {updated} companies. "
             "Existing accounts are now isolated from global plan changes. "
-            "Use the ⚙ button in Subscribers to modify individual account features."
+            "Use the âš™ button in Subscribers to modify individual account features."
         )
     }
 
@@ -589,9 +590,32 @@ def migrate_existing_account_features(master_id: str = Depends(get_current_admin
 def create_tenant(data: TenantCreate, master_id: str = Depends(get_current_admin), current_admin: str = Depends(get_current_admin)):
     require_master_user(master_id)
         
-    if admins_collection.find_one({"username": data.username}):
+    username_clean = (data.username or "").strip()
+    email_clean = (data.email or "").strip().lower()
+
+    if not username_clean:
+        raise HTTPException(status_code=400, detail="Username is required")
+    if not email_clean:
+        raise HTTPException(status_code=400, detail="Email is required")
+    if not data.password:
+        raise HTTPException(status_code=400, detail="Password is required")
+
+    if admins_collection.find_one({"username": username_clean}):
         raise HTTPException(status_code=400, detail="Username already exists")
-        
+    if admins_collection.find_one({"email": email_clean}):
+        raise HTTPException(status_code=400, detail="An account with this email already exists")
+
+    # Rule 1: Provision Firebase user (creates new or reconciles existing account)
+    try:
+        firebase_user, was_created = provision_firebase_user(
+            email=email_clean,
+            password=data.password,
+            display_name=data.company_name or username_clean
+        )
+    except Exception as fb_err:
+        logger.error(f"Failed to provision Firebase user for tenant {email_clean}: {fb_err}")
+        raise HTTPException(status_code=400, detail=f"Firebase account creation failed: {fb_err}")
+
     start = datetime.now(timezone.utc)
     plan_def = get_plan_definition(data.subscription_plan)
     credits_to_grant = plan_def.get("credits_granted", 10)
@@ -599,32 +623,48 @@ def create_tenant(data: TenantCreate, master_id: str = Depends(get_current_admin
     # Expiry is no longer time-based, but we keep the field for backward compatibility
     expiry = start + timedelta(days=3650) 
         
-    new_company = {
-        "name": data.company_name,
-        "subscription_plan": data.subscription_plan,
-        "subscription_start": start.isoformat(),
-        "subscription_expiry": expiry.isoformat(),
-        "credits": data.credits if data.credits > 0 else credits_to_grant,
-        "created_at": start.isoformat(),
-        # Snapshot the plan's features at creation time so that future edits
-        # to the global plan template do NOT affect this account's features.
-        "features": list(plan_def.get("features", [])),
-    }
-    company_insert = companies_collection.insert_one(new_company)
-    company_id = str(company_insert.inserted_id)
+    company_id = None
+    try:
+        new_company = {
+            "name": data.company_name,
+            "subscription_plan": data.subscription_plan,
+            "subscription_start": start.isoformat(),
+            "subscription_expiry": expiry.isoformat(),
+            "credits": data.credits if data.credits > 0 else credits_to_grant,
+            "created_at": start.isoformat(),
+            # Snapshot the plan's features at creation time so that future edits
+            # to the global plan template do NOT affect this account's features.
+            "features": list(plan_def.get("features", [])),
+        }
+        company_insert = companies_collection.insert_one(new_company)
+        company_id = company_insert.inserted_id
 
-    new_tenant = {
-        "username": data.username,
-        "password": hash_password(data.password),
-        "email": data.email,
-        "role": "super_admin",
-        "company_id": company_id,
-        "login_enabled": True,
-        "created_at": start.isoformat()
-    }
-    
-    new_tenant["custom_id"] = get_next_sequence_value("recruiter", "RC")
-    admins_collection.insert_one(new_tenant)
+        new_tenant = {
+            "username": username_clean,
+            "password": hash_password(data.password),
+            "email": email_clean,
+            "firebase_uid": firebase_user.uid,
+            "firebase_email": firebase_user.email,
+            "role": "super_admin",
+            "company_id": str(company_id),
+            "login_enabled": True,
+            "created_at": start.isoformat()
+        }
+        
+        new_tenant["custom_id"] = get_next_sequence_value("recruiter", "RC")
+        admins_collection.insert_one(new_tenant)
+
+    except Exception as db_err:
+        # Rule 2: Rollback on database failure
+        logger.error(f"Tenant database insertion failed: {db_err}. Rolling back...")
+        if company_id:
+            try:
+                companies_collection.delete_one({"_id": company_id})
+            except Exception:
+                pass
+        if was_created:
+            rollback_firebase_user(firebase_user.uid)
+        raise HTTPException(status_code=500, detail="Database failure during tenant registration") from db_err
     
     brevo_key = (os.getenv("BREVO_API_KEY") or "").strip().strip('"').strip("'")
     sender_email = (os.getenv("BREVO_SENDER_EMAIL") or "").strip().strip('"').strip("'")
@@ -654,7 +694,7 @@ def create_tenant(data: TenantCreate, master_id: str = Depends(get_current_admin
                 "htmlContent": email_html
             }, headers={"api-key": brevo_key, "content-type": "application/json"}, timeout=5)
             if resp.status_code >= 300:
-                logger.error(f"❌ [BREVO ERROR tenant credentials] {resp.status_code}: {resp.text}")
+                logger.error(f"âŒ [BREVO ERROR tenant credentials] {resp.status_code}: {resp.text}")
             else:
                 logger.info(f"Sent credentials email to {data.email}")
         except Exception as email_err:
@@ -800,6 +840,66 @@ def update_company(company_id: str, data: TenantUpdate, master_id: str = Depends
         pass
 
     return {"status": "success", "message": "Company updated successfully", "data": update_fields}
+
+
+class MasterSyncTenantFirebase(BaseModel):
+    new_password: Optional[str] = None
+
+@router.post("/master/tenants/{tenant_id}/sync-firebase")
+@router.post("/master/companies/{company_id}/sync-firebase")
+def sync_tenant_to_firebase(tenant_id: str, data: Optional[MasterSyncTenantFirebase] = None, master_id: str = Depends(get_current_admin)):
+    """Master-only: Manually sync, auto-link, or provision any stuck tenant in Firebase."""
+    require_master_user(master_id)
+    
+    admin = None
+    try:
+        admin = admins_collection.find_one({"_id": ObjectId(tenant_id)})
+    except Exception:
+        pass
+        
+    if not admin:
+        admin = admins_collection.find_one({
+            "$or": [
+                {"company_id": tenant_id, "role": {"$in": ["super_admin", "superadmin"]}},
+                {"custom_id": tenant_id},
+                {"username": tenant_id},
+                {"email": tenant_id.lower()},
+            ]
+        })
+        
+    if not admin:
+        raise HTTPException(status_code=404, detail="Tenant account not found")
+
+    email = (admin.get("email") or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="Tenant has no email configured")
+
+    import secrets
+    pw = (data.new_password if data and data.new_password else None) or secrets.token_urlsafe(10)
+    
+    firebase_user, was_created = provision_firebase_user(
+        email=email,
+        password=pw,
+        display_name=admin.get("name") or admin.get("company_name") or admin.get("username") or email
+    )
+    
+    update_data = {
+        "firebase_uid": firebase_user.uid,
+        "firebase_email": firebase_user.email,
+        "password": hash_password(pw),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    admins_collection.update_one({"_id": admin["_id"]}, {"$set": update_data})
+    
+    return {
+        "status": "success",
+        "message": f"Tenant '{admin.get('username')}' successfully synced with Firebase Auth.",
+        "username": admin.get("username"),
+        "email": email,
+        "firebase_uid": firebase_user.uid,
+        "temporary_password": pw,
+        "was_created": was_created
+    }
 
 
 @router.patch("/master/companies/{company_id}/subscription")
@@ -957,7 +1057,7 @@ def get_company_revenue(
                 
             formatted_txns.append({
                 "order_id": ord_item.get("order_id", f"ORD-{str(ord_item.get('_id', ''))[-6:].upper()}"),
-                "payment_id": ord_item.get("payment_id", "—"),
+                "payment_id": ord_item.get("payment_id", "â€”"),
                 "plan_name": p_name,
                 "amount": int(o_amt_inr),
                 "status": "verified" if is_successful else o_status,

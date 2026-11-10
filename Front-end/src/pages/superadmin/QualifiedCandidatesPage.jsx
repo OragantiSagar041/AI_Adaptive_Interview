@@ -105,9 +105,9 @@ export default function QualifiedCandidatesPage() {
 
       if (!q) return true
       return (
-        (c.candidate_name || "").toLowerCase().includes(q) ||
+        (c.candidate_name || c.name || "").toLowerCase().includes(q) ||
         jobApplied.toLowerCase().includes(q) ||
-        (c.email || "").toLowerCase().includes(q)
+        (c.candidate_email || c.email || "").toLowerCase().includes(q)
       )
     })
   }, [search, jobFilter, dateFilter, qualifiedCandidates])

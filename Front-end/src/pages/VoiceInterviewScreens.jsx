@@ -48,9 +48,16 @@ export function WaitingScreen({
           </span>
         </div>
         <div className="flex items-center gap-3">
-          <div className={`text-sm font-mono font-bold px-4 py-1.5 rounded-full border ${countdown < 300 ? 'border-rose-500/50 text-rose-400 bg-rose-500/10' : 'border-indigo-500/30 text-indigo-300 bg-indigo-500/10'}`}>
-            <i className="fas fa-clock mr-2" />{fmt(countdown)}
-          </div>
+          {countdown === 0 ? (
+            <div className="text-sm font-mono font-bold px-4 py-1.5 rounded-full border border-amber-500/50 text-amber-400 bg-amber-500/10 animate-pulse flex items-center gap-1.5">
+              <i className="fas fa-clock text-amber-400" />
+              <span>00:00 (Finishing current answer)</span>
+            </div>
+          ) : (
+            <div className={`text-sm font-mono font-bold px-4 py-1.5 rounded-full border ${countdown < 300 ? 'border-rose-500/50 text-rose-400 bg-rose-500/10' : 'border-indigo-500/30 text-indigo-300 bg-indigo-500/10'}`}>
+              <i className="fas fa-clock mr-2" />{fmt(countdown)}
+            </div>
+          )}
           {warningsCount > 0 && (
             <div className="flex items-center gap-1 px-3 py-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-400 text-xs font-bold" title={`${warningsCount} proctoring alert${warningsCount > 1 ? 's' : ''} detected`}>
               <i className="fas fa-exclamation-triangle text-[10px]" />{warningsCount}

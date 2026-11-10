@@ -37,10 +37,11 @@ export default function AuditLogsPage() {
 
   const logs = data?.logs || [];
   
-  const filteredLogs = logs.filter(log => 
-    log.event.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    log.user.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredLogs = logs.filter(log => {
+    const q = (searchTerm || '').toLowerCase();
+    return (log.event || '').toLowerCase().includes(q) ||
+           (log.user || '').toLowerCase().includes(q);
+  });
 
   return (
     <div

@@ -267,7 +267,8 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
 
   const filteredIntegrations = INTEGRATIONS.filter(int => {
     const matchesCategory = activeCategory === 'All' || int.category === activeCategory
-    const matchesSearch = int.name.toLowerCase().includes(searchQuery.toLowerCase()) || int.desc.toLowerCase().includes(searchQuery.toLowerCase())
+    const q = (searchQuery || '').toLowerCase()
+    const matchesSearch = (int.name || '').toLowerCase().includes(q) || (int.desc || '').toLowerCase().includes(q)
     return matchesCategory && matchesSearch
   })
 

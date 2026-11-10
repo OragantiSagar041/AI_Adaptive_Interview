@@ -1,6 +1,6 @@
 """
-app/routes_split/auth.py — Admin login, register, Firebase, OTP
-Auto-split from routes.py lines 7506–7820.
+app/routes_split/auth.py â€” Admin login, register, Firebase, OTP
+Auto-split from routes.py lines 7506â€“7820.
 """
 
 # ---------------------------------------------------------------------------
@@ -91,6 +91,7 @@ from app.core.routes_core import (
 
 
 from app.routes.notifications import FirebaseAuthRequest
+from app.services.firebase_auth_service import provision_firebase_user, rollback_firebase_user
 
 load_dotenv()
 
@@ -118,9 +119,9 @@ if not firebase_admin._apps:
         logger.warning("GOOGLE_APPLICATION_CREDENTIALS not set in environment. Firebase Admin SDK will not be available until configured.")
 
 router = APIRouter()
-# ─────────────────────────────────────────────────────────────────────────────
-# TOKEN REFRESH  —  silently extend a valid session without re-entering creds
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# TOKEN REFRESH  â€”  silently extend a valid session without re-entering creds
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @router.post("/token/refresh")
 def refresh_token(current_admin: dict = Depends(get_current_admin_details)):
     """
@@ -356,6 +357,7 @@ class Verify2FA(BaseModel):
 
 class FirebaseLoginIdentifier(BaseModel):
     identifier: str
+    password: Optional[str] = None
 
 
 @router.post("/admin/firebase-login-identifier")
@@ -422,49 +424,54 @@ def firebase_login_identifier(data: FirebaseLoginIdentifier):
         )
 
     # ---------------------------------------------------------
-    # 4. Make sure this MongoDB account is linked to Firebase
+    # 4. Resolve or auto-heal Firebase account for this admin
     # ---------------------------------------------------------
     firebase_uid = user.get("firebase_uid")
+    user_email = (user.get("email") or "").strip().lower()
+    firebase_user = None
 
-    if not firebase_uid:
+    if firebase_uid:
+        try:
+            firebase_user = firebase_auth_admin.get_user(firebase_uid)
+        except Exception as exc:
+            logger.info(f"Firebase lookup by UID {firebase_uid} failed ({exc}); trying email fallback...")
+
+    # Auto-heal / fallback: find in Firebase by email if UID was missing or out of sync
+    if not firebase_user and user_email:
+        try:
+            firebase_user = firebase_auth_admin.get_user_by_email(user_email)
+            # Auto-heal: update MongoDB with the real Firebase UID and email
+            admins_collection.update_one(
+                {"_id": user["_id"]},
+                {"$set": {"firebase_uid": firebase_user.uid, "firebase_email": firebase_user.email}}
+            )
+            logger.info(f"Auto-resynced firebase_uid for admin {user_email} to {firebase_user.uid}")
+        except Exception as email_exc:
+            logger.warning(f"Unable to resolve Firebase account by email {user_email}: {email_exc}")
+
+            # JIT (Just-In-Time) Auto-Provisioning for legacy/stuck tenants:
+            # If user exists in MongoDB, enters their valid password, but was never provisioned in Firebase,
+            # provision them on the spot and link their account so login succeeds seamlessly!
+            if data.password and user.get("password") and verify_password(data.password, user["password"]):
+                try:
+                    firebase_user, _ = provision_firebase_user(
+                        email=user_email,
+                        password=data.password,
+                        display_name=user.get("name") or user.get("username") or user_email,
+                    )
+                    admins_collection.update_one(
+                        {"_id": user["_id"]},
+                        {"$set": {"firebase_uid": firebase_user.uid, "firebase_email": firebase_user.email}}
+                    )
+                    logger.info(f"JIT auto-provisioned Firebase user for existing stuck account: {user_email}")
+                except Exception as jit_err:
+                    logger.error(f"JIT provisioning failed for {user_email}: {jit_err}")
+
+    if not firebase_user:
         raise HTTPException(
             status_code=401,
-            detail="This account is not available for Firebase login.",
+            detail="This account is not available for Firebase login. Please contact support or reset your password.",
         )
-
-    # ---------------------------------------------------------
-    # 5. Get the Firebase account
-    # ---------------------------------------------------------
-    try:
-        firebase_user = firebase_auth_admin.get_user(firebase_uid)
-
-    except Exception as exc:
-        # Fallback: try finding the account in Firebase Auth by email in case UID is out of sync
-        user_email = (user.get("email") or "").strip().lower()
-        firebase_user = None
-        if user_email:
-            try:
-                firebase_user = firebase_auth_admin.get_user_by_email(user_email)
-                # Auto-heal: update MongoDB with the real Firebase UID
-                admins_collection.update_one(
-                    {"_id": user["_id"]},
-                    {"$set": {"firebase_uid": firebase_user.uid, "firebase_email": firebase_user.email}}
-                )
-                logger.info(f"Auto-resynced firebase_uid for admin {user_email} to {firebase_user.uid}")
-            except Exception as email_exc:
-                logger.warning(f"Unable to resolve Firebase account by email {user_email}: {email_exc}")
-
-        if not firebase_user:
-            logger.warning(
-                "Unable to resolve Firebase account for admin: %s - %s",
-                type(exc).__name__,
-                str(exc),
-            )
-
-            raise HTTPException(
-                status_code=401,
-                detail="Firebase account is not available.",
-            )
 
     firebase_email = (firebase_user.email or "").strip().lower()
 
@@ -780,34 +787,62 @@ def register_admin(data: AdminRegister):
     plan_def = get_plan_definition(data.plan)
     credits_to_grant = plan_def.get("credits_granted", 10)
     expiry = now + timedelta(days=3650)
-    
-    new_company = {
-        "name": normalized_company,
-        "subscription_plan": data.plan,
-        "subscription_start": now.isoformat(),
-        "subscription_expiry": expiry.isoformat(),
-        "is_paid": False,
-        "credits": credits_to_grant,
-        "created_at": now.isoformat()
-    }
-    company_insert = companies_collection.insert_one(new_company)
-    company_id = str(company_insert.inserted_id)
 
-    new_admin = {
-        "username": normalized_email,  # Use email as username
-        "password": hash_password(data.password),
-        "email": normalized_email,
-        "name": normalized_name,
-        "phone": data.phone,
-        "role": "super_admin",
-        "company_id": company_id,
-        "login_enabled": True,
-        "credits": credits_to_grant,
-        "created_at": now.isoformat()
-    }
-    
-    new_admin["custom_id"] = get_next_sequence_value("recruiter", "RC")
-    admins_collection.insert_one(new_admin)
+    # Rule 1: Provision Firebase user (creates or reconciles existing)
+    try:
+        firebase_user, was_created = provision_firebase_user(
+            email=normalized_email,
+            password=data.password,
+            display_name=normalized_name or normalized_email,
+        )
+    except Exception as fb_err:
+        logger.error(f"Failed to provision Firebase user for registration {normalized_email}: {fb_err}")
+        raise HTTPException(status_code=400, detail=f"Firebase registration failed: {fb_err}")
+
+    company_id = None
+    try:
+        new_company = {
+            "name": normalized_company,
+            "subscription_plan": data.plan,
+            "subscription_start": now.isoformat(),
+            "subscription_expiry": expiry.isoformat(),
+            "is_paid": False,
+            "credits": credits_to_grant,
+            "created_at": now.isoformat()
+        }
+        company_insert = companies_collection.insert_one(new_company)
+        company_id = company_insert.inserted_id
+
+        new_admin = {
+            "username": normalized_email,  # Use email as username
+            "password": hash_password(data.password),
+            "email": normalized_email,
+            "firebase_uid": firebase_user.uid,
+            "firebase_email": firebase_user.email,
+            "name": normalized_name,
+            "phone": data.phone,
+            "role": "super_admin",
+            "company_id": str(company_id),
+            "login_enabled": True,
+            "credits": credits_to_grant,
+            "created_at": now.isoformat()
+        }
+        
+        new_admin["custom_id"] = get_next_sequence_value("recruiter", "RC")
+        admins_collection.insert_one(new_admin)
+
+    except Exception as db_err:
+        # Rule 2: Rollback on database failure
+        logger.error(f"Failed to create admin in database during registration: {db_err}")
+        if company_id:
+            try:
+                companies_collection.delete_one({"_id": company_id})
+            except Exception:
+                pass
+        if was_created:
+            rollback_firebase_user(firebase_user.uid)
+        raise HTTPException(status_code=500, detail="Database failure during registration") from db_err
+
     return {"status": "success", "message": f"Account created with {data.plan} plan! Please login."}
 
 def get_razorpay_credentials():

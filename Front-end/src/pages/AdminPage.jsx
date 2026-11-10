@@ -43,10 +43,10 @@ import { handleUpdateCreditRequest } from '../store/slices/creditsSlice'
 const getFilteredCandidates = (candidatesState) => {
   const { candidates, searchTerm, statusFilter, startDate, endDate, sortBy } = candidatesState
   const filtered = candidates.filter(c => {
-    const name = (c.candidate_name || '').toLowerCase()
-    const email = (c.candidate_email || '').toLowerCase()
-    const position = (c.interview_title || '').toLowerCase()
-    const query = searchTerm.toLowerCase()
+    const name = (c.candidate_name || c.name || '').toLowerCase()
+    const email = (c.candidate_email || c.email || '').toLowerCase()
+    const position = (c.interview_title || c.role || c.job_title || '').toLowerCase()
+    const query = (searchTerm || '').toLowerCase()
 
     const matchesSearch = name.includes(query) || email.includes(query) || position.includes(query)
     if (!matchesSearch) return false
