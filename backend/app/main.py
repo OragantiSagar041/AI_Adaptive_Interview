@@ -387,6 +387,7 @@ def root():
     return {"status": "ok", "service": "HireIQ Backend"}
 
 
+@app.get("/api/health")
 @app.get("/health")
 def health():
     return {"status": "healthy"}
