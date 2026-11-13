@@ -1955,7 +1955,7 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
                     "scored_count": {"$sum": {"$cond": [{"$ne": [{"$ifNull": ["$avg_score", None]}, None]}, 1, 0]}},
                     "today": {"$sum": {"$cond": [{"$gte": ["$created_at", today_start]}, 1, 0]}},
                     "this_week": {"$sum": {"$cond": [{"$gte": ["$created_at", week_start]}, 1, 0]}},
-                    "candidate_emails": {"$addToSet": {"$toLower": {"$ifNull": ["$candidate_email", "$email"]}}},
+                    "candidate_emails": {"$addToSet": {"$toLower": {"$ifNull": ["$candidate_email", {"$ifNull": ["$email", ""]}]}}},
                     "completed_today": {"$sum": {"$cond": [{"$and": [{"$eq": ["$effective_status", "completed"]}, {"$gte": ["$created_at", today_start]}]}, 1, 0]}},
                     "completed_yesterday": {"$sum": {"$cond": [{"$and": [{"$eq": ["$effective_status", "completed"]}, {"$gte": ["$created_at", yesterday_start]}, {"$lt": ["$created_at", today_start]}]}, 1, 0]}},
                     "selected_today": {"$sum": {"$cond": [{"$and": [{"$eq": ["$decision", "selected"]}, {"$gte": ["$created_at", today_start]}]}, 1, 0]}},

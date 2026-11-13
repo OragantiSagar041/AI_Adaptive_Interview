@@ -287,6 +287,28 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+from starlette.types import ASGIApp, Scope, Receive, Send
+
+class ApiNormalizationMiddleware:
+    """
+    Normalizes request paths to guarantee seamless routing between frontend and backend:
+    1. Collapses duplicate /api prefixes (/api/api/... -> /api/...) caused by
+       combining API_BASE_URL (https://hireiq.co.in/api) with /api/... endpoints.
+    2. Works for both HTTP and WebSocket connections.
+    """
+    def __init__(self, app: ASGIApp):
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] in ("http", "websocket"):
+            path = scope.get("path", "")
+            if "/api/api" in path:
+                while "/api/api" in path:
+                    path = path.replace("/api/api", "/api")
+                scope["path"] = path
+                if "raw_path" in scope:
+                    scope["raw_path"] = path.encode("utf-8")
+        await self.app(scope, receive, send)
 
 # --- Middleware ---
 # Middlewares are executed top-down. We want CORSMiddleware to be the outermost (last added)
@@ -294,6 +316,7 @@ app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(ApiNormalizationMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -330,44 +353,52 @@ if not _os.path.isdir(_uploads_dir) and _os.path.isdir("uploads"):
 if _os.getenv("ENV", "local") != "production" and _os.path.isdir(_uploads_dir):
     app.mount("/uploads", StaticFiles(directory=_uploads_dir), name="uploads")
 
-# --- Routers ---
-app.include_router(admin_dashboard_router)
-app.include_router(ai_calls_router)
-app.include_router(auth_router)
-app.include_router(candidates_router)
-app.include_router(projects_router, prefix="/api/projects", tags=["Projects"])
-app.include_router(projects_router, prefix="/projects", tags=["Projects"])
-app.include_router(coding_chat_router)
-app.include_router(credits_router)
-app.include_router(demo_router)
-app.include_router(interview_router)
-app.include_router(jobs_router)
-app.include_router(master_router)
-app.include_router(master_admins_router)
-app.include_router(notes_superadmin2_router)
-app.include_router(notifications_router)
-app.include_router(payments_router)
-app.include_router(session_complete_router)
-app.include_router(superadmin_router)
-app.include_router(voice_tts_router)
-app.include_router(ws_dashboard_router)
-app.include_router(debug_router)
-app.include_router(plans_router)
-app.include_router(platform_router)
-app.include_router(platform_router, prefix="/api/platform", tags=["Platform Settings"])
-app.include_router(platform_router, prefix="/platform", tags=["Platform Settings"])
-
-app.include_router(conversation_flow_router)
-app.include_router(omni_sync_router)
-app.include_router(transcription.router)
-app.include_router(voice_routes.router)
-app.include_router(translation_router)
-
 # Subscription Management — dedicated modular router
 from app.routes.subscription import router as subscription_router
 from app.routes.subscription import router_superadmin as subscription_superadmin_router
-app.include_router(subscription_router)
-app.include_router(subscription_superadmin_router)
+
+# --- Routers ---
+# Mount routers with both default and /api prefixes so all routes are reachable
+# whether requested locally or via reverse proxy in production (e.g. AWS ALB).
+_dual_prefix_routers = [
+    admin_dashboard_router,
+    ai_calls_router,
+    auth_router,
+    candidates_router,
+    coding_chat_router,
+    credits_router,
+    demo_router,
+    interview_router,
+    jobs_router,
+    master_router,
+    master_admins_router,
+    notes_superadmin2_router,
+    notifications_router,
+    payments_router,
+    session_complete_router,
+    superadmin_router,
+    voice_tts_router,
+    ws_dashboard_router,
+    debug_router,
+    plans_router,
+    conversation_flow_router,
+    omni_sync_router,
+    transcription.router,
+    voice_routes.router,
+    translation_router,
+    subscription_router,
+    subscription_superadmin_router,
+]
+
+for _r in _dual_prefix_routers:
+    app.include_router(_r)
+    if not getattr(_r, "prefix", "").startswith("/api"):
+        app.include_router(_r, prefix="/api")
+
+app.include_router(projects_router, prefix="/api/projects", tags=["Projects"])
+app.include_router(projects_router, prefix="/projects", tags=["Projects"])
+app.include_router(platform_router, prefix="/api/platform", tags=["Platform Settings"])
+app.include_router(platform_router, prefix="/platform", tags=["Platform Settings"])
 
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
