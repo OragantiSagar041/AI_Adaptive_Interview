@@ -37,7 +37,7 @@ RULES:
 - overall_score = content_score + relevance_score (max 100).
 - time_score MUST be strictly 0.
 - Also score clarity_score, technical_depth_score, confidence_score (each 0-100).
-- Acknowledge what the candidate correctly articulated first in the feedback; provide constructive suggestions for depth.
+- CRITICAL: Write the 'feedback' STRICTLY from the RECRUITER / HIRING MANAGER point of view in the THIRD PERSON ("Candidate demonstrated...", "Candidate lacked..."). NEVER address the candidate directly ("you", "your") and NEVER provide coaching tips/suggestions on how to improve in the future.
 - Return VALID JSON ONLY."""
 
 
@@ -312,6 +312,89 @@ def _dynamic_offline_evaluation(
     }
 
 
+
+
+def format_feedback_for_recruiter(fb: str) -> str:
+    """
+    Enforce recruiter perspective: convert any legacy or model-generated second-person 
+    coaching feedback ("You did...", "To strengthen your answer...", "In future, try to...")
+    into third-person objective recruiter assessment reports ("Candidate demonstrated...", etc.).
+    """
+    if not fb or not isinstance(fb, str):
+        return fb
+    
+    cleaned = fb.strip()
+    
+    transformations = [
+        # Intro patterns
+        (r'(?i)\bYou did a good job introducing yourself\b', 'Candidate introduced themselves effectively'),
+        (r'(?i)\bYou did a good job (?:of )?asking\s+several questions\b', 'Candidate asked relevant questions'),
+        (r'(?i)\bYou did a good job (?:of )?asking\b', 'Candidate asked relevant questions regarding'),
+        (r'(?i)\bYou did a good job (?:of )?', 'Candidate demonstrated competence in '),
+        (r'(?i)\bYou did well to\b', 'Candidate successfully'),
+        (r'(?i)\bYou did not\b', 'Candidate did not'),
+        (r'(?i)\bYou didn\'t\b', 'Candidate did not'),
+        (r'(?i)\bTo strengthen your answer,?\s*(?:explicitly\s+)?(?:state|mention)?\s*(?:why)?\b', 'Recruiter Note: Probe why'),
+        (r'(?i)\bTo improve your answer,?\s*\b', 'Evaluation Gap: '),
+        (r'(?i)\bIn future,?\s*try to\s*\b', 'Recruiter Recommendation: Probe whether candidate can '),
+        (r'(?i)\bIn future,?\s*\b', 'In follow-up rounds, '),
+        (r'(?i)\bThis will help (?:the )?interviewers?\s+(?:quickly )?understand\b', 'This would demonstrate to interviewers'),
+        (r'(?i)\bwhat you\'re curious about\b', 'candidate motivation'),
+        (r'(?i)\bwhat you are curious about\b', 'candidate motivation'),
+        
+        # Candidate action / coaching
+        (r'(?i)\bTry to\b', 'Candidate should'),
+        (r'(?i)\bMake sure to\b', 'Candidate needs to'),
+        (r'(?i)\bBe sure to\b', 'Candidate needs to'),
+        (r'(?i)\bYour answer was\b', 'Candidate response was'),
+        (r'(?i)\byour answer\b', "the candidate's answer"),
+        (r'(?i)\byour response\b', "the candidate's response"),
+        (r'(?i)\byour explanation\b', "the candidate's explanation"),
+        (r'(?i)\byour education\b', "their education"),
+        (r'(?i)\byour enthusiasm\b', "their enthusiasm"),
+        (r'(?i)\byour past experiences\b', "their past experience"),
+        (r'(?i)\byour experience\b', "their experience"),
+        (r'(?i)\byour skills\b', "their skills"),
+        (r'(?i)\byour career goals\b', "their career goals"),
+        (r'(?i)\byour role\b', "the role"),
+        (r'(?i)\byour\b', "their"),
+        (r'(?i)\byourself\b', 'themselves'),
+        (r'(?i)\bYou demonstrated\b', 'Candidate demonstrated'),
+        (r'(?i)\bYou explained\b', 'Candidate explained'),
+        (r'(?i)\bYou mentioned\b', 'Candidate mentioned'),
+        (r'(?i)\bYou provided\b', 'Candidate provided'),
+        (r'(?i)\bYou answered\b', 'Candidate answered'),
+        (r'(?i)\bYou articulated\b', 'Candidate articulated'),
+        (r'(?i)\bYou covered\b', 'Candidate covered'),
+        (r'(?i)\bYou struggled\b', 'Candidate struggled'),
+        (r'(?i)\bYou missed\b', 'Candidate missed'),
+        (r'(?i)\bexcites you\b', 'excites them'),
+        (r'(?i)\bhow you will\b', 'how they will'),
+        (r'(?i)\bhow you would\b', 'how they would'),
+        (r'(?i)\bhow you\b', 'how they'),
+        (r'(?i)\bwhat you\b', 'what they'),
+        (r'(?i)\bthat you\b', 'that they'),
+        (r'(?i)\byou will\b', 'they will'),
+        (r'(?i)\byou would\b', 'they would'),
+        (r'(?i)\byou are\b', 'they are'),
+        (r'(?i)\byou have\b', 'they have'),
+        (r'(?i)\byou can\b', 'they can'),
+        (r'(?i)\bYou should\b', 'Candidate should'),
+        (r'(?i)\bYou could\b', 'Candidate could'),
+        (r'(?i)\bYou can\b', 'Candidate can'),
+        (r'(?i)\bYou are\b', 'Candidate is'),
+        (r'(?i)\bYou were\b', 'Candidate was'),
+        (r'(?i)\bYou have\b', 'Candidate has'),
+        (r'(?i)\bYou\b', 'Candidate'),
+        (r'(?i)\byou\b', 'the candidate'),
+    ]
+    
+    for pattern, repl in transformations:
+        cleaned = re.sub(pattern, repl, cleaned)
+        
+    return cleaned
+
+
 def analyze_answer(
     question: str,
     answer: str,
@@ -372,6 +455,10 @@ RULES:
 - relevance_score is max 30.
 - time_score MUST be strictly 0.
 - Also score clarity_score, technical_depth_score, confidence_score (each 0-100).
+- FEEDBACK REQUIREMENT (RECRUITER POINT OF VIEW):
+  * Write 'feedback' strictly as an objective evaluation report for the RECRUITER / HIRING TEAM.
+  * Write in the 3rd person ("Candidate demonstrated...", "Candidate did not articulate...", "Candidate showed...").
+  * NEVER use 2nd-person ("you", "your") and do NOT give candidate coaching suggestions or improvement tips.
 - Return VALID JSON ONLY.
 
 Return VALID JSON ONLY:
@@ -461,14 +548,13 @@ Return VALID JSON ONLY:
         content_s = 0
         relevance_s = 0
         time_s = 0
-        result_dict["feedback"] = "Answer is too short to evaluate. Please provide a full, detailed explanation."
+        result_dict["feedback"] = "Candidate provided an insufficient response (< 5 words) to evaluate competency."
     elif len(answer_words) < 10 and not is_closed_format_active:
         content_s = min(content_s, 8)
         relevance_s = min(relevance_s, 5)
-        if "too short" not in result_dict.get("feedback", "").lower():
+        if "too short" not in result_dict.get("feedback", "").lower() and "insufficient" not in result_dict.get("feedback", "").lower():
             result_dict["feedback"] = (
-                "Your answer was too short to evaluate meaningfully. "
-                "Please provide a detailed response. "
+                "Candidate answer was too brief (< 10 words) for complete evaluation. "
                 + result_dict.get("feedback", "")
             )
             
@@ -499,6 +585,9 @@ Return VALID JSON ONLY:
                 .replace("\u201c", '"')
                 .replace("\u201d", '"')
             )
+    if "feedback" in result_dict and isinstance(result_dict["feedback"], str):
+        result_dict["feedback"] = format_feedback_for_recruiter(result_dict["feedback"])
+
     for k in ["clarity_score", "technical_depth_score", "confidence_score"]:
         result_dict[k] = max(0, min(100, int(result_dict.get(k, 0))))
     
