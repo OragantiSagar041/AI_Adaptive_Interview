@@ -957,6 +957,33 @@ html.admin-layout[data-theme="dark"] .superadmin-jobs-page h1 {
   background-clip: padding-box;
 }
 
+/* Candidate comparison cards horizontal scrollbar */
+.cards-horizontal-scrollbar {
+  scrollbar-color: rgba(99, 102, 241, 0.55) rgba(148, 163, 184, 0.15);
+  scrollbar-width: thin;
+}
+
+.cards-horizontal-scrollbar::-webkit-scrollbar {
+  height: 10px;
+}
+
+.cards-horizontal-scrollbar::-webkit-scrollbar-track {
+  background: rgba(148, 163, 184, 0.15);
+  border-radius: 9999px;
+  margin: 0 4px;
+}
+
+.cards-horizontal-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.55);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.cards-horizontal-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.85);
+}
+
 /* Hide scrollbar for Chrome, Safari and Opera */
 .scrollbar-none::-webkit-scrollbar {
   display: none !important;
