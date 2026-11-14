@@ -7,6 +7,7 @@ import Badge from '../../Badge'
 import { toJpeg } from 'html-to-image'
 import { jsPDF } from 'jspdf'
 import { detectNonEnglishText, translateText } from '../../../utils/translation'
+import { formatFeedbackForRecruiter } from '../../../utils/adminFormatters'
 
 // Lightweight WYSIWYG Editor using native iframe designMode
 function IframeWYSIWYG({ initialHtml, onChange }) {
@@ -689,7 +690,7 @@ export function CandidateScorecardModal({
                       <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider flex items-center gap-1.5 mb-2">
                         <i className="fas fa-comment-medical text-emerald-500"></i> AI Evaluator Feedback
                       </span>
-                      <p className="text-sm text-slate-700 leading-relaxed">{ans.ai_feedback}</p>
+                      <p className="text-sm text-slate-700 leading-relaxed">{formatFeedbackForRecruiter(ans.ai_feedback)}</p>
                     </div>
                   )}
 

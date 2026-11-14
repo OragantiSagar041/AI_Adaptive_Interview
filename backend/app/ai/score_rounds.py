@@ -224,7 +224,7 @@ Respond ONLY with a valid JSON object in exactly this format:
   "evaluations": [
     {{
       "score": <score_for_scenario_1_between_0_and_100>,
-      "feedback": "<concise actionable feedback on why this score was given>"
+      "feedback": "<concise 3rd-person recruiter evaluation report assessing candidate's solution>"
     }},
     ...
   ],
