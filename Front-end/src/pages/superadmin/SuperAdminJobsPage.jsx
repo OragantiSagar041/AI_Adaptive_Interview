@@ -5,11 +5,14 @@ import {
   Wallet, Users, LayoutGrid, LayoutList, ArrowRight, ChevronRight, Zap,
   Building2, BookOpen, CheckCircle2, Mail, Phone, ExternalLink, RefreshCw,
   ChevronDown, Copy, Calendar, Eye, Download, FileCheck, Check, Sparkles,
-  User, UserCheck, History, ShieldCheck, Share2, Award
+  User, UserCheck, History, ShieldCheck, Share2, Award, GitCompare
 } from 'lucide-react';
 import Card from '../../components/Card';
 import Button from '../../components/Button';
 import JobApplicationModal from '../../components/JobApplicationModal';
+import CandidateComparisonModal from '../../components/superadmin/CandidateComparisonModal';
+import CandidateDetailsModal from '../../components/superadmin/CandidateDetailsModal';
+import { evaluateCandidateMatch, formatCandidateId, deduplicateCandidatesForComparison } from '../../utils/candidateMatcher';
 import { useSelector, useDispatch } from 'react-redux';
 import { loadSuperAdminDashboard } from '../../store/slices/dashboardSlice';
 import { getComputedStatus, formatRelativeTime } from '../../utils/adminFormatters';
@@ -234,8 +237,118 @@ export default function SuperAdminJobsPage() {
     loading: false,
   });
 
+  // Candidate comparison & details state
+  const [comparisonModalData, setComparisonModalData] = useState({
+    isOpen: false,
+    job: null,
+    candidates: [],
+  });
+  const [comparisonLoadingJobId, setComparisonLoadingJobId] = useState(null);
+  const [selectedCandidateForDetails, setSelectedCandidateForDetails] = useState(null);
+
+  const handleOpenComparison = async (job) => {
+    const jobId = job.job_id || job._id;
+    setComparisonLoadingJobId(jobId);
+    try {
+      // 1. Fetch matching candidates pool from backend
+      let candidatesList = [];
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/matching-candidates`, {
+          headers: { ...authHeaders },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          candidatesList = data.candidates || [];
+        }
+      } catch (poolErr) {
+        console.warn('Matching candidates endpoint error, attempting fallback:', poolErr);
+      }
+
+      // Fallback if matching-candidates returned empty or failed
+      if (!candidatesList || candidatesList.length === 0) {
+        try {
+          const fbRes = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/applications`, {
+            headers: { ...authHeaders },
+          });
+          if (fbRes.ok) {
+            const fbData = await fbRes.json();
+            candidatesList = fbData.applications || [];
+          }
+        } catch (fbErr) {
+          console.error('Fallback applications fetch error:', fbErr);
+        }
+      }
+
+      if (!candidatesList || candidatesList.length === 0) {
+        Swal.fire({
+          title: 'No Candidates Found',
+          text: 'No candidate profiles or resumes were found in the database. Upload or invite candidates to compare them.',
+          icon: 'info',
+          confirmButtonColor: '#4f46e5',
+        });
+        return;
+      }
+
+      // 2. Deduplicate candidates using normalized resume content fingerprints
+      // Guarantees only unique resumes are compared and evaluated
+      const uniqueCandidatesList = deduplicateCandidatesForComparison(candidatesList, job);
+
+      // 3. Evaluate unique candidates against this specific job's criteria
+      const evaluated = uniqueCandidatesList.map(cand => evaluateCandidateMatch(cand, job));
+
+      // Filter candidates that have valid profile or resume text
+      const validEvaluated = evaluated.filter(item => item.hasSufficientData);
+
+      if (validEvaluated.length < 2) {
+        if (validEvaluated.length === 1) {
+          Swal.fire({
+            title: 'At Least Two Candidates Needed',
+            text: `Found 1 candidate (${validEvaluated[0].name || 'Candidate'}) matching this job. At least two candidate profiles with resume data are needed to perform a side-by-side comparison.`,
+            icon: 'info',
+            confirmButtonColor: '#4f46e5',
+          });
+        } else {
+          Swal.fire({
+            title: 'No Matching Candidates',
+            text: 'None of the available candidates in the repository have resume or profile data matching this job description.',
+            icon: 'info',
+            confirmButtonColor: '#4f46e5',
+          });
+        }
+        return;
+      }
+
+      // 3. Sort candidates by overallScore descending so highest matching resumes appear first
+      validEvaluated.sort((a, b) => {
+        const bScore = b.overallScore !== null ? b.overallScore : -1;
+        const aScore = a.overallScore !== null ? a.overallScore : -1;
+        if (bScore !== aScore) return bScore - aScore;
+        return (a.name || '').localeCompare(b.name || '');
+      });
+
+      const sortedCandidates = validEvaluated.map(item => item.candidate);
+
+      setComparisonModalData({
+        isOpen: true,
+        job: job,
+        candidates: sortedCandidates,
+      });
+    } catch (err) {
+      console.error('Error fetching candidates for comparison:', err);
+      Swal.fire({
+        title: 'Error',
+        text: 'An error occurred while preparing candidates for comparison.',
+        icon: 'error',
+        confirmButtonColor: '#4f46e5',
+      });
+    } finally {
+      setComparisonLoadingJobId(null);
+    }
+  };
+
   const openApplications = useCallback(async (job) => {
     setApplicationData({ open: true, job, list: [], loading: true });
+    setSelectedCandidateForDetails(null);
     try {
       const res = await fetch(`${API_BASE_URL}/api/jobs/${job.job_id}/applications`, {
         headers: { ...authHeaders },
@@ -253,8 +366,10 @@ export default function SuperAdminJobsPage() {
     }
   }, [authHeaders]);
 
-  const closeApplications = () =>
+  const closeApplications = () => {
     setApplicationData({ open: false, job: null, list: [], loading: false });
+    setSelectedCandidateForDetails(null);
+  };
 
   const handleStatusChange = async (app, newStatus) => {
     try {
@@ -315,7 +430,7 @@ export default function SuperAdminJobsPage() {
     }
   };
 
-  const handleScheduleInterview = async (app) => {
+  const handleScheduleInterview = async (app, jobOverride = null) => {
     const userFeatures = adminUser?.features || ['Create Interview'];
     if (!userFeatures.includes('Create Interview') && adminUser?.role !== 'super_admin' && adminUser?.role !== 'master') {
       Swal.fire({
@@ -342,6 +457,7 @@ export default function SuperAdminJobsPage() {
         console.error("Failed to update status before scheduling:", e);
       }
     }
+    const currentJob = jobOverride || comparisonModalData.job || applicationData.job;
     const isSuperAdmin = window.location.pathname.startsWith('/superadmin');
     const targetRoute = isSuperAdmin ? '/superadmin/create-interview' : '/admin/create-interview';
     navigate(targetRoute, {
@@ -356,10 +472,10 @@ export default function SuperAdminJobsPage() {
           resumeFilename: app.resume_filename || '',
           coverLetter: app.cover_letter || '',
           coverLetterUrl: app.cover_letter_url || '',
-          jobDescription: applicationData.job?.description || '',
-          jobTitle: applicationData.job?.title || '',
-          jobSkills: applicationData.job?.skills || '',
-          jobId: applicationData.job?.job_id || '',
+          jobDescription: currentJob?.description || '',
+          jobTitle: currentJob?.title || '',
+          jobSkills: currentJob?.skills || '',
+          jobId: currentJob?.job_id || '',
           applicationId: app._id
         }
       }
@@ -825,7 +941,7 @@ export default function SuperAdminJobsPage() {
                   setExpandedSkills={setExpandedSkills}
                 />
 
-                {/* Card Action Buttons (View Applications + Preview/Apply) */}
+                {/* Card Action Buttons (View Applications + Details/Apply + Candidate Comparison) */}
                 <div className="mt-auto pt-2 flex flex-col gap-2">
                   <button
                     onClick={(e) => { e.stopPropagation(); openApplications(job); }}
@@ -847,6 +963,21 @@ export default function SuperAdminJobsPage() {
                       <Zap size={13} /> Apply <ExternalLink size={11} className="opacity-70" />
                     </button>
                   </div>
+                  {/* Candidate Comparison Button in the marked area below Details & Apply */}
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); handleOpenComparison(job); }}
+                    disabled={comparisonLoadingJobId === (job.job_id || job._id)}
+                    className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/40 dark:to-purple-950/40 hover:from-indigo-100 hover:to-purple-100 dark:hover:from-indigo-900/60 dark:hover:to-purple-900/60 text-indigo-700 dark:text-indigo-300 font-bold text-xs border border-indigo-200 dark:border-indigo-800 cursor-pointer transition-all hover:scale-[1.01] active:scale-98 shadow-xs"
+                    title="Compare candidates for this job"
+                  >
+                    {comparisonLoadingJobId === (job.job_id || job._id) ? (
+                      <span className="w-3.5 h-3.5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <GitCompare size={14} className="text-indigo-600 dark:text-indigo-400" />
+                    )}
+                    <span>Candidate Comparison</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -937,6 +1068,19 @@ export default function SuperAdminJobsPage() {
                         >
                           <Users size={14} />
                           <span>Applications</span>
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleOpenComparison(job); }}
+                          disabled={comparisonLoadingJobId === (job.job_id || job._id)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white rounded-xl border border-indigo-200 font-bold text-xs cursor-pointer transition-all shadow-xs"
+                          title="Candidate Comparison"
+                        >
+                          {comparisonLoadingJobId === (job.job_id || job._id) ? (
+                            <span className="w-3.5 h-3.5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <GitCompare size={14} />
+                          )}
+                          <span>Compare</span>
                         </button>
                         <button
                           onClick={(e) => handleCopyJobLink(job, e)}
@@ -1338,6 +1482,7 @@ export default function SuperAdminJobsPage() {
                         <th className="py-3 px-3 sm:px-4 text-[0.7rem] font-extrabold uppercase text-slate-400 tracking-wider">Candidate</th>
                         <th className="py-3 px-3 sm:px-4 text-[0.7rem] font-extrabold uppercase text-slate-400 tracking-wider">Contact</th>
                         <th className="py-3 px-3 sm:px-4 text-[0.7rem] font-extrabold uppercase text-slate-400 tracking-wider">Resume</th>
+                        <th className="py-3 px-3 sm:px-4 text-[0.7rem] font-extrabold uppercase text-slate-400 tracking-wider">Match Score</th>
                         <th className="py-3 px-3 sm:px-4 text-[0.7rem] font-extrabold uppercase text-slate-400 tracking-wider hidden lg:table-cell">Applied</th>
                         <th className="py-3 px-3 sm:px-4 text-[0.7rem] font-extrabold uppercase text-slate-400 tracking-wider">Status</th>
                         <th className="py-3 px-3 sm:px-4 text-[0.7rem] font-extrabold uppercase text-slate-400 tracking-wider text-right">Actions</th>
@@ -1353,116 +1498,148 @@ export default function SuperAdminJobsPage() {
                           'Hired': 'bg-emerald-50 text-emerald-700 border-emerald-200',
                         };
                         const st = app.status || 'Pending Review';
+                        const matchEval = evaluateCandidateMatch(app, applicationData.job);
+
                         return (
                           <tr key={app._id} className="hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700/60 transition-colors group">
                             <td className="py-3 px-3 sm:px-4">
-                              <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 rounded-xl text-white font-black text-sm flex items-center justify-center shrink-0 shadow-md shadow-indigo-500/30" style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)' }}>
-                                  {(app.name || '?')[0].toUpperCase()}
-                                </div>
-                                <div>
-                                  <p className="font-bold text-slate-800 dark:text-slate-100 text-sm">{app.name || '—'}</p>
-                                  {app.linkedin_url && (
-                                    <a href={app.linkedin_url} target="_blank" rel="noreferrer"
-                                      className="text-[0.68rem] text-indigo-500 hover:underline flex items-center gap-0.5">
-                                      <ExternalLink size={9} /> LinkedIn
-                                    </a>
-                                  )}
-                                </div>
-                              </div>
-                            </td>
-                            <td className="py-3 px-3 sm:px-4">
-                              <div className="flex flex-col gap-1">
-                                <span className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 font-medium w-full max-w-[140px] xl:max-w-[180px]">
-                                  <Mail size={11} className="text-indigo-400 shrink-0" /><span className="truncate">{app.candidate_email || app.email || '—'}</span>
-                                </span>
-                                <span className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                                  <Phone size={11} className="text-teal-400 shrink-0" />{app.phone || '—'}
-                                </span>
-                              </div>
-                            </td>
-                            <td className="py-3 px-3 sm:px-4">
-                              {app.resume_url || app.resume_text ? (
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedResumeApp(app)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-100 transition-all cursor-pointer shadow-sm hover:scale-[1.02]"
-                                  title="View Candidate Resume"
-                                >
-                                  <FileText size={13} className="text-indigo-600" /> Resume
-                                </button>
-                              ) : (
-                                <span className="text-xs text-slate-400 font-medium">Not provided</span>
-                              )}
-                            </td>
-                            <td className="py-3 px-3 sm:px-4 hidden lg:table-cell">
-                              <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                                {app.applied_at
-                                  ? new Date(app.applied_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-                                  : '—'}
-                              </span>
-                            </td>
-                            <td className="py-3 px-3 sm:px-4">
-                              <div className="flex flex-col gap-1 items-start">
-                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[0.68rem] font-bold border ${statusStyles[st] || 'bg-slate-50 dark:bg-slate-900/50 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}>
-                                  {st}
-                                </span>
-                                {app.last_action_by_name ? (
-                                  <div className="flex flex-col text-[0.68rem] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50/80 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700/60 max-w-[170px]" title={`Action taken by ${app.last_action_by_name} (${app.last_action_by_role || 'Admin'})`}>
-                                    <span className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1 truncate">
-                                      <UserCheck size={11} className="text-indigo-600 shrink-0" />
-                                      <span>by {app.last_action_by_name}</span>
-                                      {app.last_action_by_role && (
-                                        <span className="text-[0.6rem] text-slate-400 uppercase font-bold">({app.last_action_by_role})</span>
-                                      )}
-                                    </span>
-                                    {app.last_action_at && (
-                                      <span className="text-[0.6rem] text-slate-400 font-mono">
-                                        {new Date(app.last_action_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                <div className="flex items-center gap-3">
+                                  <div className="w-9 h-9 rounded-xl text-white font-black text-sm flex items-center justify-center shrink-0 shadow-md shadow-indigo-500/30" style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)' }}>
+                                    {(app.name || '?')[0].toUpperCase()}
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <p className="font-bold text-slate-800 dark:text-slate-100 text-sm">{app.name || '—'}</p>
+                                      <span className="text-[10px] font-mono font-bold text-slate-400">
+                                        {formatCandidateId(app)}
                                       </span>
+                                    </div>
+                                    {app.linkedin_url && (
+                                      <a href={app.linkedin_url} target="_blank" rel="noreferrer"
+                                        className="text-[0.68rem] text-indigo-500 hover:underline flex items-center gap-0.5">
+                                        <ExternalLink size={9} /> LinkedIn
+                                      </a>
                                     )}
                                   </div>
+                                </div>
+                              </td>
+                              <td className="py-3 px-3 sm:px-4">
+                                <div className="flex flex-col gap-1">
+                                  <span className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 font-medium w-full max-w-[140px] xl:max-w-[180px]">
+                                    <Mail size={11} className="text-indigo-400 shrink-0" /><span className="truncate">{app.candidate_email || app.email || '—'}</span>
+                                  </span>
+                                  <span className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                                    <Phone size={11} className="text-teal-400 shrink-0" />{app.phone || '—'}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="py-3 px-3 sm:px-4">
+                                {app.resume_url || app.resume_text ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedResumeApp(app)}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-100 transition-all cursor-pointer shadow-sm hover:scale-[1.02]"
+                                    title="View Candidate Resume"
+                                  >
+                                    <FileText size={13} className="text-indigo-600" /> Resume
+                                  </button>
                                 ) : (
-                                  <span className="text-[0.62rem] text-slate-400 italic">No action yet</span>
+                                  <span className="text-xs text-slate-400 font-medium">Not provided</span>
                                 )}
-                              </div>
-                            </td>
-                            <td className="py-3 px-3 sm:px-4 text-right">
-                              <div className="flex flex-col items-end justify-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => handleScheduleInterview(app)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold rounded-xl shadow-sm hover:shadow-indigo-500/25 transition-all cursor-pointer whitespace-nowrap active:scale-95"
-                                  title="Schedule interview for candidate"
-                                >
-                                  <Calendar size={13} /> {st === 'Interview Scheduled' ? 'Reschedule' : 'Schedule'}
-                                </button>
-                                <select
-                                  value={st}
-                                  onChange={e => {
-                                    if (e.target.value === '__SCHEDULE__') {
-                                      handleScheduleInterview(app);
-                                    } else {
-                                      handleStatusChange(app, e.target.value);
-                                    }
-                                  }}
-                                  className="text-[11px] font-bold px-2 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 text-slate-700 dark:text-slate-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all hover:border-indigo-300 w-[110px]"
-                                >
-                                  <option value="__SCHEDULE__">📅 Schedule...</option>
-                                  <option disabled>──────────</option>
-                                  {['Pending Review', 'Shortlisted', 'Interview Scheduled', 'Rejected', 'Hired'].map(s => (
-                                    <option key={s} value={s}>{s}</option>
-                                  ))}
-                                </select>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                              </td>
+                              <td className="py-3 px-3 sm:px-4">
+                                <div className="flex flex-col gap-1 items-start">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className={`text-xs font-black ${matchEval.matchCategory.colorClass}`}>
+                                      {matchEval.overallScore}%
+                                    </span>
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${matchEval.matchCategory.badgeClass}`}>
+                                      {matchEval.matchCategory.label}
+                                    </span>
+                                  </div>
+                                  <span className="text-[10px] text-slate-400 font-medium">
+                                    {matchEval.skillsAlignment.matchRatio} skills
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="py-3 px-3 sm:px-4 hidden lg:table-cell">
+                                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                                  {app.applied_at
+                                    ? new Date(app.applied_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                                    : '—'}
+                                </span>
+                              </td>
+                              <td className="py-3 px-3 sm:px-4">
+                                <div className="flex flex-col gap-1 items-start">
+                                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[0.68rem] font-bold border ${statusStyles[st] || 'bg-slate-50 dark:bg-slate-900/50 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}>
+                                    {st}
+                                  </span>
+                                  {app.last_action_by_name ? (
+                                    <div className="flex flex-col text-[0.68rem] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50/80 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700/60 max-w-[170px]" title={`Action taken by ${app.last_action_by_name} (${app.last_action_by_role || 'Admin'})`}>
+                                      <span className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1 truncate">
+                                        <UserCheck size={11} className="text-indigo-600 shrink-0" />
+                                        <span>by {app.last_action_by_name}</span>
+                                        {app.last_action_by_role && (
+                                          <span className="text-[0.6rem] text-slate-400 uppercase font-bold">({app.last_action_by_role})</span>
+                                        )}
+                                      </span>
+                                      {app.last_action_at && (
+                                        <span className="text-[0.6rem] text-slate-400 font-mono">
+                                          {new Date(app.last_action_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="text-[0.62rem] text-slate-400 italic">No action yet</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-3 px-3 sm:px-4 text-right">
+                                <div className="flex flex-col items-end justify-center gap-1.5">
+                                  <div className="flex items-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedCandidateForDetails(app)}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer shadow-xs hover:border-indigo-300"
+                                      title="View Detailed Candidate Breakdown"
+                                    >
+                                      <Eye size={12} className="text-indigo-600 dark:text-indigo-400" /> Details
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleScheduleInterview(app)}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold rounded-xl shadow-sm hover:shadow-indigo-500/25 transition-all cursor-pointer whitespace-nowrap active:scale-95"
+                                      title="Schedule interview for candidate"
+                                    >
+                                      <Calendar size={12} /> {st === 'Interview Scheduled' ? 'Reschedule' : 'Schedule'}
+                                    </button>
+                                  </div>
+                                  <select
+                                    value={st}
+                                    onChange={e => {
+                                      if (e.target.value === '__SCHEDULE__') {
+                                        handleScheduleInterview(app);
+                                      } else {
+                                        handleStatusChange(app, e.target.value);
+                                      }
+                                    }}
+                                    className="text-[11px] font-bold px-2 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 text-slate-700 dark:text-slate-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all hover:border-indigo-300 w-[110px]"
+                                  >
+                                    <option value="__SCHEDULE__">📅 Schedule...</option>
+                                    <option disabled>──────────</option>
+                                    {['Pending Review', 'Shortlisted', 'Interview Scheduled', 'Rejected', 'Hired'].map(s => (
+                                      <option key={s} value={s}>{s}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
             </div>
 
             {/* Footer */}
@@ -1670,6 +1847,30 @@ export default function SuperAdminJobsPage() {
             adminUser={adminUser}
           />
         </React.Suspense>
+      )}
+
+      {/* ── Candidate Comparison Modal ───────────────────── */}
+      {comparisonModalData.isOpen && comparisonModalData.job && (
+        <CandidateComparisonModal
+          isOpen={comparisonModalData.isOpen}
+          onClose={() => setComparisonModalData({ isOpen: false, job: null, candidates: [] })}
+          job={comparisonModalData.job}
+          candidates={comparisonModalData.candidates}
+          onViewDetails={(cand) => setSelectedCandidateForDetails(cand)}
+          onScheduleInterview={(cand) => handleScheduleInterview(cand, comparisonModalData.job)}
+        />
+      )}
+
+      {/* ── Candidate Details Modal ──────────────────────── */}
+      {selectedCandidateForDetails && (comparisonModalData.job || applicationData.job) && (
+        <CandidateDetailsModal
+          isOpen={Boolean(selectedCandidateForDetails)}
+          onClose={() => setSelectedCandidateForDetails(null)}
+          candidate={selectedCandidateForDetails}
+          job={comparisonModalData.job || applicationData.job}
+          onScheduleInterview={(cand) => handleScheduleInterview(cand, comparisonModalData.job || applicationData.job)}
+          onViewResume={(cand) => setSelectedResumeApp(cand)}
+        />
       )}
     </div>
   );
