@@ -1213,8 +1213,9 @@ export default function PreviousInterviewsModal({
                     <div className="space-y-1.5 flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-2.5">
                         <span className="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                          {code}
-                        </span>
+                          {code}  
+                          
+                          </span>
                         <h3 className="text-sm font-extrabold text-slate-900 dark:text-slate-100 truncate" title={extractJobTitle(roleName)}>
                           {extractJobTitle(roleName)}
                         </h3>
