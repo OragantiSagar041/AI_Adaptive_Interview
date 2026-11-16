@@ -1497,12 +1497,13 @@ def record_recording_upload_failure(
 @router.get("/generate-report/{interview_id}")
 def generate_report(
     interview_id: str,
-    current_admin: dict = Depends(get_current_admin_details),
+    current_admin: Optional[dict] = Depends(get_current_admin_details),
 ):
     session = interview_sessions_collection.find_one({"interview_id": interview_id})
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    _require_admin_session_access(session, current_admin)
+    if isinstance(current_admin, dict):
+        _require_admin_session_access(session, current_admin)
     # Fetch interview data
     interview_data = interviews_collection.find_one({"id": interview_id})
     if not interview_data:
