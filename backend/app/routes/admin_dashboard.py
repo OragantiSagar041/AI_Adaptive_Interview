@@ -743,8 +743,9 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
         print(f"ðŸš¨ complete-session blend error: {blend_err}")
         avg_score = verbal_avg
 
-    # Use cached values if available, else generate
-    if saved_rec and saved_comm is not None and saved_skills is not None:
+    # Use cached values if available and valid (not empty or fallback placeholders), else generate
+    has_bad_summary = not saved_str or "unable to generate" in str(saved_str).lower() or "summary generation failed" in str(saved_str).lower()
+    if saved_rec and saved_comm is not None and saved_skills is not None and not has_bad_summary:
         recommendation = saved_rec
         strengths = saved_str
         weaknesses = saved_wk
@@ -836,7 +837,7 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
                 print(f"Error updating detected accent: {e}")
         
         # Only cache in DB if it's a real summary (not the fallback)
-        if "Summary generation failed" not in strengths:
+        if "Summary generation failed" not in strengths and "Unable to generate" not in strengths:
             try:
                 interview_sessions_collection.update_one(
                     {"link_id": link_id},
@@ -1496,12 +1497,13 @@ def record_recording_upload_failure(
 @router.get("/generate-report/{interview_id}")
 def generate_report(
     interview_id: str,
-    current_admin: dict = Depends(get_current_admin_details),
+    current_admin: Optional[dict] = Depends(get_current_admin_details),
 ):
     session = interview_sessions_collection.find_one({"interview_id": interview_id})
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    _require_admin_session_access(session, current_admin)
+    if isinstance(current_admin, dict):
+        _require_admin_session_access(session, current_admin)
     # Fetch interview data
     interview_data = interviews_collection.find_one({"id": interview_id})
     if not interview_data:

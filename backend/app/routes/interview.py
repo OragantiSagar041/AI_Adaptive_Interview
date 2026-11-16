@@ -1653,7 +1653,7 @@ def generate_interview_summary(candidate_name: str, answers_data: list) -> dict:
     try:
         from app.data.interview_graphs import run_summary_graph
         result = run_summary_graph(candidate_name, answers_data)
-        if result and "recommendation" in result:
+        if result and "recommendation" in result and result.get("strengths") not in ["Unable to generate.", None, ""]:
             return result
     except ImportError:
         pass
