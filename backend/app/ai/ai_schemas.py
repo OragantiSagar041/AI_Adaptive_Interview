@@ -6,8 +6,8 @@ Every AI call now returns a type-safe, validated Python object.
 """
 
 from __future__ import annotations
-from typing import List
-from pydantic import BaseModel, Field
+from typing import List, Union
+from pydantic import BaseModel, Field, field_validator
 
 
 class ResumeAnalysis(BaseModel):
@@ -54,8 +54,8 @@ class AnswerScore(BaseModel):
 
 class InterviewSummary(BaseModel):
     recommendation: str = "Borderline"
-    strengths: str = "Unable to generate."
-    weaknesses: str = "Unable to generate."
+    strengths: Union[str, List[str]] = "Unable to generate."
+    weaknesses: Union[str, List[str]] = "Unable to generate."
     communication_score: int = Field(default=50, ge=0, le=100)
     communication_reasoning: str = "N/A"
     skills_score: int = Field(default=50, ge=0, le=100)
@@ -69,6 +69,13 @@ class InterviewSummary(BaseModel):
     job_success_score: int = Field(default=50, ge=0, le=100)
     job_success_reasoning: str = "N/A"
     detected_accent: str = "Unknown"
+
+    @field_validator("strengths", "weaknesses", mode="before")
+    @classmethod
+    def convert_list_to_str(cls, v):
+        if isinstance(v, list):
+            return " ".join(str(item).strip() for item in v if item)
+        return str(v or "")
 
     def to_dict(self) -> dict:
         return self.model_dump()
