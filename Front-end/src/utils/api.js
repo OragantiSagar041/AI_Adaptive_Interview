@@ -15,6 +15,9 @@ const CANDIDATE_ROUTE_RE = /(?:\/|^)(?:transcribe|stt|speech-to-text-whisper|tts
 ============================================================================= */
 api.interceptors.request.use(
   (config) => {
+    if (config.url && config.url.includes('/api/api/')) {
+      config.url = config.url.replace(/\/api\/api\//g, '/api/');
+    }
     const requestPath = String(config.url || "");
     const candidateRequest = CANDIDATE_ROUTE_RE.test(requestPath);
     let token = candidateRequest ? getCandidateSessionToken() : localStorage.getItem('masterToken');

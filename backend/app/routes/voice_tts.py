@@ -601,7 +601,7 @@ async def stt_endpoint(
         file_size = len(audio_content)
         if file_size > 25 * 1024 * 1024:
             raise HTTPException(status_code=413, detail="Audio upload exceeds 25 MB")
-        if file_size < 3000:
+        if file_size < 1000:
             return {"transcript": "", "text": ""}
         header_hex = audio_content[:16].hex() if file_size >= 16 else ""
         print(f"📊 [STT CONCURRENCY TRACE - REQ #{req_id}] Started | In-Flight Requests: {current_inflight} | File: {file.filename} ({file_size} bytes)")
@@ -754,6 +754,11 @@ async def stt_endpoint(
                 "thank you for watching", "like and subscribe"
             ]
 
+            VALID_SHORT_WORDS = {
+                "sql", "git", "go", "aws", "c++", "c#", "r", "vue", "yes", "no", "ok",
+                "api", "npm", "css", "xml", "php", "java", "ruby", "ci", "cd"
+            }
+
             if transcript_text:
                 # Substring scrub
                 t_lower = transcript_text.lower()
@@ -780,8 +785,8 @@ async def stt_endpoint(
                     # If majority of segments were hallucinations, drop everything.
                     if valid_segments and hallucinated_segments > len(valid_segments):
                         transcript_text = ""
-                    # If transcript is < 4 characters after cleaning, treat as noise
-                    elif len(transcript_text) < 4:
+                    # If transcript is < 4 characters after cleaning, treat as noise unless it's a recognized short technical term or affirmative
+                    elif len(transcript_text) < 2 or (len(transcript_text) < 4 and transcript_text.lower() not in VALID_SHORT_WORDS):
                         transcript_text = ""
 
             # If a hallucinated segment contained real-looking text we dropped

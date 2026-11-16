@@ -122,6 +122,7 @@ router = APIRouter()
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # TOKEN REFRESH  â€”  silently extend a valid session without re-entering creds
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+@router.post("/api/token/refresh")
 @router.post("/token/refresh")
 def refresh_token(current_admin: dict = Depends(get_current_admin_details)):
     """
@@ -143,6 +144,7 @@ def refresh_token(current_admin: dict = Depends(get_current_admin_details)):
     )
     return {"token": new_token}
 
+@router.post("/api/admin/firebase-auth")
 @router.post("/admin/firebase-auth")
 def firebase_auth(
     credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
@@ -360,6 +362,7 @@ class FirebaseLoginIdentifier(BaseModel):
     password: Optional[str] = None
 
 
+@router.post("/api/admin/firebase-login-identifier")
 @router.post("/admin/firebase-login-identifier")
 def firebase_login_identifier(data: FirebaseLoginIdentifier):
     """
@@ -489,6 +492,7 @@ def firebase_login_identifier(data: FirebaseLoginIdentifier):
     }
 
 
+@router.post("/api/admin/verify-2fa")
 @router.post("/admin/verify-2fa")
 def verify_2fa(
     data: Verify2FA,
@@ -695,6 +699,7 @@ class RazorpayUpgradeVerifyRequest(BaseModel):
 
 
 
+@router.get("/api/master/plans")
 @router.get("/master/plans")
 def get_all_plans_master(master_id: str = Depends(get_current_admin)):
     """Master-only: fetch ALL plans including owner"""
@@ -722,6 +727,7 @@ def get_all_plans_master(master_id: str = Depends(get_current_admin)):
         result.append(serialized)
     return {"status": "success", "data": result}
 
+@router.post("/api/master/plans")
 @router.post("/master/plans")
 def upsert_plan(data: PlanUpdate, master_id: str = Depends(get_current_admin), current_admin: str = Depends(get_current_admin)):
     """Master-only: create or update a plan"""
@@ -742,6 +748,7 @@ def upsert_plan(data: PlanUpdate, master_id: str = Depends(get_current_admin), c
 
     return {"status": "success", "message": f"Plan '{data.plan_name}' saved"}
 
+@router.delete("/api/master/plans/{plan_id}")
 @router.delete("/master/plans/{plan_id}")
 def delete_plan(plan_id: str, master_id: str = Depends(get_current_admin)):
     """Master-only: delete a plan"""

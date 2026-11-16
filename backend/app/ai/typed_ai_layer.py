@@ -37,6 +37,11 @@ _SCORING_SYSTEM = (
     "1. CONTENT QUALITY (0-70 pts): 50-70=Solid verbal explanation of concepts & steps, 30-49=Partial explanation, 0-29=Major conceptual errors.\n"
     "2. RELEVANCE (0-30 pts): 25-30=Directly answers question, 15-24=Mostly on point, 0-14=Off-topic.\n"
     "3. TIME SCORE: Strictly 0 (disabled).\n"
+    "CRITICAL FEEDBACK PERSPECTIVE (RECRUITER REPORT ONLY):\n"
+    "- The feedback is an evaluation report for the RECRUITER / HIRING MANAGER, NOT coaching for the candidate.\n"
+    "- Write in third person ('Candidate demonstrated...', 'Candidate lacked...').\n"
+    "- NEVER address the candidate directly as 'you' or 'your'.\n"
+    "- NEVER give candidate coaching tips on how to improve in the future.\n"
     "Return VALID JSON ONLY. No markdown."
 )
 
@@ -351,6 +356,9 @@ Question: "{_truncate(question, 300)}"
 Answer: "{answer}"
 Time info: {time_context}
 {time_score_hint}
+
+FEEDBACK REQUIREMENT:
+Write 'feedback' strictly as an objective evaluation report for the RECRUITER / HIRING MANAGER in 3rd person (e.g. 'Candidate demonstrated...', 'Candidate failed to explain...'). Do NOT coach or address the candidate as 'you'.
 
 Return VALID JSON ONLY:
 {{

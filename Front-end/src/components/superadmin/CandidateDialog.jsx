@@ -15,6 +15,7 @@ import {
 } from "lucide-react"
 import { jsPDF } from 'jspdf'
 import { detectNonEnglishText, translateText, translateQAPairs } from '../../utils/translation'
+import { formatFeedbackForRecruiter } from '../../utils/adminFormatters'
 
 // ── Score Ring ──────────────────────────────────────────────────────────────
 function ScoreRing({ value, size = 140, strokeWidth = 12, label, tone }) {
@@ -776,7 +777,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
         doc.text("AI Feedback:", margin, y);
         y += 5;
         doc.setFont("helvetica", "normal");
-        const fLines = doc.splitTextToSize(cleanForPdf(a.ai_feedback), pageWidth - 2 * margin);
+        const fLines = doc.splitTextToSize(cleanForPdf(formatFeedbackForRecruiter(a.ai_feedback)), pageWidth - 2 * margin);
         for (let i = 0; i < fLines.length; i++) {
           checkPageBreak(5);
           doc.text(fLines[i], margin, y);
@@ -2288,7 +2289,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                                     <Sparkles size={10} /> AI Feedback
                                   </div>
                                   <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-sm text-indigo-800 italic leading-relaxed whitespace-pre-wrap">
-                                    {a.ai_feedback}
+                                    {formatFeedbackForRecruiter(a.ai_feedback)}
                                   </div>
                                 </div>
                               )}
@@ -2410,7 +2411,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                                     <Sparkles size={10} /> AI Feedback
                                   </div>
                                   <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-sm text-indigo-800 italic leading-relaxed whitespace-pre-wrap">
-                                    {a.ai_feedback}
+                                    {formatFeedbackForRecruiter(a.ai_feedback)}
                                   </div>
                                 </div>
                               )}
@@ -2571,7 +2572,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                                               <Sparkles size={10} /> AI Feedback
                                             </div>
                                             <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-sm text-indigo-800 italic leading-relaxed whitespace-pre-wrap">
-                                              {ansObj.ai_feedback}
+                                              {formatFeedbackForRecruiter(ansObj.ai_feedback)}
                                             </div>
                                           </div>
                                         )}

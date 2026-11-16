@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 import { jsPDF } from 'jspdf'
 import { detectNonEnglishText, translateText, translateQAPairs } from '../utils/translation'
+import { formatFeedbackForRecruiter } from '../utils/adminFormatters'
 
 // ── Score Ring ──────────────────────────────────────────────────────────────
 function ScoreRing({ value, size = 140, strokeWidth = 12, label, tone }) {
@@ -549,7 +550,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
         doc.text('AI Feedback:', margin, y)
         y += 5
         doc.setFont('helvetica', 'normal')
-        const feedbackLines = doc.splitTextToSize(cleanForPdf(a.ai_feedback), pageWidth - 2 * margin)
+        const feedbackLines = doc.splitTextToSize(cleanForPdf(formatFeedbackForRecruiter(a.ai_feedback)), pageWidth - 2 * margin)
         feedbackLines.forEach((line) => {
           checkPageBreak(5)
           doc.text(line, margin, y)
@@ -1118,7 +1119,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                           )
                         })()}
                         {a.ai_feedback && (
-                          <p className="mt-2 text-xs text-slate-500 italic border-t border-slate-200 pt-2">{a.ai_feedback}</p>
+                          <p className="mt-2 text-xs text-slate-500 italic border-t border-slate-200 pt-2">{formatFeedbackForRecruiter(a.ai_feedback)}</p>
                         )}
                       </div>
                     ))}
