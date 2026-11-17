@@ -1702,7 +1702,6 @@ export default function VoiceInterviewPage() {
               hasSpokenInChunk = true
               hasSpokenThisSessionRef.current = true
               lastCandidateVoiceTimeRef.current = now
-              lastSilenceReset = now
               clearTimeout(silenceTimerRef.current)
               silenceTimerRef.current = setTimeout(() => {
                 if (isListeningRef.current) {

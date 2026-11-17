@@ -769,7 +769,7 @@ async def get_ongoing_interviews(admin_id: Optional[str] = None, current_admin: 
 
 
 @router.post("/admin/interview/{link_id}/spectator-token")
-async def generate_spectator_token(
+def generate_spectator_token(
     link_id: str,
     current_admin: dict = Depends(get_current_admin_details),
 ):
@@ -1065,7 +1065,7 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
             await websocket.close(code=1008)
             return
         try:
-            auth_context = _decode_dashboard_websocket_admin(token)
+            auth_context = await run_in_threadpool(_decode_dashboard_websocket_admin, token)
             live_session_doc = await run_in_threadpool(_get_authorized_live_session, link_id, auth_context)
             # Resolve to canonical link_id so admin and candidate always join the exact same room
             canonical_link_id = str(live_session_doc.get("link_id") or live_session_doc.get("_id") or link_id)
@@ -1113,7 +1113,8 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
         session_query = [{"link_id": link_id}]
         if ObjectId.is_valid(link_id):
             session_query.append({"_id": ObjectId(link_id)})
-        session_check = interview_sessions_collection.find_one(
+        session_check = await run_in_threadpool(
+            interview_sessions_collection.find_one,
             {"$or": session_query},
             {"link_id": 1, "status": 1, "is_deactivated": 1}
         )
