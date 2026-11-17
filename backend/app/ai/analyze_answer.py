@@ -1,3 +1,4 @@
+import re
 import json
 from app.ai.ai_client import chat_completion, extract_json
 from app.ai.typed_ai_layer import normalize_stt_technical_terms
