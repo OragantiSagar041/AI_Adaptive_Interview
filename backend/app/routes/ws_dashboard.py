@@ -27,6 +27,7 @@ from dotenv import load_dotenv
 from groq import AsyncGroq
 from pydantic import BaseModel, validator, Field
 from starlette.background import BackgroundTask
+from starlette.concurrency import run_in_threadpool
 from fastapi import (
     APIRouter, Depends, File, Form, HTTPException, Request, UploadFile,
     WebSocket, WebSocketDisconnect, BackgroundTasks, Header
@@ -107,7 +108,7 @@ async def dashboard_websocket(websocket: WebSocket, token: Optional[str] = None)
         await websocket.close(code=1008)
         return
     try:
-        auth_context = _decode_dashboard_websocket_admin(token)
+        auth_context = await run_in_threadpool(_decode_dashboard_websocket_admin, token)
     except HTTPException:
         await websocket.close(code=1008)
         return

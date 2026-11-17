@@ -78,6 +78,7 @@ export const InterviewTechnical = () => {
   const renderRoundTwoUI = (session) => {
     const {
       globalCountdown,
+    totalDuration,
       compiling,
       setCompiling,
       activeRightTab,
@@ -1008,6 +1009,7 @@ export const InterviewTechnical = () => {
     transcriptionText,
     interimTranscriptText,
     globalCountdown,
+    totalDuration,
     isTimeExpired,
     isRoundTwo,
     showRound2Confirm,
