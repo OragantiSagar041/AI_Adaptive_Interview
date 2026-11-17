@@ -131,11 +131,8 @@ export const InterviewNonTechnical = () => {
     transcriptionText,
     interimTranscriptText,
     globalCountdown,
-<<<<<<< HEAD
-=======
     totalDuration,
     isTimeExpired,
->>>>>>> 802f902f53c962d68cd45a95d5fc41d9d7c24aad
     isRoundTwo,
     showRound2Confirm,
     setShowRound2Confirm,

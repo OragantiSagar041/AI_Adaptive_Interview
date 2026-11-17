@@ -445,8 +445,6 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
     return minutes > 0 ? `${minutes}m ${remainingSeconds}s` : `${Math.floor(duration)}s`
   }
 
-<<<<<<< HEAD
-=======
   const cleanForPdf = (text) => {
     if (!text) return ''
     return String(text)
@@ -457,8 +455,6 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
       .replace(/\u2022/g, '*')
       .replace(/[\u0080-\uFFFF]/g, '')
   }
-
->>>>>>> 802f902f53c962d68cd45a95d5fc41d9d7c24aad
   const handleDownloadTranscript = () => {
     if (!c.answers || c.answers.length === 0) return
 
