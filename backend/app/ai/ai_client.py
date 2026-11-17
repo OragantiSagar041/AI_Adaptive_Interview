@@ -338,11 +338,11 @@ def _call_groq(
 ) -> str:
     """Call Groq API (completions) with active model and fast failover on network/decommissioned models."""
     url = "https://api.groq.com/openai/v1/chat/completions"
-    active_model = model if (model and ("gpt-oss" in model or "qwen" in model)) else os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
-    fallback_models = ["openai/gpt-oss-20b", "openai/gpt-oss-120b", "qwen/qwen3.8-27b", "llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+    active_model = model if model else os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+    fallback_models = ["openai/gpt-oss-20b", "openai/gpt-oss-120b"]
     
-    # Cap attempts to 2 keys per model to prevent multi-minute retry loops
-    max_attempts = min(groq_key_manager.get_total_keys() or 1, 2)
+    # Allow trying up to 5 keys in rotation if one gets 429
+    max_attempts = min(groq_key_manager.get_total_keys() or 1, 5)
     last_error_text = ""
     last_status = 500
 
@@ -350,9 +350,8 @@ def _call_groq(
     for fm in fallback_models:
         if fm != active_model and fm not in models_to_try:
             models_to_try.append(fm)
-    models_to_try = models_to_try[:2]  # Active model + at most 1 fallback
 
-    groq_timeout = min(timeout, 12)
+    groq_timeout = min(timeout, 25)
 
     for current_model in models_to_try:
         payload = {
