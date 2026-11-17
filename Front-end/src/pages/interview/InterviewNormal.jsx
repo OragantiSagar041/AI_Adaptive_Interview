@@ -236,6 +236,8 @@ export const InterviewNormal = () => {
     transcriptionText,
     interimTranscriptText,
     globalCountdown,
+    totalDuration,
+    isTimeExpired,
     isRoundTwo,
     showRound2Confirm,
     setShowRound2Confirm,

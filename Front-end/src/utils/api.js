@@ -1,6 +1,7 @@
 import axios from "axios";
 import { API_BASE_URL } from "../apiConfig";
 import { clearCandidateSessionAuth, getCandidateSessionToken } from "./candidateAuth";
+import { auth } from "../firebase";
 
 // Create a single, consistent Axios instance
 const api = axios.create({
@@ -8,13 +9,16 @@ const api = axios.create({
   timeout: 50000,
   headers: { "Content-Type": "application/json" },
 });
-const CANDIDATE_ROUTE_RE = /(?:\/|^)(?:transcribe|stt|tts|voice-clone-instant|save-answer|save-behavioral-data|coding-round|case-study|upload-full-recording|recording-upload-failure|complete-session|submit-feedback|proctoring\/violation|session(?:\/.*)?|api\/interview(?:\/.*)?|interview(?:\/.*)?|generate-next-question|generate-more-questions|live-heartbeat)(?:\/|\?|$)/
+const CANDIDATE_ROUTE_RE = /(?:\/|^)(?:transcribe|stt|speech-to-text-whisper|tts|voice-clone-instant|save-answer|save-behavioral-data|coding-round|case-study|upload-full-recording|recording-upload-failure|complete-session|submit-feedback|proctoring\/violation|session(?:\/.*)?|api\/interview(?:\/.*)?|interview(?:\/.*)?|generate-next-question|generate-more-questions|live-heartbeat)(?:\/|\?|$)/
 
 /* =============================================================================
    REQUEST INTERCEPTOR → attaches token from sessionStorage
 ============================================================================= */
 api.interceptors.request.use(
   (config) => {
+    if (config.url && config.url.includes('/api/api/')) {
+      config.url = config.url.replace(/\/api\/api\//g, '/api/');
+    }
     const requestPath = String(config.url || "");
     const candidateRequest = CANDIDATE_ROUTE_RE.test(requestPath);
     let token = candidateRequest ? getCandidateSessionToken() : localStorage.getItem('masterToken');
@@ -39,6 +43,11 @@ api.interceptors.request.use(
     // Attach token if resolved
     if (token) {
       config.headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    // Allow browser to automatically set multipart/form-data boundary for FormData
+    if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+      delete config.headers["Content-Type"];
     }
 
     return config;

@@ -153,8 +153,6 @@ app = FastAPI(
     root_path=os.getenv("FASTAPI_ROOT_PATH", ""),
 )
 
-app.add_middleware(GZipMiddleware, minimum_size=500)
-
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):

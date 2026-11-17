@@ -74,6 +74,8 @@ export default function OverviewDashboardPage() {
   const token = useSelector(state => state.auth.token)
   const role = useSelector(state => state.auth.role)
   const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
+  const adminUser = useSelector(state => state.auth.adminUser)
+  const userFeatures = adminUser?.features || adminUser?.plan_details?.features || []
 
   const dbStats = useSelector(state => state.dashboard.superAdminStats || state.dashboard.dbStats)
   const ongoingLiveCount = useSelector(state => state.dashboard.ongoingLiveCount)

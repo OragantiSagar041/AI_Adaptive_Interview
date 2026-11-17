@@ -504,7 +504,8 @@ def generate_report_task(self, interview_id: str):
     from app.routes import generate_report
 
     try:
-        file_path = generate_report(interview_id)
+        report_res = generate_report(interview_id)
+        file_path = report_res.path if hasattr(report_res, "path") else str(report_res)
         logger.info(f"Report generated successfully: {file_path}")
         return {"status": "success", "file_path": file_path}
     except Exception as e:

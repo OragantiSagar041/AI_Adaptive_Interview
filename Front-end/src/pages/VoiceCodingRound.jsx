@@ -283,6 +283,7 @@ export default function VoiceCodingRound({
   const currentTxRef = useRef('')
   const submittingRef = useRef(false)
   const activeAudioRef = useRef(null)    // prevents overlapping audio
+  const lastRunResultRef = useRef(null)
 
   // Cancel any lingering audio or speech synthesis from previous rounds on mount/unmount
   useEffect(() => {

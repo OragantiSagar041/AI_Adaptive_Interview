@@ -713,7 +713,7 @@ async def get_ongoing_interviews(admin_id: Optional[str] = None, current_admin: 
 
 
 @router.post("/admin/interview/{link_id}/spectator-token")
-async def generate_spectator_token(
+def generate_spectator_token(
     link_id: str,
     current_admin: dict = Depends(get_current_admin_details),
 ):
@@ -952,8 +952,11 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
             await websocket.close(code=1008)
             return
         try:
-            auth_context = _decode_dashboard_websocket_admin(token)
-            _get_authorized_live_session(link_id, auth_context)
+            auth_context = await run_in_threadpool(_decode_dashboard_websocket_admin, token)
+            live_session_doc = await run_in_threadpool(_get_authorized_live_session, link_id, auth_context)
+            # Resolve to canonical link_id so admin and candidate always join the exact same room
+            canonical_link_id = str(live_session_doc.get("link_id") or live_session_doc.get("_id") or link_id)
+            link_id = canonical_link_id
             # Use client-provided unique admin_id or generate unique instance identifier
             client_admin_id = websocket.query_params.get("admin_id")
             if client_admin_id and client_admin_id != "undefined":
@@ -992,9 +995,13 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
             await websocket.close(code=1008)
             return
         # Verify session is not deactivated or cancelled
-        session_check = interview_sessions_collection.find_one(
-            {"link_id": link_id},
-            {"status": 1, "is_deactivated": 1}
+        session_query = [{"link_id": link_id}]
+        if ObjectId.is_valid(link_id):
+            session_query.append({"_id": ObjectId(link_id)})
+        session_check = await run_in_threadpool(
+            interview_sessions_collection.find_one,
+            {"$or": session_query},
+            {"link_id": 1, "status": 1, "is_deactivated": 1}
         )
         if not session_check or session_check.get("is_deactivated") or session_check.get("status") in ("terminated", "cancelled", "expired"):
             logger.info(f"Spectator session check failed for link_id {link_id}: {session_check}")

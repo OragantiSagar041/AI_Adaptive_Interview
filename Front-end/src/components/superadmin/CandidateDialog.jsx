@@ -569,6 +569,20 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
     return minutes > 0 ? `${minutes}m ${remainingSeconds}s` : `${Math.floor(duration)}s`;
   };
 
+<<<<<<< HEAD
+=======
+  const cleanForPdf = (text) => {
+    if (!text) return '';
+    return String(text)
+      .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015]/g, '-')
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/[\u201C\u201D]/g, '"')
+      .replace(/\u2026/g, '...')
+      .replace(/\u2022/g, '*')
+      .replace(/[\u0080-\uFFFF]/g, '');
+  };
+
+>>>>>>> 802f902f53c962d68cd45a95d5fc41d9d7c24aad
   const handleDownloadTranscript = () => {
     if (!c.answers || c.answers.length === 0) return;
 
