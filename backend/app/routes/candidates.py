@@ -1842,26 +1842,56 @@ def get_all_sessions(
     rows = list(interview_sessions_collection.find(query_filter, projection).sort(sort_field))
     
     # Pre-fetch recording paths to prevent N+1 query problem
-    interview_ids_to_fetch = [row.get("interview_id") for row in rows if row.get("interview_id") and not row.get("recording_path")]
+    interview_ids_to_fetch = [
+        row.get("interview_id") 
+        for row in rows 
+        if row.get("interview_id") and not (row.get("recording_path") or row.get("screen_recording_path") or row.get("recording_url") or row.get("screen_recording_url"))
+    ]
     interview_doc_map = {}
     if interview_ids_to_fetch:
-        interview_docs = list(interviews_collection.find({"id": {"$in": interview_ids_to_fetch}}, {"id": 1, "recording_path": 1}))
+        interview_docs = list(interviews_collection.find(
+            {"id": {"$in": interview_ids_to_fetch}}, 
+            {"id": 1, "recording_path": 1, "screen_recording_path": 1, "recording_url": 1, "screen_recording_url": 1}
+        ))
         for doc in interview_docs:
-            interview_doc_map[doc.get("id")] = doc.get("recording_path")
+            interview_doc_map[doc.get("id")] = doc
     
     sessions = []
     now = datetime.now(timezone.utc)
     for row in rows:
         has_video = False
         interview_id = row.get("interview_id")
-        rec_path = row.get("recording_path")
         
-        if interview_id and not rec_path:
-            rec_path = interview_doc_map.get(interview_id)
-        if rec_path:
-            # Cloudinary URLs are DB-backed remote videos; local fallbacks need a file check.
-            if rec_path.startswith("http") or os.path.exists(rec_path):
-                has_video = True
+        # Check camera recording
+        rec_path = row.get("recording_path") or row.get("recording_url")
+        if interview_id and not rec_path and interview_id in interview_doc_map:
+            rec_doc = interview_doc_map[interview_id]
+            rec_path = rec_doc.get("recording_path") or rec_doc.get("recording_url")
+            
+        # Check screen recording
+        screen_rec_path = row.get("screen_recording_path") or row.get("screen_recording_url")
+        if interview_id and not screen_rec_path and interview_id in interview_doc_map:
+            rec_doc = interview_doc_map[interview_id]
+            screen_rec_path = rec_doc.get("screen_recording_path") or rec_doc.get("screen_recording_url")
+            
+        def is_valid_media_path(path_val):
+            if not path_val:
+                return False
+            p_str = str(path_val).strip()
+            if not p_str or p_str.lower() in ("none", "null"):
+                return False
+            if (
+                p_str.startswith("cloudinary-authenticated://")
+                or p_str.startswith("http://")
+                or p_str.startswith("https://")
+                or p_str.lower().endswith((".webm", ".mp4", ".mov", ".mkv"))
+                or os.path.exists(p_str)
+            ):
+                return True
+            return False
+
+        if is_valid_media_path(rec_path) or is_valid_media_path(screen_rec_path):
+            has_video = True
                 
         status = sync_session_status(row, now)
 
@@ -1880,7 +1910,9 @@ def get_all_sessions(
             "decision": row.get("decision"),
             "has_video": has_video,
             "record_video": row.get("record_video", True),
-            "is_deactivated": row.get("is_deactivated", False)
+            "is_deactivated": row.get("is_deactivated", False),
+            "recording_path": rec_path,
+            "screen_recording_path": screen_rec_path,
         })
         
     return {"status": "success", "sessions": sessions}
