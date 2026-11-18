@@ -16,7 +16,7 @@ const CANDIDATE_ROUTE_RE = /(?:\/|^)(?:transcribe|stt|speech-to-text-whisper|tts
 api.interceptors.request.use(
   (config) => {
     const requestPath = String(config.url || "");
-    const candidateRequest = CANDIDATE_ROUTE_RE.test(requestPath);
+    const candidateRequest = CANDIDATE_ROUTE_RE.test(requestPath) && !/(?:recruiter\/|auto-save-progress|save-recruiter-evaluation)/.test(requestPath);
     let token = candidateRequest ? getCandidateSessionToken() : localStorage.getItem('masterToken');
 
     if (!candidateRequest) {

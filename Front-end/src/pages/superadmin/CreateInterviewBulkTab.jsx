@@ -946,7 +946,8 @@ export default function CreateInterviewBulkTab({
                     onChange={(e) => handleBulkConfigChange('interviewFormat', e.target.value)}
                     options={[
                       { value: 'Standard', label: 'Standard (Text/Form Based)' },
-                      { value: 'Voice', label: 'Voice AI (Real-time Speech)' }
+                      { value: 'Voice', label: 'Voice AI (Real-time Speech)' },
+                      { value: 'Recruiter-Led', label: 'Recruiter-Led (Human Call + AI Q&A Guide)' }
                     ]}
                   />
 
@@ -1026,6 +1027,29 @@ export default function CreateInterviewBulkTab({
                     />
                   </div>
 </FeatureLockOverlay>
+
+                  {bulkConfig.interviewFormat === 'Recruiter-Led' && (
+                    <div className="sm:col-span-2 p-3.5 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/60 space-y-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300">
+                          External Call Link (Optional: Google Meet / Zoom)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => window.open('https://meet.new', '_blank', 'noopener,noreferrer')}
+                          className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 transition"
+                        >
+                          + New Google Meet
+                        </button>
+                      </div>
+                      <Input
+                        type="url"
+                        placeholder="Paste https://meet.google.com/... or Zoom link (leave blank for built-in 2-way video)"
+                        value={bulkConfig.externalMeetingUrl || ''}
+                        onChange={(e) => handleBulkConfigChange('externalMeetingUrl', e.target.value)}
+                      />
+                    </div>
+                  )}
 
                   {bulkConfig.interviewType === 'Non-Technical' && (
                     <div className="sm:col-span-2">

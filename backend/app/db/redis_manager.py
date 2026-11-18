@@ -133,6 +133,19 @@ class RedisConnectionManager:
                                             await admins_map[target_admin].send_json(data)
                                         except Exception as e:
                                             logger.error(f"Error sending to local admin {target_admin}: {e}")
+                                    elif not str(target_admin).startswith("spectator_"):
+                                        # Target admin_id may be stale after Cockpit reload; deliver to active admins
+                                        fallback_payload = dict(data)
+                                        active_admin_ids = [aid for aid in admins_map.keys() if not str(aid).startswith("spectator_")]
+                                        if len(active_admin_ids) == 1:
+                                            fallback_payload["target_admin_id"] = active_admin_ids[0]
+                                        else:
+                                            fallback_payload.pop("target_admin_id", None)
+                                        for ws in list(local_group.get("admins", [])):
+                                            try:
+                                                await ws.send_json(fallback_payload)
+                                            except Exception as e:
+                                                logger.error(f"Error fallback-sending to local admin: {e}")
                                 else:
                                     recipients = list(local_group["admins"]) + list(local_group.get("spectators", []))
                                     for ws in recipients:
@@ -157,7 +170,9 @@ class RedisConnectionManager:
     async def connect_candidate(self, websocket: WebSocket, link_id: str, alias_id: Optional[str] = None):
         await websocket.accept()
         if link_id not in self.local_connections:
-            self.local_connections[link_id] = {"candidate": None, "admins": [], "admins_map": {}}
+            self.local_connections[link_id] = {"candidate": None, "admins": [], "admins_map": {}, "spectators": []}
+        elif "spectators" not in self.local_connections[link_id]:
+            self.local_connections[link_id]["spectators"] = []
         self.local_connections[link_id]["candidate"] = websocket
         if alias_id and alias_id != link_id:
             self.local_connections[alias_id] = self.local_connections[link_id]
@@ -176,27 +191,38 @@ class RedisConnectionManager:
                 self._redis_failed = True
                 self._redis_last_attempt = time.monotonic()
 
-    def disconnect_candidate(self, link_id: str):
-        if link_id in self.local_connections:
-            self.local_connections[link_id]["candidate"] = None
-            if not self.local_connections[link_id]["admins"]:
-                del self.local_connections[link_id]
-                if self.pubsub:
-                    asyncio.create_task(
-                        self._safe_unsubscribe(
-                            f"session:{link_id}:candidate",
-                            f"session:{link_id}:admins",
-                        )
+    def disconnect_candidate(self, link_id: str, websocket: Optional[WebSocket] = None, alias_id: Optional[str] = None) -> bool:
+        group = self.local_connections.get(link_id)
+        if not group:
+            return False
+        # Do not clear or clean up if a newer WebSocket replaced this one (e.g. React StrictMode remount)
+        if websocket is not None and group.get("candidate") is not websocket:
+            return False
+        group["candidate"] = None
+        if not group.get("admins") and not group.get("spectators"):
+            self.local_connections.pop(link_id, None)
+            if alias_id and alias_id != link_id and self.local_connections.get(alias_id) is group:
+                self.local_connections.pop(alias_id, None)
+            if self.pubsub:
+                asyncio.create_task(
+                    self._safe_unsubscribe(
+                        f"session:{link_id}:candidate",
+                        f"session:{link_id}:admins",
                     )
+                )
+        return True
 
     # ─── Admin connection ────────────────────────────────────────────────────────
 
     async def connect_admin(self, websocket: WebSocket, link_id: str, admin_id: Optional[str] = None, alias_id: Optional[str] = None):
         await websocket.accept()
         if link_id not in self.local_connections:
-            self.local_connections[link_id] = {"candidate": None, "admins": [], "admins_map": {}}
-        elif "admins_map" not in self.local_connections[link_id]:
-            self.local_connections[link_id]["admins_map"] = {}
+            self.local_connections[link_id] = {"candidate": None, "admins": [], "admins_map": {}, "spectators": []}
+        else:
+            if "admins_map" not in self.local_connections[link_id]:
+                self.local_connections[link_id]["admins_map"] = {}
+            if "spectators" not in self.local_connections[link_id]:
+                self.local_connections[link_id]["spectators"] = []
 
         if websocket not in self.local_connections[link_id]["admins"]:
             self.local_connections[link_id]["admins"].append(websocket)
@@ -220,31 +246,40 @@ class RedisConnectionManager:
                 self._redis_failed = True
                 self._redis_last_attempt = time.monotonic()
 
-    def disconnect_admin(self, websocket: WebSocket, link_id: str, admin_id: Optional[str] = None):
-        if link_id in self.local_connections:
-            if websocket in self.local_connections[link_id]["admins"]:
-                self.local_connections[link_id]["admins"].remove(websocket)
-            admins_map = self.local_connections[link_id].get("admins_map", {})
-            if admin_id and admin_id in admins_map:
+    def disconnect_admin(self, websocket: WebSocket, link_id: str, admin_id: Optional[str] = None, alias_id: Optional[str] = None) -> bool:
+        group = self.local_connections.get(link_id)
+        if not group:
+            return False
+        if websocket in group.get("admins", []):
+            group["admins"].remove(websocket)
+        admins_map = group.get("admins_map", {})
+        still_present = False
+        if admin_id and admin_id in admins_map:
+            if admins_map[admin_id] is websocket:
                 del admins_map[admin_id]
             else:
-                keys_to_del = [k for k, v in admins_map.items() if v is websocket]
-                for k in keys_to_del:
-                    del admins_map[k]
+                still_present = True
+        else:
+            keys_to_del = [k for k, v in admins_map.items() if v is websocket]
+            for k in keys_to_del:
+                del admins_map[k]
 
-            if (
-                not self.local_connections[link_id]["admins"]
-                and not self.local_connections[link_id]["candidate"]
-                and not self.local_connections[link_id].get("spectators")
-            ):
-                del self.local_connections[link_id]
-                if self.pubsub:
-                    asyncio.create_task(
-                        self._safe_unsubscribe(
-                            f"session:{link_id}:candidate",
-                            f"session:{link_id}:admins",
-                        )
+        if (
+            not group.get("admins")
+            and not group.get("candidate")
+            and not group.get("spectators")
+        ):
+            self.local_connections.pop(link_id, None)
+            if alias_id and alias_id != link_id and self.local_connections.get(alias_id) is group:
+                self.local_connections.pop(alias_id, None)
+            if self.pubsub:
+                asyncio.create_task(
+                    self._safe_unsubscribe(
+                        f"session:{link_id}:candidate",
+                        f"session:{link_id}:admins",
                     )
+                )
+        return not still_present
 
     async def _safe_unsubscribe(self, *channels):
         try:
@@ -435,7 +470,7 @@ class RedisConnectionManager:
         if "target_admin_id" not in message:
             message["target_admin_id"] = admin_id
 
-        # 1. Local delivery immediately to local target admin
+        # 1. Local delivery immediately to local target admin (with stale-admin fallback for 1:1 calls)
         local_group = self.local_connections.get(link_id)
         if local_group:
             admins_map = local_group.get("admins_map", {})
@@ -445,6 +480,18 @@ class RedisConnectionManager:
                     await admin_ws.send_json(message)
                 except Exception:
                     pass
+            elif not str(admin_id).startswith("spectator_") and local_group.get("admins"):
+                fallback_msg = dict(message)
+                active_admin_ids = [aid for aid in admins_map.keys() if not str(aid).startswith("spectator_")]
+                if len(active_admin_ids) == 1:
+                    fallback_msg["target_admin_id"] = active_admin_ids[0]
+                else:
+                    fallback_msg.pop("target_admin_id", None)
+                for ws in list(local_group.get("admins", [])):
+                    try:
+                        await ws.send_json(fallback_msg)
+                    except Exception:
+                        pass
 
         # 2. Redis broadcast to other instances
         if self.redis:
@@ -558,4 +605,3 @@ def broadcast_interview_event(
         r.close()
     except Exception as e:
         logger.warning(f"Sync Redis broadcast failed: {e}")
-

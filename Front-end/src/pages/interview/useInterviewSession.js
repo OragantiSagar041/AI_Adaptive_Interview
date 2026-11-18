@@ -792,6 +792,13 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           return
         }
 
+        const fmtLower = String(payload.interview_format || '').toLowerCase()
+        const modeLower = String(payload.interview_mode || '').toLowerCase()
+        if (modeLower === 'recruiter_led' || fmtLower === 'recruiter-led' || fmtLower === 'recruiter_led') {
+          navigate(`/interview/candidate-live/${sessionId}`, { replace: true })
+          return
+        }
+
         if (payload.interview_format === 'Voice') {
           navigate(`/voice-interview/${sessionId}`, { replace: true })
           return

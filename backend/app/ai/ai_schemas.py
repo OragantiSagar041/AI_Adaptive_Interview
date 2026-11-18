@@ -6,7 +6,7 @@ Every AI call now returns a type-safe, validated Python object.
 """
 
 from __future__ import annotations
-from typing import List
+from typing import List, Union, Optional, Dict, Any
 from pydantic import BaseModel, Field
 
 
@@ -85,4 +85,28 @@ class FollowupQuestion(BaseModel):
         return self.model_dump()
 
 
-print("[OK] ai_schemas.py loaded | 5 Pydantic AI output models ready")
+class RecruiterQuestionItem(BaseModel):
+    id: Union[int, str] = 1
+    question: str = Field(..., description="The interview question text to ask verbally.")
+    quick_summary: str = Field(..., description="1-sentence core concept for 2-second glanceability.")
+    key_points: List[str] = Field(default_factory=list, description="2 to 4 must-mention concepts.")
+    model_answer: str = Field(..., description="Complete, authoritative model answer.")
+    category: str = Field(default="Core Technical")
+    difficulty: str = Field(default="Medium")
+    question_type: str = Field(default="discussion", description="Type: 'discussion', 'coding', or 'case_study'")
+    coding_task: Optional[Dict[str, Any]] = Field(default=None, description="Optional coding challenge payload for Monaco editor.")
+    case_study: Optional[Dict[str, Any]] = Field(default=None, description="Optional scenario-based case study narrative.")
+
+    def to_dict(self) -> dict:
+        if hasattr(self, "model_dump"):
+            return self.model_dump()
+        return self.dict()
+
+
+try:
+    RecruiterQuestionItem.model_rebuild()
+except Exception:
+    pass
+
+
+print("[OK] ai_schemas.py loaded | 6 Pydantic AI output models ready")

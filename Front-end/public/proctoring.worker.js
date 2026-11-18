@@ -196,11 +196,11 @@ function extractPhoneCandidates(detections, faceLandmarks, bitmap, pose) {
           const boxHeightNorm = d.boundingBox.height / bitmap.height;
           const boxMaxDim = Math.max(boxWidthNorm, boxHeightNorm);
 
-          const isAtEar = distToEar < faceHeight * 0.35;
-          const isEarbudOrArtifact = score < 0.50 || boxMaxDim < faceHeight * 0.50;
+          const isAtEar = distToEar < faceHeight * 0.30;
+          const isEarbudOrArtifact = score < 0.20 && boxMaxDim < faceHeight * 0.35;
 
           if (isAtEar && isEarbudOrArtifact) {
-            continue; // Suppressed: ear profile or in-ear earbud during head turn
+            continue; // Suppressed: only tiny in-ear earbud artifacts with low score during head turn
           }
         }
 

@@ -1052,6 +1052,17 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
         canonical_link_id = str(candidate_session.get("link_id") or candidate_session.get("_id") or link_id)
         link_id = canonical_link_id
         await manager.connect_candidate(websocket, canonical_link_id, alias_id=raw_link_id)
+        # If an admin/recruiter is already connected in this room, notify this candidate immediately
+        try:
+            room_group = manager.local_connections.get(canonical_link_id) or {}
+            admins_map = room_group.get("admins_map") or {}
+            if admins_map:
+                for connected_admin_id in list(admins_map.keys()):
+                    await websocket.send_json({"type": "admin_connected", "admin_id": connected_admin_id})
+            elif room_group.get("admins"):
+                await websocket.send_json({"type": "admin_connected", "admin_id": "admin_default"})
+        except Exception:
+            pass
         # Notify watching admins immediately that candidate stream is active/ready
         try:
             await manager.send_to_admins(canonical_link_id, {"type": "candidate_connected"})
@@ -1065,7 +1076,7 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
             await websocket.close(code=1008)
             return
         try:
-            auth_context = _decode_dashboard_websocket_admin(token)
+            auth_context = await run_in_threadpool(_decode_dashboard_websocket_admin, token)
             live_session_doc = await run_in_threadpool(_get_authorized_live_session, link_id, auth_context)
             # Resolve to canonical link_id so admin and candidate always join the exact same room
             canonical_link_id = str(live_session_doc.get("link_id") or live_session_doc.get("_id") or link_id)
@@ -1079,6 +1090,13 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
                 admin_id = f"{base}_{uuid.uuid4().hex[:8]}"
 
             await manager.connect_admin(websocket, canonical_link_id, admin_id=admin_id, alias_id=raw_link_id)
+            # If the candidate is already connected in this room, notify this admin immediately
+            try:
+                room_group = manager.local_connections.get(canonical_link_id) or {}
+                if room_group.get("candidate") is not None:
+                    await websocket.send_json({"type": "candidate_connected"})
+            except Exception:
+                pass
             logger.info(f"Admin ({admin_id}) connected successfully to room {canonical_link_id}.")
             # Also notify candidate that a new admin connected
             try:
@@ -1113,7 +1131,7 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
         session_query = [{"link_id": link_id}]
         if ObjectId.is_valid(link_id):
             session_query.append({"_id": ObjectId(link_id)})
-        session_check = interview_sessions_collection.find_one(
+        session_check = await run_in_threadpool(interview_sessions_collection.find_one,
             {"$or": session_query},
             {"link_id": 1, "status": 1, "is_deactivated": 1}
         )
@@ -1229,23 +1247,26 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
         logger.info(f"Exception in while loop: {str(e)}\n{traceback.format_exc()}")
     finally:
         if role == "candidate":
-            manager.disconnect_candidate(link_id)
-            try:
-                await manager.send_to_admins(link_id, {"type": "candidate_disconnected"})
-            except Exception:
-                pass
+            removed_active = manager.disconnect_candidate(link_id, websocket=websocket, alias_id=raw_link_id)
+            if removed_active:
+                try:
+                    await manager.send_to_admins(link_id, {"type": "candidate_disconnected"})
+                except Exception:
+                    pass
         elif role == "admin":
-            manager.disconnect_admin(websocket, link_id, admin_id=admin_id)
-            try:
-                await manager.send_to_candidate(link_id, {"type": "admin_disconnected", "admin_id": admin_id})
-            except Exception:
-                pass
+            removed_admin = manager.disconnect_admin(websocket, link_id, admin_id=admin_id, alias_id=raw_link_id)
+            if removed_admin:
+                try:
+                    await manager.send_to_candidate(link_id, {"type": "admin_disconnected", "admin_id": admin_id})
+                except Exception:
+                    pass
         elif role == "spectator":
             await manager.disconnect_spectator(websocket, link_id, spectator_id=spectator_id)
             try:
                 await manager.send_to_candidate(link_id, {"type": "admin_disconnected", "admin_id": spectator_id})
             except Exception:
                 pass
+
 
 
 

@@ -67,6 +67,35 @@ function StatCard({ label, value }) {
   )
 }
 
+// ── Accurate Coding & Case Study Question Classifier ──────────────────────────
+export function isCodingOrCaseStudyAnswer(a) {
+  if (!a) return false
+  if (a.is_coding || a.is_case_study || a.code || a.starter_code || a.language || a.test_cases) return true
+  const qType = String(a.question_type || a.round || a.type || a.round_type || '').toLowerCase()
+  if (qType.includes('coding') || qType.includes('case_study') || qType.includes('case-study') || qType.includes('case study')) return true
+  const category = String(a.category || a.topic || '').toLowerCase()
+  if (category.includes('coding') || category.includes('case study') || category.includes('case-study')) return true
+  const qText = String(a.question_text || a.question || a.title || a.problem_statement || '').toLowerCase()
+  if (
+    qText.includes('coding round') ||
+    qText.includes('coding challenge') ||
+    qText.includes('live coding') ||
+    qText.includes('case study') ||
+    qText.includes('coding task') ||
+    qText.includes('write a function') ||
+    qText.includes('write a program') ||
+    qText.includes('write code') ||
+    qText.includes('solution in monaco') ||
+    qText.includes('time complexity') ||
+    qText.includes('space complexity') ||
+    (qText.includes('input:') && qText.includes('output:')) ||
+    (qText.includes('input') && qText.includes('output') && (qText.includes('constraints') || qText.includes('function') || qText.includes('def ')))
+  ) {
+    return true
+  }
+  return false
+}
+
 // ── Main Dialog ──────────────────────────────────────────────────────────────
 export default function CandidateDialog({ candidate, open, onOpenChange, onStatusUpdate }) {
   const dispatch = useDispatch()
@@ -173,9 +202,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
     const currentCandidate = detail || candidate || {}
     const itemsToTranslate = []
     const currentAnswers = (currentCandidate.answers || []).filter(a =>
-      transcriptTab === 'coding'
-        ? a.question_text?.toLowerCase().includes('coding round') || a.question_text?.toLowerCase().includes('case study')
-        : !a.question_text?.toLowerCase().includes('coding round') && !a.question_text?.toLowerCase().includes('case study')
+      transcriptTab === 'coding' ? isCodingOrCaseStudyAnswer(a) : !isCodingOrCaseStudyAnswer(a)
     )
 
     currentAnswers.forEach((a, idx) => {
@@ -2047,7 +2074,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                             displayScore = c.round1_score;
                         } else {
                             // Legacy fallback for old sessions
-                            const verbalAnsForScore = (c.answers || []).filter(a => !a.question_text?.toLowerCase().includes('coding round') && !a.question_text?.toLowerCase().includes('case study'));
+                            const verbalAnsForScore = (c.answers || []).filter(a => !isCodingOrCaseStudyAnswer(a));
                             const validVerbalAnsForScore = verbalAnsForScore.filter(a => a.ai_score !== null && a.ai_score !== undefined);
                             displayScore = validVerbalAnsForScore.length > 0 ? (validVerbalAnsForScore.reduce((sum, a) => sum + Number(a.ai_score), 0) / validVerbalAnsForScore.length) * (round1Max / 100) : 0;
                         }
@@ -2057,7 +2084,9 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                             displayScore = c.round2_score;
                         } else {
                             // Legacy fallback for old sessions
-                            displayScore = c.coding_round ? round2Max : 0;
+                            const codingAnsForScore = (c.answers || []).filter(a => isCodingOrCaseStudyAnswer(a));
+                            const validCodingAnsForScore = codingAnsForScore.filter(a => a.ai_score !== null && a.ai_score !== undefined);
+                            displayScore = validCodingAnsForScore.length > 0 ? (validCodingAnsForScore.reduce((sum, a) => sum + Number(a.ai_score), 0) / validCodingAnsForScore.length) * (round2Max / 100) : (c.coding_round ? round2Max : 0);
                         }
                     }
 
@@ -2083,47 +2112,53 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                 </div>
               </div>
 
-              <div className="px-6 py-2 border-b border-slate-100 bg-slate-50 flex items-center gap-2 shrink-0">
-                <button
-                  onClick={() => setTranscriptTab('verbal')}
-                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${transcriptTab === 'verbal' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-transparent text-slate-500 hover:bg-slate-200'}`}
-                >
-                  Verbal
-                </button>
-                <button
-                  onClick={() => setTranscriptTab('coding')}
-                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${transcriptTab === 'coding' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-transparent text-slate-500 hover:bg-slate-200'}`}
-                >
-                  Coding or Case Study
-                </button>
+              {(() => {
+                const verbalCount = (c.answers || []).filter(a => !isCodingOrCaseStudyAnswer(a)).length;
+                const codingCount = (c.answers || []).filter(a => isCodingOrCaseStudyAnswer(a)).length;
 
-                <div className="ml-auto flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleToggleTranslateAll}
-                    disabled={translatingAll}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border transition-all bg-white hover:bg-indigo-50 text-indigo-600 border-indigo-200 shadow-xs active:scale-95 disabled:opacity-50"
-                    title={allTranslated ? "Translate / View Original" : "Translate questions and answers to English"}
-                  >
-                    {translatingAll ? (
-                      <>
-                        <Loader2 size={13} className="animate-spin text-indigo-600" />
-                        <span>Translating...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Globe size={13} className="text-indigo-600" />
-                        <span>Translate</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
+                return (
+                  <div className="px-6 py-2 border-b border-slate-100 bg-slate-50 flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => setTranscriptTab('verbal')}
+                      className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${transcriptTab === 'verbal' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-transparent text-slate-500 hover:bg-slate-200'}`}
+                    >
+                      Verbal {verbalCount > 0 ? `(${verbalCount})` : ''}
+                    </button>
+                    <button
+                      onClick={() => setTranscriptTab('coding')}
+                      className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${transcriptTab === 'coding' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-transparent text-slate-500 hover:bg-slate-200'}`}
+                    >
+                      Coding or Case Study {codingCount > 0 ? `(${codingCount})` : ''}
+                    </button>
 
+                    <div className="ml-auto flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleToggleTranslateAll}
+                        disabled={translatingAll}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border transition-all bg-white hover:bg-indigo-50 text-indigo-600 border-indigo-200 shadow-xs active:scale-95 disabled:opacity-50"
+                        title={allTranslated ? "Translate / View Original" : "Translate questions and answers to English"}
+                      >
+                        {translatingAll ? (
+                          <>
+                            <Loader2 size={13} className="animate-spin text-indigo-600" />
+                            <span>Translating...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Globe size={13} className="text-indigo-600" />
+                            <span>Translate</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div className="flex-1 overflow-y-auto p-6">
                 <div className="space-y-5">
-                  {(c.answers || []).filter(a => transcriptTab === 'coding' ? a.question_text?.toLowerCase().includes('coding round') || a.question_text?.toLowerCase().includes('case study') : !a.question_text?.toLowerCase().includes('coding round') && !a.question_text?.toLowerCase().includes('case study')).map((a, idx) => {
+                  {(c.answers || []).filter(a => transcriptTab === 'coding' ? isCodingOrCaseStudyAnswer(a) : !isCodingOrCaseStudyAnswer(a)).map((a, idx) => {
                     const score = Number(a.ai_score ?? 0)
                     const scoreBg = score >= 75 ? 'bg-emerald-100 text-emerald-700' : score >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'
                     const wpm = Number(a.wpm ?? 0)
@@ -2139,7 +2174,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                           const transState = translations[ansKey]
                           const isQTranslated = transState?.isTranslated && transState.view === 'translated' && transState.translatedQuestion
                           const rawQText = isQTranslated ? transState.translatedQuestion : (a.question_text || 'No question recorded')
-                          const formattedQText = a.question_text?.toLowerCase().includes('coding round')
+                          const formattedQText = isCodingOrCaseStudyAnswer(a)
                             ? rawQText.replace(/(Input:)/gi, '\n\n$1').replace(/(Output:)/gi, '\n$1').replace(/(Constraints:)/gi, '\n\n$1').replace(/(Example:)/gi, '\n\n$1').trim()
                             : rawQText
 
@@ -2200,7 +2235,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                             )}
                           </div>
 
-                          {a.question_text?.toLowerCase().includes('coding round') ? (
+                          {isCodingOrCaseStudyAnswer(a) ? (
                             <>
                               <div className="bg-slate-900 rounded-xl overflow-hidden shadow-inner border border-slate-700 mt-2">
                                 <div className="bg-slate-800 px-4 py-2 border-b border-slate-700 flex items-center justify-between">
@@ -2423,10 +2458,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
 
                   {/* ── Direct coding_round display (VoiceCodingRound stores code here, NOT in answers) ── */}
                   {transcriptTab === 'coding' &&
-                    (c.answers || []).filter(a =>
-                      a.question_text?.toLowerCase().includes('coding round') ||
-                      a.question_text?.toLowerCase().includes('case study')
-                    ).length === 0 && (
+                    (c.answers || []).filter(isCodingOrCaseStudyAnswer).length === 0 && (
                       <>
                         {(() => {
                           const itype = (c.interview_type || 'Technical').trim().toLowerCase();
@@ -2826,9 +2858,9 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                       </>
                     )}
 
-                  {transcriptTab !== 'coding' && (!c.answers || c.answers.length === 0) && (
+                  {transcriptTab !== 'coding' && (!c.answers || c.answers.filter(a => !isCodingOrCaseStudyAnswer(a)).length === 0) && (
                     <div className="text-center py-12 text-slate-400 text-sm font-medium">
-                      No transcript available for this candidate.
+                      No verbal transcript available for this candidate.
                     </div>
                   )}
                 </div>

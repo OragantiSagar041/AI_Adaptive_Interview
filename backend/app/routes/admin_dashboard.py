@@ -1,3 +1,5 @@
+import os
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
 """
 app/routes_split/admin_dashboard.py — Admin dashboard, stats, copilot
 Auto-split from routes.py lines 2052–4009.
@@ -692,6 +694,12 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
     round1_s = 0.0
     round2_s = 0.0
     interview_type = (session_data.get("interview_type") if session_data else None) or "Technical"
+    is_recruiter_led_session = bool(
+        session_data and (
+            session_data.get("interview_mode") == "recruiter_led"
+            or str(session_data.get("interview_format") or "").lower() in ("recruiter-led", "recruiter_led")
+        )
+    )
     scores = [r["ai_score"] for r in results if r["ai_score"] is not None]
     verbal_avg = round(sum(scores) / len(scores), 1) if scores else 0
 
@@ -741,6 +749,20 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
     except Exception as blend_err:
         print(f"🚨 complete-session blend error: {blend_err}")
         avg_score = verbal_avg
+
+    if is_recruiter_led_session:
+        _stored_s = session_data.get("avg_score")
+        if _stored_s is None:
+            _stored_s = session_data.get("score")
+        avg_score = _stored_s if _stored_s is not None else verbal_avg
+        round1_s = avg_score
+        round2_s = avg_score
+        if not saved_rec:
+            saved_rec = session_data.get("overall_recommendation") or "Pending Evaluation"
+        if saved_comm is None:
+            saved_comm = avg_score
+        if saved_skills is None:
+            saved_skills = avg_score
 
     # Use cached values if available, else generate
     if saved_rec and saved_comm is not None and saved_skills is not None:
@@ -989,6 +1011,10 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
         "round1_score": round1_s,
         "round2_score": round2_s,
         "interview_type": interview_type,
+        "interview_format": session_data.get("interview_format", "Standard") if session_data else "Standard",
+        "interview_mode": session_data.get("interview_mode", "standard") if session_data else "standard",
+        "recruiter_evaluations": (session_data.get("recruiter_evaluations") or []) if session_data else [],
+        "overall_notes": (session_data.get("overall_notes") or "") if session_data else "",
         "overall_recommendation": recommendation,
         "strengths_summary": strengths,
         "weaknesses_summary": weaknesses,
