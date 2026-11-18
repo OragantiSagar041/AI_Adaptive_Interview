@@ -1,3 +1,4 @@
+import { API_BASE_URL as fallbackBaseUrl } from '../apiConfig'
 import React, { useState, useEffect } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
@@ -360,21 +361,28 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
   ]
 
   const formatMediaUrl = (url) => {
-    if (!url) return null
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      return url
+    if (!url || typeof url !== 'string') return null
+    const clean = url.trim()
+    if (!clean || clean === 'None' || clean === 'null' || clean === 'undefined') return null
+    if (clean.startsWith('cloudinary-authenticated://')) {
+      return null
     }
-    if (url.includes('recordings/') || url.startsWith('uploads/')) {
-      const fname = url.split('/').pop()
-      const apiBase = (API_BASE_URL || '').replace(/\/+$/, '')
-      return `${apiBase}/admin/recordings/stream/${fname}`
+    if (clean.startsWith('http://') || clean.startsWith('https://')) {
+      return clean
     }
-    const base = (API_BASE_URL || '').replace(/\/api\/?$/, '').replace(/\/+$/, '')
-    return `${base}/${url.replace(/^\/+/, '')}`
+    const fname = clean.split(/[\\/]/).pop()
+    if (!fname || fname === 'None' || fname === 'null' || fname === 'undefined') return null
+    const isVideo = /\.(webm|mp4|mov|mkv|ogg)$/i.test(fname)
+    if (!isVideo && !clean.includes('recordings/') && !clean.includes('uploads/')) {
+      return null
+    }
+    const cleanBase = (API_BASE_URL || fallbackBaseUrl || '').replace(/\/+$/, '')
+    const apiPrefix = cleanBase.endsWith('/api') ? cleanBase : (cleanBase ? `${cleanBase}/api` : '/api')
+    return `${apiPrefix}/admin/recordings/stream/${fname}`
   }
 
-  const rawCam = c.recording_url !== undefined ? c.recording_url : candidate?.recording_url
-  const rawScreen = c.screen_recording_url !== undefined ? c.screen_recording_url : candidate?.screen_recording_url
+  const rawCam = c.recording_url || candidate?.recording_url || c.recording_path || candidate?.recording_path
+  const rawScreen = c.screen_recording_url || candidate?.screen_recording_url || c.screen_recording_path || candidate?.screen_recording_path
   const recordingUrl = formatMediaUrl(rawCam)
   const screenRecordingUrl = formatMediaUrl(rawScreen)
 
@@ -966,7 +974,9 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                             className="w-full aspect-video object-contain rounded-lg border border-slate-200 bg-black max-h-48" 
                             src={recordingUrl}
                           >
-                            Your browser does not support video.
+                            <source src={recordingUrl} type="video/mp4" />
+                            <source src={recordingUrl} type="video/webm" />
+                            Your browser does not support video playback.
                           </video>
                           <div className="flex justify-end">
                             <a href={recordingUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold text-indigo-600 hover:underline">
@@ -975,8 +985,14 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                           </div>
                         </div>
                       ) : (
-                        <div className="h-28 flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
-                          {camVideoError ? "Camera recording currently unavailable" : "No camera recording available"}
+                        <div className="h-28 flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-slate-200 p-2 text-center text-xs font-medium text-slate-400">
+                          <p>{camVideoError ? "Camera playback unavailable." : "No camera recording available"}</p>
+                          {recordingUrl && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <a href={recordingUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-bold text-indigo-600 hover:underline">Open direct link ↗</a>
+                              <button type="button" onClick={() => setCamVideoError(false)} className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">Retry</button>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1000,7 +1016,9 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                             className="w-full aspect-video object-contain rounded-lg border border-slate-200 bg-black max-h-48" 
                             src={screenRecordingUrl}
                           >
-                            Your browser does not support video.
+                            <source src={screenRecordingUrl} type="video/mp4" />
+                            <source src={screenRecordingUrl} type="video/webm" />
+                            Your browser does not support video playback.
                           </video>
                           <div className="flex justify-end">
                             <a href={screenRecordingUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold text-emerald-600 hover:underline">
@@ -1009,8 +1027,14 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                           </div>
                         </div>
                       ) : (
-                        <div className="h-28 flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
-                          {screenVideoError ? "Screen recording currently unavailable" : "No screen recording available"}
+                        <div className="h-28 flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-slate-200 p-2 text-center text-xs font-medium text-slate-400">
+                          <p>{screenVideoError ? "Screen playback unavailable." : "No screen recording available"}</p>
+                          {screenRecordingUrl && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <a href={screenRecordingUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-bold text-emerald-600 hover:underline">Open direct link ↗</a>
+                              <button type="button" onClick={() => setScreenVideoError(false)} className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">Retry</button>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

@@ -465,7 +465,7 @@ export const useInterviewMedia = ({
       console.log(`[REC_TRACE] Stream initialized. Video tracks: ${stream.getVideoTracks().length}, Audio tracks: ${stream.getAudioTracks().length}. Screen video tracks: ${screenStream ? screenStream.getVideoTracks().length : 0}. Selected mimeType: ${mimeType}`)
 
       if (shouldRecordVideo) {
-        let options = { mimeType, videoBitsPerSecond: 800000, audioBitsPerSecond: 64000 }
+        let options = { mimeType, videoBitsPerSecond: 350000, audioBitsPerSecond: 48000 }
         try {
           cameraRecorderRef.current = new MediaRecorder(stream, options)
         } catch (err) {
@@ -588,7 +588,7 @@ export const useInterviewMedia = ({
       const shouldRecordVideo = sessionDetailRef.current?.record_video !== false;
       if (shouldRecordVideo) {
         const mimeType = recordedMimeTypeRef.current || 'video/webm'
-        let options = { mimeType, videoBitsPerSecond: 800000, audioBitsPerSecond: 64000 }
+        let options = { mimeType, videoBitsPerSecond: 350000, audioBitsPerSecond: 48000 }
         try {
           screenRecorderRef.current = new MediaRecorder(screenStream, options)
         } catch (_) {
