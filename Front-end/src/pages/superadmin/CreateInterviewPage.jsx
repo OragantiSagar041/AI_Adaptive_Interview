@@ -1105,9 +1105,10 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
       }
 
       Swal.fire({
-        title: 'Success!',
+        title: 'Interview Created!',
         text: msg,
         icon: 'success',
+        confirmButtonText: 'Done',
         confirmButtonColor: '#6366f1'
       })
 
