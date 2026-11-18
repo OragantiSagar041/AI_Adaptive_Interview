@@ -46,6 +46,13 @@ export default function Interview() {
           throw new Error(`This interview is scheduled to start on ${startTime.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'short', timeStyle: 'short' })}. Please try again at the scheduled time.`)
         }
 
+        const fmtLower = String(payload.interview_format || '').toLowerCase()
+        const modeLower = String(payload.interview_mode || '').toLowerCase()
+        if (modeLower === 'recruiter_led' || fmtLower === 'recruiter-led' || fmtLower === 'recruiter_led') {
+          navigate(`/interview/candidate-live/${sessionId}`, { replace: true })
+          return
+        }
+
         if (payload.interview_format === 'Voice') {
           navigate(`/voice-interview/${sessionId}`, { replace: true })
           return

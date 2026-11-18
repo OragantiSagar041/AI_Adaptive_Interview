@@ -24,6 +24,8 @@ const HireIQCaseStudyPage = React.lazy(() => import('./pages/HireIQCaseStudyPage
 const JobApplicationPage = React.lazy(() => import('./pages/JobApplicationPage'))
 const JobPortalPage = React.lazy(() => import('./pages/JobPortalPage'))
 const SpectatorPage = React.lazy(() => import('./pages/SpectatorPage'))
+const CandidateLiveRoom = React.lazy(() => import('./pages/interview/CandidateLiveRoom'))
+const RecruiterCopilotRoom = React.lazy(() => import('./pages/interview/RecruiterCopilotRoom'))
 
 // Admin / master routes (were already lazy — keep them)
 const MasterLayout = React.lazy(() => import('./components/master/MasterLayout'))
@@ -137,6 +139,17 @@ function App() {
             <Route path="/careers/:companyId" element={<JobPortalPage />} />
             <Route path="/apply/:jobId" element={<JobApplicationPage />} />
             <Route path="/spectate/:linkId" element={<SpectatorPage />} />
+            <Route path="/interview/candidate-live/:sessionId" element={<CandidateLiveRoom />} />
+            <Route path="/candidate-live-room/:sessionId" element={<CandidateLiveRoom />} />
+            <Route path="/candidate-live/:sessionId" element={<CandidateLiveRoom />} />
+            <Route
+              path="/interview/recruiter-copilot/:sessionId"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'superadmin', 'master']}>
+                  <RecruiterCopilotRoom />
+                </ProtectedRoute>
+              }
+            />
             <Route path="/create-interview" element={<CreateInterviewRedirect />} />
             <Route path="/admin/create_interview" element={<Navigate to="/admin/create-interview" replace />} />
             <Route path="/superadmin/create_interview" element={<Navigate to="/superadmin/create-interview" replace />} />

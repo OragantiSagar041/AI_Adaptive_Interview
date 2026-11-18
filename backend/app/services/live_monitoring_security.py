@@ -60,30 +60,30 @@ def validate_snapshot_dataurl(value: str, max_bytes: int) -> str:
 
 
 def admin_can_access_session(current_admin: Dict[str, Any], session: Dict[str, Any]) -> bool:
-    role = current_admin.get("role")
+    role = str(current_admin.get("role") or "").strip().lower()
     if role == "master":
         return True
-    if role not in {"admin", "super_admin"}:
+    if role not in {"admin", "recruiter", "subadmin", "super_admin", "superadmin", "tenant"}:
         return False
 
     admin_company_id = str(current_admin.get("company_id") or "")
     session_company_id = str(session.get("company_id") or "")
     if not admin_company_id or not hmac.compare_digest(admin_company_id, session_company_id):
         return False
-    if role == "admin":
+    if role in {"admin", "recruiter", "subadmin"}:
         return str(session.get("created_by") or "") == str(current_admin.get("admin_id") or "")
     return True
 
 
 def admin_can_receive_dashboard_event(current_admin: Dict[str, Any], event: Dict[str, Any]) -> bool:
-    role = current_admin.get("role")
+    role = str(current_admin.get("role") or "").strip().lower()
     if role == "master":
         return True
-    if role not in {"admin", "super_admin"}:
+    if role not in {"admin", "recruiter", "subadmin", "super_admin", "superadmin", "tenant"}:
         return False
     if str(current_admin.get("company_id") or "") != str(event.get("company_id") or ""):
         return False
-    if role == "admin":
+    if role in {"admin", "recruiter", "subadmin"}:
         if event.get("type") == "profile_update":
             return str(current_admin.get("admin_id") or "") == str(event.get("admin_id") or "")
         return str(current_admin.get("admin_id") or "") == str(event.get("created_by") or "")

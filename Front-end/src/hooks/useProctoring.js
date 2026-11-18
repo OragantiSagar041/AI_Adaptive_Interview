@@ -2,9 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 // ── Tunable thresholds (Production Calibrated to eliminate false alarms) ──
 const DETECT_INTERVAL_MS = Number(import.meta.env?.VITE_PROCTORING_INTERVAL_MS) || 250          // frame cadence (4 FPS, detects within sub-second)
-const PHONE_ALERT_CONFIDENCE = Number(import.meta.env?.VITE_PROCTORING_PHONE_CONFIDENCE) || 0.35 // calibrated threshold: catches real phones from any angle (front/back camera) while eliminating low-confidence noise
-const PHONE_CONSECUTIVE_FRAMES = 3      // 3 frames (~0.75s) of sustained visibility required to detect reliably while eliminating glints
-const PHONE_COOLDOWN_MS = 20000         // 20 seconds cooldown between phone alerts to prevent rapid strike termination cascades
+const PHONE_ALERT_CONFIDENCE = Number(import.meta.env?.VITE_PROCTORING_PHONE_CONFIDENCE) || 0.22 // calibrated threshold: reliably detects handheld phones from any angle
+const PHONE_CONSECUTIVE_FRAMES = 2      // 2 frames (~0.5s) of sustained visibility required to detect quickly
+const PHONE_COOLDOWN_MS = 10000         // 10 seconds cooldown between phone alerts
 
 const MULTI_FACE_CONSECUTIVE_FRAMES = 6 // 6 consecutive frames (~2.4s) to ignore background posters/glitches
 const NO_FACE_CONSECUTIVE_FRAMES = 12   // 12 consecutive frames (~4.8s) allows sneezing / natural posture shifts

@@ -1,4 +1,5 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
+import basicSsl from '@vitejs/plugin-basic-ssl'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { fileURLToPath } from 'url'
@@ -25,11 +26,31 @@ function suppressMediapipeSourceMapWarning() {
   }
 }
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, __dirname, '')
+  const useLanHttps = mode === 'lan' || env.VITE_DEV_HTTPS === 'true'
+  const rawBackendTarget = (env.VITE_API_BASE_URL || env.VITE_API_URL || 'http://127.0.0.1:8000').replace(/\/+$/, '')
+  const proxyTarget = rawBackendTarget.replace('://localhost:', '://127.0.0.1:')
+
+  return {
+  server: {
+    host: true,
+    port: 5173,
+    allowedHosts: true,
+    proxy: {
+      '/__api_proxy': {
+        target: proxyTarget,
+        changeOrigin: true,
+        ws: true,
+        rewrite: (reqPath) => reqPath.replace(/^\/__api_proxy/, ''),
+      },
+    },
+  },
   plugins: [
     suppressMediapipeSourceMapWarning(),
     react(),
     tailwindcss(),
+    ...(useLanHttps ? [basicSsl()] : []),
   ],
 
   resolve: {
@@ -105,4 +126,5 @@ export default defineConfig({
       },
     },
   },
+  }
 })

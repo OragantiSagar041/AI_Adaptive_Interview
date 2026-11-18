@@ -53,7 +53,8 @@ class CodingRoundSubmitRequest(CodingRoundCheckpointRequest):
 
 
 class CodingRoundRunRequest(CodingRoundCheckpointRequest):
-    pass
+    task: Optional[Dict[str, Any]] = None
+    question_id: Optional[Union[int, str]] = None
 
 
 class CodingRoundObserveRequest(CodingRoundCheckpointRequest):
@@ -140,7 +141,10 @@ class BulkCreateSession(BaseModel):
     admin_id: str
     interview_duration: int = 30
     record_video: bool = True  # Global default
-    interview_format: str = "Standard"  # "Standard" or "Voice"
+    interview_format: str = "Standard"  # "Standard", "Voice", or "Recruiter-Led"
+    interview_mode: Optional[str] = None  # "standard", "voice", or "recruiter_led"
+    external_meeting_url: str = ""
+    external_call_mode: bool = False
     interview_type: str = "Technical"
     industry_type: str = "General"
     language: str = "English"
@@ -417,3 +421,28 @@ class RecruiterMessage(BaseModel):
     subject: str
     body: str
 
+
+
+class QuestionEvaluation(BaseModel):
+    question_id: int
+    question: str = ""
+    rating: str  # "Correct" | "Partial" | "Incorrect" | "Skip"
+    notes: Optional[str] = ""
+
+
+class SaveRecruiterEvaluationRequest(BaseModel):
+    evaluations: List[QuestionEvaluation] = Field(default_factory=list)
+    recommendation: str  # "Strongly Recommend" | "Recommend" | "Hold" | "Reject"
+    overall_notes: Optional[str] = ""
+    active_question_index: Optional[int] = 0
+
+
+class AutoSaveRecruiterProgressRequest(BaseModel):
+    active_question_index: int = 0
+    evaluations: List[QuestionEvaluation] = Field(default_factory=list)
+    overall_notes: Optional[str] = ""
+
+
+class ExternalMeetingUpdateRequest(BaseModel):
+    external_call_mode: bool = True
+    external_meeting_url: str = ""
