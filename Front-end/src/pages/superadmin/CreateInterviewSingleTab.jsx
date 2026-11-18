@@ -1186,28 +1186,75 @@ export default function CreateInterviewSingleTab({
                   </div>
 </FeatureLockOverlay>
 
-                  {singleCandidate.interviewFormat === 'Recruiter-Led' && (
-                    <div className="sm:col-span-2 p-3.5 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/60 space-y-2">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300">
-                          External Call Link (Optional: Google Meet / Zoom)
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => window.open('https://meet.new', '_blank', 'noopener,noreferrer')}
-                          className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 transition"
-                        >
-                          + New Google Meet
-                        </button>
+                  {singleCandidate.interviewFormat === 'Recruiter-Led' && (() => {
+                    const latestRecruiterLink = [...(singleCreatedLinks || [])]
+                      .reverse()
+                      .find((l) => String(l?.interviewFormat || '').toLowerCase() === 'recruiter-led');
+                    const hasActiveSession = Boolean(latestRecruiterLink?.id);
+                    return (
+                      <div className="sm:col-span-2 p-3.5 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/60 space-y-3">
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300">
+                              External Call Link (Optional: Google Meet / Zoom)
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => window.open('https://meet.new', '_blank', 'noopener,noreferrer')}
+                              className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 transition cursor-pointer"
+                            >
+                              + New Google Meet
+                            </button>
+                          </div>
+                          <Input
+                            type="url"
+                            placeholder="Paste https://meet.google.com/... or Zoom link (leave blank for built-in 2-way video)"
+                            value={singleCandidate.externalMeetingUrl || ''}
+                            onChange={(e) => handleSingleChange('externalMeetingUrl', e.target.value)}
+                          />
+                        </div>
+
+                        <div className="pt-2.5 border-t border-indigo-200/80 dark:border-indigo-800/60 space-y-1.5">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <button
+                              type="button"
+                              disabled={!hasActiveSession}
+                              onClick={() => {
+                                if (!hasActiveSession) return;
+                                window.open(`/interview?session_id=${latestRecruiterLink.id}`, '_blank', 'noopener,noreferrer');
+                              }}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 text-xs font-bold transition ${
+                                hasActiveSession ? 'hover:bg-indigo-50 dark:hover:bg-indigo-950/60 cursor-pointer shadow-xs' : 'opacity-50 cursor-not-allowed'
+                              }`}
+                            >
+                              <i className="fas fa-eye text-[11px]"></i>
+                              <span>Candidate Preview</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              disabled={!hasActiveSession}
+                              onClick={() => {
+                                if (!hasActiveSession) return;
+                                window.open(`/interview/recruiter-copilot/${latestRecruiterLink.id}`, '_blank', 'noopener,noreferrer');
+                              }}
+                              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold transition ${
+                                hasActiveSession ? 'hover:bg-emerald-500 cursor-pointer shadow-sm' : 'opacity-50 cursor-not-allowed'
+                              }`}
+                            >
+                              <i className="fas fa-video text-[11px]"></i>
+                              <span>Recruiter Cockpit</span>
+                            </button>
+                          </div>
+                          {!hasActiveSession && (
+                            <p className="text-[11px] text-indigo-700/75 dark:text-indigo-300/75 m-0">
+                              Create the interview session first to activate Candidate Preview &amp; Recruiter Cockpit.
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      <Input
-                        type="url"
-                        placeholder="Paste https://meet.google.com/... or Zoom link (leave blank for built-in 2-way video)"
-                        value={singleCandidate.externalMeetingUrl || ''}
-                        onChange={(e) => handleSingleChange('externalMeetingUrl', e.target.value)}
-                      />
-                    </div>
-                  )}
+                    );
+                  })()}
 
                   {singleCandidate.interviewType === 'Non-Technical' && (
                     <div className="sm:col-span-2">
