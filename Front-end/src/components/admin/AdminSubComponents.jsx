@@ -307,7 +307,7 @@ export function CandidateTable({
                       <div className="flex items-center gap-1.5">
                         {c.candidate_id && <span className="text-[0.65rem] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold mr-1">{c.candidate_id}</span>}
                         {c.candidate_name}
-                        {c.recording_url && <Video size={14} className="text-primary" />}
+                        {(c.has_video || c.recording_url || c.recording_path) && <Video size={14} className="text-primary" />}
                         {(c.decision === 'selected' || c.decision === 'hired' || c.status === 'qualified') && (
                           <span className="text-[0.65rem] bg-emerald-500 text-white px-1.5 py-0.5 rounded font-extrabold">SELECTED</span>
                         )}
@@ -341,6 +341,14 @@ export function CandidateTable({
                     </td>
                     <td className="px-4 py-3.5 text-sm text-right pr-6">
                       <div className="inline-flex items-center gap-2">
+                        {(c.interview_mode === 'recruiter_led' || String(c.interview_format || '').toLowerCase() === 'recruiter-led' || String(c.interview_format || '').toLowerCase() === 'recruiter_led') && computedStatus !== 'completed' && computedStatus !== 'expired' && (
+                          <a
+                            href={`/interview/recruiter-copilot/${c.link_id || c.id}`}
+                            className="px-2.5 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded hover:bg-indigo-700 transition-colors flex items-center gap-1 no-underline"
+                          >
+                            <Video size={12} /> Open Cockpit
+                          </a>
+                        )}
                         {computedStatus === 'completed' && (
                           <button
                             onClick={() => handleOpenScorecard(c)}
@@ -349,7 +357,7 @@ export function CandidateTable({
                             <Eye size={12} /> View Results
                           </button>
                         )}
-                        {computedStatus === 'started' && (
+                        {computedStatus === 'started' && !(c.interview_mode === 'recruiter_led' || String(c.interview_format || '').toLowerCase() === 'recruiter-led' || String(c.interview_format || '').toLowerCase() === 'recruiter_led') && (
                           <button
                             onClick={() => handleOpenScorecard(c)}
                             className="px-2.5 py-1.5 bg-primary text-white text-xs font-bold rounded hover:bg-primary-hover transition-colors flex items-center gap-1 cursor-pointer border-none"
@@ -381,7 +389,7 @@ export function CandidateTable({
                             Reschedule
                           </button>
                         )}
-                        {computedStatus === 'pending' && (
+                        {(computedStatus === 'pending' || computedStatus === 'started') && (
                           <button
                             onClick={(e) => {
                               navigator.clipboard.writeText(`${window.location.origin}/interview?session_id=${c.link_id || c.id}`)

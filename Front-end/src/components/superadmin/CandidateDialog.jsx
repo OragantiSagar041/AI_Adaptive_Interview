@@ -1,3 +1,4 @@
+import { API_BASE_URL as fallbackBaseUrl } from '../../apiConfig'
 import React, { useState, useEffect } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
@@ -68,6 +69,35 @@ function StatCard({ label, value }) {
   )
 }
 
+// ── Accurate Coding & Case Study Question Classifier ──────────────────────────
+export function isCodingOrCaseStudyAnswer(a) {
+  if (!a) return false
+  if (a.is_coding || a.is_case_study || a.code || a.starter_code || a.language || a.test_cases) return true
+  const qType = String(a.question_type || a.round || a.type || a.round_type || '').toLowerCase()
+  if (qType.includes('coding') || qType.includes('case_study') || qType.includes('case-study') || qType.includes('case study')) return true
+  const category = String(a.category || a.topic || '').toLowerCase()
+  if (category.includes('coding') || category.includes('case study') || category.includes('case-study')) return true
+  const qText = String(a.question_text || a.question || a.title || a.problem_statement || '').toLowerCase()
+  if (
+    qText.includes('coding round') ||
+    qText.includes('coding challenge') ||
+    qText.includes('live coding') ||
+    qText.includes('case study') ||
+    qText.includes('coding task') ||
+    qText.includes('write a function') ||
+    qText.includes('write a program') ||
+    qText.includes('write code') ||
+    qText.includes('solution in monaco') ||
+    qText.includes('time complexity') ||
+    qText.includes('space complexity') ||
+    (qText.includes('input:') && qText.includes('output:')) ||
+    (qText.includes('input') && qText.includes('output') && (qText.includes('constraints') || qText.includes('function') || qText.includes('def ')))
+  ) {
+    return true
+  }
+  return false
+}
+
 // ── Main Dialog ──────────────────────────────────────────────────────────────
 export default function CandidateDialog({ candidate, open, onOpenChange, onStatusUpdate }) {
   const dispatch = useDispatch()
@@ -84,6 +114,13 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   const [showRecordingModal, setShowRecordingModal] = useState(false)
   const [camVideoError, setCamVideoError] = useState(false)
   const [screenVideoError, setScreenVideoError] = useState(false)
+
+  useEffect(() => {
+    if (showRecordingModal) {
+      setCamVideoError(false)
+      setScreenVideoError(false)
+    }
+  }, [showRecordingModal])
   const [showTranscriptModal, setShowTranscriptModal] = useState(false)
   const [transcriptTab, setTranscriptTab] = useState('verbal')
   const [showAllTests, setShowAllTests] = useState(false)
@@ -174,9 +211,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
     const currentCandidate = detail || candidate || {}
     const itemsToTranslate = []
     const currentAnswers = (currentCandidate.answers || []).filter(a =>
-      transcriptTab === 'coding'
-        ? a.question_text?.toLowerCase().includes('coding round') || a.question_text?.toLowerCase().includes('case study')
-        : !a.question_text?.toLowerCase().includes('coding round') && !a.question_text?.toLowerCase().includes('case study')
+      transcriptTab === 'coding' ? isCodingOrCaseStudyAnswer(a) : !isCodingOrCaseStudyAnswer(a)
     )
 
     currentAnswers.forEach((a, idx) => {
@@ -604,21 +639,28 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   ]
 
   const formatMediaUrl = (url) => {
-    if (!url) return null
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      return url
+    if (!url || typeof url !== 'string') return null
+    const clean = url.trim()
+    if (!clean || clean === 'None' || clean === 'null' || clean === 'undefined') return null
+    if (clean.startsWith('cloudinary-authenticated://')) {
+      return null
     }
-    if (url.includes('recordings/') || url.startsWith('uploads/')) {
-      const fname = url.split('/').pop()
-      const apiBase = (API_BASE_URL || '').replace(/\/+$/, '')
-      return `${apiBase}/admin/recordings/stream/${fname}`
+    if (clean.startsWith('http://') || clean.startsWith('https://')) {
+      return clean
     }
-    const base = (API_BASE_URL || '').replace(/\/api\/?$/, '').replace(/\/+$/, '')
-    return `${base}/${url.replace(/^\/+/, '')}`
+    const fname = clean.split(/[\\/]/).pop()
+    if (!fname || fname === 'None' || fname === 'null' || fname === 'undefined') return null
+    const isVideo = /\.(webm|mp4|mov|mkv|ogg)$/i.test(fname)
+    if (!isVideo && !clean.includes('recordings/') && !clean.includes('uploads/')) {
+      return null
+    }
+    const cleanBase = (API_BASE_URL || fallbackBaseUrl || '').replace(/\/+$/, '')
+    const apiPrefix = cleanBase.endsWith('/api') ? cleanBase : (cleanBase ? `${cleanBase}/api` : '/api')
+    return `${apiPrefix}/admin/recordings/stream/${fname}`
   }
 
-  const rawCam = c.recording_url !== undefined ? c.recording_url : candidate?.recording_url
-  const rawScreen = c.screen_recording_url !== undefined ? c.screen_recording_url : candidate?.screen_recording_url
+  const rawCam = c.recording_url || candidate?.recording_url || c.recording_path || candidate?.recording_path
+  const rawScreen = c.screen_recording_url || candidate?.screen_recording_url || c.screen_recording_path || candidate?.screen_recording_path
   const recordingUrl = formatMediaUrl(rawCam)
   const screenRecordingUrl = formatMediaUrl(rawScreen)
 
@@ -1959,17 +2001,45 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                           className="w-full aspect-video object-contain rounded-lg border border-slate-200 bg-black" 
                           src={recordingUrl}
                         >
-                          Your browser does not support video.
+                          <source src={recordingUrl} type="video/mp4" />
+                          <source src={recordingUrl} type="video/webm" />
+                          Your browser does not support video playback.
                         </video>
-                        <div className="flex justify-end">
-                          <a href={recordingUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold text-indigo-600 hover:underline">
+                        <div className="flex justify-between items-center text-[11px]">
+                          <a 
+                            href={recordingUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="font-semibold text-indigo-600 hover:underline"
+                          >
                             Open video in new tab ↗
                           </a>
                         </div>
                       </div>
                     ) : (
-                      <div className="w-full aspect-video flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
-                        {camVideoError ? "Camera recording currently unavailable" : "No camera recording available"}
+                      <div className="w-full aspect-video flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-slate-200 p-4 text-center">
+                        <p className="text-xs font-medium text-slate-500 mb-2">
+                          {camVideoError ? "Camera recording player could not stream video directly." : "No camera recording available"}
+                        </p>
+                        {recordingUrl && (
+                          <div className="flex items-center gap-2 mt-1">
+                            <a 
+                              href={recordingUrl} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="px-3 py-1.5 text-xs font-bold bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors inline-flex items-center gap-1"
+                            >
+                              Open direct link ↗
+                            </a>
+                            <button 
+                              type="button" 
+                              onClick={() => setCamVideoError(false)} 
+                              className="px-3 py-1.5 text-xs font-bold bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors"
+                            >
+                              Retry
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1992,17 +2062,45 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                           className="w-full aspect-video object-contain rounded-lg border border-slate-200 bg-black" 
                           src={screenRecordingUrl}
                         >
-                          Your browser does not support video.
+                          <source src={screenRecordingUrl} type="video/mp4" />
+                          <source src={screenRecordingUrl} type="video/webm" />
+                          Your browser does not support video playback.
                         </video>
-                        <div className="flex justify-end">
-                          <a href={screenRecordingUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold text-emerald-600 hover:underline">
+                        <div className="flex justify-between items-center text-[11px]">
+                          <a 
+                            href={screenRecordingUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="font-semibold text-emerald-600 hover:underline"
+                          >
                             Open video in new tab ↗
                           </a>
                         </div>
                       </div>
                     ) : (
-                      <div className="w-full aspect-video flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
-                        {screenVideoError ? "Screen recording currently unavailable" : "No screen recording available"}
+                      <div className="w-full aspect-video flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-slate-200 p-4 text-center">
+                        <p className="text-xs font-medium text-slate-500 mb-2">
+                          {screenVideoError ? "Screen recording player could not stream video directly." : "No screen recording available"}
+                        </p>
+                        {screenRecordingUrl && (
+                          <div className="flex items-center gap-2 mt-1">
+                            <a 
+                              href={screenRecordingUrl} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="px-3 py-1.5 text-xs font-bold bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors inline-flex items-center gap-1"
+                            >
+                              Open direct link ↗
+                            </a>
+                            <button 
+                              type="button" 
+                              onClick={() => setScreenVideoError(false)} 
+                              className="px-3 py-1.5 text-xs font-bold bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors"
+                            >
+                              Retry
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -2048,7 +2146,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                             displayScore = c.round1_score;
                         } else {
                             // Legacy fallback for old sessions
-                            const verbalAnsForScore = (c.answers || []).filter(a => !a.question_text?.toLowerCase().includes('coding round') && !a.question_text?.toLowerCase().includes('case study'));
+                            const verbalAnsForScore = (c.answers || []).filter(a => !isCodingOrCaseStudyAnswer(a));
                             const validVerbalAnsForScore = verbalAnsForScore.filter(a => a.ai_score !== null && a.ai_score !== undefined);
                             displayScore = validVerbalAnsForScore.length > 0 ? (validVerbalAnsForScore.reduce((sum, a) => sum + Number(a.ai_score), 0) / validVerbalAnsForScore.length) * (round1Max / 100) : 0;
                         }
@@ -2058,7 +2156,9 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                             displayScore = c.round2_score;
                         } else {
                             // Legacy fallback for old sessions
-                            displayScore = c.coding_round ? round2Max : 0;
+                            const codingAnsForScore = (c.answers || []).filter(a => isCodingOrCaseStudyAnswer(a));
+                            const validCodingAnsForScore = codingAnsForScore.filter(a => a.ai_score !== null && a.ai_score !== undefined);
+                            displayScore = validCodingAnsForScore.length > 0 ? (validCodingAnsForScore.reduce((sum, a) => sum + Number(a.ai_score), 0) / validCodingAnsForScore.length) * (round2Max / 100) : (c.coding_round ? round2Max : 0);
                         }
                     }
 
@@ -2084,47 +2184,53 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                 </div>
               </div>
 
-              <div className="px-6 py-2 border-b border-slate-100 bg-slate-50 flex items-center gap-2 shrink-0">
-                <button
-                  onClick={() => setTranscriptTab('verbal')}
-                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${transcriptTab === 'verbal' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-transparent text-slate-500 hover:bg-slate-200'}`}
-                >
-                  Verbal
-                </button>
-                <button
-                  onClick={() => setTranscriptTab('coding')}
-                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${transcriptTab === 'coding' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-transparent text-slate-500 hover:bg-slate-200'}`}
-                >
-                  Coding or Case Study
-                </button>
+              {(() => {
+                const verbalCount = (c.answers || []).filter(a => !isCodingOrCaseStudyAnswer(a)).length;
+                const codingCount = (c.answers || []).filter(a => isCodingOrCaseStudyAnswer(a)).length;
 
-                <div className="ml-auto flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleToggleTranslateAll}
-                    disabled={translatingAll}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border transition-all bg-white hover:bg-indigo-50 text-indigo-600 border-indigo-200 shadow-xs active:scale-95 disabled:opacity-50"
-                    title={allTranslated ? "Translate / View Original" : "Translate questions and answers to English"}
-                  >
-                    {translatingAll ? (
-                      <>
-                        <Loader2 size={13} className="animate-spin text-indigo-600" />
-                        <span>Translating...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Globe size={13} className="text-indigo-600" />
-                        <span>Translate</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
+                return (
+                  <div className="px-6 py-2 border-b border-slate-100 bg-slate-50 flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => setTranscriptTab('verbal')}
+                      className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${transcriptTab === 'verbal' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-transparent text-slate-500 hover:bg-slate-200'}`}
+                    >
+                      Verbal {verbalCount > 0 ? `(${verbalCount})` : ''}
+                    </button>
+                    <button
+                      onClick={() => setTranscriptTab('coding')}
+                      className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${transcriptTab === 'coding' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-transparent text-slate-500 hover:bg-slate-200'}`}
+                    >
+                      Coding or Case Study {codingCount > 0 ? `(${codingCount})` : ''}
+                    </button>
 
+                    <div className="ml-auto flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleToggleTranslateAll}
+                        disabled={translatingAll}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border transition-all bg-white hover:bg-indigo-50 text-indigo-600 border-indigo-200 shadow-xs active:scale-95 disabled:opacity-50"
+                        title={allTranslated ? "Translate / View Original" : "Translate questions and answers to English"}
+                      >
+                        {translatingAll ? (
+                          <>
+                            <Loader2 size={13} className="animate-spin text-indigo-600" />
+                            <span>Translating...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Globe size={13} className="text-indigo-600" />
+                            <span>Translate</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div className="flex-1 overflow-y-auto p-6">
                 <div className="space-y-5">
-                  {(c.answers || []).filter(a => transcriptTab === 'coding' ? a.question_text?.toLowerCase().includes('coding round') || a.question_text?.toLowerCase().includes('case study') : !a.question_text?.toLowerCase().includes('coding round') && !a.question_text?.toLowerCase().includes('case study')).map((a, idx) => {
+                  {(c.answers || []).filter(a => transcriptTab === 'coding' ? isCodingOrCaseStudyAnswer(a) : !isCodingOrCaseStudyAnswer(a)).map((a, idx) => {
                     const score = Number(a.ai_score ?? 0)
                     const scoreBg = score >= 75 ? 'bg-emerald-100 text-emerald-700' : score >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'
                     const wpm = Number(a.wpm ?? 0)
@@ -2140,7 +2246,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                           const transState = translations[ansKey]
                           const isQTranslated = transState?.isTranslated && transState.view === 'translated' && transState.translatedQuestion
                           const rawQText = isQTranslated ? transState.translatedQuestion : (a.question_text || 'No question recorded')
-                          const formattedQText = a.question_text?.toLowerCase().includes('coding round')
+                          const formattedQText = isCodingOrCaseStudyAnswer(a)
                             ? rawQText.replace(/(Input:)/gi, '\n\n$1').replace(/(Output:)/gi, '\n$1').replace(/(Constraints:)/gi, '\n\n$1').replace(/(Example:)/gi, '\n\n$1').trim()
                             : rawQText
 
@@ -2201,7 +2307,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                             )}
                           </div>
 
-                          {a.question_text?.toLowerCase().includes('coding round') ? (
+                          {isCodingOrCaseStudyAnswer(a) ? (
                             <>
                               <div className="bg-slate-900 rounded-xl overflow-hidden shadow-inner border border-slate-700 mt-2">
                                 <div className="bg-slate-800 px-4 py-2 border-b border-slate-700 flex items-center justify-between">
@@ -2424,10 +2530,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
 
                   {/* ── Direct coding_round display (VoiceCodingRound stores code here, NOT in answers) ── */}
                   {transcriptTab === 'coding' &&
-                    (c.answers || []).filter(a =>
-                      a.question_text?.toLowerCase().includes('coding round') ||
-                      a.question_text?.toLowerCase().includes('case study')
-                    ).length === 0 && (
+                    (c.answers || []).filter(isCodingOrCaseStudyAnswer).length === 0 && (
                       <>
                         {(() => {
                           const itype = (c.interview_type || 'Technical').trim().toLowerCase();
@@ -2827,9 +2930,9 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                       </>
                     )}
 
-                  {transcriptTab !== 'coding' && (!c.answers || c.answers.length === 0) && (
+                  {transcriptTab !== 'coding' && (!c.answers || c.answers.filter(a => !isCodingOrCaseStudyAnswer(a)).length === 0) && (
                     <div className="text-center py-12 text-slate-400 text-sm font-medium">
-                      No transcript available for this candidate.
+                      No verbal transcript available for this candidate.
                     </div>
                   )}
                 </div>

@@ -1,3 +1,5 @@
+import os
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
 """
 app/routes_split/admin_dashboard.py â€” Admin dashboard, stats, copilot
 Auto-split from routes.py lines 2052â€“4009.
@@ -420,6 +422,8 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
         
         backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         check_dirs = [
+            "/app/uploads/recordings",
+            "/app/uploads",
             os.path.join(backend_dir, "uploads", "recordings"),
             os.path.join(backend_dir, "uploads"),
             os.path.abspath("backend/uploads/recordings"),
@@ -447,18 +451,64 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
                 from urllib.parse import urlparse, parse_qs
                 import cloudinary
                 import cloudinary.utils
+                import re
                 
                 parsed_uri = urlparse(rpath)
                 public_id = (parsed_uri.netloc + parsed_uri.path).lstrip("/")
                 if not public_id or public_id == "None":
                     return None
 
+                # Clean public_id from existing extensions so format="mp4" produces clean playable .mp4
+                clean_public_id = re.sub(r'\.(webm|mp4|mov|mkv)$', '', public_id, flags=re.IGNORECASE)
+
                 query_params = parse_qs(parsed_uri.query)
+                cloud_name = query_params.get("cloud_name", [None])[0]
+                api_key = query_params.get("api_key", [None])[0]
+                api_secret = query_params.get("api_secret", [None])[0]
                 
-                cloud_name = query_params.get("cloud_name", [None])[0] or os.getenv("CLOUDINARY_CLOUD_NAME")
-                api_key = query_params.get("api_key", [None])[0] or os.getenv("CLOUDINARY_API_KEY")
-                api_secret = query_params.get("api_secret", [None])[0] or os.getenv("CLOUDINARY_API_SECRET")
-                
+                # Check cross-account or manager fallback
+                if not (cloud_name and api_key and api_secret):
+                    try:
+                        from app.core.cloudinary_manager import cloudinary_manager
+                        accounts = cloudinary_manager.get_all_accounts()
+                        target_acc = None
+                        
+                        global _CLOUDINARY_ACCOUNT_CACHE
+                        if "_CLOUDINARY_ACCOUNT_CACHE" not in globals():
+                            globals()["_CLOUDINARY_ACCOUNT_CACHE"] = {}
+                        
+                        target_acc = globals()["_CLOUDINARY_ACCOUNT_CACHE"].get(clean_public_id)
+                        
+                        if not target_acc and accounts:
+                            # Search accounts to locate which one holds the video asset
+                            for acc in accounts:
+                                try:
+                                    import cloudinary.api
+                                    res = cloudinary.api.resource(
+                                        clean_public_id,
+                                        resource_type="video",
+                                        type="authenticated",
+                                        cloud_name=acc.get("cloud_name"),
+                                        api_key=acc.get("api_key"),
+                                        api_secret=acc.get("api_secret")
+                                    )
+                                    if res and res.get("public_id"):
+                                        target_acc = acc
+                                        globals()["_CLOUDINARY_ACCOUNT_CACHE"][clean_public_id] = acc
+                                        break
+                                except Exception:
+                                    continue
+                        
+                        if not target_acc and accounts:
+                            target_acc = next((a for a in accounts if cloud_name and a.get("cloud_name") == cloud_name), accounts[0])
+                            
+                        if target_acc:
+                            cloud_name = target_acc.get("cloud_name")
+                            api_key = target_acc.get("api_key")
+                            api_secret = target_acc.get("api_secret")
+                    except Exception as mgr_err:
+                        logger.warning(f"Error resolving cloudinary accounts: {mgr_err}")
+
                 if cloud_name and api_key and api_secret:
                     cloudinary.config(
                         cloud_name=cloud_name,
@@ -466,15 +516,19 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
                         api_secret=api_secret,
                         secure=True
                     )
-                
-                signed_url, _ = cloudinary.utils.cloudinary_url(
-                    public_id,
-                    resource_type="video",
-                    type="authenticated",
-                    secure=True,
-                    sign_url=True,
-                )
-                return signed_url
+                    # Sign URL with native format to avoid Cloudinary on-the-fly transcoding limits
+                    signed_url, _ = cloudinary.utils.cloudinary_url(
+                        public_id,
+                        resource_type="video",
+                        type="authenticated",
+                        secure=True,
+                        sign_url=True,
+                        cloud_name=cloud_name,
+                        api_key=api_key,
+                        api_secret=api_secret
+                    )
+                    return signed_url
+                return None
 
             if rpath.startswith("http://") or rpath.startswith("https://"):
                 if "onrender.com/uploads/" in rpath:
@@ -484,12 +538,27 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
                         return f"/api/admin/recordings/stream/{fname}"
                 return rpath
 
-            local_file = find_local_recording_file(rpath)
-            if local_file:
-                fname = os.path.basename(local_file)
-                return f"/api/admin/recordings/stream/{fname}"
+            fname = os.path.basename(str(rpath).replace("\\", "/").strip())
+            if fname and fname.endswith((".webm", ".mp4", ".mov", ".mkv")):
+                is_production = (
+                    str(os.getenv("ENV", "")).lower() == "production"
+                    or str(os.getenv("APP_ENV", "")).lower() == "production"
+                    or str(os.getenv("ENVIRONMENT", "")).lower() == "production"
+                )
+                if is_production:
+                    return f"/api/admin/recordings/stream/{fname}"
 
-            # If not found locally on disk, return None
+                local_file = find_local_recording_file(fname)
+                if local_file:
+                    return f"/api/admin/recordings/stream/{fname}"
+
+                # Fallback for local development connecting to production database:
+                prod_base = os.getenv("PRODUCTION_API_URL") or os.getenv("PROD_API_URL") or "https://hireiq.co.in"
+                clean_prod = prod_base.rstrip("/")
+                if not clean_prod.endswith("/api"):
+                    clean_prod = f"{clean_prod}/api"
+                return f"{clean_prod}/admin/recordings/stream/{fname}"
+
             return None
         except Exception as e:
             print(f"Error generating recording URL for {rpath}: {e}")
@@ -693,6 +762,12 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
     round1_s = 0.0
     round2_s = 0.0
     interview_type = (session_data.get("interview_type") if session_data else None) or "Technical"
+    is_recruiter_led_session = bool(
+        session_data and (
+            session_data.get("interview_mode") == "recruiter_led"
+            or str(session_data.get("interview_format") or "").lower() in ("recruiter-led", "recruiter_led")
+        )
+    )
     scores = [r["ai_score"] for r in results if r["ai_score"] is not None]
     verbal_avg = round(sum(scores) / len(scores), 1) if scores else 0
 
@@ -743,8 +818,24 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
         print(f"ðŸš¨ complete-session blend error: {blend_err}")
         avg_score = verbal_avg
 
+    if is_recruiter_led_session:
+        _stored_s = session_data.get("avg_score")
+        if _stored_s is None:
+            _stored_s = session_data.get("score")
+        avg_score = _stored_s if _stored_s is not None else verbal_avg
+        round1_s = avg_score
+        round2_s = avg_score
+        if not saved_rec:
+            saved_rec = session_data.get("overall_recommendation") or "Pending Evaluation"
+        if saved_comm is None:
+            saved_comm = avg_score
+        if saved_skills is None:
+            saved_skills = avg_score
+
     # Use cached values if available and valid (not empty or fallback placeholders), else generate
-    has_bad_summary = not saved_str or "unable to generate" in str(saved_str).lower() or "summary generation failed" in str(saved_str).lower()
+    has_bad_summary = (not is_recruiter_led_session) and (
+        not saved_str or "unable to generate" in str(saved_str).lower() or "summary generation failed" in str(saved_str).lower()
+    )
     if saved_rec and saved_comm is not None and saved_skills is not None and not has_bad_summary:
         recommendation = saved_rec
         strengths = saved_str
@@ -991,6 +1082,10 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
         "round1_score": round1_s,
         "round2_score": round2_s,
         "interview_type": interview_type,
+        "interview_format": session_data.get("interview_format", "Standard") if session_data else "Standard",
+        "interview_mode": session_data.get("interview_mode", "standard") if session_data else "standard",
+        "recruiter_evaluations": (session_data.get("recruiter_evaluations") or []) if session_data else [],
+        "overall_notes": (session_data.get("overall_notes") or "") if session_data else "",
         "overall_recommendation": recommendation,
         "strengths_summary": strengths,
         "weaknesses_summary": weaknesses,
@@ -1012,6 +1107,8 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
         "detected_language_accent": detected_accent,
         "recording_url": recording_url,
         "screen_recording_url": screen_recording_url,
+        "recording_path": raw_path,
+        "screen_recording_path": raw_screen_path,
         "completion_reason": session_data.get("completion_reason"),
         "integrity": {
             "total_tab_switches": total_tab_switches,
@@ -1273,72 +1370,81 @@ def upload_full_recording(
         try:
             from app.core.cloudinary_manager import cloudinary_manager
             
-            # Try uploading using the round-robin accounts
-            last_error = None
-            for account in cloudinary_manager.get_next_accounts_generator():
-                try:
-                    cloud_name = account.get("cloud_name")
-                    api_key = account.get("api_key")
-                    api_secret = account.get("api_secret")
-                    
-                    if not all([cloud_name, api_key, api_secret]):
-                        continue
+            accounts = cloudinary_manager.get_all_accounts()
+            if accounts:
+                last_error = None
+                for account in cloudinary_manager.get_next_accounts_generator():
+                    try:
+                        cloud_name = account.get("cloud_name")
+                        api_key = account.get("api_key")
+                        api_secret = account.get("api_secret")
                         
-                    # Cloudinary's Python SDK upload_large method has a bug where it
-                    # sometimes ignores credentials passed as kwargs and uses globals.
-                    # We can force it by passing it as a `cloud_name` kwarg but using the 
-                    # api_proxy or environment variable, or we can just safely update the config
-                    # using cloudinary.config() before uploading. Since we're in a threaded
-                    # environment, we'll pass the `cloudinary://` URL explicitly using the 
-                    # undocumented `_connection` override or just set config.
-                    
-                    import cloudinary
-                    
-                    # Temporarily update the global config for this thread
-                    cloudinary.config(
-                        cloud_name=cloud_name,
-                        api_key=api_key,
-                        api_secret=api_secret,
-                        secure=True
-                    )
-                    
-                    upload_kwargs = {
-                        "resource_type": "video",
-                        "type": "authenticated",
-                        "folder": "hireiq_interview_recordings"
-                    }
-                    
-                    upload_result = cloudinary.uploader.upload_large(
-                        file_path,
-                        **upload_kwargs
-                    )
-                    
-                    cloudinary_public_id = upload_result.get("public_id")
-                    if not cloudinary_public_id:
-                        raise ValueError(f"Cloudinary returned empty public_id: {upload_result}")
-                    
-                    # Store the account details in the DB along with the path so we know which 
-                    # credentials to use when generating signed URLs later, since we have multiple keys!
-                    normalized_path = f"cloudinary-authenticated://{cloudinary_public_id}?cloud_name={cloud_name}&api_key={api_key}&api_secret={api_secret}"
-                    
-                    # Clean up local file after successful upload
-                    os.remove(file_path)
-                    last_error = None
-                    break  # Success, exit the retry loop
-                    
-                except Exception as cloud_e:
-                    logger.warning(f"Cloudinary upload failed for key {account.get('api_key')}: {cloud_e}")
-                    last_error = cloud_e
-                    continue # Try the next account
-                    
-            if last_error:
-                raise last_error
-            
+                        if not all([cloud_name, api_key, api_secret]):
+                            continue
+                            
+                        import cloudinary
+                        import cloudinary.uploader
+                        
+                        # Temporarily update config and also pass credentials explicitly in upload_kwargs for complete thread-safety
+                        cloudinary.config(
+                            cloud_name=cloud_name,
+                            api_key=api_key,
+                            api_secret=api_secret,
+                            secure=True
+                        )
+                        
+                        upload_kwargs = {
+                            "resource_type": "video",
+                            "folder": "hireiq_interview_recordings",
+                            "cloud_name": cloud_name,
+                            "api_key": api_key,
+                            "api_secret": api_secret
+                        }
+                        
+                        upload_result = cloudinary.uploader.upload_large(
+                            file_path,
+                            **upload_kwargs
+                        )
+                        
+                        cloudinary_public_id = upload_result.get("public_id")
+                        if not cloudinary_public_id:
+                            raise ValueError(f"Cloudinary returned empty public_id: {upload_result}")
+                        
+                        # Store direct secure HTTPS URL from Cloudinary if available; fallback to signed protocol
+                        secure_url = upload_result.get("secure_url")
+                        normalized_path = secure_url or f"cloudinary-authenticated://{cloudinary_public_id}?cloud_name={cloud_name}&api_key={api_key}&api_secret={api_secret}"
+                        
+                        # Clean up local file only after successful upload
+                        if os.path.exists(file_path):
+                            os.remove(file_path)
+                        last_error = None
+                        break  # Success, exit the retry loop
+                        
+                    except Exception as cloud_e:
+                        err_str = str(cloud_e).lower()
+                        logger.warning(f"Cloudinary upload failed for key {account.get('api_key')}: {cloud_e}")
+                        if "disabled customer" in err_str or "unauthorized" in err_str:
+                            cloudinary_manager.mark_account_disabled(account.get("cloud_name"), str(cloud_e))
+                        last_error = cloud_e
+                        continue  # Try the next account
+                        
+                if not cloudinary_public_id and last_error:
+                    logger.warning(f"All Cloudinary uploads exhausted. Falling back to local storage: {last_error}")
+                    normalized_path = file_path.replace("\\", "/")
+                    cloudinary_public_id = None
+            else:
+                # No Cloudinary accounts configured (local dev): Save local file path directly
+                normalized_path = file_path.replace("\\", "/")
+                cloudinary_public_id = None
         except Exception as cloud_e:
-            logger.exception("All Cloudinary upload attempts failed")
+            logger.exception(f"All Cloudinary upload attempts failed: {cloud_e}")
             # Fall back to local storage instead of deleting the file
             normalized_path = file_path.replace("\\", "/")
             cloudinary_public_id = None
+        
+        # Absolute fallback guarantee: if file exists on disk, never store None
+        if not normalized_path and os.path.exists(file_path):
+            normalized_path = file_path.replace("\\", "/")
         # Update database
         uploaded_at = datetime.now(timezone.utc)
         
@@ -1378,7 +1484,7 @@ def upload_full_recording(
                     type="authenticated",
                     invalidate=True,
                 )
-            elif os.path.exists(normalized_path):
+            elif normalized_path and os.path.exists(normalized_path):
                 os.remove(normalized_path)
             raise HTTPException(status_code=404, detail="Interview record no longer exists")
 
@@ -1426,8 +1532,8 @@ def upload_full_recording(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/admin/recordings/stream/{filename}")
-@router.get("/api/admin/recordings/stream/{filename}")
+@router.api_route("/admin/recordings/stream/{filename}", methods=["GET", "HEAD"])
+@router.api_route("/api/admin/recordings/stream/{filename}", methods=["GET", "HEAD"])
 def stream_local_recording(filename: str):
     """
     Stream a local video recording from server disk with media headers.
@@ -1439,6 +1545,8 @@ def stream_local_recording(filename: str):
 
     backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     check_dirs = [
+        "/app/uploads/recordings",
+        "/app/uploads",
         os.path.join(backend_dir, "uploads", "recordings"),
         os.path.join(backend_dir, "uploads"),
         os.path.abspath("backend/uploads/recordings"),
@@ -1455,7 +1563,20 @@ def stream_local_recording(filename: str):
             break
 
     if not target_file:
-        raise HTTPException(status_code=404, detail="Recording file not found on server disk")
+        is_production = (
+            str(os.getenv("ENV", "")).lower() == "production"
+            or str(os.getenv("APP_ENV", "")).lower() == "production"
+            or str(os.getenv("ENVIRONMENT", "")).lower() == "production"
+        )
+        if is_production:
+            raise HTTPException(status_code=404, detail="Recording file not found on server disk")
+
+        prod_base = os.getenv("PRODUCTION_API_URL") or os.getenv("PROD_API_URL") or "https://hireiq.co.in"
+        clean_prod = prod_base.rstrip("/")
+        if not clean_prod.endswith("/api"):
+            clean_prod = f"{clean_prod}/api"
+        from starlette.responses import RedirectResponse
+        return RedirectResponse(url=f"{clean_prod}/admin/recordings/stream/{clean_filename}")
 
     media_type = "video/webm"
     if clean_filename.lower().endswith(".mp4"):

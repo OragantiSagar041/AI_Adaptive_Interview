@@ -2,7 +2,7 @@ import json
 import os
 import re
 from hashlib import sha1
-from typing import Any, Dict, List, TypedDict
+from typing import Any, Dict, List, Optional, TypedDict
 
 from app.ai.ai_client import chat_completion, extract_json as _safe_json_extract
 
@@ -211,7 +211,7 @@ def _build_context_packet(state: CodingRoundState) -> str:
     return json.dumps(packet, ensure_ascii=True)
 
 
-def _llm_json(system_prompt: str, user_prompt: str, fallback: Dict[str, Any]) -> Dict[str, Any]:
+def _llm_json(system_prompt: str, user_prompt: str, fallback: Dict[str, Any], temperature: float = 0.1) -> Dict[str, Any]:
     try:
         content = chat_completion(
             messages=[
@@ -219,20 +219,72 @@ def _llm_json(system_prompt: str, user_prompt: str, fallback: Dict[str, Any]) ->
                 {"role": "user", "content": user_prompt},
             ],
             model=DEFAULT_MODEL,
-            temperature=0.1,
+            temperature=temperature,
             timeout=60,
         )
         result = _safe_json_extract(content)
         return result if result else _safe_json(content, fallback)
     except Exception as exc:
-        fallback = dict(fallback)
+        fallback = dict(fallback) if isinstance(fallback, dict) else {}
         fallback.setdefault("coach_message", f"AI feedback unavailable right now: {exc}")
         return fallback
 
 
 import random
 
-def _offline_coding_fallback(profile_text: str) -> Dict[str, Any]:
+_CODING_TITLE_STOPWORDS = {
+    "a", "an", "the", "of", "in", "on", "to", "for", "with", "and", "or",
+    "live", "coding", "challenge", "problem", "task", "write", "function",
+    "calculator", "analyzer", "finder", "checker", "system", "manager",
+}
+
+
+def _normalize_coding_key(text: Any) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", str(text or "").lower()).strip()
+
+
+def _coding_title_tokens(text: Any) -> set:
+    return set(re.findall(r"[a-z0-9]+", str(text or "").lower())) - _CODING_TITLE_STOPWORDS
+
+
+def _is_coding_task_duplicate(
+    task: Optional[Dict[str, Any]],
+    exclude_titles: Optional[List[str]] = None,
+    exclude_functions: Optional[List[str]] = None,
+) -> bool:
+    if not isinstance(task, dict):
+        return False
+    title_norm = _normalize_coding_key(task.get("title"))
+    fn_norm = _normalize_coding_key(task.get("function_name"))
+    title_tokens = _coding_title_tokens(task.get("title"))
+
+    for ex_fn in (exclude_functions or []):
+        ex_fn_norm = _normalize_coding_key(ex_fn)
+        if fn_norm and ex_fn_norm and fn_norm == ex_fn_norm and fn_norm not in ("solve", "solution", "main"):
+            return True
+
+    for ex_title in (exclude_titles or []):
+        ex_norm = _normalize_coding_key(ex_title)
+        if not ex_norm or not title_norm:
+            continue
+        if title_norm == ex_norm or title_norm in ex_norm or ex_norm in title_norm:
+            return True
+        ex_tokens = _coding_title_tokens(ex_title)
+        if title_tokens and ex_tokens:
+            inter = title_tokens & ex_tokens
+            union = title_tokens | ex_tokens
+            jaccard = len(inter) / len(union) if union else 0.0
+            min_overlap = len(inter) / min(len(title_tokens), len(ex_tokens))
+            if jaccard >= 0.50 or min_overlap >= 0.67:
+                return True
+    return False
+
+
+def _offline_coding_fallback(
+    profile_text: str,
+    exclude_titles: Optional[List[str]] = None,
+    exclude_functions: Optional[List[str]] = None,
+) -> Optional[Dict[str, Any]]:
     profile_lower = (profile_text or "").lower()
     
     tasks_pool = [
@@ -325,18 +377,330 @@ def _offline_coding_fallback(profile_text: str) -> Dict[str, Any]:
                 {"id": 13, "input": [[1, -1, 1, -1, 1]], "expected": 1, "visible": False},
                 {"id": 14, "input": [[100, -100, 200]], "expected": 200, "visible": False},
             ],
-        }
+        },
+        {
+            "title": "Valid Parentheses Matcher",
+            "description": "Given a string `s` containing only '(', ')', '{', '}', '[' and ']', determine if the input brackets are properly balanced and nested.",
+            "input_format": "A string `s` of bracket characters.",
+            "output_format": "Boolean `True` if balanced, otherwise `False`.",
+            "constraints": ["0 <= s.length <= 10^4"],
+            "examples": [{"input": '"()[]{}"', "output": "true", "explanation": "All brackets close in valid order."}],
+            "evaluation_focus": ["Stack Data Structure", "Edge Case Handling"],
+            "starter_function_signature": "def is_valid_brackets(s):",
+            "function_name": "is_valid_brackets",
+            "difficulty": "Easy",
+            "recommended_language": "python",
+            "timebox_minutes": 20,
+            "test_cases": [
+                {"id": 1, "input": ["()[]{}"], "expected": True, "visible": True},
+                {"id": 2, "input": ["(]"], "expected": False, "visible": True},
+                {"id": 3, "input": ["({[]})"], "expected": True, "visible": True},
+                {"id": 4, "input": [""], "expected": True, "visible": False},
+                {"id": 5, "input": ["("], "expected": False, "visible": False},
+                {"id": 6, "input": [")"], "expected": False, "visible": False},
+                {"id": 7, "input": ["([)]"], "expected": False, "visible": False},
+                {"id": 8, "input": ["{[]}"], "expected": True, "visible": False},
+                {"id": 9, "input": ["((()))"], "expected": True, "visible": False},
+                {"id": 10, "input": ["((())"], "expected": False, "visible": False},
+                {"id": 11, "input": ["[]{}(())"], "expected": True, "visible": False},
+                {"id": 12, "input": ["}{"], "expected": False, "visible": False},
+                {"id": 13, "input": ["[[[[]]]]"], "expected": True, "visible": False},
+                {"id": 14, "input": ["[({})](]"], "expected": False, "visible": False},
+            ],
+        },
+        {
+            "title": "First Non-Repeating Character",
+            "description": "Given a string `s`, find the index of the first character that does not repeat anywhere in the string. Return -1 if none exists.",
+            "input_format": "A lowercase string `s`.",
+            "output_format": "Integer index of the first unique character, or -1.",
+            "constraints": ["0 <= s.length <= 10^5"],
+            "examples": [{"input": '"leetcode"', "output": "0", "explanation": "'l' appears once at index 0."}],
+            "evaluation_focus": ["Frequency Counting", "Two-Pass O(N) Scan"],
+            "starter_function_signature": "def first_unique_char(s):",
+            "function_name": "first_unique_char",
+            "difficulty": "Easy",
+            "recommended_language": "python",
+            "timebox_minutes": 20,
+            "test_cases": [
+                {"id": 1, "input": ["leetcode"], "expected": 0, "visible": True},
+                {"id": 2, "input": ["loveleetcode"], "expected": 2, "visible": True},
+                {"id": 3, "input": ["aabb"], "expected": -1, "visible": True},
+                {"id": 4, "input": [""], "expected": -1, "visible": False},
+                {"id": 5, "input": ["z"], "expected": 0, "visible": False},
+                {"id": 6, "input": ["aadadaad"], "expected": -1, "visible": False},
+                {"id": 7, "input": ["abcabcx"], "expected": 6, "visible": False},
+                {"id": 8, "input": ["swiss"], "expected": 1, "visible": False},
+                {"id": 9, "input": ["racecar"], "expected": 3, "visible": False},
+                {"id": 10, "input": ["aabbccd"], "expected": 6, "visible": False},
+                {"id": 11, "input": ["xxyz"], "expected": 2, "visible": False},
+                {"id": 12, "input": ["bbbb"], "expected": -1, "visible": False},
+                {"id": 13, "input": ["abac"], "expected": 1, "visible": False},
+                {"id": 14, "input": ["python"], "expected": 0, "visible": False},
+            ],
+        },
+        {
+            "title": "Merge Overlapping Intervals",
+            "description": "Given an array of intervals `[start, end]`, merge all overlapping intervals and return an array of non-overlapping intervals sorted by start time.",
+            "input_format": "A list of `[start, end]` integer pairs.",
+            "output_format": "A sorted list of merged `[start, end]` pairs.",
+            "constraints": ["0 <= intervals.length <= 10^4"],
+            "examples": [{"input": "[[1,3],[2,6],[8,10],[15,18]]", "output": "[[1,6],[8,10],[15,18]]", "explanation": "[1,3] and [2,6] overlap."}],
+            "evaluation_focus": ["Sorting", "Interval Merging"],
+            "starter_function_signature": "def merge_intervals(intervals):",
+            "function_name": "merge_intervals",
+            "difficulty": "Medium",
+            "recommended_language": "python",
+            "timebox_minutes": 25,
+            "test_cases": [
+                {"id": 1, "input": [[[1, 3], [2, 6], [8, 10], [15, 18]]], "expected": [[1, 6], [8, 10], [15, 18]], "visible": True},
+                {"id": 2, "input": [[[1, 4], [4, 5]]], "expected": [[1, 5]], "visible": True},
+                {"id": 3, "input": [[[5, 6], [1, 2]]], "expected": [[1, 2], [5, 6]], "visible": True},
+                {"id": 4, "input": [[]], "expected": [], "visible": False},
+                {"id": 5, "input": [[[1, 10], [2, 3], [4, 5]]], "expected": [[1, 10]], "visible": False},
+                {"id": 6, "input": [[[1, 4], [0, 4]]], "expected": [[0, 4]], "visible": False},
+                {"id": 7, "input": [[[1, 4], [0, 1]]], "expected": [[0, 4]], "visible": False},
+                {"id": 8, "input": [[[1, 4], [2, 3]]], "expected": [[1, 4]], "visible": False},
+                {"id": 9, "input": [[[2, 3], [4, 5], [6, 7], [1, 10]]], "expected": [[1, 10]], "visible": False},
+                {"id": 10, "input": [[[1, 2]]], "expected": [[1, 2]], "visible": False},
+                {"id": 11, "input": [[[1, 3], [4, 6], [7, 9]]], "expected": [[1, 3], [4, 6], [7, 9]], "visible": False},
+                {"id": 12, "input": [[[1, 5], [2, 6], [3, 7]]], "expected": [[1, 7]], "visible": False},
+                {"id": 13, "input": [[[10, 12], [8, 10], [6, 8]]], "expected": [[6, 12]], "visible": False},
+                {"id": 14, "input": [[[0, 0], [1, 1]]], "expected": [[0, 0], [1, 1]], "visible": False},
+            ],
+        },
+        {
+            "title": "Longest Substring Without Repeating Characters",
+            "description": "Given a string `s`, find the length of the longest contiguous substring that contains no duplicate characters.",
+            "input_format": "A string `s`.",
+            "output_format": "An integer representing the maximum unique substring length.",
+            "constraints": ["0 <= s.length <= 5 * 10^4"],
+            "examples": [{"input": '"abcabcbb"', "output": "3", "explanation": 'The answer is "abc", length 3.'}],
+            "evaluation_focus": ["Sliding Window", "Hash Map Index Tracking"],
+            "starter_function_signature": "def longest_unique_substring(s):",
+            "function_name": "longest_unique_substring",
+            "difficulty": "Medium",
+            "recommended_language": "python",
+            "timebox_minutes": 25,
+            "test_cases": [
+                {"id": 1, "input": ["abcabcbb"], "expected": 3, "visible": True},
+                {"id": 2, "input": ["bbbbb"], "expected": 1, "visible": True},
+                {"id": 3, "input": ["pwwkew"], "expected": 3, "visible": True},
+                {"id": 4, "input": [""], "expected": 0, "visible": False},
+                {"id": 5, "input": [" "], "expected": 1, "visible": False},
+                {"id": 6, "input": ["au"], "expected": 2, "visible": False},
+                {"id": 7, "input": ["dvdf"], "expected": 3, "visible": False},
+                {"id": 8, "input": ["abba"], "expected": 2, "visible": False},
+                {"id": 9, "input": ["abcdef"], "expected": 6, "visible": False},
+                {"id": 10, "input": ["tmmzuxt"], "expected": 5, "visible": False},
+                {"id": 11, "input": ["aabaab!bb"], "expected": 3, "visible": False},
+                {"id": 12, "input": ["nfpdmpi"], "expected": 5, "visible": False},
+                {"id": 13, "input": ["ohvhjdml"], "expected": 6, "visible": False},
+                {"id": 14, "input": ["ckilbkd"], "expected": 5, "visible": False},
+            ],
+        },
+        {
+            "title": "Product of Array Except Self",
+            "description": "Given an integer array `nums`, return an array `answer` such that `answer[i]` equals the product of all elements of `nums` except `nums[i]`, without using division.",
+            "input_format": "An array of integers `nums`.",
+            "output_format": "An array of integers representing products except self.",
+            "constraints": ["2 <= nums.length <= 10^5"],
+            "examples": [{"input": "[1,2,3,4]", "output": "[24,12,8,6]", "explanation": "Prefix and suffix products multiply cleanly."}],
+            "evaluation_focus": ["Prefix & Suffix Products", "O(N) Without Division"],
+            "starter_function_signature": "def product_except_self(nums):",
+            "function_name": "product_except_self",
+            "difficulty": "Medium",
+            "recommended_language": "python",
+            "timebox_minutes": 25,
+            "test_cases": [
+                {"id": 1, "input": [[1, 2, 3, 4]], "expected": [24, 12, 8, 6], "visible": True},
+                {"id": 2, "input": [[-1, 1, 0, -3, 3]], "expected": [0, 0, 9, 0, 0], "visible": True},
+                {"id": 3, "input": [[2, 3]], "expected": [3, 2], "visible": True},
+                {"id": 4, "input": [[0, 0]], "expected": [0, 0], "visible": False},
+                {"id": 5, "input": [[1, 1, 1, 1]], "expected": [1, 1, 1, 1], "visible": False},
+                {"id": 6, "input": [[5, 2, 3]], "expected": [6, 15, 10], "visible": False},
+                {"id": 7, "input": [[-1, -2, -3]], "expected": [6, 3, 2], "visible": False},
+                {"id": 8, "input": [[0, 4, 5]], "expected": [20, 0, 0], "visible": False},
+                {"id": 9, "input": [[2, 2, 2]], "expected": [4, 4, 4], "visible": False},
+                {"id": 10, "input": [[10, 0, 0]], "expected": [0, 0, 0], "visible": False},
+                {"id": 11, "input": [[1, 2, 0, 4]], "expected": [0, 0, 8, 0], "visible": False},
+                {"id": 12, "input": [[3, 4, 5, 6]], "expected": [120, 90, 72, 60], "visible": False},
+                {"id": 13, "input": [[-2, 3, -4]], "expected": [-12, 8, -6], "visible": False},
+                {"id": 14, "input": [[7, 1]], "expected": [1, 7], "visible": False},
+            ],
+        },
+        {
+            "title": "Best Time to Buy and Sell Stock",
+            "description": "Given an array `prices` where `prices[i]` is the price of a stock on day `i`, return the maximum profit achievable from one buy followed by one sell. Return 0 if no profit is possible.",
+            "input_format": "An array of non-negative integers `prices`.",
+            "output_format": "An integer representing maximum single-transaction profit.",
+            "constraints": ["1 <= prices.length <= 10^5"],
+            "examples": [{"input": "[7,1,5,3,6,4]", "output": "5", "explanation": "Buy at 1, sell at 6 for profit 5."}],
+            "evaluation_focus": ["Greedy One-Pass", "Running Minimum Tracking"],
+            "starter_function_signature": "def max_profit(prices):",
+            "function_name": "max_profit",
+            "difficulty": "Easy",
+            "recommended_language": "python",
+            "timebox_minutes": 20,
+            "test_cases": [
+                {"id": 1, "input": [[7, 1, 5, 3, 6, 4]], "expected": 5, "visible": True},
+                {"id": 2, "input": [[7, 6, 4, 3, 1]], "expected": 0, "visible": True},
+                {"id": 3, "input": [[2, 4, 1]], "expected": 2, "visible": True},
+                {"id": 4, "input": [[1]], "expected": 0, "visible": False},
+                {"id": 5, "input": [[1, 2]], "expected": 1, "visible": False},
+                {"id": 6, "input": [[2, 1]], "expected": 0, "visible": False},
+                {"id": 7, "input": [[3, 3, 3]], "expected": 0, "visible": False},
+                {"id": 8, "input": [[1, 2, 3, 4, 5]], "expected": 4, "visible": False},
+                {"id": 9, "input": [[5, 1, 2, 10]], "expected": 9, "visible": False},
+                {"id": 10, "input": [[10, 2, 8, 1, 9]], "expected": 8, "visible": False},
+                {"id": 11, "input": [[0, 5, 0, 10]], "expected": 10, "visible": False},
+                {"id": 12, "input": [[4, 2, 1, 7]], "expected": 6, "visible": False},
+                {"id": 13, "input": [[6, 1, 3, 2, 4, 7]], "expected": 6, "visible": False},
+                {"id": 14, "input": [[100, 180, 260, 310, 40, 535, 695]], "expected": 655, "visible": False},
+            ],
+        },
+        {
+            "title": "Rotate Array by K Steps",
+            "description": "Given an integer array `nums` and a non-negative integer `k`, return the array rotated to the right by `k` steps.",
+            "input_format": "An array of integers `nums` and integer `k`.",
+            "output_format": "The right-rotated integer array.",
+            "constraints": ["0 <= nums.length <= 10^5", "0 <= k <= 10^5"],
+            "examples": [{"input": "[1,2,3,4,5,6,7], 3", "output": "[5,6,7,1,2,3,4]", "explanation": "Rotated 3 steps to the right."}],
+            "evaluation_focus": ["Modulo Normalization", "Array Slicing / Reversal"],
+            "starter_function_signature": "def rotate_array(nums, k):",
+            "function_name": "rotate_array",
+            "difficulty": "Easy",
+            "recommended_language": "python",
+            "timebox_minutes": 20,
+            "test_cases": [
+                {"id": 1, "input": [[1, 2, 3, 4, 5, 6, 7], 3], "expected": [5, 6, 7, 1, 2, 3, 4], "visible": True},
+                {"id": 2, "input": [[-1, -100, 3, 99], 2], "expected": [3, 99, -1, -100], "visible": True},
+                {"id": 3, "input": [[1, 2, 3], 4], "expected": [3, 1, 2], "visible": True},
+                {"id": 4, "input": [[], 3], "expected": [], "visible": False},
+                {"id": 5, "input": [[1], 10], "expected": [1], "visible": False},
+                {"id": 6, "input": [[1, 2, 3], 0], "expected": [1, 2, 3], "visible": False},
+                {"id": 7, "input": [[1, 2, 3], 3], "expected": [1, 2, 3], "visible": False},
+                {"id": 8, "input": [[1, 2], 1], "expected": [2, 1], "visible": False},
+                {"id": 9, "input": [[1, 2], 3], "expected": [2, 1], "visible": False},
+                {"id": 10, "input": [[5, 6, 7, 8], 1], "expected": [8, 5, 6, 7], "visible": False},
+                {"id": 11, "input": [[5, 6, 7, 8], 2], "expected": [7, 8, 5, 6], "visible": False},
+                {"id": 12, "input": [[10, 20, 30, 40, 50], 7], "expected": [40, 50, 10, 20, 30], "visible": False},
+                {"id": 13, "input": [[0, 0, 1], 1], "expected": [1, 0, 0], "visible": False},
+                {"id": 14, "input": [[9, 8, 7, 6], 6], "expected": [7, 6, 9, 8], "visible": False},
+            ],
+        },
+        {
+            "title": "Run-Length String Compression",
+            "description": "Write a function that performs run-length encoding on string `s` by replacing consecutive identical characters with the character followed by its count (e.g., 'aaabbc' -> 'a3b2c1'). Return empty string for empty input.",
+            "input_format": "A string `s`.",
+            "output_format": "The run-length encoded string.",
+            "constraints": ["0 <= s.length <= 10^4"],
+            "examples": [{"input": '"aaabbc"', "output": '"a3b2c1"', "explanation": "3 a's, 2 b's, 1 c."}],
+            "evaluation_focus": ["Two-Pointer String Scan", "Linear Builder Pattern"],
+            "starter_function_signature": "def compress_string(s):",
+            "function_name": "compress_string",
+            "difficulty": "Easy",
+            "recommended_language": "python",
+            "timebox_minutes": 20,
+            "test_cases": [
+                {"id": 1, "input": ["aaabbc"], "expected": "a3b2c1", "visible": True},
+                {"id": 2, "input": ["abcd"], "expected": "a1b1c1d1", "visible": True},
+                {"id": 3, "input": ["aaaaa"], "expected": "a5", "visible": True},
+                {"id": 4, "input": [""], "expected": "", "visible": False},
+                {"id": 5, "input": ["x"], "expected": "x1", "visible": False},
+                {"id": 6, "input": ["aabbcc"], "expected": "a2b2c2", "visible": False},
+                {"id": 7, "input": ["aabba"], "expected": "a2b2a1", "visible": False},
+                {"id": 8, "input": ["wwwwwaaadexxxxxx"], "expected": "w5a3d1e1x6", "visible": False},
+                {"id": 9, "input": ["11122"], "expected": "1322", "visible": False},
+                {"id": 10, "input": ["AAaa"], "expected": "A2a2", "visible": False},
+                {"id": 11, "input": ["zzzz"], "expected": "z4", "visible": False},
+                {"id": 12, "input": ["ababa"], "expected": "a1b1a1b1a1", "visible": False},
+                {"id": 13, "input": ["bbccc"], "expected": "b2c3", "visible": False},
+                {"id": 14, "input": ["mmnnpp"], "expected": "m2n2p2", "visible": False},
+            ],
+        },
+        {
+            "title": "Count Subarrays With Target Sum",
+            "description": "Given an integer array `nums` and an integer `k`, return the total number of contiguous subarrays whose sum equals `k`.",
+            "input_format": "An integer array `nums` and target integer `k`.",
+            "output_format": "Integer count of subarrays summing to `k`.",
+            "constraints": ["1 <= nums.length <= 2 * 10^4"],
+            "examples": [{"input": "[1,1,1], 2", "output": "2", "explanation": "Two subarrays [1,1] sum to 2."}],
+            "evaluation_focus": ["Prefix Sum Hash Map", "O(N) Complexity"],
+            "starter_function_signature": "def subarray_sum_count(nums, k):",
+            "function_name": "subarray_sum_count",
+            "difficulty": "Medium",
+            "recommended_language": "python",
+            "timebox_minutes": 25,
+            "test_cases": [
+                {"id": 1, "input": [[1, 1, 1], 2], "expected": 2, "visible": True},
+                {"id": 2, "input": [[1, 2, 3], 3], "expected": 2, "visible": True},
+                {"id": 3, "input": [[1, -1, 0], 0], "expected": 3, "visible": True},
+                {"id": 4, "input": [[0, 0, 0], 0], "expected": 6, "visible": False},
+                {"id": 5, "input": [[5], 5], "expected": 1, "visible": False},
+                {"id": 6, "input": [[5], 3], "expected": 0, "visible": False},
+                {"id": 7, "input": [[3, 4, 7, 2, -3, 1, 4, 2], 7], "expected": 4, "visible": False},
+                {"id": 8, "input": [[-1, -1, 1], 0], "expected": 1, "visible": False},
+                {"id": 9, "input": [[2, 2, 2], 4], "expected": 2, "visible": False},
+                {"id": 10, "input": [[1, 2, 1, 2, 1], 3], "expected": 4, "visible": False},
+                {"id": 11, "input": [[10, -10, 10], 10], "expected": 3, "visible": False},
+                {"id": 12, "input": [[4, 5, 0, -2, -3, 1], 5], "expected": 3, "visible": False},
+                {"id": 13, "input": [[1, 2, 3, 4], 10], "expected": 1, "visible": False},
+                {"id": 14, "input": [[2, -2, 2, -2], 0], "expected": 4, "visible": False},
+            ],
+        },
     ]
-    return random.choice(tasks_pool)
+
+    available = [
+        t for t in tasks_pool
+        if not _is_coding_task_duplicate(t, exclude_titles, exclude_functions)
+    ]
+    if not available:
+        return None
+    return random.choice(available)
 
 
-def generate_coding_task(profile_text: str, answers_data: List[Dict[str, Any]], interview_type: str = "Technical", industry: str = "General", language: str = "English") -> Dict[str, Any]:
+def generate_coding_task(
+    profile_text: str,
+    answers_data: List[Dict[str, Any]],
+    interview_type: str = "Technical",
+    industry: str = "General",
+    language: str = "English",
+    exclude_titles: Optional[List[str]] = None,
+    exclude_functions: Optional[List[str]] = None,
+) -> Optional[Dict[str, Any]]:
     answers_summary = "\n".join(
         f"- Q: {a.get('question_text', '')}\n  A: {_truncate(a.get('answer_text', ''), 220)}"
-        for a in answers_data[-5:]
+        for a in (answers_data or [])[-5:]
     )
-    fallback = _offline_coding_fallback(profile_text)
-    
+    exclude_titles = [str(t).strip() for t in (exclude_titles or []) if str(t).strip()]
+    exclude_functions = [str(f).strip() for f in (exclude_functions or []) if str(f).strip()]
+    fallback = _offline_coding_fallback(profile_text, exclude_titles=exclude_titles, exclude_functions=exclude_functions)
+
+    exclude_block = ""
+    if exclude_titles or exclude_functions:
+        lines = []
+        if exclude_titles:
+            lines.append("ALREADY USED CODING TITLES / PROBLEMS (STRICTLY FORBIDDEN TO REPEAT OR REPHRASE):")
+            lines.extend(f"- {t}" for t in exclude_titles[:30])
+        if exclude_functions:
+            lines.append("ALREADY USED FUNCTION NAMES (DO NOT REUSE): " + ", ".join(exclude_functions[:30]))
+        exclude_block = "\n" + "\n".join(lines) + "\n"
+
+    algorithmic_themes = [
+        "Hash Map / Frequency Aggregation",
+        "Sliding Window / Contiguous Subarray or Substring",
+        "Stack / Monotonic Stack / Bracket or Expression Parsing",
+        "Intervals / Sorting & Merging Ranges",
+        "Two Pointers / In-place Array Partitioning",
+        "Prefix Sum / Cumulative Metrics",
+        "String Parsing / Run-Length Encoding or Log Normalization",
+        "Greedy Optimization / Scheduling",
+        "Dynamic Programming / Optimal Substructure",
+        "Queue / Rate Limiting or Stream Window Simulation",
+    ]
+    chosen_theme = algorithmic_themes[len(exclude_titles) % len(algorithmic_themes)]
+    temp = 0.6 if exclude_titles else 0.2
+
     if interview_type == "Non-Technical":
         system_prompt = (
             f"You design realistic written business and management case study tasks for the '{industry}' industry. Return valid JSON only."
@@ -349,7 +713,7 @@ Profile:
 
 Recent interview answers:
 {answers_summary or "- No answers available"}
-
+{exclude_block}
 Return JSON with:
 - title
 - description (The detailed scenario the candidate must read and respond to)
@@ -370,19 +734,21 @@ CRITICAL: All text fields (title, description, constraints, evaluation_focus) MU
 """
     else:
         system_prompt = (
-            f"You design realistic live-coding interview tasks tailored to the '{industry}' industry. Return valid JSON only."
+            f"You design realistic live-coding interview tasks tailored to the '{industry}' industry. "
+            f"NEVER repeat or rephrase any previously used coding task. Return valid JSON only."
         )
         user_prompt = f"""
-Create a single coding round tailored to this candidate.
+Create a brand-new, completely unique single coding round tailored to this candidate.
+REQUIRED ALGORITHMIC PATTERN FOR THIS TASK: {chosen_theme}
 
 Profile:
 {_truncate(profile_text, 2500)}
 
 Recent interview answers:
 {answers_summary or "- No answers available"}
-
+{exclude_block}
 Return JSON with:
-- title
+- title (MUST be completely different from every excluded title above)
 - description
 - input_format
 - output_format
@@ -390,7 +756,7 @@ Return JSON with:
 - examples (array of objects with input, output, explanation)
 - evaluation_focus (array)
 - starter_function_signature
-- function_name
+- function_name (MUST be completely different from every excluded function name above)
 - difficulty
 - recommended_language
 - timebox_minutes
@@ -400,8 +766,13 @@ Make the task a pure function problem using only cross-language friendly inputs 
 All text fields MUST be written in English.
 """
 
-    result = _llm_json(system_prompt, user_prompt, fallback)
-    return _normalize_task(result)
+    result = _llm_json(system_prompt, user_prompt, fallback or {}, temperature=temp)
+    normalized = _normalize_task(result) if isinstance(result, dict) and result.get("title") else None
+    if normalized and not _is_coding_task_duplicate(normalized, exclude_titles, exclude_functions):
+        return normalized
+    if fallback and not _is_coding_task_duplicate(fallback, exclude_titles, exclude_functions):
+        return _normalize_task(fallback)
+    return None
 
 
 def _prepare_context(state: CodingRoundState) -> CodingRoundState:

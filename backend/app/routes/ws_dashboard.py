@@ -252,6 +252,9 @@ async def get_dashboard_aggregated_data(
             "interview_id": 1,
             "record_video": 1,
             "interview_type": 1,
+            "interview_format": 1,
+            "interview_mode": 1,
+            "overall_recommendation": 1,
         }
         
         def _load_dashboard_candidates():
@@ -325,6 +328,8 @@ async def get_dashboard_aggregated_data(
         needed_interview_ids = set()
 
         for c in candidates_cursor:
+            if c.get("interview_mode") == "recruiter_led" or str(c.get("interview_format") or "").lower() in ("recruiter-led", "recruiter_led"):
+                continue
             computed_status = sync_session_status(c, now)
             if (computed_status in ("completed", "qualified") or c.get("started_at")) and (c.get("score") is None or c.get("avg_score") is None):
                 all_completed_candidates.append(c)

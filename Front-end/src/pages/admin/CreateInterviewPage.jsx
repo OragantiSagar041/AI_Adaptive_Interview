@@ -106,6 +106,7 @@ export default function CreateInterviewPage() {
       interviewType: 'Technical',
       language: 'English',
       caseStudyCount: 3,
+      externalMeetingUrl: '',
       duration: 30,
       scheduledStart: '',
       scheduledEnd: '',
@@ -230,6 +231,7 @@ export default function CreateInterviewPage() {
       interviewType: 'Technical',
       language: 'English',
       caseStudyCount: 3,
+      externalMeetingUrl: '',
       duration: 30,
       scheduledStart: '',
       scheduledEnd: '',
@@ -1055,7 +1057,9 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
         ats_score: atsScoreData ? atsScoreData.score : null,
         jd_file_url: singleCandidate.jdFileUrl || null,
         job_id: singleCandidate.jobId || "",
-        interview_title: singleCandidate.jobTitle || ""
+        interview_title: singleCandidate.jobTitle || "",
+        external_meeting_url: (singleCandidate.externalMeetingUrl || '').trim(),
+        external_call_mode: Boolean(interviewFormat === 'Recruiter-Led' && singleCandidate.externalMeetingUrl?.trim())
       }, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -1084,6 +1088,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
           url: data.link_url,
           id: data.link_id,
           email,
+          interviewFormat: singleCandidate.interviewFormat,
           createdAt: new Date().toISOString()
         }
       ])
@@ -1109,7 +1114,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
         current_ctc: '',
         expected_ctc: '',
         current_company: '',
-        notice_period: ''
+        notice_period: '',
+        externalMeetingUrl: ''
       }))
       setAtsScoreData(null)
       setCustomEmailHtml('')
@@ -1356,7 +1362,9 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
           project_name: bulkConfig.projectFileName || '',
           voice_clone: bulkConfig.voiceCloning,
           custom_voice_id: bulkConfig.customVoiceId || "",
-          jd_file_url: bulkConfig.jdFileUrl || null
+          jd_file_url: bulkConfig.jdFileUrl || null,
+          external_meeting_url: (bulkConfig.externalMeetingUrl || '').trim(),
+          external_call_mode: Boolean(interviewFormat === 'Recruiter-Led' && bulkConfig.externalMeetingUrl?.trim())
         }, {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -2409,7 +2417,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     onChange={(e) => handleSingleChange('interviewFormat', e.target.value)}
                     options={[
                       { value: 'Standard', label: 'Standard (Text/Form Based)' },
-                      { value: 'Voice', label: 'Voice AI (Real-time Speech)' }
+                      { value: 'Voice', label: 'Voice AI (Real-time Speech)' },
+                      { value: 'Recruiter-Led', label: 'Recruiter-Led (Human Call + AI Q&A Guide)' }
                     ]}
                   />
 
@@ -2511,6 +2520,29 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       ]}
                     />
                   </div>
+
+                  {singleCandidate.interviewFormat === 'Recruiter-Led' && (
+                    <div className="sm:col-span-2 p-3.5 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/60 space-y-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300">
+                          External Call Link (Optional: Google Meet / Zoom)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => window.open('https://meet.new', '_blank', 'noopener,noreferrer')}
+                          className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 transition"
+                        >
+                          + New Google Meet
+                        </button>
+                      </div>
+                      <Input
+                        type="url"
+                        placeholder="Paste https://meet.google.com/... or Zoom link (leave blank to use built-in 2-way video)"
+                        value={singleCandidate.externalMeetingUrl || ''}
+                        onChange={(e) => handleSingleChange('externalMeetingUrl', e.target.value)}
+                      />
+                    </div>
+                  )}
 
                   {singleCandidate.interviewType === 'Non-Technical' && (
                     <div className="sm:col-span-2">
@@ -3443,7 +3475,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     onChange={(e) => handleBulkConfigChange('interviewFormat', e.target.value)}
                     options={[
                       { value: 'Standard', label: 'Standard (Text/Form Based)' },
-                      { value: 'Voice', label: 'Voice AI (Real-time Speech)' }
+                      { value: 'Voice', label: 'Voice AI (Real-time Speech)' },
+                      { value: 'Recruiter-Led', label: 'Recruiter-Led (Human Call + AI Q&A Guide)' }
                     ]}
                   />
 
@@ -3521,6 +3554,29 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       ]}
                     />
                   </div>
+
+                  {bulkConfig.interviewFormat === 'Recruiter-Led' && (
+                    <div className="sm:col-span-2 p-3.5 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/60 space-y-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300">
+                          External Call Link (Optional: Google Meet / Zoom)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => window.open('https://meet.new', '_blank', 'noopener,noreferrer')}
+                          className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 transition"
+                        >
+                          + New Google Meet
+                        </button>
+                      </div>
+                      <Input
+                        type="url"
+                        placeholder="Paste https://meet.google.com/... or Zoom link (leave blank for built-in 2-way video)"
+                        value={bulkConfig.externalMeetingUrl || ''}
+                        onChange={(e) => handleBulkConfigChange('externalMeetingUrl', e.target.value)}
+                      />
+                    </div>
+                  )}
 
                   {bulkConfig.interviewType === 'Non-Technical' && (
                     <div className="sm:col-span-2">
@@ -3878,15 +3934,50 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       >
                         <i className="far fa-copy text-xs"></i> Copy Link
                       </button>
-                      <a
-                        href={`/interview?session_id=${link.id}`}
-                        target="_blank"
-                        rel="noreferrer"
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const isRecruiterLed = String(link.interviewFormat || '').toLowerCase() === 'recruiter-led';
+                          if (isRecruiterLed) {
+                            Swal.fire({
+                              title: 'Start Recruiter-Led Interview',
+                              html: `
+                                <div style="text-align: left; font-size: 13px; color: #475569; line-height: 1.5; padding: 4px 0;">
+                                  <p style="margin-bottom: 12px;">This session for <strong>${link.candidateName || 'Candidate'}</strong> is configured as <strong>Recruiter-Led</strong>.</p>
+                                  <p style="margin-bottom: 0;">How would you like to enter this interview?</p>
+                                </div>
+                              `,
+                              icon: 'question',
+                              showCancelButton: true,
+                              showDenyButton: true,
+                              confirmButtonText: '<i class="fas fa-video mr-1"></i> Conduct as Recruiter (Cockpit)',
+                              denyButtonText: '<i class="fas fa-user mr-1"></i> Preview as Candidate',
+                              cancelButtonText: 'Cancel',
+                              confirmButtonColor: '#059669',
+                              denyButtonColor: '#4f46e5',
+                              cancelButtonColor: '#94a3b8',
+                              customClass: {
+                                popup: 'rounded-2xl',
+                                confirmButton: 'font-bold text-xs px-4 py-2.5 rounded-lg shadow-md',
+                                denyButton: 'font-bold text-xs px-4 py-2.5 rounded-lg shadow-md',
+                                cancelButton: 'text-xs px-3 py-2 rounded-lg'
+                              }
+                            }).then((result) => {
+                              if (result.isConfirmed) {
+                                window.open(`/interview/recruiter-copilot/${link.id}`, '_blank', 'noopener,noreferrer');
+                              } else if (result.isDenied) {
+                                window.open(`/interview?session_id=${link.id}`, '_blank', 'noopener,noreferrer');
+                              }
+                            });
+                          } else {
+                            window.open(`/interview?session_id=${link.id}`, '_blank', 'noopener,noreferrer');
+                          }
+                        }}
                         style={{ backgroundColor: '#4f46e5', color: '#ffffff', border: '1.5px solid #818cf8' }}
-                        className="px-4 py-2 text-xs font-extrabold rounded-lg shadow-sm hover:bg-indigo-700 hover:-translate-y-0.5 transition-all text-center flex items-center justify-center no-underline cursor-pointer gap-1.5 ring-1 ring-indigo-400/50"
+                        className="px-4 py-2 text-xs font-extrabold rounded-lg shadow-sm hover:bg-indigo-700 hover:-translate-y-0.5 transition-all text-center flex items-center justify-center cursor-pointer gap-1.5 ring-1 ring-indigo-400/50"
                       >
                         <i className="fas fa-play text-[10px] text-white"></i> Start Interview
-                      </a>
+                      </button>
                     </div>
                   </div>
                 ))}

@@ -37,7 +37,7 @@ import { VOICE_TRANSLATIONS } from '../utils/voiceTranslations'
 import { normalizeInterviewQuestions, unwrapInterviewPayload } from './interview/interviewPayload'
 
 const MAX_RECORDING_BYTES_PER_STREAM = 128 * 1024 * 1024
-const RECORDING_OPTIONS = { videoBitsPerSecond: 450000, audioBitsPerSecond: 48000 }
+const RECORDING_OPTIONS = { videoBitsPerSecond: 350000, audioBitsPerSecond: 48000 }
 
 // ── Video Avatar Component ────────────────────────────────────────────────────
 function VideoAvatar({ status, size = 220 }) {

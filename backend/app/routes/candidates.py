@@ -1253,6 +1253,40 @@ def restore_candidate(
 
 
 
+def _normalize_interview_mode_and_format(raw_format: Optional[str], raw_mode: Optional[str] = None) -> tuple[str, str]:
+    fmt = (raw_format or "Standard").strip()
+    mode = (raw_mode or "").strip().lower()
+    lower_fmt = fmt.lower()
+    if mode in ("recruiter_led", "recruiter-led", "recruiter led") or lower_fmt in ("recruiter-led", "recruiter_led", "recruiter led", "copilot", "recruiter-copilot"):
+        return "Recruiter-Led", "recruiter_led"
+    if mode == "voice" or lower_fmt == "voice":
+        return "Voice", "voice"
+    return (fmt or "Standard"), "standard"
+
+
+def _sanitize_external_meeting_url(raw_url: Optional[str]) -> str:
+    url = (raw_url or "").strip()
+    if not url:
+        return ""
+    lower = url.lower()
+    if not (lower.startswith("http://") or lower.startswith("https://")):
+        if re.match(r"^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(/.*)?$", url):
+            url = "https://" + url
+        else:
+            return ""
+    return url[:500]
+
+
+def _strip_recruiter_cheat_sheet(questions: list) -> list:
+    cleaned = []
+    for q in (questions or []):
+        if isinstance(q, dict):
+            cleaned.append({k: v for k, v in q.items() if k not in ("model_answer", "quick_summary", "key_points")})
+        else:
+            cleaned.append(q)
+    return cleaned
+
+
 @router.post("/admin/create-session")
 def create_session(data: CreateSession, http_req: Request, current_admin: dict = Depends(get_current_admin_details)):
     company_id = current_admin.get("company_id")
@@ -1323,7 +1357,10 @@ def create_session(data: CreateSession, http_req: Request, current_admin: dict =
             "created_at": now.isoformat(),
             "expires_at": expires_at,
             "interview_duration": data.interview_duration,
-            "interview_format": data.interview_format,
+            "interview_format": _normalize_interview_mode_and_format(data.interview_format, getattr(data, "interview_mode", None))[0],
+            "interview_mode": _normalize_interview_mode_and_format(data.interview_format, getattr(data, "interview_mode", None))[1],
+            "external_meeting_url": _sanitize_external_meeting_url(getattr(data, "external_meeting_url", "")),
+            "external_call_mode": bool(getattr(data, "external_call_mode", False) or _sanitize_external_meeting_url(getattr(data, "external_meeting_url", ""))),
             "interview_type": data.interview_type,
             "language": data.language,
             "record_video": data.record_video,
@@ -1541,7 +1578,10 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
                 "created_at": now.isoformat(),
                 "expires_at": expiry_iso,
                 "interview_duration": data.interview_duration,
-                "interview_format": data.interview_format,
+                "interview_format": _normalize_interview_mode_and_format(data.interview_format, getattr(data, "interview_mode", None))[0],
+            "interview_mode": _normalize_interview_mode_and_format(data.interview_format, getattr(data, "interview_mode", None))[1],
+            "external_meeting_url": _sanitize_external_meeting_url(getattr(data, "external_meeting_url", "")),
+            "external_call_mode": bool(getattr(data, "external_call_mode", False) or _sanitize_external_meeting_url(getattr(data, "external_meeting_url", ""))),
                 "interview_type": data.interview_type,
                 "industry": data.industry_type,
                 "language": data.language,
@@ -1562,20 +1602,12 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
             }
             if data.scheduled_start:
                 session_doc["scheduled_start"] = data.scheduled_start
-                start_dt = parse_iso_datetime(data.scheduled_start)
-                if start_dt:
-                    send_at = start_dt - timedelta(minutes=15)
-                    if send_at > now:
-                        session_doc["invite_email_status"] = "pending"
-                        session_doc["invite_email_send_at"] = send_at.isoformat()
-                        session_doc["invite_email_sent_at"] = None
             if data.scheduled_end:
                 session_doc["scheduled_end"] = data.scheduled_end
 
-            if "invite_email_status" not in session_doc:
-                session_doc["invite_email_status"] = "sent"
-                session_doc["invite_email_send_at"] = now.isoformat()
-                session_doc["invite_email_sent_at"] = now.isoformat()
+            session_doc["invite_email_status"] = "sent"
+            session_doc["invite_email_send_at"] = now.isoformat()
+            session_doc["invite_email_sent_at"] = now.isoformat()
             
             session_docs.append(session_doc)
         
@@ -1685,9 +1717,20 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
     }
 
 
+
+def _find_session_by_identifier(identifier: str) -> Optional[Dict[str, Any]]:
+    ident = (identifier or "").strip()
+    if not ident:
+        return None
+    queries = [{"link_id": ident}, {"interview_id": ident}, {"session_id": ident}]
+    if ObjectId.is_valid(ident):
+        queries.append({"_id": ObjectId(ident)})
+    return interview_sessions_collection.find_one({"$or": queries})
+
+
 @router.get("/session/{link_id}")
 def get_session_by_link(link_id: str):
-    row = interview_sessions_collection.find_one({"link_id": link_id})
+    row = _find_session_by_identifier(link_id)
     if row:
         expires_at = row.get("expires_at")
         now = datetime.now(timezone.utc)
@@ -1722,6 +1765,8 @@ def get_session_by_link(link_id: str):
                 pass
                 
         status = row.get("status")
+        norm_format, norm_mode = _normalize_interview_mode_and_format(row.get("interview_format"), row.get("interview_mode"))
+        is_recruiter_led = (norm_mode == "recruiter_led")
         
         # Verify if allowed duration has already been exceeded
         raw_duration = row.get("interview_duration")
@@ -1730,7 +1775,7 @@ def get_session_by_link(link_id: str):
         except (ValueError, TypeError):
             interview_duration = 30
             
-        if status == 'started':
+        if status == 'started' and not is_recruiter_led:
             from datetime import timedelta
             started_at_str = row.get("started_at")
             if started_at_str:
@@ -1738,7 +1783,7 @@ def get_session_by_link(link_id: str):
                     started_at = parse_iso_datetime(started_at_str)
                     if now > started_at + timedelta(minutes=interview_duration + 5):
                         interview_sessions_collection.update_one(
-                            {"link_id": link_id},
+                            {"_id": row["_id"]},
                             {"$set": {"status": "completed"}}
                         )
                         status = "completed"
@@ -1747,7 +1792,7 @@ def get_session_by_link(link_id: str):
                     
                     
         # Verify if proctoring thresholds have already been exceeded
-        if status == 'started':
+        if status == 'started' and not is_recruiter_led:
             violation_count = row.get("violation_count", 0)
             warnings_count = row.get("warnings_count", 0)
             violations = row.get("violations", [])
@@ -1764,7 +1809,7 @@ def get_session_by_link(link_id: str):
             )
             if is_terminated:
                 interview_sessions_collection.update_one(
-                    {"link_id": link_id},
+                    {"_id": row["_id"]},
                     {"$set": {"status": "completed"}}
                 )
                 status = "completed"
@@ -1774,7 +1819,8 @@ def get_session_by_link(link_id: str):
             "candidate_name": row.get("candidate_name"),
             "session_status": status,
             "interview_duration": interview_duration,
-            "interview_format": row.get("interview_format", "Standard"),
+            "interview_format": _normalize_interview_mode_and_format(row.get("interview_format"), row.get("interview_mode"))[0],
+            "interview_mode": _normalize_interview_mode_and_format(row.get("interview_format"), row.get("interview_mode"))[1],
             "is_expired": is_expired,
             "is_before_schedule": is_before_schedule,
             "scheduled_start": scheduled_start,
@@ -1787,10 +1833,180 @@ def get_session_by_link(link_id: str):
             "custom_voice_id": row.get("custom_voice_id", ""),
             "cloned_voice_id": row.get("cloned_voice_id", ""),
             "project_difficulty": row.get("project_difficulty") or row.get("difficulty") or "Medium",
-            "difficulty": row.get("project_difficulty") or row.get("difficulty") or "Medium"
+            "difficulty": row.get("project_difficulty") or row.get("difficulty") or "Medium",
+            "external_meeting_url": row.get("external_meeting_url") or "",
+            "external_call_mode": bool(row.get("external_call_mode") or row.get("external_meeting_url"))
         }
     else:
         raise HTTPException(status_code=404, detail="Session not found")
+@router.post("/session/{link_id}/live-join")
+def live_join_session(link_id: str):
+    """
+    Lightweight join endpoint for Recruiter-Led live calls.
+    Marks session active, issues a candidate monitoring/WebRTC token,
+    and NEVER exposes interview questions, model answers, or AI cheat sheets.
+    """
+    row = _find_session_by_identifier(link_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Session not found")
+    canonical_link_id = str(row.get("link_id") or row.get("_id") or link_id)
+
+    if row.get("is_deactivated"):
+        raise HTTPException(status_code=403, detail="This interview session has been deactivated.")
+
+    now = datetime.now(timezone.utc)
+    expires_at = row.get("expires_at")
+    if expires_at:
+        try:
+            if now > parse_iso_datetime(expires_at):
+                return {
+                    "status": "expired",
+                    "is_expired": True,
+                    "detail": "This interview link has expired."
+                }
+        except Exception:
+            pass
+
+    scheduled_start = row.get("scheduled_start", "")
+    if scheduled_start:
+        try:
+            if now < parse_iso_datetime(scheduled_start):
+                return {
+                    "status": "scheduled",
+                    "is_before_schedule": True,
+                    "scheduled_start": scheduled_start,
+                    "detail": "This interview has not started yet."
+                }
+        except Exception:
+            pass
+
+    scheduled_end = row.get("scheduled_end", "")
+    if scheduled_end:
+        try:
+            if now > parse_iso_datetime(scheduled_end):
+                return {
+                    "status": "expired",
+                    "is_expired": True,
+                    "detail": "This scheduled interview window has ended."
+                }
+        except Exception:
+            pass
+
+    norm_format, norm_mode = _normalize_interview_mode_and_format(row.get("interview_format"), row.get("interview_mode"))
+    raw_duration = row.get("interview_duration")
+    try:
+        interview_duration = int(raw_duration) if raw_duration and int(raw_duration) > 0 else 30
+    except (ValueError, TypeError):
+        interview_duration = 30
+
+    session_status = row.get("status", "pending")
+    interview_id = row.get("interview_id") or f"int_{int(now.timestamp())}_{uuid.uuid4().hex[:8]}"
+    started_at = row.get("started_at") or now.isoformat()
+
+    if session_status in ("completed", "terminated", "cancelled", "expired"):
+        return {
+            "status": "completed",
+            "session_status": session_status,
+            "already_completed": True,
+            "link_id": canonical_link_id,
+            "interview_id": interview_id,
+            "candidate_name": row.get("candidate_name", "Candidate"),
+            "interview_title": row.get("interview_title") or row.get("job_title") or "",
+            "interview_format": norm_format,
+            "interview_mode": norm_mode,
+            "external_meeting_url": row.get("external_meeting_url") or "",
+            "external_call_mode": bool(row.get("external_call_mode") or row.get("external_meeting_url")),
+        }
+
+    update_fields = {
+        "interview_id": interview_id,
+        "interview_format": norm_format,
+        "interview_mode": norm_mode,
+        "external_meeting_url": row.get("external_meeting_url") or "",
+        "external_call_mode": bool(row.get("external_call_mode") or row.get("external_meeting_url")),
+    }
+    if session_status != "started":
+        update_fields["status"] = "started"
+        update_fields["started_at"] = started_at
+        session_status = "started"
+
+    interview_sessions_collection.update_one({"_id": row["_id"]}, {"$set": update_fields})
+
+    # Ensure matching interview doc exists cleanly (without touching autonomous questions if already populated)
+    diff_val = row.get("project_difficulty") or row.get("difficulty") or "Medium"
+    safe_diff = diff_val.capitalize() if isinstance(diff_val, str) and diff_val.strip() else "Medium"
+    try:
+        interviews_collection.update_one(
+            {"$or": [{"id": interview_id}, {"link_id": canonical_link_id}]},
+            {
+                "$set": {
+                    "id": interview_id,
+                    "link_id": canonical_link_id,
+                    "source": "Recruiter-Led Live Call",
+                    "job_description": row.get("job_description") or "",
+                    "resume_text": row.get("resume_text") or "",
+                    "difficulty": safe_diff,
+                    "candidate_name": row.get("candidate_name") or "Candidate",
+                    "candidate_email": row.get("candidate_email") or "",
+                    "language": row.get("language") or "English",
+                    "interview_format": norm_format,
+                    "interview_mode": norm_mode,
+                    "external_meeting_url": row.get("external_meeting_url") or "",
+                    "external_call_mode": bool(row.get("external_call_mode") or row.get("external_meeting_url")),
+                    "interview_type": row.get("interview_type") or "Technical",
+                    "status": "started",
+                },
+                "$setOnInsert": {
+                    "created_at": started_at,
+                    "profile_text": (row.get("job_description") or "")[:5000],
+                    "questions": row.get("pre_generated_questions") or "[]",
+                },
+            },
+            upsert=True,
+        )
+    except Exception as iv_err:
+        logger.warning(f"Error syncing interview doc in live_join_session: {iv_err}")
+
+    try:
+        from app.db.redis_manager import broadcast_interview_event
+        broadcast_interview_event(
+            event_type="candidate_joined",
+            session_id=canonical_link_id,
+            company_id=row.get("company_id"),
+            created_by=row.get("created_by"),
+            extra={
+                "candidate_name": row.get("candidate_name"),
+                "interview_title": row.get("interview_title") or row.get("job_title"),
+                "interview_mode": norm_mode,
+                "external_meeting_url": row.get("external_meeting_url") or "",
+                "external_call_mode": bool(row.get("external_call_mode") or row.get("external_meeting_url")),
+            },
+        )
+    except Exception:
+        pass
+
+    return {
+        "status": "started",
+        "session_status": session_status,
+        "link_id": canonical_link_id,
+        "interview_id": interview_id,
+        "candidate_name": row.get("candidate_name") or "Candidate",
+        "interview_title": row.get("interview_title") or row.get("job_title") or "",
+        "interview_duration": interview_duration,
+        "interview_format": norm_format,
+        "interview_mode": norm_mode,
+        "external_meeting_url": row.get("external_meeting_url") or "",
+        "external_call_mode": bool(row.get("external_call_mode") or row.get("external_meeting_url")),
+        "interview_type": row.get("interview_type") or "Technical",
+        "record_video": row.get("record_video", True),
+        "language": row.get("language") or "English",
+        "started_at": started_at,
+        "monitoring_token": _create_candidate_monitoring_token(
+            canonical_link_id, interview_id, interview_duration
+        ),
+    }
+
+
 @router.get("/admin/sessions")
 def get_all_sessions(
     current_admin: dict = Depends(get_current_admin_details), 
@@ -1836,32 +2052,64 @@ def get_all_sessions(
         "link_id": 1, "candidate_id": 1, "candidate_name": 1, "candidate_email": 1, "status": 1, 
         "created_at": 1, "expires_at": 1, "interview_duration": 1, "interview_id": 1, 
         "avg_score": 1, "overall_recommendation": 1, "decision": 1, 
-        "recording_path": 1, "record_video": 1, "is_deactivated": 1
+        "recording_path": 1, "record_video": 1, "is_deactivated": 1,
+        "interview_format": 1, "interview_mode": 1, "interview_type": 1, "interview_title": 1,
+        "external_meeting_url": 1, "external_call_mode": 1
     }
     
     rows = list(interview_sessions_collection.find(query_filter, projection).sort(sort_field))
     
     # Pre-fetch recording paths to prevent N+1 query problem
-    interview_ids_to_fetch = [row.get("interview_id") for row in rows if row.get("interview_id") and not row.get("recording_path")]
+    interview_ids_to_fetch = [
+        row.get("interview_id") 
+        for row in rows 
+        if row.get("interview_id") and not (row.get("recording_path") or row.get("screen_recording_path") or row.get("recording_url") or row.get("screen_recording_url"))
+    ]
     interview_doc_map = {}
     if interview_ids_to_fetch:
-        interview_docs = list(interviews_collection.find({"id": {"$in": interview_ids_to_fetch}}, {"id": 1, "recording_path": 1}))
+        interview_docs = list(interviews_collection.find(
+            {"id": {"$in": interview_ids_to_fetch}}, 
+            {"id": 1, "recording_path": 1, "screen_recording_path": 1, "recording_url": 1, "screen_recording_url": 1}
+        ))
         for doc in interview_docs:
-            interview_doc_map[doc.get("id")] = doc.get("recording_path")
+            interview_doc_map[doc.get("id")] = doc
     
     sessions = []
     now = datetime.now(timezone.utc)
     for row in rows:
         has_video = False
         interview_id = row.get("interview_id")
-        rec_path = row.get("recording_path")
         
-        if interview_id and not rec_path:
-            rec_path = interview_doc_map.get(interview_id)
-        if rec_path:
-            # Cloudinary URLs are DB-backed remote videos; local fallbacks need a file check.
-            if rec_path.startswith("http") or os.path.exists(rec_path):
-                has_video = True
+        # Check camera recording
+        rec_path = row.get("recording_path") or row.get("recording_url")
+        if interview_id and not rec_path and interview_id in interview_doc_map:
+            rec_doc = interview_doc_map[interview_id]
+            rec_path = rec_doc.get("recording_path") or rec_doc.get("recording_url")
+            
+        # Check screen recording
+        screen_rec_path = row.get("screen_recording_path") or row.get("screen_recording_url")
+        if interview_id and not screen_rec_path and interview_id in interview_doc_map:
+            rec_doc = interview_doc_map[interview_id]
+            screen_rec_path = rec_doc.get("screen_recording_path") or rec_doc.get("screen_recording_url")
+            
+        def is_valid_media_path(path_val):
+            if not path_val:
+                return False
+            p_str = str(path_val).strip()
+            if not p_str or p_str.lower() in ("none", "null"):
+                return False
+            if (
+                p_str.startswith("cloudinary-authenticated://")
+                or p_str.startswith("http://")
+                or p_str.startswith("https://")
+                or p_str.lower().endswith((".webm", ".mp4", ".mov", ".mkv"))
+                or os.path.exists(p_str)
+            ):
+                return True
+            return False
+
+        if is_valid_media_path(rec_path) or is_valid_media_path(screen_rec_path):
+            has_video = True
                 
         status = sync_session_status(row, now)
 
@@ -1877,17 +2125,25 @@ def get_all_sessions(
             "interview_id": interview_id,
             "avg_score": row.get("avg_score"),
             "recommendation": row.get("overall_recommendation"),
+            "interview_format": _normalize_interview_mode_and_format(row.get("interview_format"), row.get("interview_mode"))[0],
+            "interview_mode": _normalize_interview_mode_and_format(row.get("interview_format"), row.get("interview_mode"))[1],
+            "interview_type": row.get("interview_type", "Technical"),
+            "interview_title": row.get("interview_title", ""),
+            "external_meeting_url": row.get("external_meeting_url") or "",
+            "external_call_mode": bool(row.get("external_call_mode") or row.get("external_meeting_url")),
             "decision": row.get("decision"),
             "has_video": has_video,
             "record_video": row.get("record_video", True),
-            "is_deactivated": row.get("is_deactivated", False)
+            "is_deactivated": row.get("is_deactivated", False),
+            "recording_path": rec_path,
+            "screen_recording_path": screen_rec_path,
         })
         
     return {"status": "success", "sessions": sessions}
 
 @router.delete("/admin/sessions/{link_id}")
 def delete_session(link_id: str, current_admin: dict = Depends(require_role("admin", "super_admin"))):
-    row = interview_sessions_collection.find_one({"link_id": link_id})
+    row = _find_session_by_identifier(link_id)
     if not row:
         raise HTTPException(status_code=404, detail="Session not found")
         
@@ -1902,28 +2158,28 @@ def delete_session(link_id: str, current_admin: dict = Depends(require_role("adm
             delete_cached_session(interview_id)
             
     # Delete the session link
-    interview_sessions_collection.delete_one({"link_id": link_id})
+    interview_sessions_collection.delete_one({"_id": row["_id"]})
     
     return {"status": "success", "message": "Session deleted"}
 
 @router.post("/admin/sessions/{link_id}/deactivate")
 def deactivate_session(link_id: str, current_admin: dict = Depends(require_role("admin", "super_admin"))):
-    row = interview_sessions_collection.find_one({"link_id": link_id})
+    row = _find_session_by_identifier(link_id)
     if not row:
         raise HTTPException(status_code=404, detail="Session not found")
     _require_admin_session_access(row, current_admin)
         
-    interview_sessions_collection.update_one({"link_id": link_id}, {"$set": {"is_deactivated": True}})
+    interview_sessions_collection.update_one({"_id": row["_id"]}, {"$set": {"is_deactivated": True}})
     return {"status": "success"}
 
 @router.post("/admin/sessions/{link_id}/activate")
 def activate_session(link_id: str, current_admin: dict = Depends(require_role("admin", "super_admin"))):
-    row = interview_sessions_collection.find_one({"link_id": link_id})
+    row = _find_session_by_identifier(link_id)
     if not row:
         raise HTTPException(status_code=404, detail="Session not found")
     _require_admin_session_access(row, current_admin)
         
-    interview_sessions_collection.update_one({"link_id": link_id}, {"$set": {"is_deactivated": False}})
+    interview_sessions_collection.update_one({"_id": row["_id"]}, {"$set": {"is_deactivated": False}})
     return {"status": "success"}
 
 @router.post("/admin/sessions/{link_id}/reschedule")
@@ -1932,7 +2188,7 @@ def reschedule_session(link_id: str, new_expiry: str = Form(...), new_start: str
     Reschedule an interview by updating its expires_at date 
     and resetting its status to pending (if it was expired).
     """
-    row = interview_sessions_collection.find_one({"link_id": link_id})
+    row = _find_session_by_identifier(link_id)
     if not row:
         raise HTTPException(status_code=404, detail="Session not found")
     _require_admin_session_access(row, current_admin)
@@ -1948,7 +2204,7 @@ def reschedule_session(link_id: str, new_expiry: str = Form(...), new_start: str
     # Also update scheduled_end if it exists for consistency
     update_data["scheduled_end"] = new_expiry
     result = interview_sessions_collection.update_one(
-        {"link_id": link_id}, 
+        {"_id": row["_id"]},
         {"$set": update_data}
     )
     
@@ -1956,8 +2212,8 @@ def reschedule_session(link_id: str, new_expiry: str = Form(...), new_start: str
         raise HTTPException(status_code=404, detail="Session not found")
         
     # Fetch the updated session for email dispatch
-    updated_session = interview_sessions_collection.find_one({"link_id": link_id})
-    link_url = f"{FRONTEND_URL}/interview?session_id={link_id}"
+    updated_session = interview_sessions_collection.find_one({"_id": row["_id"]})
+    link_url = f"{FRONTEND_URL}/interview?session_id={(updated_session or row).get('link_id') or link_id}"
     
     # Re-send the invitation email to the candidate
     email_result = queue_or_send_interview_email(updated_session, link_url)
@@ -1998,7 +2254,7 @@ def check_questions_match_instructions(questions_list, instructions_text):
 @router.post("/api/start_session_interview")
 async def start_session_interview(link_id: str = Form(...)):
     current_session_id.set(link_id)
-    row = interview_sessions_collection.find_one({"link_id": link_id})
+    row = _find_session_by_identifier(link_id)
     
     if not row:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -2008,6 +2264,8 @@ async def start_session_interview(link_id: str = Form(...)):
     resume_text = row.get("resume_text")
     job_description = row.get("job_description")
     status = row.get("status")
+    norm_format, norm_mode = _normalize_interview_mode_and_format(row.get("interview_format"), row.get("interview_mode"))
+    is_recruiter_led = (norm_mode == "recruiter_led")
     interview_type = row.get("interview_type", "Technical")
     num_questions = row.get("num_questions")
     raw_duration = row.get("interview_duration")
@@ -2059,7 +2317,7 @@ async def start_session_interview(link_id: str = Form(...)):
     
     # If session was already started or completed, don't restart — return status
     if status in ('started', 'completed') and existing_interview_id:
-        if status == 'started':
+        if status == 'started' and not is_recruiter_led:
             from datetime import timedelta
             started_at_str = row.get("started_at")
             if started_at_str:
@@ -2068,7 +2326,7 @@ async def start_session_interview(link_id: str = Form(...)):
                     # Block resuming if time elapsed exceeds duration + 5 minutes buffer
                     if datetime.now(timezone.utc) > started_at + timedelta(minutes=interview_duration + 5):
                         interview_sessions_collection.update_one(
-                            {"link_id": link_id},
+                            {"_id": row["_id"]},
                             {"$set": {"status": "completed"}}
                         )
                         status = "completed"
@@ -2092,7 +2350,7 @@ async def start_session_interview(link_id: str = Form(...)):
             )
             if is_terminated and status != "completed":
                 interview_sessions_collection.update_one(
-                    {"link_id": link_id},
+                    {"_id": row["_id"]},
                     {"$set": {"status": "completed"}}
                 )
                 status = "completed"
@@ -2178,7 +2436,7 @@ async def start_session_interview(link_id: str = Form(...)):
             if not questions and not answered_docs:
                 print("🔄 Resetting session status to pending for fresh question generation with AI instructions...")
                 interview_sessions_collection.update_one(
-                    {"link_id": link_id},
+                    {"_id": row["_id"]},
                     {"$set": {"status": "pending"}, "$unset": {"interview_id": "", "started_at": ""}}
                 )
                 # Fall through to fresh question generation below (skip the returns in this block)
@@ -2210,14 +2468,15 @@ async def start_session_interview(link_id: str = Form(...)):
                     return {
                         "status": "started",
                         "interview_id": existing_interview_id,
-                        "questions": questions,
-                        "first_question": resume_question,
+                        "questions": _strip_recruiter_cheat_sheet(questions),
+                        "first_question": _strip_recruiter_cheat_sheet([resume_question])[0] if resume_question else None,
                         "resume_question_id": resume_question_id or 1,
                         "total_questions": len(questions),
                         "candidate_name": candidate_name,
                         "interview_duration": interview_duration,
                         "interview_type": interview_type,
-                        "interview_format": row.get("interview_format", "Standard"),
+                        "interview_format": _normalize_interview_mode_and_format(row.get("interview_format"), row.get("interview_mode"))[0],
+            "interview_mode": _normalize_interview_mode_and_format(row.get("interview_format"), row.get("interview_mode"))[1],
                         "record_video": row.get("record_video", True),
                         "language": row.get("language", "English"),
                         "voice_clone": row.get("voice_clone", False),
@@ -2422,13 +2681,14 @@ async def start_session_interview(link_id: str = Form(...)):
             "questions": json.dumps(questions),
             "created_at": datetime.now(timezone.utc).isoformat(),
             "language": language,
-            "interview_format": row.get("interview_format", "Standard"),
+            "interview_format": _normalize_interview_mode_and_format(row.get("interview_format"), row.get("interview_mode"))[0],
+            "interview_mode": _normalize_interview_mode_and_format(row.get("interview_format"), row.get("interview_mode"))[1],
             "ai_instructions": ai_instructions_text or ""
         })
         
         # Update session status AND cache questions for instant future loads
         interview_sessions_collection.update_one(
-            {"link_id": link_id},
+            {"_id": row["_id"]},
             {"$set": {
                 "status": "started", 
                 "interview_id": interview_id,
@@ -2453,6 +2713,7 @@ async def start_session_interview(link_id: str = Form(...)):
     except Exception as db_e:
         logger.exception("Failed to persist interview session start")
         raise HTTPException(status_code=500, detail="Unable to start the interview session") from db_e
+    questions = _strip_recruiter_cheat_sheet(questions)
     return {
         "status": "started",
         "interview_id": interview_id,
@@ -2461,7 +2722,8 @@ async def start_session_interview(link_id: str = Form(...)):
         "total_questions": len(questions),
         "candidate_name": candidate_name,
         "interview_duration": interview_duration,
-        "interview_format": row.get("interview_format", "Standard"),
+        "interview_format": _normalize_interview_mode_and_format(row.get("interview_format"), row.get("interview_mode"))[0],
+            "interview_mode": _normalize_interview_mode_and_format(row.get("interview_format"), row.get("interview_mode"))[1],
         "interview_type": interview_type,
         "record_video": row.get("record_video", True),
         "language": row.get("language", "English"),
