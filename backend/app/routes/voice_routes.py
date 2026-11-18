@@ -36,7 +36,8 @@ async def interview_websocket(websocket: WebSocket, link_id: str):
     token = websocket.query_params.get("token", "")
     try:
         payload = decode_monitoring_token(JWT_SECRET_KEY, ALGORITHM, token, link_id)
-        session = interview_sessions_collection.find_one(
+        session = await run_in_threadpool(
+            interview_sessions_collection.find_one,
             {"link_id": link_id},
             {"interview_id": 1, "status": 1, "is_deactivated": 1, "candidate_name": 1},
         )
@@ -54,7 +55,8 @@ async def interview_websocket(websocket: WebSocket, link_id: str):
 
         if session.get("status") not in ("started", "in_progress"):
             try:
-                interview_sessions_collection.update_one(
+                await run_in_threadpool(
+                    interview_sessions_collection.update_one,
                     {"link_id": link_id},
                     {"$set": {"status": "started", "started_at": datetime.now(timezone.utc).isoformat()}}
                 )

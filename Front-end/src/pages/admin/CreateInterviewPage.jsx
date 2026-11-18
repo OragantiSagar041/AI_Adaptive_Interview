@@ -912,16 +912,16 @@ export default function CreateInterviewPage() {
 
 Congratulations! You have been selected for an AI-powered interview. Please review the details below and click the button to begin when you're ready.
 
-ðŸ“‹ Role Details:
+📋 Role Details:
 {job_description}
 
 [Start Interview Button]
 
-âš ï¸ Mandatory Interview Guidelines
-â€¢ Full-Screen Only: You must remain in full-screen mode. Exiting or switching tabs is flagged as a violation.
-â€¢ Camera Active: AI-powered face tracking and multi-face detection will be active throughout the session.
-â€¢ Quiet Environment: Background noise or additional voices may negatively impact your evaluation score.
-â€¢ Screen Sharing: You must share your entire screen during the session.
+⚠️ Mandatory Interview Guidelines
+• Full-Screen Only: You must remain in full-screen mode. Exiting or switching tabs is flagged as a violation.
+• Camera Active: AI-powered face tracking and multi-face detection will be active throughout the session.
+• Quiet Environment: Background noise or additional voices may negatively impact your evaluation score.
+• Screen Sharing: You must share your entire screen during the session.
 
 {schedule_info}`
 

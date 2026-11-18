@@ -484,7 +484,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
       .replace(/[\u201C\u201D]/g, '"')
       .replace(/\u2026/g, '...')
       .replace(/\u2022/g, '*')
-      .replace(/[^\x00-\x7F]/g, '')
+      .replace(/[\u0080-\uFFFF]/g, '')
   }
 
   const handleDownloadTranscript = () => {

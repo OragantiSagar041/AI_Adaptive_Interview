@@ -1,899 +1,2428 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import axios from 'axios';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
-  X, Sparkles, Trophy, GitCompare, ShieldCheck, AlertTriangle,
-  Search, CheckCircle2, ChevronRight, User, ExternalLink,
-  SlidersHorizontal, Check, RefreshCw, Zap, ArrowRight, Layers,
-  Award, ThumbsUp, Eye, FileText, Clock
+  X, Check, AlertCircle, Briefcase, MapPin, Calendar, User, Eye,
+  ArrowUpDown, GitCompare, Sparkles, Building2, Award, Clock, GraduationCap,
+  ChevronRight, ChevronLeft, ExternalLink, Filter, CheckCircle2, ChevronDown, ChevronUp,
+  Scale, ArrowRight, ArrowLeft, HelpCircle, FileText, Info, TrendingUp
 } from 'lucide-react';
-import Button from '../Button';
+import {
+  evaluateCandidateMatch,
+  getMatchCategory,
+  formatCandidateId,
+  parseExperienceYears,
+  deduplicateCandidatesForComparison,
+  evaluateTiedGroupRecommendation
+} from '../../utils/candidateMatcher';
 
-// Safe Alert Parser - Extracts exact breakdown of Tab Switches, Face Alerts, and Audio Alerts
-const getAlertBreakdown = (c) => {
-  const violationsList = c.violations || c.alerts || [];
-  const tabTypes = ['tab_switch', 'screen_casting', 'screen_share_detected', 'screen_recording', 'screenshare_stopped', 'multiple_displays', 'multi_monitor', 'fullscreen_exit'];
-  const noiseTypes = ['noise_alert', 'background_noise', 'noise'];
+// Formats candidate attribute values with fallback to "Not available" when missing
+function displayValue(val) {
+  if (!val || val === 'Not specified' || val === '—' || String(val).trim() === '') {
+    return 'Not available';
+  }
+  return val;
+}
 
-  let tabSwitches = c.integrity?.total_tab_switches !== undefined
-    ? Number(c.integrity.total_tab_switches || 0)
-    : violationsList.filter(v => tabTypes.includes(v.type || v.violation_type)).length;
+// Analyzes skill differences for a candidate relative to other tied peers
+function getSkillDifferences(candItem, allTiedItems) {
+  const otherTiedItems = allTiedItems.filter(
+    other => (other.candidateId || other.candidate._id || other.candidate.id) !== (candItem.candidateId || candItem.candidate._id || candItem.candidate.id)
+  );
 
-  let faceAlerts = c.integrity?.total_face_alerts !== undefined
-    ? Number(c.integrity.total_face_alerts || 0)
-    : violationsList.filter(v => !tabTypes.includes(v.type || v.violation_type) && !noiseTypes.includes(v.type || v.violation_type) && (v.type || v.violation_type) !== 'window_blur').length;
-
-  let noiseAlerts = c.integrity?.total_noise_alerts !== undefined
-    ? Number(c.integrity.total_noise_alerts || 0)
-    : violationsList.filter(v => noiseTypes.includes(v.type || v.violation_type)).length;
-
-  // Fallback to top-level fields
-  if (tabSwitches === 0 && c.tab_switches) tabSwitches = Number(c.tab_switches) || 0;
-  if (faceAlerts === 0 && c.face_alerts) faceAlerts = Number(c.face_alerts) || 0;
-  if (noiseAlerts === 0 && c.noise_alerts) noiseAlerts = Number(c.noise_alerts) || 0;
-
-  // Single number alert fallback
-  if (tabSwitches === 0 && faceAlerts === 0 && noiseAlerts === 0 && c.proctoring_alerts) {
-    const parsed = parseInt(c.proctoring_alerts, 10);
-    if (!isNaN(parsed) && parsed > 0) {
-      tabSwitches = parsed; // default to tab switches
-    }
+  if (otherTiedItems.length === 0) {
+    return { uniqueMatched: [], advantageMatched: [], peerPossessedGaps: [] };
   }
 
-  const total = tabSwitches + faceAlerts + noiseAlerts;
+  const myMatched = candItem.skillsAlignment?.matchedSkills || [];
+  const myMissing = candItem.skillsAlignment?.missingSkills || [];
+
+  // Skills this candidate matched that NO other tied peer matched (unique advantage)
+  const uniqueMatched = myMatched.filter(skill => {
+    const norm = skill.toLowerCase().trim();
+    return otherTiedItems.every(other => !(other.skillsAlignment?.matchedSkills || []).some(s => s.toLowerCase().trim() === norm));
+  });
+
+  // Skills this candidate matched that at least one other tied peer missed (peer advantage)
+  const advantageMatched = myMatched.filter(skill => {
+    const norm = skill.toLowerCase().trim();
+    return otherTiedItems.some(other => (other.skillsAlignment?.missingSkills || []).some(s => s.toLowerCase().trim() === norm));
+  });
+
+  // Skills this candidate is missing that at least one other tied peer possesses (gap)
+  const peerPossessedGaps = myMissing.filter(skill => {
+    const norm = skill.toLowerCase().trim();
+    return otherTiedItems.some(other => (other.skillsAlignment?.matchedSkills || []).some(s => s.toLowerCase().trim() === norm));
+  });
+
   return {
-    tabSwitches: isNaN(tabSwitches) ? 0 : tabSwitches,
-    faceAlerts: isNaN(faceAlerts) ? 0 : faceAlerts,
-    noiseAlerts: isNaN(noiseAlerts) ? 0 : noiseAlerts,
-    total: isNaN(total) ? 0 : total
+    uniqueMatched,
+    advantageMatched,
+    peerPossessedGaps,
   };
-};
+}
 
-// Compute Comprehensive Composite Fit Score
-// Balances Interview Score (35%), Technical Score (40%), and ATS Resume Match (25%)
-const computeCompositeScore = (c) => {
-  const interviewScore = parseFloat(c.score ?? c.avg_score ?? 0);
-  const techScore = parseFloat(c.skills_score ?? c.scores?.technical_skills ?? (interviewScore > 0 ? interviewScore : 0));
-  const atsScore = parseFloat(c.ats_match_percentage ?? c.ats_score ?? 0);
+// Compares a metric across tied candidates (highest, lowest, equal)
+function getMetricComparison(metricKey, candItem, allTiedItems) {
+  const values = allTiedItems.map(item => item.breakdown[metricKey] || 0);
+  const myVal = candItem.breakdown[metricKey] || 0;
+  const maxVal = Math.max(...values);
+  const minVal = Math.min(...values);
 
-  if (atsScore === 0) {
-    const blended = (interviewScore * 0.5) + (techScore * 0.5);
-    return Math.round(blended * 10) / 10;
+  if (maxVal === minVal) {
+    return { status: 'equal', diff: 0, text: 'Equal' };
+  }
+  if (myVal === maxVal) {
+    const diff = myVal - minVal;
+    return { status: 'highest', diff, text: `Higher (+${diff}%)` };
+  }
+  if (myVal === minVal) {
+    const diff = maxVal - myVal;
+    return { status: 'lowest', diff, text: `Lower (-${diff}%)` };
+  }
+  return { status: 'mid', diff: 0, text: 'Mid-range' };
+}
+
+// Compares numeric experience years across tied candidates
+function getExpComparison(candItem, allTiedItems) {
+  const expValues = allTiedItems.map(item => parseExperienceYears(item.experience));
+  const myExp = parseExperienceYears(candItem.experience);
+  const maxExp = Math.max(...expValues);
+  const minExp = Math.min(...expValues);
+
+  if (maxExp === minExp) {
+    return { status: 'equal', diff: 0, text: 'Equal Experience' };
+  }
+  if (myExp === maxExp) {
+    const diff = Math.round((myExp - minExp) * 10) / 10;
+    return { status: 'highest', diff, text: `+${diff} yr${diff !== 1 ? 's' : ''} more` };
+  }
+  if (myExp === minExp) {
+    const diff = Math.round((maxExp - myExp) * 10) / 10;
+    return { status: 'lowest', diff, text: `-${diff} yr${diff !== 1 ? 's' : ''} less` };
+  }
+  return { status: 'mid', diff: 0, text: 'Mid-range' };
+}
+
+// Generates key differentiators and factual trade-offs for each tied candidate from resume data
+function getCandidateDifferentiators(candItem, allTiedItems, job) {
+  const skillDiffs = getSkillDifferences(candItem, allTiedItems);
+  const skillsComp = getMetricComparison('skillsScore', candItem, allTiedItems);
+  const expComp = getExpComparison(candItem, allTiedItems);
+  const roleComp = getMetricComparison('roleScore', candItem, allTiedItems);
+
+  const advantages = [];
+  const considerations = [];
+
+  // Skills advantages based on resume evidence
+  if (skillDiffs.uniqueMatched.length > 0) {
+    advantages.push(`Only candidate with resume matching: ${skillDiffs.uniqueMatched.join(', ')}`);
+  } else if (skillDiffs.advantageMatched.length > 0) {
+    advantages.push(`Resume matches ${skillDiffs.advantageMatched.join(', ')} (missed by peer)`);
   }
 
-  const composite = (interviewScore * 0.35) + (techScore * 0.40) + (atsScore * 0.25);
-  return Math.round(composite * 10) / 10;
-};
+  if (skillsComp.status === 'highest') {
+    advantages.push(`Higher mandatory skills alignment (${candItem.breakdown.skillsScore}% vs lowest ${Math.min(...allTiedItems.map(c => c.breakdown.skillsScore))}%)`);
+  }
 
-// Score Badge Helper
-const getScorePill = (score, status) => {
-  const num = parseFloat(score || 0);
-  const st = (status || '').toLowerCase();
+  // Preferred skills advantage
+  if (candItem.skillsAlignment?.matchedPreferredSkills?.length > 0) {
+    advantages.push(`Matches ${candItem.skillsAlignment.matchedPreferredSkills.length} preferred skill(s): ${candItem.skillsAlignment.matchedPreferredSkills.join(', ')}`);
+  }
 
-  if (st === 'pending' || (num === 0 && st !== 'completed')) {
-    return {
-      bg: 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-300 dark:border-slate-700',
-      label: 'Pending',
-      text: '0%'
-    };
+  // Experience advantages/gaps
+  if (expComp.status === 'highest') {
+    advantages.push(`More experience indicated in resume (${candItem.experience})`);
+  } else if (expComp.status === 'lowest') {
+    considerations.push(`Less experience indicated in resume (${candItem.experience})`);
   }
-  if (num >= 75) {
-    return {
-      bg: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30',
-      label: 'Strong Hire',
-      text: `${num}%`
-    };
+
+  // Role score advantages/gaps
+  if (roleComp.status === 'highest') {
+    advantages.push(`Stronger keyword & responsibility alignment with JD (${candItem.breakdown.roleScore}%)`);
+  } else if (roleComp.status === 'lowest') {
+    considerations.push(`Lower keyword alignment with JD responsibilities (${candItem.breakdown.roleScore}%)`);
   }
-  if (num >= 60) {
-    return {
-      bg: 'bg-blue-500/15 text-blue-700 dark:text-blue-400 border border-blue-500/30',
-      label: 'Recommended',
-      text: `${num}%`
-    };
+
+  // Skills gaps
+  if (skillDiffs.peerPossessedGaps.length > 0) {
+    considerations.push(`Missing mandatory skill(s): ${skillDiffs.peerPossessedGaps.join(', ')} (matched by peer)`);
   }
-  if (num >= 45) {
-    return {
-      bg: 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30',
-      label: 'Consider',
-      text: `${num}%`
-    };
+
+  // Supplementary skills
+  if (candItem.skillsAlignment?.additionalSkills?.length > 0) {
+    advantages.push(`${candItem.skillsAlignment.additionalSkills.length} supplementary skill(s) found in resume`);
   }
-  return {
-    bg: 'bg-rose-500/15 text-rose-700 dark:text-rose-400 border border-rose-500/30',
-    label: num > 0 ? 'Under Review' : 'Incomplete',
-    text: `${num}%`
-  };
-};
+
+  if (advantages.length === 0) {
+    advantages.push('Equivalent core qualification profile in resume');
+  }
+  if (considerations.length === 0) {
+    considerations.push('No significant requirement deficit found in resume');
+  }
+
+  return { advantages, considerations };
+}
+
+const DEFAULT_EMPTY_SET = new Set();
 
 export default function CandidateComparisonModal({
   isOpen,
   onClose,
+  job,
   candidates = [],
-  preselectedIds = [],
-  API_BASE_URL,
-  token,
-  onSelectCandidate
+  selectedCandidateIds = DEFAULT_EMPTY_SET,
+  onViewDetails,
+  onScheduleInterview,
 }) {
-  const [activeMode, setActiveMode] = useState('grid'); // 'grid' or 'versus'
-  const [rankingMode, setRankingMode] = useState('composite'); // 'composite', 'tech', 'ats', 'interview'
-  const [selectedIds, setSelectedIds] = useState([]);
-  const [detailedCandidates, setDetailedCandidates] = useState({});
-  const [loadingDetails, setLoadingDetails] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  
-  // Versus mode candidate selections
-  const [versusIdA, setVersusIdA] = useState('');
-  const [versusIdB, setVersusIdB] = useState('');
+  // Sort state: 'score_desc' (default), 'score_asc', 'name_asc', 'exp_desc'
+  const [sortBy, setSortBy] = useState('score_desc');
+  // Pagination state: maximum 10 candidates per page in selection row
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
 
-  // Initialize selected candidate IDs
-  useEffect(() => {
-    if (preselectedIds && preselectedIds.length > 0) {
-      setSelectedIds(preselectedIds);
-      if (preselectedIds.length >= 2) {
-        setVersusIdA(preselectedIds[0]);
-        setVersusIdB(preselectedIds[1]);
-      }
-    } else if (candidates.length > 0) {
-      const allIds = candidates.map(c => c.link_id || c.id);
-      setSelectedIds(allIds);
-      if (allIds.length >= 2) {
-        setVersusIdA(allIds[0]);
-        setVersusIdB(allIds[1]);
-      }
+  // Deduplicate candidates strictly by normalized resume content fingerprint
+  // Guarantees each unique resume appears only once in comparison results
+  const uniqueCandidates = useMemo(() => {
+    return deduplicateCandidatesForComparison(candidates, job);
+  }, [candidates, job]);
+
+  // Candidate filter state: set of IDs currently visible in the comparison
+  const [activeCandidateIds, setActiveCandidateIds] = useState(() => {
+    if (selectedCandidateIds && selectedCandidateIds.size > 0) {
+      return new Set(selectedCandidateIds);
     }
-  }, [preselectedIds, candidates]);
-
-  // Fetch full details for candidates in background
-  useEffect(() => {
-    if (!isOpen || selectedIds.length === 0 || !API_BASE_URL || !token) return;
-
-    const idsToFetch = selectedIds.filter(id => !detailedCandidates[id] && !id.startsWith('ai_call_omni_'));
-    if (idsToFetch.length === 0) return;
-
-    setLoadingDetails(true);
-    Promise.allSettled(
-      idsToFetch.map(id =>
-        axios.get(`${API_BASE_URL}/admin/interview/${id}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        }).then(r => ({ id, data: r.data }))
-      )
-    ).then(results => {
-      const newDetails = {};
-      results.forEach(res => {
-        if (res.status === 'fulfilled' && res.value?.data) {
-          newDetails[res.value.id] = res.value.data;
-        }
-      });
-      setDetailedCandidates(prev => ({ ...prev, ...newDetails }));
-    }).finally(() => {
-      setLoadingDetails(false);
-    });
-  }, [isOpen, selectedIds, API_BASE_URL, token]);
-
-  if (!isOpen) return null;
-
-  // Check if string is a failed error text from backend
-  const isInvalidSummary = (text) => {
-    if (!text) return true;
-    const t = text.trim().toLowerCase();
-    return (
-      t.includes('summary generation failed') ||
-      t.includes('review individual scores') ||
-      t.includes('no summary available') ||
-      t === 'n/a' ||
-      t.length < 5
-    );
-  };
-
-  // Merge candidate data and attach composite score
-  const candidateList = selectedIds.map(id => {
-    const basic = candidates.find(c => (c.link_id || c.id) === id) || {};
-    const detailed = detailedCandidates[id] || {};
-    const merged = { ...basic, ...detailed, id };
-    const compScore = computeCompositeScore(merged);
-    return { ...merged, compositeScore: compScore };
+    const deduped = deduplicateCandidatesForComparison(candidates, job);
+    return new Set(deduped.slice(0, 6).map(c => c._id || c.id));
   });
 
-  // Extract clean, intelligent strengths (Never showing raw system errors)
-  const getStrengths = (c) => {
-    if (!isInvalidSummary(c.strengths_summary)) {
-      return c.strengths_summary.trim();
-    }
-    if (!isInvalidSummary(c.summary) && c.summary.length > 10) {
-      return c.summary.trim();
-    }
-    const tech = parseFloat(c.skills_score ?? c.scores?.technical_skills ?? 0);
-    const comm = parseFloat(c.communication_score ?? c.scores?.communication ?? 0);
-    const ats = parseFloat(c.ats_match_percentage ?? c.ats_score ?? 0);
+  // Dedicated Tied Candidates Comparison View active state
+  const [isTiedViewOpen, setIsTiedViewOpen] = useState(false);
+  // Collapsed by default: Equal Resume Match Scores Detected section toggle state
+  const [isTiedScoresExpanded, setIsTiedScoresExpanded] = useState(false);
+  // Active tied group score for dedicated comparison section
+  const [activeTiedScore, setActiveTiedScore] = useState(null);
+  // Set of candidate IDs selected for the dedicated tied comparison table
+  const [tiedSelectedCandidateIds, setTiedSelectedCandidateIds] = useState(new Set());
 
-    if (tech >= 75) {
-      return `Outstanding technical competency (${tech}/100) demonstrated across core evaluation tasks.`;
-    }
-    if (ats >= 80) {
-      return `High resume match (${ats}%) with direct alignment to role requirements and technology stack.`;
-    }
-    if (comm >= 65) {
-      return `Clear, articulate communication and structured problem explanation during the session.`;
-    }
-    if (Array.isArray(c.matched_skills) && c.matched_skills.length > 0) {
-      return `Verified domain skills: ${c.matched_skills.slice(0, 4).join(', ')}.`;
-    }
-    if (c.experience && c.experience !== 'N/A') {
-      return `Experienced background with ${c.experience} in ${c.interview_title || 'target discipline'}.`;
-    }
-    const score = parseFloat(c.score ?? c.avg_score ?? 0);
-    if (score > 50) {
-      return `Consistent performance with an interview score of ${score}%.`;
-    }
-    return 'Candidate participated in interview screening; review question breakdown for topic details.';
-  };
+  const jobId = job?.job_id || job?._id;
 
-  // Extract clean, intelligent weaknesses (Never showing raw system errors)
-  const getWeaknesses = (c) => {
-    if (!isInvalidSummary(c.weaknesses_summary)) {
-      return c.weaknesses_summary.trim();
-    }
-    const ats = parseFloat(c.ats_match_percentage ?? c.ats_score ?? 0);
-    const tech = parseFloat(c.skills_score ?? c.scores?.technical_skills ?? 0);
-    const comm = parseFloat(c.communication_score ?? c.scores?.communication ?? 0);
+  // Reset tied view & collapse tied-score groups when modal opens/closes or job changes
+  React.useEffect(() => {
+    setIsTiedViewOpen(false);
+    setActiveTiedScore(null);
+    setTiedSelectedCandidateIds(new Set());
+    setIsTiedScoresExpanded(false);
+  }, [jobId, isOpen]);
 
-    if (ats === 0) {
-      return 'Resume has 0% direct keyword match with the job description; verify core stack prerequisites.';
+  // Keep activeCandidateIds synced when modal opens or job changes
+  React.useEffect(() => {
+    if (selectedCandidateIds && selectedCandidateIds.size > 0) {
+      setActiveCandidateIds(new Set(selectedCandidateIds));
+    } else if (uniqueCandidates && uniqueCandidates.length > 0) {
+      setActiveCandidateIds(new Set(uniqueCandidates.slice(0, 6).map(c => c._id || c.id)));
+    } else {
+      setActiveCandidateIds(new Set());
     }
-    if (comm > 0 && comm < 50) {
-      return `Communication clarity scored ${comm}/100; several answers were overly brief or fragmented.`;
-    }
-    if (tech > 0 && tech < 60) {
-      return `Technical problem-solving scored ${tech}/100; needs further depth in complex system questions.`;
-    }
-    if (Array.isArray(c.missing_skills) && c.missing_skills.length > 0) {
-      return `Missing key job criteria: ${c.missing_skills.slice(0, 3).join(', ')}.`;
-    }
-    if (c.rejection_reason && !isInvalidSummary(c.rejection_reason)) {
-      return c.rejection_reason.trim();
-    }
-    return 'Could elaborate with deeper architectural context and end-to-end edge case coverage.';
-  };
+  }, [jobId, isOpen, uniqueCandidates]);
 
-  // Sort candidates based on selected ranking mode
-  const rankedCandidates = candidateList
-    .filter(c => {
-      const q = searchQuery.toLowerCase();
-      return (c.candidate_name || '').toLowerCase().includes(q) ||
-             (c.candidate_email || '').toLowerCase().includes(q) ||
-             (c.interview_title || '').toLowerCase().includes(q);
-    })
-    .sort((a, b) => {
-      if (rankingMode === 'composite') {
-        return b.compositeScore - a.compositeScore;
+  // Evaluate candidate match data strictly from unique resumes against job requirements
+  const evaluatedAll = useMemo(() => {
+    return uniqueCandidates.map(c => evaluateCandidateMatch(c, job));
+  }, [uniqueCandidates, job]);
+
+  // Sort all evaluated candidates globally across the entire candidate pool
+  const sortedEvaluatedAll = useMemo(() => {
+    return [...evaluatedAll].sort((a, b) => {
+      const aScore = a.overallScore !== null ? a.overallScore : -1;
+      const bScore = b.overallScore !== null ? b.overallScore : -1;
+
+      if (sortBy === 'score_desc') {
+        if (bScore !== aScore) return bScore - aScore;
+        return (a.name || '').localeCompare(b.name || '');
       }
-      if (rankingMode === 'tech') {
-        const aTech = parseFloat(a.skills_score ?? a.scores?.technical_skills ?? 0);
-        const bTech = parseFloat(b.skills_score ?? b.scores?.technical_skills ?? 0);
-        return bTech - aTech;
+      if (sortBy === 'score_asc') {
+        if (aScore !== bScore) return aScore - bScore;
+        return (a.name || '').localeCompare(b.name || '');
       }
-      if (rankingMode === 'ats') {
-        const aAts = parseFloat(a.ats_match_percentage ?? a.ats_score ?? 0);
-        const bAts = parseFloat(b.ats_match_percentage ?? b.ats_score ?? 0);
-        return bAts - aAts;
+      if (sortBy === 'name_asc') {
+        return (a.name || '').localeCompare(b.name || '');
       }
-      if (rankingMode === 'interview') {
-        const aScore = parseFloat(a.score ?? a.avg_score ?? 0);
-        const bScore = parseFloat(b.score ?? b.avg_score ?? 0);
-        return bScore - aScore;
+      if (sortBy === 'exp_desc') {
+        return (b.breakdown?.experienceScore || 0) - (a.breakdown?.experienceScore || 0);
       }
       return 0;
     });
+  }, [evaluatedAll, sortBy]);
 
-  // Top Highlights
-  const topCandidate = rankedCandidates.length > 0 ? rankedCandidates[0] : null;
-  const bestTechCandidate = [...rankedCandidates].sort((a, b) => {
-    const aT = parseFloat(a.skills_score ?? a.scores?.technical_skills ?? 0);
-    const bT = parseFloat(b.skills_score ?? b.scores?.technical_skills ?? 0);
-    return bT - aT;
-  })[0];
-  const bestAtsCandidate = [...rankedCandidates].sort((a, b) => {
-    const aA = parseFloat(a.ats_match_percentage ?? a.ats_score ?? 0);
-    const bA = parseFloat(b.ats_match_percentage ?? b.ats_score ?? 0);
-    return bA - aA;
-  })[0];
+  // Reset pagination to page 1 whenever user changes sort order or job
+  React.useEffect(() => {
+    setPage(1);
+  }, [sortBy, job?.job_id || job?._id]);
 
-  // Versus mode candidates
-  const candA = candidateList.find(c => c.id === versusIdA) || rankedCandidates[0] || {};
-  const candB = candidateList.find(c => c.id === versusIdB) || (rankedCandidates[1] && rankedCandidates[1].id !== candA.id ? rankedCandidates[1] : rankedCandidates[0]) || {};
+  const totalCandidates = sortedEvaluatedAll.length;
+  const totalPages = Math.max(1, Math.ceil(totalCandidates / pageSize));
+  const currentPage = Math.min(Math.max(1, page), totalPages);
 
-  const handleLaunchVersus = (id) => {
-    setVersusIdA(topCandidate?.id !== id ? topCandidate?.id : rankedCandidates[1]?.id || id);
-    setVersusIdB(id);
-    setActiveMode('versus');
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalCandidates);
+
+  // Current page candidate slice (max 10 candidates per page)
+  const paginatedCandidates = useMemo(() => {
+    return sortedEvaluatedAll.slice(startIndex, endIndex);
+  }, [sortedEvaluatedAll, startIndex, endIndex]);
+
+  // Helper to determine if a candidate (or any of its merged duplicate IDs) is active
+  const isCandidateActive = useCallback((item) => {
+    if (!item) return false;
+    const cand = item.candidate || item;
+    const primaryId = cand._id || cand.id;
+    if (primaryId && activeCandidateIds.has(primaryId)) return true;
+    if (item.candidateId && activeCandidateIds.has(item.candidateId)) return true;
+    if (cand.associatedCandidateIds && Array.isArray(cand.associatedCandidateIds)) {
+      return cand.associatedCandidateIds.some(aid => activeCandidateIds.has(aid));
+    }
+    return false;
+  }, [activeCandidateIds]);
+
+  // Filter and sort candidates to compare (preserves selected candidates across pagination)
+  const comparedList = useMemo(() => {
+    return sortedEvaluatedAll.filter(item => isCandidateActive(item));
+  }, [sortedEvaluatedAll, isCandidateActive]);
+
+  // Horizontal scroll ref and navigation states for candidate cards row
+  const cardsScrollRef = useRef(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  // Synchronize scroll button states (disabled at beginning and end)
+  const updateCardScrollButtons = useCallback(() => {
+    const el = cardsScrollRef.current;
+    if (!el) {
+      setCanScrollLeft(false);
+      setCanScrollRight(false);
+      return;
+    }
+    const { scrollLeft, scrollWidth, clientWidth } = el;
+    const maxScroll = scrollWidth - clientWidth;
+
+    // Can scroll left if we have scrolled past start (> 5px)
+    setCanScrollLeft(scrollLeft > 5);
+    // Can scroll right if there is overflow and we have not reached the end
+    setCanScrollRight(maxScroll > 5 && scrollLeft < maxScroll - 5);
+  }, []);
+
+  // Smoothly scroll horizontally by approximately one candidate card width + gap (~360px)
+  const scrollCardsLeft = useCallback(() => {
+    const el = cardsScrollRef.current;
+    if (!el) return;
+    el.scrollBy({ left: -360, behavior: 'smooth' });
+  }, []);
+
+  const scrollCardsRight = useCallback(() => {
+    const el = cardsScrollRef.current;
+    if (!el) return;
+    el.scrollBy({ left: 360, behavior: 'smooth' });
+  }, []);
+
+  // Listen for scroll, window resize, wheel, and candidate count updates
+  useEffect(() => {
+    const el = cardsScrollRef.current;
+    if (!el) return;
+
+    // Immediately check bounds and schedule follow-up check after layout settle
+    updateCardScrollButtons();
+    const timer = setTimeout(updateCardScrollButtons, 150);
+
+    const handleScroll = () => {
+      updateCardScrollButtons();
+    };
+    el.addEventListener('scroll', handleScroll, { passive: true });
+
+    const handleResize = () => {
+      updateCardScrollButtons();
+    };
+    window.addEventListener('resize', handleResize);
+
+    // Mouse wheel handler: allows vertical wheel to scroll candidate cards horizontally when hovering over them
+    const handleWheel = (e) => {
+      if (el.scrollWidth <= el.clientWidth) return;
+      // If predominantly vertical delta without Shift
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        const atStart = el.scrollLeft <= 5 && e.deltaY < 0;
+        const atEnd = Math.ceil(el.scrollLeft + el.clientWidth) >= el.scrollWidth - 5 && e.deltaY > 0;
+        if (!atStart && !atEnd) {
+          e.preventDefault();
+          el.scrollBy({ left: e.deltaY, behavior: 'auto' });
+        }
+      }
+    };
+    el.addEventListener('wheel', handleWheel, { passive: false });
+
+    return () => {
+      clearTimeout(timer);
+      el.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleResize);
+      el.removeEventListener('wheel', handleWheel);
+    };
+  }, [comparedList.length, isTiedViewOpen, isOpen, updateCardScrollButtons]);
+
+  // Identify score counts across all evaluated candidates for this job
+  const allScoreCounts = useMemo(() => {
+    const counts = {};
+    sortedEvaluatedAll.forEach(c => {
+      if (c.overallScore !== null && c.isEvaluated) {
+        counts[c.overallScore] = (counts[c.overallScore] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [sortedEvaluatedAll]);
+
+  // Group candidates with equal resume match scores across all evaluated candidates (>= 2 candidates)
+  const tieGroups = useMemo(() => {
+    const groups = {};
+    sortedEvaluatedAll.forEach(item => {
+      if (item.overallScore !== null && item.isEvaluated) {
+        const score = item.overallScore;
+        if (!groups[score]) {
+          groups[score] = [];
+        }
+        groups[score].push(item);
+      }
+    });
+
+    return Object.entries(groups)
+      .filter(([_, list]) => list.length >= 2)
+      .map(([score, list]) => ({
+        score: Number(score),
+        candidates: list,
+      }))
+      .sort((a, b) => b.score - a.score);
+  }, [sortedEvaluatedAll]);
+
+  // Calculate fair competition rankings where candidates with identical resume match scores share the same rank
+  const candidateRanks = useMemo(() => {
+    const validScores = sortedEvaluatedAll
+      .filter(item => item.overallScore !== null && item.isEvaluated)
+      .sort((a, b) => b.overallScore - a.overallScore);
+
+    const ranks = {};
+    let currentRank = 1;
+
+    validScores.forEach((item, index) => {
+      if (index > 0 && item.overallScore < validScores[index - 1].overallScore) {
+        currentRank = index + 1; // Standard competition ranking: 1, 1, 3...
+      }
+      const id = item.candidateId || item.candidate._id || item.candidate.id;
+      const isTied = (allScoreCounts[item.overallScore] || 0) > 1;
+      ranks[id] = {
+        rankNumber: currentRank,
+        isTied,
+        rankLabel: isTied ? `Tied #${currentRank}` : `#${currentRank}`,
+      };
+    });
+
+    // Candidates without evaluation data
+    sortedEvaluatedAll.forEach(item => {
+      const id = item.candidateId || item.candidate._id || item.candidate.id;
+      if (!ranks[id]) {
+        ranks[id] = {
+          rankNumber: '-',
+          isTied: false,
+          rankLabel: 'N/A',
+        };
+      }
+    });
+
+    return ranks;
+  }, [sortedEvaluatedAll, allScoreCounts]);
+
+  // Keep activeTiedScore synced with available tie groups
+  React.useEffect(() => {
+    if (tieGroups.length > 0) {
+      if (activeTiedScore === null || !tieGroups.some(g => Number(g.score) === Number(activeTiedScore))) {
+        setActiveTiedScore(tieGroups[0].score);
+      }
+    } else {
+      setActiveTiedScore(null);
+    }
+  }, [tieGroups, activeTiedScore]);
+
+  // Keep tiedSelectedCandidateIds synced with activeTiedScore group
+  React.useEffect(() => {
+    if (activeTiedScore !== null) {
+      const group = tieGroups.find(g => Number(g.score) === Number(activeTiedScore));
+      if (group) {
+        const idSet = new Set();
+        group.candidates.forEach(c => {
+          if (c.candidateId) idSet.add(c.candidateId);
+          if (c.candidate?._id) idSet.add(String(c.candidate._id));
+          if (c.candidate?.id) idSet.add(String(c.candidate.id));
+        });
+        setTiedSelectedCandidateIds(idSet);
+      }
+    } else {
+      setTiedSelectedCandidateIds(new Set());
+    }
+  }, [activeTiedScore, tieGroups]);
+
+  const activeTiedGroup = useMemo(() => {
+    if (activeTiedScore === null) return null;
+    return tieGroups.find(g => Number(g.score) === Number(activeTiedScore)) || null;
+  }, [activeTiedScore, tieGroups]);
+
+  // Candidates actually displayed in the tied comparison table (filtered by tiedSelectedCandidateIds)
+  const comparedTiedCandidates = useMemo(() => {
+    if (!activeTiedGroup) return [];
+    if (tiedSelectedCandidateIds.size === 0) return activeTiedGroup.candidates;
+    const filtered = activeTiedGroup.candidates.filter(c => {
+      const cid = c.candidateId;
+      const rawId = c.candidate?._id ? String(c.candidate._id) : null;
+      const altId = c.candidate?.id ? String(c.candidate.id) : null;
+      const associated = c.candidate?.associatedCandidateIds || [];
+      return (
+        (cid && tiedSelectedCandidateIds.has(cid)) ||
+        (rawId && tiedSelectedCandidateIds.has(rawId)) ||
+        (altId && tiedSelectedCandidateIds.has(altId)) ||
+        associated.some(aid => tiedSelectedCandidateIds.has(String(aid)))
+      );
+    });
+    return filtered.length >= 2 ? filtered : activeTiedGroup.candidates;
+  }, [activeTiedGroup, tiedSelectedCandidateIds]);
+
+  // Evaluates empirical recommendation and relative ranking for candidates sharing this tied score
+  const tiedRecommendation = useMemo(() => {
+    if (!activeTiedGroup || !comparedTiedCandidates || comparedTiedCandidates.length < 2) return null;
+    return evaluateTiedGroupRecommendation(comparedTiedCandidates, job);
+  }, [activeTiedGroup, comparedTiedCandidates, job]);
+
+  const activeGroupRankNumber = useMemo(() => {
+    if (!activeTiedGroup || activeTiedGroup.candidates.length === 0) return 1;
+    const firstCand = activeTiedGroup.candidates[0];
+    const rankInfo = candidateRanks[firstCand.candidateId || firstCand.candidate._id || firstCand.candidate.id];
+    return rankInfo?.rankNumber || 1;
+  }, [activeTiedGroup, candidateRanks]);
+
+  // Open the dedicated side-by-side comparison view for candidates sharing this score
+  const openTiedComparison = (score) => {
+    const numScore = Number(score);
+    setActiveTiedScore(numScore);
+    const group = tieGroups.find(g => Number(g.score) === numScore);
+    if (group) {
+      const idSet = new Set();
+      group.candidates.forEach(c => {
+        if (c.candidateId) idSet.add(c.candidateId);
+        if (c.candidate?._id) idSet.add(String(c.candidate._id));
+        if (c.candidate?.id) idSet.add(String(c.candidate.id));
+        if (c.candidate?.associatedCandidateIds && Array.isArray(c.candidate.associatedCandidateIds)) {
+          c.candidate.associatedCandidateIds.forEach(aid => idSet.add(String(aid)));
+        }
+      });
+      setTiedSelectedCandidateIds(idSet);
+    }
+    setIsTiedViewOpen(true);
   };
 
+  // Switch to another tied score group while inside the dedicated view
+  const switchTiedScore = (score) => {
+    const numScore = Number(score);
+    setActiveTiedScore(numScore);
+    const group = tieGroups.find(g => Number(g.score) === numScore);
+    if (group) {
+      const idSet = new Set();
+      group.candidates.forEach(c => {
+        if (c.candidateId) idSet.add(c.candidateId);
+        if (c.candidate?._id) idSet.add(String(c.candidate._id));
+        if (c.candidate?.id) idSet.add(String(c.candidate.id));
+        if (c.candidate?.associatedCandidateIds && Array.isArray(c.candidate.associatedCandidateIds)) {
+          c.candidate.associatedCandidateIds.forEach(aid => idSet.add(String(aid)));
+        }
+      });
+      setTiedSelectedCandidateIds(idSet);
+    }
+  };
+
+  // Return to full candidate comparison view (preserves all selections, filters, and sort order)
+  const closeTiedComparison = () => {
+    setIsTiedViewOpen(false);
+  };
+
+  const toggleCandidate = (id, candItem) => {
+    const associatedIds = candItem?.candidate?.associatedCandidateIds || [];
+    setActiveCandidateIds(prev => {
+      const next = new Set(prev);
+      const isCurrentlyActive = next.has(id) || associatedIds.some(aid => next.has(aid));
+      if (isCurrentlyActive) {
+        if (next.size <= 1) return prev; // Keep at least one candidate
+        next.delete(id);
+        associatedIds.forEach(aid => next.delete(aid));
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const toggleTiedCandidate = (id, candItem) => {
+    const associatedIds = candItem?.candidate?.associatedCandidateIds || [];
+    setTiedSelectedCandidateIds(prev => {
+      const next = new Set(prev);
+      const isCurrentlyActive = next.has(id) || associatedIds.some(aid => next.has(aid));
+      if (isCurrentlyActive) {
+        if (next.size <= 2) return prev; // Keep at least two candidates for comparison
+        next.delete(id);
+        associatedIds.forEach(aid => next.delete(aid));
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const selectAllCandidates = () => {
+    setActiveCandidateIds(new Set(uniqueCandidates.map(c => c._id || c.id)));
+  };
+
+  const clearAllCandidates = () => {
+    setActiveCandidateIds(new Set());
+  };
+
+  const selectCurrentPage = () => {
+    setActiveCandidateIds(prev => {
+      const next = new Set(prev);
+      paginatedCandidates.forEach(item => {
+        next.add(item.candidate._id || item.candidate.id);
+      });
+      return next;
+    });
+  };
+
+  if (!isOpen || !job) return null;
+
+  const jobTitle = job.title || 'Position';
+  const jobCode = job.job_id || 'JOB-001';
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-5 overflow-hidden">
-      <div className="relative w-full max-w-6xl h-[92vh] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl flex flex-col border border-slate-200 dark:border-slate-800 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-        
-        {/* ============================================================== */}
-        {/* TOP HEADER BAR                                                 */}
-        {/* ============================================================== */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/70 gap-3 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
-              <GitCompare size={20} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                  Candidate Comparison Intelligence
+    <div
+      className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[110] flex items-center justify-center p-3 sm:p-6 animate-fadeIn"
+      onClick={onClose}
+    >
+      <div
+        className="bg-card border border-border rounded-2xl sm:rounded-[2rem] shadow-2xl w-full max-w-[96vw] 2xl:max-w-[1536px] h-[92vh] max-h-[92vh] flex flex-col overflow-hidden my-auto"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* ── Modal Header ──────────────────────────────────────────────── */}
+        <div className="px-6 sm:px-8 py-5 border-b border-border flex items-center justify-between bg-card shrink-0 flex-wrap gap-4">
+          <div className="flex items-center gap-3.5 min-w-0">
+            {isTiedViewOpen ? (
+              <button
+                type="button"
+                onClick={closeTiedComparison}
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-secondary hover:bg-muted text-foreground font-bold text-xs border border-border shadow-2xs transition-all cursor-pointer shrink-0"
+                title="Return to full Candidate Comparison view"
+              >
+                <ArrowLeft size={16} />
+                <span>Back to All Candidates</span>
+              </button>
+            ) : (
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 text-white shadow-lg shadow-indigo-500/25 shrink-0">
+                <GitCompare size={22} />
+              </div>
+            )}
+            <div className="min-w-0">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h2 className="text-lg sm:text-xl font-black text-foreground tracking-tight truncate">
+                  {isTiedViewOpen ? 'Tied Candidates Comparison' : 'Candidate Comparison'}
                 </h2>
-                <span className="text-[11px] font-bold bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 px-2.5 py-0.5 rounded-full">
-                  {rankedCandidates.length} Selected
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                  {isTiedViewOpen ? 'Side-by-Side Analysis' : 'Resume-to-Job Matching'}
                 </span>
-                {loadingDetails && (
-                  <span className="text-[11px] text-indigo-600 flex items-center gap-1 ml-2">
-                    <RefreshCw size={11} className="animate-spin" /> Analyzing scorecards...
+                <span className="px-2.5 py-0.5 rounded-md text-xs font-mono font-bold bg-secondary text-foreground border border-border">
+                  {jobCode}
+                </span>
+                {isTiedViewOpen ? (
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                    Tied #{activeGroupRankNumber} ({activeTiedScore}% Match)
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-teal-50 dark:bg-teal-950/70 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
+                    Comparing {comparedList.length} of {candidates.length}
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Multi-factor candidate ranking, detailed integrity tracking, and final hiring decision.
-              </p>
+              <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground font-medium flex-wrap">
+                <span className="font-semibold text-slate-700 dark:text-slate-200">{jobTitle}</span>
+                <span>•</span>
+                <span className="flex items-center gap-1">
+                  <MapPin size={11} className="text-teal-500" /> {job.location || 'Remote'}
+                </span>
+                <span>•</span>
+                <span className="flex items-center gap-1">
+                  <Clock size={11} className="text-indigo-500" /> {job.workMode || 'Full-time'}
+                </span>
+                {job.experience && (
+                  <>
+                    <span>•</span>
+                    <span className="flex items-center gap-1">
+                      <Briefcase size={11} className="text-amber-500" /> Req: {job.experience}
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* View Mode Switcher */}
-            <div className="flex bg-slate-200/80 dark:bg-slate-800 p-0.5 rounded-lg text-xs font-semibold">
-              <button
-                onClick={() => setActiveMode('grid')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all ${
-                  activeMode === 'grid'
-                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-white shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-                }`}
-              >
-                <Layers size={14} />
-                <span>All Candidates ({rankedCandidates.length})</span>
-              </button>
-              <button
-                onClick={() => setActiveMode('versus')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all ${
-                  activeMode === 'versus'
-                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-white shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-                }`}
-              >
-                <GitCompare size={14} />
-                <span>Side-by-Side Matchup</span>
-              </button>
-            </div>
-
+          {/* Controls: Sort Dropdown & Close Button */}
+          <div className="flex items-center gap-3">
+            {!isTiedViewOpen && (
+              <div className="flex items-center gap-2 bg-secondary/60 rounded-xl px-3 py-1.5 border border-border">
+                <ArrowUpDown size={14} className="text-muted-foreground" />
+                <span className="text-xs font-bold text-muted-foreground hidden sm:inline">Sort:</span>
+                <select
+                  value={sortBy}
+                  onChange={e => setSortBy(e.target.value)}
+                  className="bg-transparent text-xs font-bold text-foreground focus:outline-none cursor-pointer border-none"
+                >
+                  <option value="score_desc">Resume Match (High → Low)</option>
+                  <option value="score_asc">Resume Match (Low → High)</option>
+                  <option value="name_asc">Candidate Name (A → Z)</option>
+                  <option value="exp_desc">Experience Match</option>
+                </select>
+              </div>
+            )}
             <button
               onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg ml-2"
+              className="p-2 rounded-xl bg-secondary hover:bg-rose-500/10 text-muted-foreground hover:text-rose-500 border border-border cursor-pointer transition-colors"
+              title="Close Comparison"
             >
-              <X size={20} />
+              <X size={18} />
             </button>
           </div>
         </div>
 
-        {/* ============================================================== */}
-        {/* INTELLIGENT RANKING CRITERIA & SUMMARY TOOLBAR                 */}
-        {/* ============================================================== */}
-        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-2.5 bg-indigo-50/40 dark:bg-indigo-950/20 border-b border-indigo-100 dark:border-indigo-950/40 text-xs shrink-0">
-          
-          {/* Key Leader Highlights */}
-          <div className="flex flex-wrap items-center gap-4">
-            {topCandidate && (
-              <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
-                <span className="text-amber-500 font-bold flex items-center gap-1">
-                  <Trophy size={14} /> Leader:
-                </span>
-                <strong className="text-slate-900 dark:text-white">{topCandidate.candidate_name || 'Candidate'}</strong>
-                <span className="text-indigo-600 font-bold">({topCandidate.compositeScore}% Fit)</span>
-              </div>
-            )}
-
-            {bestTechCandidate && parseFloat(bestTechCandidate.skills_score ?? bestTechCandidate.scores?.technical_skills ?? 0) > 0 && (
-              <div className="hidden sm:flex items-center gap-1.5 text-slate-700 dark:text-slate-300 border-l pl-4 border-slate-300 dark:border-slate-700">
-                <span className="text-indigo-600 font-bold">💻 Best Tech:</span>
-                <span>{bestTechCandidate.candidate_name} ({bestTechCandidate.skills_score ?? bestTechCandidate.scores?.technical_skills}/100)</span>
-              </div>
-            )}
-
-            {bestAtsCandidate && parseFloat(bestAtsCandidate.ats_match_percentage ?? bestAtsCandidate.ats_score ?? 0) > 0 && (
-              <div className="hidden md:flex items-center gap-1.5 text-slate-700 dark:text-slate-300 border-l pl-4 border-slate-300 dark:border-slate-700">
-                <span className="text-emerald-600 font-bold">📄 Top Resume Fit:</span>
-                <span>{bestAtsCandidate.candidate_name} ({bestAtsCandidate.ats_match_percentage ?? bestAtsCandidate.ats_score}%)</span>
-              </div>
-            )}
-          </div>
-
-          {/* Ranking Mode Selector + Search */}
-          <div className="flex items-center gap-3 ml-auto">
-            <div className="flex items-center gap-1.5">
-              <span className="text-slate-500 font-semibold text-[11px]">Rank By:</span>
-              <select
-                value={rankingMode}
-                onChange={(e) => setRankingMode(e.target.value)}
-                className="py-1 px-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md font-bold text-xs text-indigo-600 focus:outline-hidden"
-              >
-                <option value="composite">⭐ Overall Fit (Interview + Tech + ATS)</option>
-                <option value="tech">💻 Technical Skills Score</option>
-                <option value="ats">📄 ATS Resume Match %</option>
-                <option value="interview">🎙️ Raw Interview Score Only</option>
-              </select>
+        {/* ── Candidate Inclusion Filter Bar (Single Horizontal Row + 10 Per Page Pagination) ── */}
+        {!isTiedViewOpen && (
+          <div className="px-6 sm:px-8 py-2.5 bg-secondary/30 border-b border-border shrink-0 space-y-2">
+          {/* Top Control Line: Filter Label, Count Badge, Selection Helpers, and Pagination */}
+          <div className="flex items-center justify-between gap-3 flex-wrap text-xs">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <span className="font-bold text-muted-foreground flex items-center gap-1.5 uppercase tracking-wider text-[11px]">
+                <Filter size={13} className="text-indigo-600 dark:text-indigo-400" /> Compare Candidates:
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-mono">
+                {totalCandidates > 0
+                  ? `Showing ${startIndex + 1}–${endIndex} of ${totalCandidates} candidates`
+                  : '0 candidates'}
+              </span>
+              <span className="text-[11px] text-muted-foreground font-medium">
+                ({activeCandidateIds.size} selected)
+              </span>
             </div>
 
-            {activeMode === 'grid' && (
-              <div className="relative w-40 sm:w-48">
-                <Search className="absolute left-2.5 top-2 text-slate-400" size={12} />
-                <input
-                  type="text"
-                  placeholder="Filter name..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-7 pr-2.5 py-1 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md focus:outline-hidden"
-                />
+            <div className="flex items-center gap-3">
+              {/* Select All / Select Page / Clear Selection */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={selectCurrentPage}
+                  className="text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 font-semibold text-xs cursor-pointer bg-transparent border-none"
+                  title="Select all 10 candidates on the current page"
+                >
+                  Select Page
+                </button>
+                <span className="text-muted-foreground">•</span>
+                {activeCandidateIds.size < evaluatedAll.length ? (
+                  <button
+                    type="button"
+                    onClick={selectAllCandidates}
+                    className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline text-xs cursor-pointer bg-transparent border-none"
+                    title="Select all candidates across all pages"
+                  >
+                    Select All ({evaluatedAll.length})
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={clearAllCandidates}
+                    className="text-rose-600 dark:text-rose-400 font-bold hover:underline text-xs cursor-pointer bg-transparent border-none"
+                    title="Deselect all candidates"
+                  >
+                    Clear All
+                  </button>
+                )}
+                {activeCandidateIds.size > 0 && activeCandidateIds.size < evaluatedAll.length && (
+                  <>
+                    <span className="text-muted-foreground">•</span>
+                    <button
+                      type="button"
+                      onClick={clearAllCandidates}
+                      className="text-slate-500 hover:text-rose-500 font-medium text-xs cursor-pointer bg-transparent border-none"
+                      title="Clear candidate selection"
+                    >
+                      Clear
+                    </button>
+                  </>
+                )}
               </div>
-            )}
+
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="flex items-center gap-1 bg-background dark:bg-slate-900 border border-border rounded-xl px-2 py-1 shadow-xs">
+                  <button
+                    type="button"
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage <= 1}
+                    className="p-1 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                    title="Previous 10 candidates"
+                  >
+                    <ChevronLeft size={14} />
+                  </button>
+                  <span className="text-[11px] font-bold font-mono px-2 text-foreground select-none">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage >= totalPages}
+                    className="p-1 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                    title="Next 10 candidates"
+                  >
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
 
-        {/* ============================================================== */}
-        {/* VIEW 1: CLEAN PROFILE CARDS                                    */}
-        {/* ============================================================== */}
-        {activeMode === 'grid' && (
-          <div className="flex-1 overflow-y-auto p-5 sm:p-6 bg-slate-50/60 dark:bg-slate-900/40">
-            {rankedCandidates.length === 0 ? (
-              <div className="py-20 text-center text-slate-500">
-                No candidates found.
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {rankedCandidates.map((c, idx) => {
-                  const id = c.id || c.link_id;
-                  const interviewScore = parseFloat(c.score ?? c.avg_score ?? 0);
-                  const ats = parseFloat(c.ats_match_percentage ?? c.ats_score ?? 0);
-                  const tech = parseFloat(c.skills_score ?? c.scores?.technical_skills ?? 0);
-                  const comm = parseFloat(c.communication_score ?? c.scores?.communication ?? 0);
-                  const alertsInfo = getAlertBreakdown(c);
-                  const isTop = idx === 0;
-                  const pill = getScorePill(c.compositeScore, c.status);
-                  const strengthsText = getStrengths(c);
-                  const weaknessesText = getWeaknesses(c);
-
-                  // Differentiator tags
-                  const isTechLeader = bestTechCandidate && bestTechCandidate.id === id && tech > 60;
-                  const isAtsLeader = bestAtsCandidate && bestAtsCandidate.id === id && ats > 70;
-                  const hasAtsZero = ats === 0;
-                  const isImmediate = (c.notice_period || '').toLowerCase().includes('immediate');
-
-                  return (
-                    <div
-                      key={id || idx}
-                      className={`relative bg-white dark:bg-slate-800 rounded-2xl border p-5 shadow-xs flex flex-col justify-between transition-all hover:shadow-md ${
-                        isTop
-                          ? 'border-amber-400/90 ring-1 ring-amber-400/30'
-                          : 'border-slate-200 dark:border-slate-700'
+          {/* Bottom Chips Line: Clean Single Horizontal Row (Never Wrap, Horizontal Scroll if Needed) */}
+          <div className="relative overflow-hidden">
+            <div className="flex items-center gap-2 overflow-x-auto py-1 flex-nowrap no-scrollbar scroll-smooth">
+              {paginatedCandidates.map(item => {
+                const id = item.candidate._id || item.candidate.id;
+                const isChecked = isCandidateActive(item);
+                const scoreLabel = item.overallScore !== null ? `${item.overallScore}%` : 'N/A';
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => toggleCandidate(id, item)}
+                    className={`shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-bold text-xs transition-all cursor-pointer border select-none ${
+                      isChecked
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm ring-2 ring-indigo-200 dark:ring-indigo-900/60'
+                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/30'
+                    }`}
+                    title={`${item.name} - ${scoreLabel} Resume Match (${isChecked ? 'Selected - Click to deselect' : 'Click to select for comparison'})`}
+                  >
+                    <span
+                      className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] shrink-0 font-black ${
+                        isChecked
+                          ? 'bg-white/30 text-white'
+                          : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
                       }`}
                     >
-                      {/* Top Rank Badge */}
-                      {isTop && (
-                        <div className="absolute -top-3 left-4 bg-amber-500 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-xs flex items-center gap-1">
-                          <Trophy size={11} /> #1 TOP FIT
+                      {isChecked ? '✓' : '+'}
+                    </span>
+                    <span className="truncate max-w-[140px] sm:max-w-[180px]">{item.name}</span>
+                    <span
+                      className={`text-[10px] font-mono px-1.5 py-0.2 rounded font-bold shrink-0 ${
+                        isChecked
+                          ? 'bg-white/20 text-white'
+                          : 'bg-slate-100 dark:bg-slate-700 text-indigo-600 dark:text-indigo-400'
+                      }`}
+                    >
+                      {scoreLabel}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+        {/* ── Main Comparison Scrollable Area ───────────────────────────── */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 bg-background custom-scrollbar">
+          {!isTiedViewOpen ? (
+            <div>
+              {/* Quick-Jump Tied Score Alert Banner (Collapsible by default) */}
+              {tieGroups.length > 0 && (
+                <div className="mb-6 rounded-2xl bg-gradient-to-r from-amber-500/10 via-indigo-500/10 to-purple-500/10 border border-amber-300/60 dark:border-amber-700/60 overflow-hidden shadow-xs transition-all">
+                  {/* Banner Heading: Always visible, clickable to toggle expand/collapse */}
+                  <div
+                    onClick={() => setIsTiedScoresExpanded(prev => !prev)}
+                    className="p-4 flex items-center justify-between gap-3 cursor-pointer hover:bg-amber-500/5 select-none transition-colors"
+                    title={isTiedScoresExpanded ? 'Click to collapse tied score groups' : 'Click to expand tied score groups'}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                        <Scale size={20} />
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="text-xs sm:text-sm font-black text-foreground flex items-center gap-2 flex-wrap">
+                          <span>Equal Resume Match Scores Detected</span>
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 font-mono">
+                            {tieGroups.reduce((acc, g) => acc + g.candidates.length, 0)} tied candidates
+                          </span>
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                            {tieGroups.length} score {tieGroups.length === 1 ? 'group' : 'groups'}
+                          </span>
+                        </h4>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Candidates with identical resume-to-job match scores share equal rank (e.g. Tied #1). Click to {isTiedScoresExpanded ? 'collapse' : 'view'} tied-score groups and compare differences side-by-side.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Small Expand/Collapse Arrow (Chevron) */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs font-bold text-amber-700 dark:text-amber-300 hidden sm:inline">
+                        {isTiedScoresExpanded ? 'Collapse' : 'View Groups'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsTiedScoresExpanded(prev => !prev);
+                        }}
+                        className="w-8 h-8 rounded-lg flex items-center justify-center bg-white dark:bg-slate-800 border border-amber-300/60 dark:border-amber-700/60 text-amber-700 dark:text-amber-300 hover:bg-amber-100/50 dark:hover:bg-amber-900/40 transition-colors shadow-2xs cursor-pointer"
+                        aria-expanded={isTiedScoresExpanded}
+                        aria-label={isTiedScoresExpanded ? 'Collapse tied score groups' : 'Expand tied score groups'}
+                      >
+                        <ChevronDown
+                          size={18}
+                          className={`transition-transform duration-200 ${isTiedScoresExpanded ? 'rotate-180' : 'rotate-0'}`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Collapsible Buttons Container: Only rendered when expanded */}
+                  {isTiedScoresExpanded && (
+                    <div className="px-4 pb-4 pt-2 border-t border-amber-200/60 dark:border-amber-800/60 bg-white/40 dark:bg-slate-900/40 animate-fadeIn">
+                      <div className="flex items-center justify-between gap-2 mb-2.5">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                          Available Tied-Score Groups ({tieGroups.length}):
+                        </span>
+                        <span className="text-[11px] text-muted-foreground">
+                          Click any group to open dedicated side-by-side comparison
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {tieGroups.map(group => (
+                          <button
+                            key={group.score}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openTiedComparison(group.score);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-white dark:bg-slate-800 hover:bg-amber-50 dark:hover:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700 shadow-xs transition-all cursor-pointer hover:border-amber-400 active:scale-98"
+                            title={`Open side-by-side comparison for ${group.candidates.length} candidates with ${group.score}% match`}
+                          >
+                            <Scale size={13} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                            <span>Compare Tied Candidates ({group.score}%)</span>
+                            <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-amber-100 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200">
+                              {group.candidates.length}
+                            </span>
+                            <ArrowRight size={12} className="opacity-70" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+          {candidates.length === 0 ? (
+            <div className="text-center py-20 text-muted-foreground">
+              <AlertCircle size={36} className="mx-auto text-amber-500 dark:text-amber-400 mb-3" />
+              <p className="text-base font-bold text-slate-800 dark:text-slate-100">No Matching Candidates Found</p>
+              <p className="text-xs mt-1 text-slate-500 max-w-md mx-auto">
+                No candidates in the repository have matching resumes or sufficient profile information for this job description.
+              </p>
+            </div>
+          ) : comparedList.length === 0 ? (
+            <div className="text-center py-20 text-muted-foreground">
+              <GitCompare size={36} className="mx-auto text-slate-300 dark:text-slate-600 mb-3" />
+              <p className="text-base font-bold">No candidates selected for comparison.</p>
+              <p className="text-xs mt-1">Select candidates using the pill buttons above.</p>
+              <button
+                onClick={selectAllCandidates}
+                className="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold"
+              >
+                Select All Candidates
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {/* Cards Navigation Bar / Helper Header */}
+              <div className="flex items-center justify-between gap-3 px-1 py-0.5 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs sm:text-sm font-extrabold text-foreground flex items-center gap-2">
+                    <span>Side-by-Side Candidate Comparison</span>
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                      {comparedList.length} {comparedList.length === 1 ? 'candidate' : 'candidates'}
+                    </span>
+                  </span>
+                  <span className="text-xs text-muted-foreground hidden lg:inline">
+                    • Scroll horizontally with navigation arrows, mouse wheel, or drag bottom scrollbar
+                  </span>
+                </div>
+
+                {/* Top Arrow Navigation Controls */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={scrollCardsLeft}
+                    disabled={!canScrollLeft}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed bg-card border-border hover:bg-secondary text-foreground shadow-2xs hover:border-indigo-300"
+                    title="Scroll left to previous candidates"
+                    aria-label="Scroll left to previous candidates"
+                  >
+                    <ChevronLeft size={16} />
+                    <span className="hidden sm:inline">Previous</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={scrollCardsRight}
+                    disabled={!canScrollRight}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed bg-card border-border hover:bg-secondary text-foreground shadow-2xs hover:border-indigo-300"
+                    title="Scroll right to next candidates"
+                    aria-label="Scroll right to next candidates"
+                  >
+                    <span className="hidden sm:inline">Next</span>
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Relative Carousel Container with Side Navigation Floating Arrows */}
+              <div className="relative group/cards-carousel">
+                {/* Floating Left Arrow Button */}
+                <button
+                  type="button"
+                  onClick={scrollCardsLeft}
+                  disabled={!canScrollLeft}
+                  aria-label="Scroll left"
+                  title={canScrollLeft ? "Scroll left to previous candidates" : "At beginning of candidate list"}
+                  className={`absolute left-2 top-48 -translate-y-1/2 z-30 w-11 h-11 rounded-full flex items-center justify-center border shadow-xl backdrop-blur-md transition-all duration-200 ${
+                    canScrollLeft
+                      ? 'bg-card text-foreground hover:bg-indigo-600 hover:text-white hover:border-indigo-600 dark:hover:bg-indigo-600 border-border cursor-pointer opacity-95 hover:scale-110 active:scale-95 shadow-md'
+                      : 'bg-card/70 text-muted-foreground/30 border-border/30 cursor-not-allowed opacity-30 pointer-events-none'
+                  }`}
+                >
+                  <ChevronLeft size={22} className="stroke-[2.5]" />
+                </button>
+
+                {/* Floating Right Arrow Button */}
+                <button
+                  type="button"
+                  onClick={scrollCardsRight}
+                  disabled={!canScrollRight}
+                  aria-label="Scroll right"
+                  title={canScrollRight ? "Scroll right to next candidates" : "At end of candidate list"}
+                  className={`absolute right-2 top-48 -translate-y-1/2 z-30 w-11 h-11 rounded-full flex items-center justify-center border shadow-xl backdrop-blur-md transition-all duration-200 ${
+                    canScrollRight
+                      ? 'bg-card text-foreground hover:bg-indigo-600 hover:text-white hover:border-indigo-600 dark:hover:bg-indigo-600 border-border cursor-pointer opacity-95 hover:scale-110 active:scale-95 ring-2 ring-indigo-500/25 shadow-md'
+                      : 'bg-card/70 text-muted-foreground/30 border-border/30 cursor-not-allowed opacity-30 pointer-events-none'
+                  }`}
+                >
+                  <ChevronRight size={22} className="stroke-[2.5]" />
+                </button>
+
+                {/* Horizontal Scroll Area */}
+                <div
+                  ref={cardsScrollRef}
+                  className="overflow-x-auto overflow-y-visible pb-4 pt-1 custom-scrollbar cards-horizontal-scrollbar scroll-smooth focus:outline-none"
+                  tabIndex={0}
+                  role="region"
+                  aria-label="Candidate Comparison Cards Horizontal View"
+                  style={{
+                    WebkitOverflowScrolling: 'touch',
+                    scrollbarWidth: 'auto',
+                  }}
+                >
+                  <div
+                    className="flex items-stretch gap-4 sm:gap-6 flex-nowrap"
+                    style={{
+                      width: 'max-content',
+                      minWidth: '100%',
+                    }}
+                  >
+                    {comparedList.map((item, idx) => {
+                      const isTied = (allScoreCounts[item.overallScore] || 0) > 1;
+                      const candRank = candidateRanks[item.candidateId || item.candidate._id || item.candidate.id];
+
+                      return (
+                        <div
+                          key={item.candidateId || idx}
+                          className="w-[300px] sm:w-[335px] shrink-0 flex flex-col bg-card border border-border rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden"
+                        >
+                    {/* Candidate Card Top Header */}
+                    <div className="p-5 border-b border-border bg-slate-50/60 dark:bg-slate-900/60">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-black text-sm flex items-center justify-center shrink-0 shadow">
+                            {(item.name || '?')[0].toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <h3 className="font-extrabold text-sm sm:text-base text-foreground truncate" title={item.name}>
+                              {item.name}
+                            </h3>
+                            <span className="text-[11px] font-mono font-bold text-muted-foreground">
+                              {item.candidateId}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Rank / Tie indicator */}
+                        <div className="flex flex-col items-end">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
+                              isTied
+                                ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                                : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                            }`}
+                          >
+                            {candRank?.rankLabel || `#${idx + 1}`}
+                          </span>
+                          {isTied && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openTiedComparison(item.overallScore);
+                              }}
+                              className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 transition-colors cursor-pointer shadow-2xs"
+                              title="Compare tied candidates side-by-side"
+                            >
+                              <Scale size={10} />
+                              <span>Compare Tied</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Contact row */}
+                      <div className="mt-3 pt-3 border-t border-border/60 text-xs text-muted-foreground space-y-1">
+                        <p className="truncate font-medium" title={item.email}>{displayValue(item.email)}</p>
+                        {item.phone && <p className="font-medium">{displayValue(item.phone)}</p>}
+                        {item.linkedinUrl && (
+                          <a
+                            href={item.linkedinUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline font-bold"
+                          >
+                            <ExternalLink size={10} /> LinkedIn Profile
+                          </a>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Resume-to-Job Match Score Banner */}
+                    <div className={`p-4 border-b border-border ${item.matchCategory.bgClass} flex items-center justify-between`}>
+                      <div>
+                        <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+                          Resume-to-Job Match
+                        </span>
+                        <div className="flex items-baseline gap-2 mt-0.5">
+                          <span className={`text-2xl sm:text-3xl font-black ${item.matchCategory.colorClass}`}>
+                            {item.overallScore !== null ? `${item.overallScore}%` : 'Not available'}
+                          </span>
+                        </div>
+                      </div>
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-black uppercase tracking-wider border ${item.matchCategory.badgeClass}`}>
+                        {item.matchCategory.label}
+                      </span>
+                    </div>
+
+                    {/* Score Breakdown Progress Bars */}
+                    <div className="p-4 border-b border-border space-y-2.5 text-xs bg-card">
+                      <div className="flex items-center justify-between text-muted-foreground font-bold text-[11px] uppercase tracking-wider">
+                        <span>Resume Alignment Breakdown</span>
+                      </div>
+
+                      {/* Skills alignment bar */}
+                      <div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="font-semibold text-foreground">Mandatory Skills</span>
+                          <span className="font-bold text-indigo-600 dark:text-indigo-400">{item.breakdown.skillsScore}%</span>
+                        </div>
+                        <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-indigo-600 rounded-full transition-all duration-500"
+                            style={{ width: `${item.breakdown.skillsScore}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Experience bar */}
+                      <div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="font-semibold text-foreground">Experience Alignment</span>
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400">{item.breakdown.experienceScore}%</span>
+                        </div>
+                        <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                            style={{ width: `${item.breakdown.experienceScore}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Role relevance bar */}
+                      <div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="font-semibold text-foreground">Role & JD Relevance</span>
+                          <span className="font-bold text-purple-600 dark:text-purple-400">{item.breakdown.roleScore}%</span>
+                        </div>
+                        <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-purple-500 rounded-full transition-all duration-500"
+                            style={{ width: `${item.breakdown.roleScore}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Skills Alignment Matrix */}
+                    <div className="p-4 border-b border-border space-y-3 flex-1 bg-card">
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">
+                            Matched Mandatory ({item.skillsAlignment.matchedSkills.length})
+                          </span>
+                          <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
+                            {item.skillsAlignment.matchRatio}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {item.skillsAlignment.matchedSkills.length > 0 ? (
+                            item.skillsAlignment.matchedSkills.map(s => (
+                              <span
+                                key={s}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                              >
+                                <Check size={11} strokeWidth={3} className="text-emerald-600" /> {s}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-xs text-muted-foreground italic">No mandatory skills verified in resume</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Missing Mandatory Requirements */}
+                      {item.skillsAlignment.missingSkills.length > 0 && (
+                        <div>
+                          <span className="text-[11px] font-extrabold uppercase tracking-wider text-rose-600 dark:text-rose-400 block mb-2">
+                            Missing Mandatory ({item.skillsAlignment.missingSkills.length})
+                          </span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {item.skillsAlignment.missingSkills.map(s => (
+                              <span
+                                key={s}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-50 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-800"
+                              >
+                                <X size={11} strokeWidth={2.5} className="text-rose-500" /> {s}
+                              </span>
+                            ))}
+                          </div>
                         </div>
                       )}
 
-                      {/* Header */}
-                      <div>
-                        <div className="flex items-start justify-between gap-2 mt-1">
-                          <div className="min-w-0 flex-1">
-                            <span className="text-[11px] font-bold text-slate-400">RANK #{idx + 1}</span>
-                            <h3 className="font-bold text-slate-900 dark:text-white text-base truncate" title={c.candidate_name}>
-                              {c.candidate_name || 'Candidate'}
-                            </h3>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                              {c.candidate_email}
-                            </p>
-                          </div>
-                          
-                          {/* Composite Fit Gauge */}
-                          <div className="text-right shrink-0">
-                            <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-black ${pill.bg}`}>
-                              {c.compositeScore}% Fit
-                            </span>
-                            <div className="text-[9.5px] text-slate-400 font-semibold mt-0.5">
-                              {pill.label}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Special Differentiator Pills */}
-                        <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
-                          {isTechLeader && (
-                            <span className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-md border border-indigo-200/50">
-                              💻 Tech Leader ({tech}/100)
-                            </span>
-                          )}
-                          {isAtsLeader && (
-                            <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-200/50">
-                              📄 Perfect ATS ({ats}%)
-                            </span>
-                          )}
-                          {hasAtsZero && (
-                            <span className="text-[10px] font-bold text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded-md border border-rose-200/50">
-                              ⚠️ 0% Resume Match
-                            </span>
-                          )}
-                          {isImmediate && (
-                            <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-200/50">
-                              ⚡ Immediate Joiner
-                            </span>
-                          )}
-                          <span className="text-[10px] font-medium text-slate-500 bg-slate-100 dark:bg-slate-700/60 px-2 py-0.5 rounded-md truncate max-w-[130px]">
-                            {c.interview_title || c.job_applied || 'Candidate'}
+                      {/* Preferred Skills (if any) */}
+                      {item.skillsAlignment.preferredSkills && item.skillsAlignment.preferredSkills.length > 0 && (
+                        <div>
+                          <span className="text-[11px] font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 block mb-2">
+                            Matched Preferred ({item.skillsAlignment.matchedPreferredSkills?.length || 0})
                           </span>
-                        </div>
-
-                        {/* Core Metric Grid */}
-                        <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-700/60 text-center">
-                          <div className="bg-slate-50 dark:bg-slate-900/50 p-2 rounded-xl">
-                            <div className="text-[10px] text-slate-400 font-medium">ATS Match</div>
-                            <div className={`text-xs font-bold mt-0.5 ${ats === 0 ? 'text-rose-600' : 'text-slate-800 dark:text-slate-200'}`}>
-                              {ats}%
-                            </div>
-                          </div>
-                          <div className="bg-slate-50 dark:bg-slate-900/50 p-2 rounded-xl">
-                            <div className="text-[10px] text-slate-400 font-medium">Interview</div>
-                            <div className="text-xs font-bold text-indigo-600 mt-0.5">
-                              {interviewScore}%
-                            </div>
-                          </div>
-                          <div className="bg-slate-50 dark:bg-slate-900/50 p-2 rounded-xl">
-                            <div className="text-[10px] text-slate-400 font-medium">Notice</div>
-                            <div className="text-xs font-bold text-slate-800 dark:text-slate-200 mt-0.5 truncate">
-                              {c.notice_period || 'Immediate'}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Detailed Sub-Scores & Integrity Breakdown */}
-                        <div className="space-y-2 mt-3 pt-2 text-[11px]">
-                          <div className="flex items-center justify-between">
-                            <span className="text-slate-500 font-medium">Technical Competency</span>
-                            <strong className="text-slate-800 dark:text-slate-200">{tech > 0 ? `${tech}/100` : '—'}</strong>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-slate-500 font-medium">Communication Skills</span>
-                            <strong className="text-slate-800 dark:text-slate-200">{comm > 0 ? `${comm}/100` : '—'}</strong>
-                          </div>
-
-                          {/* EXACT INTEGRITY ALERT BREAKDOWN (WHAT ALERTS DID THEY GET) */}
-                          <div className="flex items-center justify-between pt-1">
-                            <span className="text-slate-500 font-medium">Integrity Audit</span>
-                            {alertsInfo.total === 0 ? (
-                              <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 font-semibold bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200/50">
-                                <ShieldCheck size={12} /> Clean (0 Alerts)
-                              </span>
-                            ) : (
-                              <div className="flex flex-wrap items-center gap-1 justify-end">
-                                <span className="text-[10px] font-bold text-amber-700 bg-amber-50 dark:bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-200/50 flex items-center gap-1">
-                                  <AlertTriangle size={10} /> {alertsInfo.total} Alerts:
+                          <div className="flex flex-wrap gap-1.5">
+                            {(item.skillsAlignment.matchedPreferredSkills || []).length > 0 ? (
+                              item.skillsAlignment.matchedPreferredSkills.map(s => (
+                                <span
+                                  key={s}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800"
+                                >
+                                  <Check size={10} className="text-indigo-600" /> {s}
                                 </span>
-                                {alertsInfo.tabSwitches > 0 && (
-                                  <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700/60 px-1.5 py-0.5 rounded" title="Candidate switched tabs or windows">
-                                    📑 {alertsInfo.tabSwitches} Tab
-                                  </span>
-                                )}
-                                {alertsInfo.faceAlerts > 0 && (
-                                  <span className="text-[10px] font-semibold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 px-1.5 py-0.5 rounded" title="Face not visible or multiple faces detected">
-                                    👤 {alertsInfo.faceAlerts} Face
-                                  </span>
-                                )}
-                                {alertsInfo.noiseAlerts > 0 && (
-                                  <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 px-1.5 py-0.5 rounded" title="Secondary background noise or voices detected">
-                                    🎙️ {alertsInfo.noiseAlerts} Audio
-                                  </span>
-                                )}
-                              </div>
+                              ))
+                            ) : (
+                              <span className="text-xs text-muted-foreground italic">No preferred skills in resume</span>
                             )}
                           </div>
                         </div>
+                      )}
 
-                        {/* Qualitative Strengths & Improvement Areas */}
-                        <div className="space-y-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-700/60">
-                          <div className="bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/60 p-2.5 rounded-xl">
-                            <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wide block mb-0.5">
-                              Key Strength
-                            </span>
-                            <p className="text-xs text-slate-700 dark:text-slate-300 font-medium leading-relaxed">
-                              {strengthsText}
-                            </p>
-                          </div>
-
-                          <div className="bg-rose-50/70 dark:bg-rose-950/30 border border-rose-200/60 p-2.5 rounded-xl">
-                            <span className="text-[10px] font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wide block mb-0.5">
-                              Area to Improve
-                            </span>
-                            <p className="text-xs text-slate-700 dark:text-slate-300 font-medium leading-relaxed">
-                              {weaknessesText}
-                            </p>
+                      {/* Additional Resume Skills */}
+                      {item.skillsAlignment.additionalSkills.length > 0 && (
+                        <div>
+                          <span className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground block mb-2">
+                            Additional Resume Skills ({item.skillsAlignment.additionalSkills.length})
+                          </span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {item.skillsAlignment.additionalSkills.slice(0, 5).map(s => (
+                              <span
+                                key={s}
+                                className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-secondary text-foreground border border-border"
+                              >
+                                {s}
+                              </span>
+                            ))}
+                            {item.skillsAlignment.additionalSkills.length > 5 && (
+                              <span className="text-[11px] text-muted-foreground font-semibold self-center">
+                                +{item.skillsAlignment.additionalSkills.length - 5} more
+                              </span>
+                            )}
                           </div>
                         </div>
-                      </div>
-
-                      {/* Card Actions */}
-                      <div className="flex items-center gap-2 mt-5 pt-3 border-t border-slate-100 dark:border-slate-700/60">
-                        <button
-                          onClick={() => handleLaunchVersus(id)}
-                          className="flex-1 py-1.5 px-3 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs rounded-lg transition-colors flex items-center justify-center gap-1"
-                          title="Compare side-by-side with another candidate"
-                        >
-                          <GitCompare size={13} />
-                          <span>Compare 1-on-1</span>
-                        </button>
-
-                        <button
-                          onClick={() => onSelectCandidate && onSelectCandidate(c)}
-                          className="flex-1 py-1.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-lg shadow-2xs transition-colors"
-                        >
-                          Select / Offer
-                        </button>
-                      </div>
-
+                      )}
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
 
-        {/* ============================================================== */}
-        {/* VIEW 2: 1-ON-1 HEAD-TO-HEAD SHOWDOWN                          */}
-        {/* Clear category winners and AI hiring recommendation verdict    */}
-        {/* ============================================================== */}
-        {activeMode === 'versus' && (
-          <div className="flex-1 overflow-y-auto p-5 sm:p-6 bg-slate-50/60 dark:bg-slate-900/40">
-            <div className="max-w-4xl mx-auto space-y-6">
-              
-              {/* Candidate Dropdown Pickers */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs">
-                <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase block mb-1.5">Candidate 1</label>
-                  <select
-                    value={candA.id || ''}
-                    onChange={(e) => setVersusIdA(e.target.value)}
-                    className="w-full py-2 px-3 text-sm font-semibold bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl"
-                  >
-                    {rankedCandidates.map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.candidate_name} ({c.compositeScore}% Fit · Tech: {c.skills_score ?? c.scores?.technical_skills ?? 0})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase block mb-1.5">Candidate 2</label>
-                  <select
-                    value={candB.id || ''}
-                    onChange={(e) => setVersusIdB(e.target.value)}
-                    className="w-full py-2 px-3 text-sm font-semibold bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl"
-                  >
-                    {rankedCandidates.map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.candidate_name} ({c.compositeScore}% Fit · Tech: {c.skills_score ?? c.scores?.technical_skills ?? 0})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* AI Head-to-Head Hiring Verdict Banner */}
-              {(() => {
-                const aTech = parseFloat(candA.skills_score ?? candA.scores?.technical_skills ?? 0);
-                const bTech = parseFloat(candB.skills_score ?? candB.scores?.technical_skills ?? 0);
-                const aAts = parseFloat(candA.ats_match_percentage ?? candA.ats_score ?? 0);
-                const bAts = parseFloat(candB.ats_match_percentage ?? candB.ats_score ?? 0);
-                const aName = candA.candidate_name || 'Candidate 1';
-                const bName = candB.candidate_name || 'Candidate 2';
-
-                let winnerName = aName;
-                let reason = '';
-
-                if (candA.compositeScore > candB.compositeScore) {
-                  winnerName = aName;
-                  reason = `${aName} leads with a ${candA.compositeScore}% overall fit score. ${aTech > bTech ? `Demonstrated superior technical ability (${aTech}/100 vs ${bTech}/100).` : `Has higher resume match (${aAts}% vs ${bAts}%).`}`;
-                } else if (candB.compositeScore > candA.compositeScore) {
-                  winnerName = bName;
-                  reason = `${bName} leads with a ${candB.compositeScore}% overall fit score. ${bTech > aTech ? `Demonstrated superior technical ability (${bTech}/100 vs ${aTech}/100).` : `Has higher resume match (${bAts}% vs ${aAts}%).`}`;
-                } else {
-                  winnerName = 'Tied Evaluation';
-                  reason = `${aName} and ${bName} have matching overall fit scores. Review specific interview answers to decide.`;
-                }
-
-                return (
-                  <div className="bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-indigo-500/10 border border-indigo-200 dark:border-indigo-800 p-4 rounded-2xl flex items-start gap-3">
-                    <Sparkles className="text-indigo-600 shrink-0 mt-0.5" size={20} />
-                    <div>
-                      <div className="font-bold text-slate-900 dark:text-white text-sm">
-                        AI Head-to-Head Recommendation: <span className="text-indigo-600 dark:text-indigo-400">{winnerName}</span>
+                    {/* Candidate Attributes Grid */}
+                    <div className="p-4 border-b border-border bg-slate-50/50 dark:bg-slate-900/40 space-y-2 text-xs">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="p-2.5 bg-white dark:bg-slate-800 rounded-xl border border-border">
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">
+                            Experience
+                          </span>
+                          <span className="font-bold text-foreground text-xs block mt-0.5 truncate">
+                            {displayValue(item.experience)}
+                          </span>
+                        </div>
+                        <div className="p-2.5 bg-white dark:bg-slate-800 rounded-xl border border-border">
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">
+                            Education
+                          </span>
+                          <span className="font-bold text-foreground text-xs block mt-0.5 truncate" title={item.education}>
+                            {displayValue(item.education)}
+                          </span>
+                        </div>
+                        <div className="p-2.5 bg-white dark:bg-slate-800 rounded-xl border border-border">
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">
+                            Location
+                          </span>
+                          <span className="font-bold text-foreground text-xs block mt-0.5 truncate" title={item.location}>
+                            {displayValue(item.location)}
+                          </span>
+                        </div>
+                        <div className="p-2.5 bg-white dark:bg-slate-800 rounded-xl border border-border">
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">
+                            Company
+                          </span>
+                          <span className="font-bold text-foreground text-xs block mt-0.5 truncate" title={item.currentCompany}>
+                            {displayValue(item.currentCompany)}
+                          </span>
+                        </div>
+                        <div className="p-2.5 bg-white dark:bg-slate-800 rounded-xl border border-border col-span-2">
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">
+                            Notice Period
+                          </span>
+                          <span className="font-bold text-foreground text-xs block mt-0.5 truncate">
+                            {displayValue(item.noticePeriod)}
+                          </span>
+                        </div>
                       </div>
-                      <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">
-                        {reason}
-                      </p>
+                    </div>
+
+                    {/* Resume Strengths & Missing Indicators */}
+                    <div className="p-4 border-b border-border space-y-2 text-xs bg-card">
+                      <div>
+                        <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400 block mb-1">
+                          Resume Strengths
+                        </span>
+                        <ul className="space-y-1">
+                          {item.strengths.slice(0, 2).map((str, sIdx) => (
+                            <li key={sIdx} className="flex items-start gap-1.5 text-muted-foreground">
+                              <CheckCircle2 size={12} className="text-emerald-600 mt-0.5 shrink-0" />
+                              <span className="text-[11px] leading-tight">{str}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      {item.missingRequirements.length > 0 && (
+                        <div className="pt-2 border-t border-border/60">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-rose-600 dark:text-rose-400 block mb-1">
+                            Missing Requirements in Resume
+                          </span>
+                          <ul className="space-y-1">
+                            {item.missingRequirements.slice(0, 2).map((gap, gIdx) => (
+                              <li key={gIdx} className="flex items-start gap-1.5 text-muted-foreground">
+                                <AlertCircle size={12} className="text-rose-500 mt-0.5 shrink-0" />
+                                <span className="text-[11px] leading-tight">{gap}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Footer Actions */}
+                    <div className="p-4 bg-slate-50 dark:bg-slate-900/60 flex items-center justify-between gap-2 mt-auto">
+                      <button
+                        type="button"
+                        onClick={() => onViewDetails && onViewDetails(item.candidate)}
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-white dark:bg-slate-800 hover:bg-slate-100 text-slate-700 dark:text-slate-200 border border-border text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+                        title="View Detailed Resume Breakdown"
+                      >
+                        <Eye size={13} className="text-indigo-600" /> Details
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => onScheduleInterview && onScheduleInterview(item.candidate)}
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer whitespace-nowrap"
+                        title="Schedule Interview"
+                      >
+                        <Calendar size={13} /> Schedule
+                      </button>
                     </div>
                   </div>
                 );
-              })()}
+              })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        /* ── Dedicated Side-by-Side Comparison for Tied Candidates ───────── */
+        activeTiedGroup && comparedTiedCandidates.length >= 2 ? (
+          <div
+            id="tied-comparison-section"
+            className="space-y-5 sm:space-y-6 max-w-full"
+          >
+            {/* 1. Comparison Header Card */}
+            <div className="bg-card border border-border rounded-2xl p-5 sm:p-6 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md">
+                    <Scale size={24} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <h3 className="text-base sm:text-lg font-black text-foreground tracking-tight">
+                        Side-by-Side Tied Score Analysis (Resume-to-Job Matching)
+                      </h3>
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 font-mono">
+                        Equal Rank: Tied #{activeGroupRankNumber}
+                      </span>
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-mono">
+                        {activeTiedScore}% Resume Match
+                      </span>
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-border font-mono">
+                        {comparedTiedCandidates.length} Candidates
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+                      Comparing candidates sharing an identical overall resume match percentage of {activeTiedScore}%. Evaluated side-by-side using factual evidence from resumes to highlight advantages and trade-offs without arbitrary ranking.
+                    </p>
+                  </div>
+                </div>
 
-              {/* Side-by-Side Matchup Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {[candA, candB].map((c, i) => {
-                  const other = i === 0 ? candB : candA;
-                  const isOverallWinner = c.compositeScore > other.compositeScore;
-                  const pill = getScorePill(c.compositeScore, c.status);
-                  const ats = parseFloat(c.ats_match_percentage ?? c.ats_score ?? 0);
-                  const otherAts = parseFloat(other.ats_match_percentage ?? other.ats_score ?? 0);
-                  const tech = parseFloat(c.skills_score ?? c.scores?.technical_skills ?? 0);
-                  const otherTech = parseFloat(other.skills_score ?? other.scores?.technical_skills ?? 0);
-                  const comm = parseFloat(c.communication_score ?? c.scores?.communication ?? 0);
-                  const otherComm = parseFloat(other.communication_score ?? other.scores?.communication ?? 0);
-                  const alertsInfo = getAlertBreakdown(c);
+                <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
+                  <button
+                    type="button"
+                    onClick={closeTiedComparison}
+                    className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-secondary hover:bg-muted text-foreground text-xs font-bold border border-border shadow-2xs transition-colors cursor-pointer"
+                    title="Return to full candidate comparison"
+                  >
+                    <ArrowLeft size={14} />
+                    <span>Back to All Candidates</span>
+                  </button>
+                </div>
+              </div>
+            </div>
 
-                  return (
-                    <div
-                      key={c.id || i}
-                      className={`bg-white dark:bg-slate-800 rounded-2xl border p-6 shadow-xs flex flex-col justify-between space-y-5 ${
-                        isOverallWinner
-                          ? 'border-indigo-500/80 ring-2 ring-indigo-500/20'
-                          : 'border-slate-200 dark:border-slate-700'
-                      }`}
-                    >
-                      <div>
-                        {isOverallWinner && (
-                          <span className="inline-flex items-center gap-1 bg-indigo-600 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full mb-2">
-                            <Trophy size={11} /> HIGHER OVERALL MATCH
+            {/* 2. Dedicated Score Groups Navigation Bar */}
+            {tieGroups.length > 1 && (
+              <div className="bg-card border border-border rounded-2xl p-4 shadow-sm space-y-2.5">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-foreground">
+                      Score Groups ({tieGroups.length}):
+                    </span>
+                    <span className="text-xs text-muted-foreground hidden sm:inline">
+                      Select a score group to compare tied candidates side-by-side
+                    </span>
+                  </div>
+                  <span className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                    Active: {activeTiedScore}% Match ({activeTiedGroup?.candidates?.length || 0} candidates)
+                  </span>
+                </div>
+
+                {/* Single horizontal row of score group buttons (Never Wrap, Horizontal Scroll if Needed) */}
+                <div className="relative overflow-hidden">
+                  <div className="flex items-center gap-2 overflow-x-auto py-1 flex-nowrap no-scrollbar scroll-smooth">
+                    {tieGroups.map(g => {
+                      const isSelected = Number(g.score) === Number(activeTiedScore);
+                      return (
+                        <button
+                          key={g.score}
+                          type="button"
+                          onClick={() => switchTiedScore(g.score)}
+                          className={`shrink-0 whitespace-nowrap inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border select-none ${
+                            isSelected
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm ring-2 ring-indigo-200 dark:ring-indigo-900/60 font-black'
+                              : 'bg-secondary/70 hover:bg-secondary text-foreground border-border hover:border-indigo-300'
+                          }`}
+                          title={`Switch comparison to ${g.candidates.length} candidates with ${g.score}% resume match`}
+                        >
+                          <Scale size={13} className={isSelected ? 'text-white' : 'text-amber-500'} />
+                          <span>{g.score}% Match</span>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-black ${
+                              isSelected
+                                ? 'bg-white/20 text-white'
+                                : 'bg-card text-muted-foreground border border-border'
+                            }`}
+                          >
+                            {g.candidates.length}
                           </span>
-                        )}
-                        <h3 className="font-bold text-slate-900 dark:text-white text-lg">
-                          {c.candidate_name || 'Candidate'}
-                        </h3>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">{c.candidate_email}</p>
-                        
-                        {/* Overall Composite Score Box */}
-                        <div className="mt-5 p-4 rounded-xl bg-slate-50 dark:bg-slate-900/60 flex items-center justify-between">
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 3. Multi-Candidate Selection Toggle (if active tied group has > 2 candidates) */}
+            {activeTiedGroup.candidates.length > 2 && (
+              <div className="bg-card border border-border rounded-2xl p-4 shadow-sm space-y-2.5">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
+                    Filter Tied Candidates for Comparison ({comparedTiedCandidates.length} of {activeTiedGroup.candidates.length} displayed):
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    Minimum 2 candidates required for side-by-side comparison
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 overflow-x-auto py-1 flex-nowrap no-scrollbar scroll-smooth">
+                  {activeTiedGroup.candidates.map(c => {
+                    const cid = c.candidateId || c.candidate?._id || c.candidate?.id;
+                    const associated = c.candidate?.associatedCandidateIds || [];
+                    const isSelected =
+                      (c.candidateId && tiedSelectedCandidateIds.has(c.candidateId)) ||
+                      (c.candidate?._id && tiedSelectedCandidateIds.has(String(c.candidate._id))) ||
+                      (c.candidate?.id && tiedSelectedCandidateIds.has(String(c.candidate.id))) ||
+                      associated.some(aid => tiedSelectedCandidateIds.has(String(aid)));
+                    return (
+                      <button
+                        key={cid}
+                        type="button"
+                        onClick={() => toggleTiedCandidate(cid, c)}
+                        className={`shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer border select-none ${
+                          isSelected
+                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                            : 'bg-secondary/60 text-muted-foreground border-border hover:border-indigo-300'
+                        }`}
+                      >
+                        <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] shrink-0 font-black ${
+                          isSelected ? 'bg-white/30 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
+                        }`}>
+                          {isSelected ? '✓' : '+'}
+                        </span>
+                        <span>{c.name}</span>
+                        <span className="text-[10px] font-mono opacity-80">({c.candidateId})</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+              {/* ── Differentiator & Trade-off Summary Cards ───────────── */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                    <Sparkles size={14} className="text-indigo-600" />
+                    Key Resume Differentiators & Trade-off Summary ({activeTiedScore}% Match)
+                  </h4>
+                  <span className="text-[11px] text-muted-foreground hidden sm:inline">
+                    Neutral comparison — factual advantages and gaps from candidate resumes
+                  </span>
+                </div>
+                <div className="overflow-x-auto pb-2 custom-scrollbar">
+                  <div
+                    className="grid gap-4 sm:gap-6 items-stretch"
+                    style={{
+                      gridTemplateColumns: `repeat(${comparedTiedCandidates.length}, minmax(320px, 1fr))`,
+                      minWidth: `${comparedTiedCandidates.length * 320}px`
+                    }}
+                  >
+                    {comparedTiedCandidates.map(c => {
+                      const diffs = getCandidateDifferentiators(c, comparedTiedCandidates, job);
+                      return (
+                        <div
+                          key={c.candidateId}
+                          className="bg-card border border-border rounded-2xl p-5 shadow-xs flex flex-col justify-between hover:shadow-sm transition-shadow min-w-[320px]"
+                        >
                           <div>
-                            <span className="text-xs font-semibold text-slate-500">Overall Fit Score</span>
-                            <div className="text-2xl font-black text-slate-900 dark:text-white mt-0.5">
-                              {c.compositeScore}%
+                            <div className="flex items-center justify-between gap-2 pb-3.5 border-b border-border">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-extrabold text-xs flex items-center justify-center shrink-0 shadow-sm">
+                                  {(c.name || '?')[0].toUpperCase()}
+                                </div>
+                                <div className="min-w-0">
+                                  <h4 className="font-extrabold text-sm text-foreground truncate" title={c.name}>{c.name}</h4>
+                                  <span className="text-[10px] font-mono text-muted-foreground">{c.candidateId}</span>
+                                </div>
+                              </div>
+                              <div className="flex flex-col items-end gap-1 shrink-0">
+                                {(() => {
+                                  const rankedItem = tiedRecommendation?.rankedCandidates?.find(
+                                    r => (r.candidateId || r.candidate?._id || r.candidate?.id) === (c.candidateId || c.candidate?._id || c.candidate?.id)
+                                  );
+                                  if (rankedItem) {
+                                    return (
+                                      <span
+                                        className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                                          rankedItem.badgeType === 'winner'
+                                            ? 'bg-emerald-500 text-white shadow-2xs'
+                                            : rankedItem.badgeType === 'runner_up'
+                                            ? 'bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'
+                                            : rankedItem.badgeType === 'third'
+                                            ? 'bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800'
+                                            : rankedItem.badgeType === 'fourth'
+                                            ? 'bg-sky-50 dark:bg-sky-950 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800'
+                                            : 'bg-secondary text-muted-foreground border border-border'
+                                        }`}
+                                      >
+                                        {rankedItem.rankLabel}
+                                      </span>
+                                    );
+                                  }
+                                  return null;
+                                })()}
+                                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                                  Tied #{activeGroupRankNumber} ({c.overallScore}%)
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Advantages */}
+                            <div className="mt-3.5 space-y-2">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400 block">
+                                Key Resume Advantages
+                              </span>
+                              <ul className="space-y-1.5 text-xs">
+                                {diffs.advantages.length > 0 ? (
+                                  diffs.advantages.map((adv, aIdx) => (
+                                    <li key={aIdx} className="flex items-start gap-2 text-foreground font-medium">
+                                      <CheckCircle2 size={13} className="text-emerald-600 mt-0.5 shrink-0" />
+                                      <span className="text-xs leading-relaxed">{adv}</span>
+                                    </li>
+                                  ))
+                                ) : (
+                                  <li className="text-xs text-muted-foreground italic">Evenly matched with peers</li>
+                                )}
+                              </ul>
+                            </div>
+
+                            {/* Considerations / Trade-offs */}
+                            <div className="mt-3.5 pt-3.5 border-t border-border/60 space-y-2">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-400 block">
+                                Resume Trade-offs & Gaps
+                              </span>
+                              <ul className="space-y-1.5 text-xs">
+                                {diffs.considerations.length > 0 ? (
+                                  diffs.considerations.map((con, cIdx) => (
+                                    <li key={cIdx} className="flex items-start gap-2 text-muted-foreground">
+                                      <AlertCircle size={13} className="text-amber-500 mt-0.5 shrink-0" />
+                                      <span className="text-xs leading-relaxed">{con}</span>
+                                    </li>
+                                  ))
+                                ) : (
+                                  <li className="text-xs text-muted-foreground italic">No notable trade-offs relative to peers</li>
+                                )}
+                              </ul>
                             </div>
                           </div>
-                          <span className={`px-3 py-1 rounded-full text-xs font-bold ${pill.bg}`}>
-                            {pill.label}
-                          </span>
+
+                          <div className="mt-4 pt-3.5 border-t border-border/60 flex items-center justify-between text-xs text-muted-foreground gap-2 flex-wrap">
+                            <span>Experience: <strong className="text-foreground">{displayValue(c.experience)}</strong></span>
+                            <span>Education: <strong className="text-foreground truncate max-w-[150px] inline-block align-bottom" title={displayValue(c.education)}>{displayValue(c.education)}</strong></span>
+                          </div>
                         </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
 
-                        {/* Metric-by-Metric Winner Indicators */}
-                        <div className="space-y-3 mt-5 text-sm">
-                          {/* Technical Competency */}
-                          <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-700">
-                            <span className="text-slate-500 text-xs">Technical Competency</span>
-                            <div className="flex items-center gap-2">
-                              <strong className="text-slate-800 dark:text-slate-200">{tech > 0 ? `${tech}/100` : '—'}</strong>
-                              {tech > otherTech && tech > 0 && (
-                                <span className="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-1.5 py-0.2 rounded">
-                                  WINNER 🏆
-                                </span>
-                              )}
+              {/* ── Side-by-Side Detailed Criteria Table ──────────────── */}
+              <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+                <div className="overflow-x-auto custom-scrollbar">
+                  <table className="w-full border-collapse text-left text-xs min-w-full">
+                    <thead>
+                      <tr className="bg-slate-50 dark:bg-slate-900/80 border-b border-border">
+                        <th className="p-4 font-black text-muted-foreground uppercase tracking-wider w-56 sm:w-64 min-w-[200px] sticky left-0 bg-slate-50 dark:bg-slate-900 z-10 border-r border-border shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]">
+                          Resume Evaluation Criteria
+                        </th>
+                        {comparedTiedCandidates.map(c => (
+                          <th key={c.candidateId} className="p-4 min-w-[300px] sm:min-w-[340px] border-r border-border last:border-r-0 align-top">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-extrabold text-xs flex items-center justify-center shrink-0 shadow-2xs">
+                                  {(c.name || '?')[0].toUpperCase()}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="font-extrabold text-foreground truncate text-sm" title={c.name}>{c.name}</div>
+                                  <div className="text-[10px] font-mono text-muted-foreground">{c.candidateId}</div>
+                                </div>
+                              </div>
+                              <span className="px-2 py-0.5 rounded text-[10px] font-black bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 shrink-0 font-mono">
+                                Tied #{activeGroupRankNumber}
+                              </span>
                             </div>
-                          </div>
-
-                          {/* ATS Resume Fit */}
-                          <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-700">
-                            <span className="text-slate-500 text-xs">ATS Resume Match</span>
-                            <div className="flex items-center gap-2">
-                              <strong className={ats === 0 ? 'text-rose-600' : 'text-slate-800 dark:text-slate-200'}>
-                                {ats}%
-                              </strong>
-                              {ats > otherAts && ats > 0 && (
-                                <span className="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-1.5 py-0.2 rounded">
-                                  WINNER 🏆
-                                </span>
-                              )}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {/* Resume-to-Job Match */}
+                      <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30">
+                        <td className="p-4 font-bold text-foreground sticky left-0 bg-card dark:bg-slate-900 z-10 border-r border-border shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)]">
+                          Resume-to-Job Match
+                        </td>
+                        {comparedTiedCandidates.map(c => (
+                          <td key={c.candidateId} className="p-4 min-w-[300px] sm:min-w-[340px] border-r border-border last:border-r-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`text-xl font-black ${c.matchCategory.colorClass}`}>
+                                {c.overallScore !== null ? `${c.overallScore}%` : 'Not available'}
+                              </span>
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${c.matchCategory.badgeClass}`}>
+                                {c.matchCategory.label}
+                              </span>
                             </div>
-                          </div>
+                            <span className="text-[10px] text-muted-foreground mt-0.5 block">
+                              Equal match percentage across compared peers
+                            </span>
+                          </td>
+                        ))}
+                      </tr>
 
-                          {/* Communication */}
-                          <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-700">
-                            <span className="text-slate-500 text-xs">Communication Skills</span>
-                            <div className="flex items-center gap-2">
-                              <strong className="text-slate-800 dark:text-slate-200">{comm > 0 ? `${comm}/100` : '—'}</strong>
-                              {comm > otherComm && comm > 0 && (
-                                <span className="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-1.5 py-0.2 rounded">
-                                  WINNER 🏆
+                      {/* Skills Alignment */}
+                      <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30">
+                        <td className="p-4 font-bold text-foreground sticky left-0 bg-card dark:bg-slate-900 z-10 border-r border-border shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)]">
+                          Mandatory Skills Match
+                        </td>
+                        {comparedTiedCandidates.map(c => {
+                          const metric = getMetricComparison('skillsScore', c, comparedTiedCandidates);
+                          return (
+                            <td key={c.candidateId} className="p-4 min-w-[300px] sm:min-w-[340px] border-r border-border last:border-r-0">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-bold text-foreground text-sm">
+                                  {c.breakdown.skillsScore}%
                                 </span>
-                              )}
-                            </div>
-                          </div>
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                                  metric.status === 'highest'
+                                    ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300'
+                                    : metric.status === 'lowest'
+                                    ? 'bg-rose-50 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border-rose-300'
+                                    : 'bg-secondary text-muted-foreground border-border'
+                                }`}>
+                                  {metric.text}
+                                </span>
+                              </div>
+                              <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-indigo-600 rounded-full transition-all duration-300"
+                                  style={{ width: `${Math.min(100, Math.max(0, c.breakdown.skillsScore))}%` }}
+                                />
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
 
-                          {/* Logistics */}
-                          <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-700">
-                            <span className="text-slate-500 text-xs">Experience</span>
-                            <strong className="text-slate-800 dark:text-slate-200">{c.experience || 'Fresher'}</strong>
-                          </div>
-                          <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-700">
-                            <span className="text-slate-500 text-xs">Notice Period</span>
-                            <strong className="text-indigo-600">{c.notice_period || 'Immediate'}</strong>
-                          </div>
+                      {/* Matched Mandatory Skills */}
+                      <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30">
+                        <td className="p-4 font-bold text-foreground sticky left-0 bg-card dark:bg-slate-900 z-10 border-r border-border shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)]">
+                          Matched Skills (Resume)
+                        </td>
+                        {comparedTiedCandidates.map(c => {
+                          return (
+                            <td key={c.candidateId} className="p-4 min-w-[300px] sm:min-w-[340px] border-r border-border last:border-r-0 align-top">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-[11px] font-bold text-muted-foreground">
+                                  {c.skillsAlignment.matchedSkills.length} Matched ({c.skillsAlignment.matchRatio})
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {c.skillsAlignment.matchedSkills.length > 0 ? (
+                                  c.skillsAlignment.matchedSkills.map(s => (
+                                    <span
+                                      key={s}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                                    >
+                                      <Check size={11} className="text-emerald-600" />
+                                      {s}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-xs text-muted-foreground italic">No required skills matched in resume</span>
+                                )}
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
 
-                          {/* DETAILED INTEGRITY AUDIT BREAKDOWN */}
-                          <div className="py-2 border-b border-slate-100 dark:border-slate-700">
-                            <div className="flex items-center justify-between">
-                              <span className="text-slate-500 text-xs">Integrity Audit</span>
-                              {alertsInfo.total === 0 ? (
-                                <span className="text-emerald-600 font-semibold flex items-center gap-1 text-xs">
-                                  <ShieldCheck size={13} /> Clean (0 Alerts)
+                      {/* Missing Skills */}
+                      <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30">
+                        <td className="p-4 font-bold text-foreground sticky left-0 bg-card dark:bg-slate-900 z-10 border-r border-border shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)]">
+                          Missing Skills
+                        </td>
+                        {comparedTiedCandidates.map(c => {
+                          return (
+                            <td key={c.candidateId} className="p-4 min-w-[300px] sm:min-w-[340px] border-r border-border last:border-r-0 align-top">
+                              {c.skillsAlignment.missingSkills.length === 0 ? (
+                                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 rounded-md border border-emerald-200 dark:border-emerald-800">
+                                  <CheckCircle2 size={12} /> None missing (100% matched)
                                 </span>
                               ) : (
-                                <span className="text-amber-600 font-bold flex items-center gap-1 text-xs">
-                                  <AlertTriangle size={13} /> {alertsInfo.total} Alerts Detected
+                                <div className="flex flex-wrap gap-1.5">
+                                  {c.skillsAlignment.missingSkills.map(s => (
+                                    <span
+                                      key={s}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-rose-50 text-rose-800 dark:bg-rose-950/50 dark:text-rose-300 border border-rose-200 dark:border-rose-800"
+                                    >
+                                      <X size={11} className="text-rose-500" />
+                                      {s}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+
+                      {/* Preferred Skills (if any exist) */}
+                      {comparedTiedCandidates.some(c => c.skillsAlignment?.preferredSkills?.length > 0) && (
+                        <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30">
+                          <td className="p-4 font-bold text-foreground sticky left-0 bg-card dark:bg-slate-900 z-10 border-r border-border shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)]">
+                            Preferred Skills
+                          </td>
+                          {comparedTiedCandidates.map(c => (
+                            <td key={c.candidateId} className="p-4 min-w-[300px] sm:min-w-[340px] border-r border-border last:border-r-0 align-top">
+                              {(c.skillsAlignment.matchedPreferredSkills || []).length > 0 ? (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {c.skillsAlignment.matchedPreferredSkills.map(s => (
+                                    <span
+                                      key={s}
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-indigo-50 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800"
+                                    >
+                                      <Check size={10} className="text-indigo-600" /> {s}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-muted-foreground italic">No preferred skills matched</span>
+                              )}
+                            </td>
+                          ))}
+                        </tr>
+                      )}
+
+                      {/* Additional Skills */}
+                      <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30">
+                        <td className="p-4 font-bold text-foreground sticky left-0 bg-card dark:bg-slate-900 z-10 border-r border-border shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)]">
+                          Additional Resume Skills
+                        </td>
+                        {comparedTiedCandidates.map(c => (
+                          <td key={c.candidateId} className="p-4 min-w-[300px] sm:min-w-[340px] border-r border-border last:border-r-0 align-top">
+                            {c.skillsAlignment.additionalSkills.length > 0 ? (
+                              <div className="flex flex-wrap gap-1.5">
+                                {c.skillsAlignment.additionalSkills.map(s => (
+                                  <span
+                                    key={s}
+                                    className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-secondary text-foreground border border-border"
+                                  >
+                                    {s}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground italic">Not available</span>
+                            )}
+                          </td>
+                        ))}
+                      </tr>
+
+                      {/* Experience Match */}
+                      <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30">
+                        <td className="p-4 font-bold text-foreground sticky left-0 bg-card dark:bg-slate-900 z-10 border-r border-border shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)]">
+                          Relevant Experience
+                        </td>
+                        {comparedTiedCandidates.map(c => {
+                          const expComp = getExpComparison(c, comparedTiedCandidates);
+                          return (
+                            <td key={c.candidateId} className="p-4 min-w-[300px] sm:min-w-[340px] border-r border-border last:border-r-0">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-extrabold text-foreground text-sm">
+                                  {displayValue(c.experience)}
+                                </span>
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                                  expComp.status === 'highest'
+                                    ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300'
+                                    : expComp.status === 'lowest'
+                                    ? 'bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300'
+                                    : 'bg-secondary text-muted-foreground border-border'
+                                }`}>
+                                  {expComp.text}
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-muted-foreground block">
+                                Score: {c.breakdown.experienceScore}% (Target: {job.experience || 'Not specified'})
+                              </span>
+                            </td>
+                          );
+                        })}
+                      </tr>
+
+                      {/* Role & Responsibility Relevance */}
+                      <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30">
+                        <td className="p-4 font-bold text-foreground sticky left-0 bg-card dark:bg-slate-900 z-10 border-r border-border shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)]">
+                          Role & JD Relevance
+                        </td>
+                        {comparedTiedCandidates.map(c => {
+                          const roleComp = getMetricComparison('roleScore', c, comparedTiedCandidates);
+                          return (
+                            <td key={c.candidateId} className="p-4 min-w-[300px] sm:min-w-[340px] border-r border-border last:border-r-0">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-extrabold text-foreground text-sm">
+                                  {c.breakdown.roleScore}%
+                                </span>
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                                  roleComp.status === 'highest'
+                                    ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300'
+                                    : roleComp.status === 'lowest'
+                                    ? 'bg-rose-50 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border-rose-300'
+                                    : 'bg-secondary text-muted-foreground border-border'
+                                }`}>
+                                  {roleComp.text}
+                                </span>
+                              </div>
+                              <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-purple-500 rounded-full transition-all duration-300"
+                                  style={{ width: `${Math.min(100, Math.max(0, c.breakdown.roleScore))}%` }}
+                                />
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+
+                      {/* Education & Qualifications */}
+                      <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30">
+                        <td className="p-4 font-bold text-foreground sticky left-0 bg-card dark:bg-slate-900 z-10 border-r border-border shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)]">
+                          Education / Qualifications
+                        </td>
+                        {comparedTiedCandidates.map(c => (
+                          <td key={c.candidateId} className="p-4 min-w-[300px] sm:min-w-[340px] border-r border-border last:border-r-0">
+                            <span className="font-medium text-foreground text-xs block">
+                              {displayValue(c.education)}
+                            </span>
+                          </td>
+                        ))}
+                      </tr>
+
+                      {/* Location & Work Mode */}
+                      <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30">
+                        <td className="p-4 font-bold text-foreground sticky left-0 bg-card dark:bg-slate-900 z-10 border-r border-border shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)]">
+                          Location & Work Mode
+                        </td>
+                        {comparedTiedCandidates.map(c => (
+                          <td key={c.candidateId} className="p-4 min-w-[300px] sm:min-w-[340px] border-r border-border last:border-r-0">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-1.5 text-foreground font-medium">
+                                <MapPin size={12} className="text-teal-600 shrink-0" />
+                                <span>{displayValue(c.location)}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 text-muted-foreground text-[11px]">
+                                <Clock size={11} className="text-indigo-500 shrink-0" />
+                                <span>{displayValue(c.candidate?.workMode || job.workMode)}</span>
+                              </div>
+                            </div>
+                          </td>
+                        ))}
+                      </tr>
+
+                      {/* Current Company & Notice Period */}
+                      <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30">
+                        <td className="p-4 font-bold text-foreground sticky left-0 bg-card dark:bg-slate-900 z-10 border-r border-border shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)]">
+                          Company & Notice Period
+                        </td>
+                        {comparedTiedCandidates.map(c => (
+                          <td key={c.candidateId} className="p-4 min-w-[300px] sm:min-w-[340px] border-r border-border last:border-r-0">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-1.5 text-foreground font-medium">
+                                <Building2 size={12} className="text-slate-500 shrink-0" />
+                                <span>{displayValue(c.currentCompany)}</span>
+                              </div>
+                              <div className="text-[11px] text-muted-foreground">
+                                Notice: <strong className="text-foreground">{displayValue(c.noticePeriod)}</strong>
+                              </div>
+                            </div>
+                          </td>
+                        ))}
+                      </tr>
+
+                      {/* Key Resume Differentiator */}
+                      <tr className="bg-amber-50/20 dark:bg-amber-950/10">
+                        <td className="p-4 font-bold text-foreground sticky left-0 bg-slate-50 dark:bg-slate-900 z-10 border-r border-border shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)]">
+                          Key Resume Differentiator
+                        </td>
+                        {comparedTiedCandidates.map(c => {
+                          const diffs = getCandidateDifferentiators(c, comparedTiedCandidates, job);
+                          return (
+                            <td key={c.candidateId} className="p-4 min-w-[300px] sm:min-w-[340px] border-r border-border last:border-r-0 align-top">
+                              <div className="space-y-2">
+                                <div>
+                                  <span className="text-[10px] font-black uppercase text-emerald-700 dark:text-emerald-400 block mb-1">
+                                    Resume Advantage:
+                                  </span>
+                                  <p className="text-xs text-foreground font-semibold leading-relaxed">
+                                    {diffs.advantages[0] || 'Comparable core skills profile in resume'}
+                                  </p>
+                                </div>
+                                <div>
+                                  <span className="text-[10px] font-black uppercase text-amber-700 dark:text-amber-400 block mb-1">
+                                    Consideration / Factor:
+                                  </span>
+                                  <p className="text-xs text-muted-foreground leading-relaxed">
+                                    {diffs.considerations[0] || 'Balanced requirement profile in resume'}
+                                  </p>
+                                </div>
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+
+                      {/* Row Actions */}
+                      <tr className="bg-slate-50/60 dark:bg-slate-900/60">
+                        <td className="p-4 font-bold text-foreground sticky left-0 bg-slate-50 dark:bg-slate-900 z-10 border-r border-border shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)]">
+                          Action
+                        </td>
+                        {comparedTiedCandidates.map(c => (
+                          <td key={c.candidateId} className="p-4 min-w-[300px] sm:min-w-[340px] border-r border-border last:border-r-0">
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => onViewDetails && onViewDetails(c.candidate)}
+                                className="flex-1 inline-flex items-center justify-center gap-1 px-2.5 py-1.5 bg-white dark:bg-slate-800 hover:bg-slate-100 text-slate-700 dark:text-slate-200 border border-border text-xs font-bold rounded-lg shadow-2xs transition-colors cursor-pointer"
+                              >
+                                <Eye size={12} className="text-indigo-600" /> Details
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => onScheduleInterview && onScheduleInterview(c.candidate)}
+                                className="flex-1 inline-flex items-center justify-center gap-1 px-2.5 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold rounded-lg shadow-2xs transition-all cursor-pointer whitespace-nowrap"
+                              >
+                                <Calendar size={12} /> Schedule
+                              </button>
+                            </div>
+                          </td>
+                        ))}
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* ── 6. Recommended Candidate Section ───────────────────── */}
+              {tiedRecommendation && (
+                <div className="space-y-4 pt-2">
+                  {/* Section Title & Subtitle */}
+                  <div className="flex items-center justify-between gap-3 flex-wrap border-b border-border/80 pb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center border border-amber-500/20 shadow-2xs">
+                        <Award size={20} />
+                      </div>
+                      <div>
+                        <h4 className="text-base font-extrabold text-foreground flex items-center gap-2 flex-wrap">
+                          <span>Recommended Candidate</span>
+                          <span className="text-xs font-mono font-bold px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                            {activeTiedScore}% Match Group
+                          </span>
+                        </h4>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Evidence-based candidate recommendation and ranking derived from resume qualifications, mandatory skills coverage, and job requirements.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-bold px-3 py-1 rounded-full border shadow-2xs ${
+                        tiedRecommendation.isClearWinner
+                          ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
+                          : 'bg-amber-50 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border-amber-300 dark:border-amber-800'
+                      }`}>
+                        {tiedRecommendation.isClearWinner ? '✓ Clear Winner Identified' : '⚖ Equally Recommended'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Recommendation Card: Clear Winner vs. No Clear Winner */}
+                  {tiedRecommendation.isClearWinner && tiedRecommendation.bestCandidate ? (
+                    <div className="bg-gradient-to-br from-emerald-500/5 via-card to-indigo-500/5 border-2 border-emerald-500/30 dark:border-emerald-500/40 rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
+                      {/* Top Header Row of Recommendation Card */}
+                      <div className="flex items-start justify-between gap-4 flex-wrap">
+                        <div className="flex items-center gap-3.5">
+                          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center font-black text-lg shadow-sm">
+                            {tiedRecommendation.bestCandidate.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h3 className="text-lg font-black text-foreground">
+                                {tiedRecommendation.bestCandidate.name}
+                              </h3>
+                              <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-emerald-500 text-white shadow-2xs">
+                                #1 Best Choice
+                              </span>
+                              <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                                {tiedRecommendation.bestCandidate.overallScore}% Resume Match
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1 flex-wrap font-medium">
+                              <span className="font-mono text-slate-500">ID: {tiedRecommendation.bestCandidate.candidateId}</span>
+                              {tiedRecommendation.bestCandidate.experience && (
+                                <span className="flex items-center gap-1">
+                                  <Briefcase size={12} className="text-muted-foreground" />
+                                  {tiedRecommendation.bestCandidate.experience}
+                                </span>
+                              )}
+                              {tiedRecommendation.bestCandidate.currentCompany && tiedRecommendation.bestCandidate.currentCompany !== 'Not specified' && (
+                                <span className="flex items-center gap-1">
+                                  <Building2 size={12} className="text-muted-foreground" />
+                                  {tiedRecommendation.bestCandidate.currentCompany}
+                                </span>
+                              )}
+                              {tiedRecommendation.bestCandidate.education && (
+                                <span className="flex items-center gap-1">
+                                  <GraduationCap size={12} className="text-muted-foreground" />
+                                  {tiedRecommendation.bestCandidate.education}
                                 </span>
                               )}
                             </div>
-                            {alertsInfo.total > 0 && (
-                              <div className="flex items-center gap-2 text-[11px] text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/60 p-2 rounded-lg mt-2 justify-between">
-                                <span>📑 Tab Switches: <strong>{alertsInfo.tabSwitches}</strong></span>
-                                <span>👤 Face Alerts: <strong>{alertsInfo.faceAlerts}</strong></span>
-                                <span>🎙️ Audio Noise: <strong>{alertsInfo.noiseAlerts}</strong></span>
-                              </div>
-                            )}
                           </div>
                         </div>
 
-                        {/* Qualitative Bullets */}
-                        <div className="space-y-2 mt-5">
-                          <div className="p-3 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/50 rounded-xl text-xs">
-                            <strong className="text-emerald-700 dark:text-emerald-400 block mb-1 font-bold">Key Strength</strong>
-                            <p className="text-slate-700 dark:text-slate-300 leading-relaxed">{getStrengths(c)}</p>
-                          </div>
-                          <div className="p-3 bg-rose-50/70 dark:bg-rose-950/30 border border-rose-200/50 rounded-xl text-xs">
-                            <strong className="text-rose-700 dark:text-rose-400 block mb-1 font-bold">Growth Area</strong>
-                            <p className="text-slate-700 dark:text-slate-300 leading-relaxed">{getWeaknesses(c)}</p>
-                          </div>
+                        {/* Action buttons */}
+                        <div className="flex items-center gap-2 self-start sm:self-center">
+                          <button
+                            type="button"
+                            onClick={() => onViewDetails && onViewDetails(tiedRecommendation.bestCandidate.candidate)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 hover:bg-slate-100 text-slate-700 dark:text-slate-200 border border-border text-xs font-bold rounded-xl shadow-2xs transition-colors cursor-pointer"
+                          >
+                            <Eye size={13} className="text-indigo-600" /> View Details
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onScheduleInterview && onScheduleInterview(tiedRecommendation.bestCandidate.candidate)}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-xl shadow-2xs transition-all cursor-pointer"
+                          >
+                            <Calendar size={13} /> Schedule Interview
+                          </button>
                         </div>
                       </div>
 
-                      {/* Select Action */}
-                      <button
-                        onClick={() => onSelectCandidate && onSelectCandidate(c)}
-                        className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors"
-                      >
-                        Select & Make Offer
-                      </button>
+                      {/* Explanation of why candidate is a better fit */}
+                      <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3.5 sm:p-4 text-xs leading-relaxed text-emerald-950 dark:text-emerald-200 flex items-start gap-2.5">
+                        <Sparkles size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-black uppercase tracking-wider text-[11px] block text-emerald-800 dark:text-emerald-300 mb-1">
+                            Executive Recommendation Summary
+                          </span>
+                          <p className="font-medium text-foreground">
+                            {tiedRecommendation.fitSummary}
+                          </p>
+                        </div>
+                      </div>
 
+                      {/* 3 Detail Columns: Why Recommended / Key Strengths / Important Gaps */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {/* 1. Why this candidate is recommended */}
+                        <div className="bg-card border border-border rounded-xl p-4 space-y-2.5 shadow-2xs">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 size={15} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                            <h5 className="text-xs font-extrabold uppercase tracking-wider text-foreground">
+                              Why This Candidate is Recommended
+                            </h5>
+                          </div>
+                          <ul className="space-y-2">
+                            {tiedRecommendation.recommendationReasons.map((reason, idx) => (
+                              <li key={idx} className="text-xs text-foreground/90 leading-relaxed flex items-start gap-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 mt-1.5" />
+                                <span>{reason}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        {/* 2. Key strengths compared with other tied candidates */}
+                        <div className="bg-card border border-border rounded-xl p-4 space-y-2.5 shadow-2xs">
+                          <div className="flex items-center gap-2">
+                            <Sparkles size={15} className="text-indigo-600 dark:text-indigo-400 shrink-0" />
+                            <h5 className="text-xs font-extrabold uppercase tracking-wider text-foreground">
+                              Key Strengths vs. Other Tied Candidates
+                            </h5>
+                          </div>
+                          <ul className="space-y-2">
+                            {tiedRecommendation.comparativeStrengths.map((str, idx) => (
+                              <li key={idx} className="text-xs text-foreground/90 leading-relaxed flex items-start gap-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0 mt-1.5" />
+                                <span>{str}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        {/* 3. Important skill or experience gaps */}
+                        <div className="bg-card border border-border rounded-xl p-4 space-y-2.5 shadow-2xs">
+                          <div className="flex items-center gap-2">
+                            <AlertCircle size={15} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                            <h5 className="text-xs font-extrabold uppercase tracking-wider text-foreground">
+                              Important Gaps & Considerations
+                            </h5>
+                          </div>
+                          <ul className="space-y-2">
+                            {tiedRecommendation.candidateGaps.map((gap, idx) => (
+                              <li key={idx} className="text-xs text-muted-foreground leading-relaxed flex items-start gap-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 mt-1.5" />
+                                <span>{gap}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
                     </div>
-                  );
-                })}
-              </div>
+                  ) : (
+                    /* Fallback: No Clear Winner */
+                    <div className="bg-amber-50/50 dark:bg-amber-950/20 border-2 border-amber-300 dark:border-amber-800 rounded-2xl p-5 sm:p-6 shadow-sm space-y-4">
+                      <div className="flex items-start gap-3.5">
+                        <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                          <Scale size={20} />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="text-base font-extrabold text-foreground">
+                              No Clear Winner — Equally Recommended Profiles
+                            </h3>
+                            <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                              Equally Tied ({activeTiedScore}% Match)
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            {tiedRecommendation.fitSummary}
+                          </p>
+                        </div>
+                      </div>
 
+                      {/* Co-recommended candidates */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5 pt-2">
+                        {tiedRecommendation.coWinners.map(cand => (
+                          <div key={cand.candidateId} className="bg-card border border-border rounded-xl p-3.5 space-y-2 shadow-2xs">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-xs text-foreground">{cand.name}</span>
+                              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 font-bold border border-amber-300 dark:border-amber-800">
+                                Co-Recommended
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-muted-foreground space-y-1">
+                              <div><span className="font-semibold text-foreground">Exp:</span> {cand.experience}</div>
+                              <div><span className="font-semibold text-foreground">Skills:</span> {cand.mMatched.slice(0, 3).join(', ')}</div>
+                            </div>
+                            <div className="pt-1 flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => onScheduleInterview && onScheduleInterview(cand.candidate)}
+                                className="w-full inline-flex items-center justify-center gap-1 py-1 px-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold cursor-pointer"
+                              >
+                                <Calendar size={11} /> Interview
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="bg-card/70 border border-border rounded-xl p-3 text-xs text-muted-foreground flex items-center gap-2">
+                        <Info size={14} className="text-indigo-600 shrink-0" />
+                        <span>
+                          <strong>Recommendation Guidance:</strong> Resume data alone does not provide a definitive differentiator. We advise conducting an initial technical interview with each co-recommended candidate to evaluate hands-on problem solving.
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Relative Ranking Table of All Tied Candidates */}
+                  <div className="bg-card border border-border rounded-2xl p-4 sm:p-5 shadow-sm space-y-3">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <TrendingUp size={16} className="text-indigo-600" />
+                        <h5 className="text-xs font-black uppercase tracking-wider text-foreground">
+                          Tied Group Relative Ranking (#{activeGroupRankNumber} Overall)
+                        </h5>
+                      </div>
+                      <span className="text-[11px] text-muted-foreground">
+                        Ranked on empirical resume criteria · Overall resume match scores remain unchanged ({activeTiedScore}%)
+                      </span>
+                    </div>
+
+                    <div className="overflow-x-auto border border-border rounded-xl">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-muted/50 border-b border-border text-[11px] font-black uppercase tracking-wider text-muted-foreground">
+                            <th className="py-2.5 px-3 w-36">Relative Rank</th>
+                            <th className="py-2.5 px-3">Candidate</th>
+                            <th className="py-2.5 px-3 text-center">Resume Match</th>
+                            <th className="py-2.5 px-3">Mandatory Skills</th>
+                            <th className="py-2.5 px-3">Experience</th>
+                            <th className="py-2.5 px-3">Key Differentiator</th>
+                            <th className="py-2.5 px-3 text-right">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                          {tiedRecommendation.rankedCandidates.map(cand => {
+                            const isTop = cand.relativeRank === 1;
+                            return (
+                              <tr
+                                key={cand.candidateId}
+                                className={`transition-colors ${
+                                  isTop
+                                    ? 'bg-emerald-50/40 dark:bg-emerald-950/20 font-medium'
+                                    : 'hover:bg-muted/30'
+                                }`}
+                              >
+                                <td className="py-3 px-3">
+                                  <span
+                                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
+                                      cand.badgeType === 'winner'
+                                        ? 'bg-emerald-500 text-white shadow-2xs'
+                                        : cand.badgeType === 'co_winner'
+                                        ? 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                                        : cand.badgeType === 'runner_up'
+                                        ? 'bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'
+                                        : cand.badgeType === 'third'
+                                        ? 'bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800'
+                                        : cand.badgeType === 'fourth'
+                                        ? 'bg-sky-50 dark:bg-sky-950 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800'
+                                        : 'bg-secondary text-muted-foreground border border-border'
+                                    }`}
+                                  >
+                                    {isTop && cand.badgeType === 'winner' && <Award size={11} />}
+                                    {cand.rankLabel}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-3">
+                                  <div>
+                                    <span className="font-bold text-foreground block">{cand.name}</span>
+                                    <span className="font-mono text-[10px] text-muted-foreground">{cand.candidateId}</span>
+                                  </div>
+                                </td>
+                                <td className="py-3 px-3 text-center">
+                                  <span className="font-mono font-bold text-xs px-2 py-0.5 rounded-md bg-secondary text-foreground border border-border">
+                                    {cand.overallScore}%
+                                  </span>
+                                </td>
+                                <td className="py-3 px-3">
+                                  <div className="flex items-center gap-1 flex-wrap">
+                                    <span className="font-bold text-xs text-foreground">
+                                      {cand.mMatched.length} matched
+                                    </span>
+                                    {cand.uniqueMatched.length > 0 && (
+                                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/60 text-indigo-800 dark:text-indigo-200">
+                                        +{cand.uniqueMatched.length} exclusive
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="py-3 px-3 text-muted-foreground">
+                                  {cand.experience}
+                                </td>
+                                <td className="py-3 px-3 text-foreground font-medium">
+                                  {cand.rankRationale}
+                                </td>
+                                <td className="py-3 px-3 text-right">
+                                  <div className="inline-flex items-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => onViewDetails && onViewDetails(cand.candidate)}
+                                      className="p-1 rounded-md text-slate-600 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-300 hover:bg-muted transition-colors cursor-pointer"
+                                      title="View Candidate Details"
+                                    >
+                                      <Eye size={13} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => onScheduleInterview && onScheduleInterview(cand.candidate)}
+                                      className="px-2 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px] transition-all cursor-pointer inline-flex items-center gap-1"
+                                    >
+                                      <Calendar size={11} /> Schedule
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
+          ) : (
+            <div className="text-center py-20 bg-card border border-border rounded-2xl p-8">
+              <Scale size={36} className="mx-auto text-amber-500 mb-3" />
+              <h3 className="text-base font-bold text-foreground">No Tied Candidates Available</h3>
+              <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
+                Unable to find at least 2 tied candidates for this score. Return to all candidates comparison.
+              </p>
+              <button
+                type="button"
+                onClick={closeTiedComparison}
+                className="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl cursor-pointer"
+              >
+                Back to All Candidates
+              </button>
+            </div>
+          )
         )}
+      </div>
 
-        {/* ============================================================== */}
-        {/* FOOTER BAR                                                     */}
-        {/* ============================================================== */}
-        <div className="px-6 py-3 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/80 flex items-center justify-between text-xs text-slate-400 shrink-0">
-          <span>HireIQ Decision Intelligence · Multi-Factor Evaluation</span>
+      {/* ── Modal Footer ──────────────────────────────────────────────── */}
+      <div className="px-6 sm:px-8 py-4 border-t border-border flex items-center justify-between bg-card shrink-0 flex-wrap gap-3">
+        <div className="text-xs text-muted-foreground font-medium max-w-xl">
+          {isTiedViewOpen
+            ? `Comparing candidates sharing an identical overall resume match percentage of ${activeTiedScore}%. Key advantages and trade-offs are based on resume evidence.`
+            : "Resume match scores are evaluated deterministically from candidate resumes and profiles against this job's requirements. Interview scores, AI evaluation ratings, and interview statuses are not used."}
+        </div>
+        <div className="flex items-center gap-2.5 ml-auto shrink-0">
+          {isTiedViewOpen && (
+            <button
+              type="button"
+              onClick={closeTiedComparison}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-secondary hover:bg-muted text-foreground font-bold text-xs sm:text-sm border border-border cursor-pointer transition-colors shadow-2xs"
+            >
+              <ArrowLeft size={14} />
+              <span>Back to All Candidates</span>
+            </button>
+          )}
           <button
             onClick={onClose}
-            className="text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900"
+            className="px-6 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-100 dark:hover:bg-white dark:text-slate-900 font-bold text-xs sm:text-sm cursor-pointer transition-colors shadow-xs"
           >
             Close Comparison
           </button>
         </div>
-
+      </div>
       </div>
     </div>
   );

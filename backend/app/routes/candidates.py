@@ -3969,7 +3969,7 @@ Return this EXACT JSON (all score fields are integers 0-100, weighted_total is t
 }}"""
 
                 target_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
-                candidate_models = [target_model, "openai/gpt-oss-20b", "openai/gpt-oss-120b", "qwen/qwen3.8-27b", "llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+                candidate_models = [target_model, "openai/gpt-oss-20b", "openai/gpt-oss-120b"]
                 model_chain = list(dict.fromkeys(candidate_models))
                 
                 raw = None

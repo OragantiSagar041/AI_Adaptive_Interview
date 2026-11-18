@@ -733,9 +733,24 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [isSaving])
 
-  const handleSkipUpload = () => {
+  const handleSkipUpload = async () => {
     setShowSkipButton(false)
     setShowAllSet(true)
+    setIsSaving(false)
+    isSavingRef.current = false
+    if (sessionId) {
+      try {
+        sessionStorage.setItem(`interview_done_${sessionId}`, '1')
+        await api.post(`/complete-session/${sessionId}`, {
+          total_tab_switches: behavioralStatsRef.current?.tabSwitches || 0,
+          total_face_alerts: behavioralStatsRef.current?.faceAlerts || 0,
+          total_noise_alerts: (behavioralStatsRef.current?.noiseAlerts || 0) + (noiseAlertCountRef?.current || 0)
+        })
+        sessionStorage.removeItem(`complete_session_pending_${sessionId}`)
+      } catch (e) {
+        console.warn("handleSkipUpload complete-session:", e)
+      }
+    }
   }
 
   useEffect(() => {
@@ -2367,6 +2382,13 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     setUploadingText("Finalizing interview...")
     setUploadPercentage(10)
 
+    if (sessionId) {
+      try {
+        sessionStorage.setItem(`interview_done_${sessionId}`, '1')
+        sessionStorage.setItem(`complete_session_pending_${sessionId}`, '1')
+      } catch (e) { }
+    }
+
     if (window.speechSynthesis) window.speechSynthesis.cancel()
     stopSilenceTimer()
     if (_sessionKey) sessionStorage.removeItem(_sessionKey)
@@ -2581,9 +2603,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       await api.post(`/save-behavioral-data`, payload)
     } catch (e) { console.error("Failed to save final behavioral data:", e) }
 
-    // Wait for the video upload to finish BEFORE completing session in DB
+    // Wait for the video upload to finish BEFORE completing session in DB (with 45s safety timeout)
     setUploadingText('Securing video recordings...')
-    await uploadPromiseChain
+    await Promise.race([
+      uploadPromiseChain,
+      new Promise(resolve => setTimeout(resolve, 45000))
+    ])
 
     setUploadPercentage(95)
     setUploadingText('Submitting responses and finalizing session...')
@@ -2595,7 +2620,10 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         total_noise_alerts: (behavioralStatsRef.current?.noiseAlerts || 0) + (noiseAlertCountRef?.current || 0)
       })
       if (sessionId) {
-        try { sessionStorage.setItem(`interview_done_${sessionId}`, '1') } catch (e) { }
+        try {
+          sessionStorage.setItem(`interview_done_${sessionId}`, '1')
+          sessionStorage.removeItem(`complete_session_pending_${sessionId}`)
+        } catch (e) { }
       }
     } catch (completionError) {
       console.error('Failed to complete interview session:', completionError)

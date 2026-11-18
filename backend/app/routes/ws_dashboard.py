@@ -27,10 +27,12 @@ from dotenv import load_dotenv
 from groq import AsyncGroq
 from pydantic import BaseModel, validator, Field
 from starlette.background import BackgroundTask
+from starlette.concurrency import run_in_threadpool
 from fastapi import (
     APIRouter, Depends, File, Form, HTTPException, Request, UploadFile,
     WebSocket, WebSocketDisconnect, BackgroundTasks, Header
 )
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -106,7 +108,7 @@ async def dashboard_websocket(websocket: WebSocket, token: Optional[str] = None)
         await websocket.close(code=1008)
         return
     try:
-        auth_context = _decode_dashboard_websocket_admin(token)
+        auth_context = await run_in_threadpool(_decode_dashboard_websocket_admin, token)
     except HTTPException:
         await websocket.close(code=1008)
         return
@@ -858,11 +860,11 @@ async def get_dashboard_aggregated_data(
         else:
             _LOCAL_DASH_AGG_CACHE[cache_key] = (time.monotonic(), res_payload)
 
-        return res_payload
+        return jsonable_encoder(res_payload)
     except Exception as e:
         logger.error(f"[dashboard] Unexpected error in get_dashboard_aggregated_data: {e}", exc_info=True)
         if "stats_data" in locals():
-            return {
+            return jsonable_encoder({
                 "dbStats": stats_data,
                 "candidates": locals().get("candidates_list", []),
                 "omni_stats": locals().get("omni_stats", {}),
@@ -873,6 +875,6 @@ async def get_dashboard_aggregated_data(
                 "ongoingSpeakingCount": 0,
                 "ongoingCodingCount": 0,
                 "creditRequests": []
-            }
+            })
         raise HTTPException(status_code=500, detail=str(e))
 

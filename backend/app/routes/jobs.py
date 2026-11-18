@@ -1235,7 +1235,15 @@ def get_job_applications(job_id: str, current_admin: dict = Depends(get_current_
         raise HTTPException(status_code=404, detail="Job not found")
     # Data Isolation Check
     allowed_ids = _get_authorized_creator_ids(current_admin)
-    if job.get("admin_id") not in allowed_ids:
+    admin_role = current_admin.get("role")
+    company_id = current_admin.get("company_id")
+    is_authorized = (
+        admin_role == "master"
+        or (job.get("admin_id") and job.get("admin_id") in allowed_ids)
+        or (company_id and job.get("company_id") == company_id)
+        or (str(job.get("admin_id") or "") == str(current_admin.get("admin_id") or ""))
+    )
+    if not is_authorized:
         raise HTTPException(status_code=403, detail="Access denied")
 
     actual_job_id = job.get("job_id") or str(job["_id"])
@@ -1281,6 +1289,320 @@ def get_job_applications(job_id: str, current_admin: dict = Depends(get_current_
                 print(f"Failed to parse stored resume {r_url}: {parse_err}")
                     
     return {"status": "success", "applications": applications, "total": len(applications)}
+
+def normalize_resume_text(text: str) -> str:
+    """
+    Normalizes resume text by stripping bullet formatting, punctuation, casing,
+    and collapsing whitespace for deterministic fingerprinting.
+    """
+    import re
+    if not text or not isinstance(text, str):
+        return ""
+    cleaned = re.sub(r'[\u2022\u2023\u25E6\u2043\u2219\u00B7\u25CF\u25AA\u25AB\u25BA\u25C6\u27A2\u2794\u2713\u2714\u2013\u2014\-_+=|\\/]', ' ', text)
+    cleaned = re.sub(r'[^a-zA-Z0-9 ]', ' ', cleaned.lower())
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    return cleaned
+
+def generate_resume_fingerprint(candidate: dict) -> str:
+    """
+    Generates deterministic fingerprint for candidate based on normalized resume content.
+    Falls back to verified email/phone/unique ID when resume text is absent.
+    """
+    import hashlib, re
+    rt = candidate.get("resume_text") or candidate.get("profile_text") or ""
+    norm = normalize_resume_text(rt)
+    if len(norm) >= 40:
+        return f"fp_resume_{hashlib.sha256(norm.encode('utf-8')).hexdigest()}"
+    email = (candidate.get("email") or candidate.get("candidate_email") or "").strip().lower()
+    if "@" in email and "." in email:
+        return f"fp_email_{hashlib.sha256(email.encode('utf-8')).hexdigest()}"
+    phone = re.sub(r'\D', '', candidate.get("phone") or candidate.get("candidate_phone") or "")
+    if len(phone) >= 7:
+        return f"fp_phone_{phone[-10:]}"
+    cand_id = str(candidate.get("_id") or candidate.get("id") or candidate.get("candidate_id") or id(candidate))
+    return f"fp_id_{cand_id}"
+
+def calculate_candidate_completeness(cand: dict, target_job_id: str) -> int:
+    import re
+    score = 0
+    cand_job_id = cand.get("job_id") or cand.get("applied_job_id")
+    if target_job_id and cand_job_id and str(cand_job_id) == str(target_job_id):
+        score += 100
+    if cand.get("has_applied"):
+        score += 50
+    name = (cand.get("name") or cand.get("candidate_name") or "").strip()
+    if name and name.lower() not in ["candidate", "applicant", "user", "n/a", "unknown"]:
+        score += 30 + min(10, len(name) // 2)
+    email = (cand.get("email") or cand.get("candidate_email") or "").strip()
+    if "@" in email and "." in email:
+        score += 30
+    phone = re.sub(r'\D', '', cand.get("phone") or cand.get("candidate_phone") or "")
+    if len(phone) >= 7:
+        score += 20
+    if cand.get("experience") and cand.get("experience") not in ["Not specified", "—"]:
+        score += 15
+    if cand.get("education") and cand.get("education") not in ["Not specified", "—"]:
+        score += 15
+    if cand.get("current_company"):
+        score += 10
+    if cand.get("linkedin_url"):
+        score += 10
+    rt = cand.get("resume_text") or cand.get("profile_text") or ""
+    score += min(30, len(rt) // 50)
+    return score
+
+def deduplicate_candidate_records(candidates: list, target_job_id: str) -> list:
+    groups = defaultdict(list)
+    for c in candidates:
+        if not c:
+            continue
+        fp = generate_resume_fingerprint(c)
+        groups[fp].append(c)
+
+    unique_list = []
+    for fp, group in groups.items():
+        if len(group) == 1:
+            item = dict(group[0])
+            item["resume_fingerprint"] = fp
+            cand_id = item.get("_id") or item.get("id") or item.get("candidate_id")
+            item["associated_candidate_ids"] = [str(cand_id)] if cand_id else []
+            unique_list.append(item)
+            continue
+
+        # Sort group by completeness descending
+        group.sort(key=lambda c: calculate_candidate_completeness(c, target_job_id), reverse=True)
+        rep = dict(group[0])
+        rep["resume_fingerprint"] = fp
+
+        all_ids = set()
+        all_emails = set()
+        all_phones = set()
+
+        for item in group:
+            for id_key in ["_id", "id", "candidate_id"]:
+                val = item.get(id_key)
+                if val:
+                    all_ids.add(str(val))
+            for aid in item.get("associated_candidate_ids", []):
+                all_ids.add(str(aid))
+
+            em = (item.get("email") or item.get("candidate_email") or "").strip()
+            if em:
+                all_emails.add(em)
+            ph = (item.get("phone") or item.get("candidate_phone") or "").strip()
+            if ph:
+                all_phones.add(ph)
+
+            if not rep.get("email") and em:
+                rep["email"] = em
+                rep["candidate_email"] = em
+            if not rep.get("phone") and ph:
+                rep["phone"] = ph
+                rep["candidate_phone"] = ph
+            if not rep.get("resume_url") and item.get("resume_url"):
+                rep["resume_url"] = item.get("resume_url")
+            if not rep.get("resume_text") and item.get("resume_text"):
+                rep["resume_text"] = item.get("resume_text")
+            if not rep.get("linkedin_url") and item.get("linkedin_url"):
+                rep["linkedin_url"] = item.get("linkedin_url")
+            if not rep.get("current_company") and item.get("current_company"):
+                rep["current_company"] = item.get("current_company")
+            if not rep.get("experience") and item.get("experience"):
+                rep["experience"] = item.get("experience")
+            if not rep.get("education") and item.get("education"):
+                rep["education"] = item.get("education")
+
+        rep["associated_candidate_ids"] = list(all_ids)
+        rep["alternate_emails"] = list(all_emails)
+        rep["alternate_phones"] = list(all_phones)
+        rep["duplicate_application_count"] = len(group)
+        unique_list.append(rep)
+
+    return unique_list
+
+@router.get("/api/jobs/{job_id}/matching-candidates")
+@router.get("/jobs/{job_id}/matching-candidates")
+@router.get("/api/jobs/{job_id}/candidates-pool")
+@router.get("/jobs/{job_id}/candidates-pool")
+def get_job_matching_candidates(job_id: str, current_admin: dict = Depends(get_current_admin_details)):
+    """
+    Returns the candidate pool for a given job to enable dynamic Candidate Comparison.
+    Retrieves candidates across all authorized sources (job applications, central candidate repository,
+    and interview session resumes), deduplicated by email/phone/name.
+    Enforces multi-tenant organization authorization.
+    """
+    job = jobs_collection.find_one({"job_id": job_id})
+    if not job:
+        from bson import ObjectId
+        if ObjectId.is_valid(job_id):
+            job = jobs_collection.find_one({"_id": ObjectId(job_id)})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    # Multi-tenant Authorization Check
+    allowed_ids = _get_authorized_creator_ids(current_admin)
+    admin_role = current_admin.get("role")
+    company_id = current_admin.get("company_id")
+    is_authorized = (
+        admin_role == "master"
+        or (job.get("admin_id") and job.get("admin_id") in allowed_ids)
+        or (company_id and job.get("company_id") == company_id)
+        or (str(job.get("admin_id") or "") == str(current_admin.get("admin_id") or ""))
+    )
+    if not is_authorized:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    actual_job_id = job.get("job_id") or str(job["_id"])
+    target_company_id = job.get("company_id") or company_id
+
+    candidates_by_key = {}
+    from app.services.services import extract_text_from_file
+    import os
+    from bson import ObjectId
+
+    # 1. Job applications across jobs in this company / organization
+    comp_jobs = list(jobs_collection.find({"company_id": target_company_id})) if target_company_id else []
+    comp_job_ids = [j.get("job_id") for j in comp_jobs if j.get("job_id")]
+    if actual_job_id not in comp_job_ids:
+        comp_job_ids.append(actual_job_id)
+
+    app_query = {"job_id": {"$in": comp_job_ids}} if comp_job_ids else {"job_id": actual_job_id}
+    for a in job_applications_collection.find(app_query).sort("applied_at", -1):
+        email = (a.get("email") or "").strip().lower()
+        name = (a.get("name") or "").strip()
+        phone = (a.get("phone") or "").strip()
+        rt = a.get("resume_text") or ""
+
+        # If resume_text is empty but resume_url exists, attempt parsing
+        if not rt and a.get("resume_url"):
+            r_url = a.get("resume_url")
+            try:
+                if os.path.exists(r_url):
+                    with open(r_url, "rb") as f:
+                        rt = extract_text_from_file(f.read(), r_url)
+                elif r_url.startswith("http://") or r_url.startswith("https://"):
+                    resp = requests.get(r_url, timeout=5)
+                    if resp.status_code == 200:
+                        rt = extract_text_from_file(resp.content, r_url)
+                if rt:
+                    a["resume_text"] = rt
+                    job_applications_collection.update_one({"_id": a["_id"]}, {"$set": {"resume_text": rt}})
+            except Exception:
+                pass
+
+        key = email if email else f"phone_{phone}" if phone else f"name_{name.lower()}" if name else str(a["_id"])
+        has_applied_to_this_job = (a.get("job_id") == actual_job_id)
+
+        candidates_by_key[key] = {
+            "_id": str(a["_id"]),
+            "id": str(a["_id"]),
+            "name": name or "Candidate",
+            "candidate_name": name or "Candidate",
+            "email": email,
+            "candidate_email": email,
+            "phone": phone,
+            "candidate_phone": phone,
+            "resume_text": rt,
+            "resume_url": a.get("resume_url") or "",
+            "linkedin_url": a.get("linkedin_url") or "",
+            "applied_job_id": a.get("job_id"),
+            "has_applied": has_applied_to_this_job,
+            "applied_at": a.get("applied_at") or "",
+            "source": "job_application",
+        }
+
+    # 2. Central candidate repository from interview_sessions
+    sess_query = {"is_deactivated": {"$ne": True}}
+    if target_company_id and admin_role != "master":
+        sess_query["company_id"] = target_company_id
+    elif admin_role != "master":
+        sess_query["created_by"] = {"$in": allowed_ids}
+
+    for s in interview_sessions_collection.find(sess_query).sort("created_at", -1):
+        email = (s.get("candidate_email") or "").strip().lower()
+        name = (s.get("candidate_name") or "").strip()
+        phone = (s.get("candidate_phone") or "").strip()
+        created_by = str(s.get("created_by") or "")
+
+        # Exclude synthetic load tester sessions
+        if created_by == "load_tester" or "loadtest" in email or "loadtest" in name.lower():
+            continue
+
+        rt = s.get("resume_text") or ""
+        key = email if email else f"phone_{phone}" if phone else f"name_{name.lower()}" if name else str(s["_id"])
+
+        if key not in candidates_by_key:
+            candidates_by_key[key] = {
+                "_id": str(s["_id"]),
+                "id": str(s["_id"]),
+                "name": name or "Candidate",
+                "candidate_name": name or "Candidate",
+                "email": email,
+                "candidate_email": email,
+                "phone": phone,
+                "candidate_phone": phone,
+                "resume_text": rt,
+                "current_company": s.get("current_company") or "",
+                "has_applied": False,
+                "applied_at": s.get("created_at") or "",
+                "source": "candidate_pool",
+            }
+        else:
+            if not candidates_by_key[key].get("resume_text") and rt:
+                candidates_by_key[key]["resume_text"] = rt
+            if not candidates_by_key[key].get("current_company") and s.get("current_company"):
+                candidates_by_key[key]["current_company"] = s.get("current_company")
+
+    # 3. Dedicated candidates_collection if present
+    cand_query = {}
+    if target_company_id and admin_role != "master":
+        cand_query["company_id"] = target_company_id
+    for c in candidates_collection.find(cand_query):
+        email = (c.get("email") or "").strip().lower()
+        name = (c.get("name") or "").strip()
+        phone = (c.get("phone") or "").strip()
+        rt = c.get("resume_text") or c.get("profile_text") or ""
+        key = email if email else f"phone_{phone}" if phone else f"name_{name.lower()}" if name else str(c["_id"])
+        if key not in candidates_by_key:
+            candidates_by_key[key] = {
+                "_id": str(c["_id"]),
+                "id": str(c["_id"]),
+                "name": name or "Candidate",
+                "candidate_name": name or "Candidate",
+                "email": email,
+                "candidate_email": email,
+                "phone": phone,
+                "candidate_phone": phone,
+                "resume_text": rt,
+                "has_applied": False,
+                "source": "candidate_registry",
+            }
+        elif not candidates_by_key[key].get("resume_text") and rt:
+            candidates_by_key[key]["resume_text"] = rt
+
+    candidate_list = deduplicate_candidate_records(list(candidates_by_key.values()), actual_job_id)
+
+    clean_job = {
+        "job_id": actual_job_id,
+        "custom_id": job.get("custom_id"),
+        "title": job.get("title"),
+        "description": job.get("description"),
+        "skills": job.get("skills"),
+        "experience": job.get("experience"),
+        "location": job.get("location"),
+        "workMode": job.get("workMode"),
+        "education": job.get("education"),
+        "salary": job.get("salary"),
+        "bond": job.get("bond"),
+    }
+
+    return {
+        "status": "success",
+        "job_id": actual_job_id,
+        "job": clean_job,
+        "candidates": candidate_list,
+        "total_pool_size": len(candidate_list),
+    }
 
 @router.patch("/api/jobs/{job_id}/applications/{app_id}/status")
 @router.patch("/jobs/{job_id}/applications/{app_id}/status")

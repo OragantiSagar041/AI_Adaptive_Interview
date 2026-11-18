@@ -3,6 +3,9 @@ import { createRoot } from 'react-dom/client'
 import { Provider } from 'react-redux'
 import { PersistGate } from 'redux-persist/integration/react'
 import { persistor, store } from './store/store'
+if (typeof window !== 'undefined') {
+  window.__HIREIQ_STORE__ = store;
+}
 import { loader } from '@monaco-editor/react'
 import './index.css'
 import App from './App.jsx'

@@ -639,21 +639,6 @@ export default function MasterPage() {
           </h2>
 
           <div className="flex items-center gap-4">
-            {/* Color dot Accent Selectors */}
-            <div className="flex gap-2">
-              {Object.keys(colors).map(colorKey => (
-                <button
-                  key={colorKey}
-                  onClick={() => setAccentColor(colorKey)}
-                  className={`w-3.5 h-3.5 rounded-full border border-black/10 cursor-pointer transition-transform ${
-                    accentColor === colorKey ? 'scale-125 ring-2 ring-indigo-500' : ''
-                  }`}
-                  style={{ backgroundColor: colors[colorKey].primary }}
-                  title={`Select ${colorKey}`}
-                />
-              ))}
-            </div>
-
             <div className="text-xs text-slate-600 font-medium">
               Welcome back, <span className="text-[#111827] font-bold">{adminName}</span>
             </div>

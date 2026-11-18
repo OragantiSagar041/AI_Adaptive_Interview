@@ -1235,10 +1235,11 @@ export default function VoiceInterviewPage() {
   // Used to suppress stale `onstop` callbacks that would otherwise restart STT twice.
   const whisperRecorderGenerationRef = useRef(0)
   // Tracks the peak RMS seen during the current Whisper chunk so we can skip
-  // the /stt request entirely when the chunk is silent. Without this gate,
-  // Whisper hallucinates phrases like "Thank you for watching" on silence.
+  // the /stt request entirely when the chunk is silent.
+  // Calibrated to 0.015 to match VAD_SPEECH_THRESHOLD and useInterviewMedia.js (0.012),
+  // preventing false silence drops on normal conversational voice while blocking zero-audio background hum.
   const chunkPeakRmsRef = useRef(0)
-  const CHUNK_SEND_RMS_THRESHOLD = 0.04
+  const CHUNK_SEND_RMS_THRESHOLD = 0.015
 
   // ── Merge consecutive Whisper chunks (12-second slices) ──
   // Whisper receives one ~12s audio slice every flush. The slices overlap at
@@ -1701,7 +1702,6 @@ export default function VoiceInterviewPage() {
               hasSpokenInChunk = true
               hasSpokenThisSessionRef.current = true
               lastCandidateVoiceTimeRef.current = now
-              lastSilenceReset = now
               clearTimeout(silenceTimerRef.current)
               silenceTimerRef.current = setTimeout(() => {
                 if (isListeningRef.current) {

@@ -7,8 +7,7 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 export default defineConfig([
   globalIgnores([
     'dist',
-    'public/models/**',
-    'public/wasm/**',
+    'public/**',
     'rewrite.cjs',
     'scratch.js',
     'test_error.cjs',
@@ -37,6 +36,8 @@ export default defineConfig([
       'react-hooks/immutability': 'warn',
       'react-hooks/refs': 'warn',
       'react-hooks/static-components': 'warn',
+      'react-hooks/purity': 'warn',
+      'react-hooks/preserve-manual-memoization': 'warn',
       'react/react-in-jsx-scope': 'off',
       'react/prop-types': 'off',
       'no-useless-assignment': 'off',
