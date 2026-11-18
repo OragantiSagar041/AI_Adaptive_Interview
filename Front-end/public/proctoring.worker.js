@@ -50,6 +50,8 @@ const LANDMARK = {
   EYE_OUTER_RIGHT: 263,
   LIP_UPPER: 13,
   LIP_LOWER: 14,
+  EAR_LEFT: 234,
+  EAR_RIGHT: 454,
 };
 
 /* ── State ─────────────────────────────────────────────────────────────────── */
@@ -92,13 +94,121 @@ function blendshapeScorer(categories) {
   return (name) => categories?.find((b) => b.categoryName === name)?.score ?? 0;
 }
 
-function extractPhoneCandidates(detections) {
+// Bounding box IoU helper for competitor object suppression
+function computeIoU(boxA, boxB) {
+  if (!boxA || !boxB) return 0;
+  const xA = Math.max(boxA.originX, boxB.originX);
+  const yA = Math.max(boxA.originY, boxB.originY);
+  const xB = Math.min(boxA.originX + boxA.width, boxB.originX + boxB.width);
+  const yB = Math.min(boxA.originY + boxA.height, boxB.originY + boxB.height);
+
+  const interWidth = Math.max(0, xB - xA);
+  const interHeight = Math.max(0, yB - yA);
+  const interArea = interWidth * interHeight;
+
+  const areaA = boxA.width * boxA.height;
+  const areaB = boxB.width * boxB.height;
+  const unionArea = areaA + areaB - interArea;
+
+  return unionArea > 0 ? interArea / unionArea : 0;
+}
+
+const BENIGN_OBJECTS = ['bottle', 'cup', 'wine glass', 'bowl', 'mug', 'book', 'mouse', 'apple', 'orange', 'banana'];
+
+function extractPhoneCandidates(detections, faceLandmarks, bitmap, pose) {
   const candidates = [];
+
+  // Identify all high-confidence benign desk/handheld objects (bottles, cups, mugs, books)
+  const benignDetections = [];
+  for (const d of detections) {
+    const topCat = d.categories?.[0];
+    if (topCat) {
+      const catName = (topCat.categoryName || '').toLowerCase();
+      if (BENIGN_OBJECTS.some((b) => catName.includes(b))) {
+        benignDetections.push({
+          label: catName,
+          score: topCat.score || 0,
+          boundingBox: d.boundingBox,
+        });
+      }
+    }
+  }
+
+  // Pre-compute candidate turned ear landmark if head is turned (pose.yaw)
+  const isHeadTurned = Boolean(pose && Math.abs(pose.yaw) > 0.18);
+  const activeEar = (isHeadTurned && faceLandmarks && faceLandmarks.length >= 468)
+    ? (pose.yaw > 0.18 ? faceLandmarks[LANDMARK.EAR_LEFT] : faceLandmarks[LANDMARK.EAR_RIGHT])
+    : null;
+  const forehead = (faceLandmarks && faceLandmarks.length >= 468) ? faceLandmarks[LANDMARK.FOREHEAD] : null;
+  const chin = (faceLandmarks && faceLandmarks.length >= 468) ? faceLandmarks[LANDMARK.CHIN] : null;
+  const faceHeight = (forehead && chin) ? Math.max(0.12, Math.abs(chin.y - forehead.y)) : 0.20;
+
   for (const d of detections) {
     for (const cat of d.categories ?? []) {
       const label = `${cat.categoryName ?? ''} ${cat.displayName ?? ''}`.toLowerCase();
-      if (label.includes('phone') || label.includes('mobile') || label.includes('cell') || label.includes('tablet')) {
-        candidates.push({ score: cat.score ?? 0 });
+      const isTarget =
+        label.includes('cell phone') ||
+        label.includes('mobile phone') ||
+        label.includes('phone') ||
+        label.includes('camera') ||
+        label.includes('remote') ||
+        label.includes('tablet');
+
+      if (isTarget) {
+        const score = cat.score ?? 0;
+
+        // 1. Direct Competitor Suppression:
+        // If the top prediction for this exact bounding box is actually a bottle/cup/etc. with a higher score, ignore phone
+        const topCatName = (d.categories?.[0]?.categoryName || '').toLowerCase();
+        const topCatScore = d.categories?.[0]?.score || 0;
+        if (BENIGN_OBJECTS.some((b) => topCatName.includes(b)) && topCatScore >= score) {
+          continue;
+        }
+
+        // 2. Spatial Overlap Suppression:
+        // If this detection overlaps significantly with a detected water bottle/cup that has equal or higher confidence
+        let suppressedByOverlap = false;
+        for (const b of benignDetections) {
+          if (computeIoU(d.boundingBox, b.boundingBox) > 0.25 && b.score >= score) {
+            suppressedByOverlap = true;
+            break;
+          }
+        }
+        if (suppressedByOverlap) {
+          continue;
+        }
+
+        // 3. Head-Turn, Bare Ear Profile & In-Ear Earbud Suppression:
+        // When a candidate turns their head (Math.abs(pose.yaw) > 0.18), the bare ear profile or an in-ear
+        // earbud (AirPods, wired earphones) against the background can trigger weak 'cell phone' / 'camera' blips.
+        // We suppress if the detection is centered directly on the active ear landmark (distToEar < faceHeight * 0.35)
+        // AND either:
+        //   a) The confidence score is < 0.50 (low/moderate artifact), OR
+        //   b) The bounding box is small (< 50% face height), proving it is an earbud/ear and not a handheld phone.
+        // Real phones held to the ear have a large bounding box (>= 60% face height) covering the cheek and jaw.
+        // Handheld phones in front of the camera, lap, chest, or held up at any angle are not centered on the ear!
+        if (activeEar && bitmap && d.boundingBox) {
+          const centerX = (d.boundingBox.originX + d.boundingBox.width / 2) / bitmap.width;
+          const centerY = (d.boundingBox.originY + d.boundingBox.height / 2) / bitmap.height;
+          const distToEar = Math.hypot(centerX - activeEar.x, centerY - activeEar.y);
+
+          const boxWidthNorm = d.boundingBox.width / bitmap.width;
+          const boxHeightNorm = d.boundingBox.height / bitmap.height;
+          const boxMaxDim = Math.max(boxWidthNorm, boxHeightNorm);
+
+          const isAtEar = distToEar < faceHeight * 0.30;
+          const isEarbudOrArtifact = score < 0.20 && boxMaxDim < faceHeight * 0.35;
+
+          if (isAtEar && isEarbudOrArtifact) {
+            continue; // Suppressed: only tiny in-ear earbud artifacts with low score during head turn
+          }
+        }
+
+        candidates.push({
+          score,
+          label: cat.categoryName || 'phone',
+          boundingBox: d.boundingBox,
+        });
       }
     }
   }
@@ -150,7 +260,7 @@ function extractFrameFeatures(bitmap) {
       downRight: score('eyeLookDownRight'),
       downLeft:  score('eyeLookDownLeft'),
     },
-    phoneCandidates: extractPhoneCandidates(objectResult.detections ?? []),
+    phoneCandidates: extractPhoneCandidates(objectResult.detections ?? [], faceLandmarks[0], bitmap, pose),
     jawOpenScore,
   };
 }

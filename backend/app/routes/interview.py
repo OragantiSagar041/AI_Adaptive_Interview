@@ -29,7 +29,7 @@ from groq import AsyncGroq
 from pydantic import BaseModel, validator, Field
 from starlette.background import BackgroundTask
 from fastapi import (
-    APIRouter, Depends, File, Form, HTTPException, Request, UploadFile,
+    APIRouter, Body, Depends, File, Form, HTTPException, Request, UploadFile,
     WebSocket, WebSocketDisconnect, BackgroundTasks, Header
 )
 from fastapi.exceptions import RequestValidationError
@@ -509,7 +509,7 @@ def get_question(interview_id: str, question_id: int):
         raise HTTPException(status_code=404, detail="Question not found")
         
     return {
-        "current_question": question,  # This key must match what your HTML looks for
+        "current_question": ({k: v for k, v in question.items() if k not in ("model_answer", "quick_summary", "key_points")} if isinstance(question, dict) else question),  # Stripped of recruiter cheat-sheet fields
         "total_questions": len(interview["questions"]),
         "interview_id": interview_id
     }
@@ -868,7 +868,8 @@ class CodingRoundSubmitRequest(CodingRoundCheckpointRequest):
 
 
 class CodingRoundRunRequest(CodingRoundCheckpointRequest):
-    pass
+    task: Optional[Dict[str, Any]] = None
+    question_id: Optional[Union[int, str]] = None
 
 
 class CodingRoundObserveRequest(CodingRoundCheckpointRequest):
@@ -1324,7 +1325,28 @@ def _run_coding_feedback(req: CodingRoundCheckpointRequest, feedback_mode: str) 
     interview = get_interview_or_404(req.interview_id)
     coding_round = interview.get("coding_round")
     if not coding_round or not coding_round.get("task"):
-        raise HTTPException(status_code=400, detail="Coding round not started")
+        found_task = getattr(req, "task", None)
+        if not found_task:
+            link_id = interview.get("link_id") or req.interview_id
+            session = interview_sessions_collection.find_one({"$or": [{"link_id": link_id}, {"interview_id": req.interview_id}]}) or {}
+            pre_q = session.get("pre_generated_questions") or []
+            if isinstance(pre_q, str):
+                try:
+                    pre_q = json.loads(pre_q)
+                except Exception:
+                    pre_q = []
+            for q in pre_q:
+                if isinstance(q, dict) and q.get("coding_task"):
+                    found_task = q.get("coding_task")
+                    break
+        if not found_task:
+            raise HTTPException(status_code=400, detail="Coding round not started")
+        coding_round = {
+            "status": "active",
+            "task": found_task,
+            "language": req.language or "python",
+            "latest_code": req.code or "",
+        }
 
     if feedback_mode == "checkpoint":
         feedback_count = coding_round.get("ai_feedback_count", 0)
@@ -1431,9 +1453,45 @@ def coding_round_run(
 ):
     _require_candidate_session(credentials, interview_id=req.interview_id)
     interview = get_interview_or_404(req.interview_id)
-    coding_round = interview.get("coding_round")
-    if not coding_round or not coding_round.get("task"):
-        raise HTTPException(status_code=400, detail="Coding round not started")
+    coding_round = interview.get("coding_round") or {}
+
+    # If coding_round or its task is not yet initialized on interview, resolve it gracefully
+    if not coding_round.get("task"):
+        found_task = getattr(req, "task", None)
+        if not found_task:
+            link_id = interview.get("link_id") or req.interview_id
+            session = interview_sessions_collection.find_one({"$or": [{"link_id": link_id}, {"interview_id": req.interview_id}]}) or {}
+            pre_q = session.get("pre_generated_questions", [])
+            if isinstance(pre_q, str):
+                try:
+                    pre_q = json.loads(pre_q)
+                except Exception:
+                    pre_q = []
+            for q in pre_q:
+                if isinstance(q, dict) and q.get("coding_task"):
+                    found_task = q.get("coding_task")
+                    break
+        if not found_task:
+            for q in interview.get("pre_generated_questions", []):
+                if isinstance(q, dict) and q.get("coding_task"):
+                    found_task = q.get("coding_task")
+                    break
+        if not found_task and getattr(req, "task", None):
+            found_task = req.task
+
+        if not found_task:
+            raise HTTPException(status_code=400, detail="Coding round not started")
+        coding_round = {
+            "status": "active",
+            "task": found_task,
+            "language": req.language or "python",
+            "latest_code": req.code or "",
+        }
+
+    # If the request explicitly supplied the active task, adopt it
+    if req.task and isinstance(req.task, dict):
+        coding_round["task"] = req.task
+
     result = run_code_against_tests(req.code or "", coding_round["task"], req.language or "python")
     coding_round["latest_code"] = req.code or ""
     coding_round["latest_explanation"] = req.explanation or coding_round.get("latest_explanation", "")
@@ -1443,6 +1501,15 @@ def coding_round_run(
         **result,
     }
     persist_coding_round(req.interview_id, coding_round)
+    try:
+        link_id = interview.get("link_id") or req.interview_id
+        interview_sessions_collection.update_one(
+            {"$or": [{"interview_id": req.interview_id}, {"link_id": link_id}]},
+            {"$set": {"coding_round": coding_round, "latest_coding_run": coding_round["latest_run"]}},
+        )
+    except Exception as e:
+        print(f"Error persisting coding run to interview session: {e}")
+
     return {
         "interview_id": req.interview_id,
         "run_result": result,
@@ -1718,3 +1785,1052 @@ def normalize_agent_flow_write_item(item: Dict[str, Any]) -> Dict[str, Any]:
         "is_enabled": bool(item.get("is_enabled", item.get("enabled", True))),
     }
 
+
+
+# ==============================================================================
+# RECRUITER-LED COPILOT ENDPOINTS (Blueprint v1.1 — Deterministic + Zero Live AI)
+# ==============================================================================
+
+_optional_admin_bearer = HTTPBearer(auto_error=False)
+_RECRUITER_RATING_SCORES = {
+    "correct": 100.0,
+    "partial": 50.0,
+    "incorrect": 0.0,
+    "skip": None,
+}
+_VALID_RECRUITER_RECOMMENDATIONS = {
+    "strongly recommend": "Strongly Recommend",
+    "recommend": "Recommend",
+    "hold": "Hold",
+    "reject": "Reject",
+}
+
+
+def _find_session_by_any_id(identifier: str) -> Optional[Dict[str, Any]]:
+    queries = [{"link_id": identifier}, {"interview_id": identifier}]
+    if ObjectId.is_valid(identifier):
+        queries.append({"_id": ObjectId(identifier)})
+    return interview_sessions_collection.find_one({"$or": queries})
+
+
+def _safe_recruiter_id(val: Any, fallback: Any = 1) -> Union[int, str]:
+    if val is None or val == "":
+        return fallback
+    if isinstance(val, int):
+        return val
+    s = str(val).strip()
+    try:
+        return int(s)
+    except (ValueError, TypeError):
+        return s
+
+
+def _safe_str_difficulty(val: Any) -> str:
+    if isinstance(val, str) and val.strip():
+        return val.strip().capitalize()
+    return "Medium"
+
+
+def _safe_json_dumps(obj: Any) -> str:
+    def _default_serializer(o):
+        if isinstance(o, (datetime, timedelta)):
+            return str(o)
+        if isinstance(o, ObjectId):
+            return str(o)
+        if hasattr(o, "isoformat"):
+            return o.isoformat()
+        if hasattr(o, "model_dump"):
+            return o.model_dump()
+        if hasattr(o, "dict"):
+            return o.dict()
+        if hasattr(o, "__str__"):
+            return str(o)
+        return repr(o)
+    return json.dumps(obj, default=_default_serializer)
+
+
+def _clean_recruiter_question_item(
+    q: Any,
+    idx: int,
+    fallback_difficulty: str = "Medium",
+    fallback_category: str = "Core Technical",
+) -> Dict[str, Any]:
+    from app.data.interview_graphs import _build_recruiter_fallback_item
+    if not isinstance(q, dict):
+        return _build_recruiter_fallback_item(
+            idx,
+            str(q or f"Question {idx}"),
+            category=fallback_category,
+            difficulty=fallback_difficulty,
+        )
+    clean = {k: v for k, v in q.items() if k != "_id" and v is not None}
+    clean["id"] = _safe_recruiter_id(clean.get("id"), idx)
+    clean["difficulty"] = _safe_str_difficulty(clean.get("difficulty") or fallback_difficulty)
+    if clean.get("coding_task") or "coding" in str(clean.get("category", "")).lower() or "coding" in str(clean.get("question", "")).lower():
+        clean["question_type"] = "coding"
+    elif clean.get("case_study") or "case study" in str(clean.get("category", "")).lower():
+        clean["question_type"] = "case_study"
+    else:
+        clean["question_type"] = str(clean.get("question_type") or "discussion")
+    q_text = str(clean.get("question") or clean.get("text") or f"Question {idx}").strip()
+    clean["question"] = q_text
+
+    # Ensure cheat-sheet essentials are always present
+    if not clean.get("quick_summary") or not clean.get("model_answer") or not clean.get("key_points"):
+        fb = _build_recruiter_fallback_item(
+            clean["id"],
+            q_text,
+            category=clean.get("category") or fallback_category,
+            difficulty=clean["difficulty"],
+            question_type=clean["question_type"],
+            coding_task=clean.get("coding_task"),
+            case_study=clean.get("case_study"),
+        )
+        for k in ("quick_summary", "key_points", "model_answer", "category"):
+            if not clean.get(k):
+                clean[k] = fb.get(k)
+    return clean
+
+
+def _build_emergency_recruiter_response(
+    session_row: Optional[Dict[str, Any]],
+    link_id: str,
+    interview_id: Optional[str] = None,
+    err: Optional[Exception] = None,
+) -> Dict[str, Any]:
+    from app.data.interview_graphs import _build_recruiter_fallback_item
+    s_row = session_row or {}
+    canonical_link_id = str(s_row.get("link_id") or link_id)
+    actual_iv_id = s_row.get("interview_id") or interview_id or f"int_emerg_{uuid.uuid4().hex[:8]}"
+    iv_type = s_row.get("interview_type") or "Technical"
+    diff = _safe_str_difficulty(s_row.get("project_difficulty") or s_row.get("difficulty"))
+    custom_qs = s_row.get("custom_questions") or ""
+    custom_lines = [q.strip() for q in str(custom_qs).split("\n") if q.strip()]
+
+    seed_questions = custom_lines[:5] + [
+        "Walk me through the most technically challenging project on your resume and your specific architectural choices.",
+        "How do you troubleshoot and isolate a critical production outage under tight latency or SLA constraints?",
+        "What key trade-offs do you evaluate when structuring database schemas, caching layers, or distributed APIs?",
+        "Describe a situation where you had to push back on a technical requirement or align cross-functional stakeholders.",
+        "How do you ensure test coverage, security postures, and code maintainability in high-velocity deployments?",
+    ]
+
+    emergency_questions = [
+        _build_recruiter_fallback_item(
+            idx,
+            q_text,
+            category="Core Technical" if "tech" in iv_type.lower() else "Case Study",
+            difficulty=diff,
+            question_type="discussion",
+        )
+        for idx, q_text in enumerate(seed_questions[:6], start=1)
+    ]
+
+    return {
+        "status": "success",
+        "link_id": canonical_link_id,
+        "interview_id": actual_iv_id,
+        "candidate_name": s_row.get("candidate_name") or "Candidate",
+        "candidate_email": s_row.get("candidate_email") or "",
+        "experience": str(s_row.get("experience") or ""),
+        "interview_title": s_row.get("interview_title") or s_row.get("job_title") or f"{iv_type} Interview",
+        "interview_duration": s_row.get("interview_duration") or 30,
+        "interview_type": iv_type,
+        "interview_format": "Recruiter-Led",
+        "interview_mode": "recruiter_led",
+        "session_status": s_row.get("status") or "pending",
+        "resume_text": s_row.get("resume_text") or "",
+        "job_description": s_row.get("job_description") or "",
+        "questions": emergency_questions,
+        "evaluations": s_row.get("recruiter_evaluations") or [],
+        "active_question_index": int(s_row.get("active_question_index") or 0),
+        "overall_notes": s_row.get("overall_notes") or "",
+        "overall_recommendation": s_row.get("overall_recommendation") or "",
+        "score": s_row.get("score"),
+        "external_meeting_url": s_row.get("external_meeting_url") or "",
+        "external_call_mode": bool(s_row.get("external_call_mode") or s_row.get("external_meeting_url")),
+        "emergency_fallback": True,
+    }
+
+
+def _strip_cheat_sheet_list(questions: Any) -> Any:
+    if not isinstance(questions, list):
+        return questions
+    cleaned = []
+    for q in questions:
+        if isinstance(q, dict):
+            cleaned.append({k: v for k, v in q.items() if k not in ("model_answer", "quick_summary", "key_points")})
+        else:
+            cleaned.append(q)
+    return cleaned
+
+
+def _normalize_recruiter_eval_items(evaluations: List[Any]) -> List[Dict[str, Any]]:
+    normalized = []
+    for item in evaluations or []:
+        if hasattr(item, "model_dump"):
+            d = item.model_dump()
+        elif hasattr(item, "dict"):
+            d = item.dict()
+        elif isinstance(item, dict):
+            d = dict(item)
+        else:
+            continue
+        raw_rating = str(d.get("rating") or "Skip").strip()
+        rating_key = raw_rating.lower()
+        canonical_rating = {
+            "correct": "Correct",
+            "partial": "Partial",
+            "incorrect": "Incorrect",
+            "skip": "Skip",
+        }.get(rating_key, "Skip")
+        normalized.append({
+            "question_id": _safe_recruiter_id(d.get("question_id"), 0),
+            "question": str(d.get("question") or ""),
+            "rating": canonical_rating,
+            "notes": str(d.get("notes") or ""),
+            "score": _RECRUITER_RATING_SCORES.get(canonical_rating.lower()),
+        })
+    return normalized
+
+
+def _compute_recruiter_score(eval_items: List[Dict[str, Any]]) -> Optional[float]:
+    scored = [
+        _RECRUITER_RATING_SCORES.get(str(item.get("rating") or "").strip().lower())
+        for item in (eval_items or [])
+    ]
+    numeric = [val for val in scored if val is not None]
+    if not numeric:
+        return None
+    return round(sum(numeric) / len(numeric), 1)
+
+
+@router.get("/recruiter/session/{link_id}/questions")
+def get_recruiter_session_questions(
+    link_id: str,
+    current_admin: dict = Depends(get_current_admin_details),
+):
+    """
+    Lazy-loads or generates the Recruiter-Only Q&A Cheat Sheet (upfront only, idempotent).
+    Never exposed to candidates.
+    """
+    from app.data.interview_graphs import (
+        generate_recruiter_cheat_sheet_questions,
+        enrich_questions_with_cheat_sheet,
+        _build_recruiter_fallback_item,
+    )
+
+    session_row = _find_session_by_any_id(link_id)
+    if not session_row:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    _require_admin_session_access(session_row, current_admin)
+    canonical_link_id = str(session_row.get("link_id") or link_id)
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    try:
+        interview_id = session_row.get("interview_id")
+        iv_doc = None
+        if interview_id:
+            try:
+                iv_doc = interviews_collection.find_one({"id": interview_id})
+            except Exception:
+                iv_doc = None
+        if not iv_doc:
+            try:
+                iv_doc = interviews_collection.find_one({"link_id": canonical_link_id})
+            except Exception:
+                iv_doc = None
+            if iv_doc and not interview_id:
+                interview_id = iv_doc.get("id")
+
+        if not interview_id:
+            interview_id = f"int_{int(datetime.now(timezone.utc).timestamp())}_{uuid.uuid4().hex[:8]}"
+
+        raw_questions = None
+        if iv_doc and iv_doc.get("questions"):
+            raw_questions = iv_doc.get("questions")
+        elif session_row.get("pre_generated_questions"):
+            raw_questions = session_row.get("pre_generated_questions")
+
+        parsed_questions: List[Dict[str, Any]] = []
+        if isinstance(raw_questions, str):
+            try:
+                loaded = json.loads(raw_questions)
+                if isinstance(loaded, list):
+                    parsed_questions = loaded
+            except Exception:
+                parsed_questions = []
+        elif isinstance(raw_questions, list):
+            parsed_questions = raw_questions
+
+        needs_generation = len(parsed_questions) == 0
+        needs_enrichment = (
+            len(parsed_questions) > 0
+            and any(
+                not isinstance(q, dict)
+                or not str(q.get("quick_summary") or "").strip()
+                or not str(q.get("model_answer") or "").strip()
+                or not isinstance(q.get("key_points"), list)
+                or len(q.get("key_points") or []) == 0
+                for q in parsed_questions
+            )
+        )
+
+        job_desc = session_row.get("job_description") or (iv_doc or {}).get("job_description") or ""
+        resume_txt = session_row.get("resume_text") or (iv_doc or {}).get("resume_text") or ""
+        custom_qs = session_row.get("custom_questions") or ""
+        ai_instr = session_row.get("ai_instructions") or ""
+        iv_type = session_row.get("interview_type") or (iv_doc or {}).get("interview_type") or "Technical"
+        experience_val = str(session_row.get("experience") or "")
+        safe_diff = _safe_str_difficulty(session_row.get("project_difficulty") or session_row.get("difficulty"))
+
+        try:
+            if needs_generation:
+                parsed_questions = generate_recruiter_cheat_sheet_questions(
+                    resume_text=resume_txt,
+                    jd_text=job_desc,
+                    num_questions=8,
+                    interview_type=iv_type,
+                    industry=session_row.get("industry") or "General",
+                    language=session_row.get("language") or "English",
+                    difficulty=safe_diff,
+                    custom_questions=custom_qs,
+                    ai_instructions=ai_instr,
+                )
+            elif needs_enrichment:
+                parsed_questions = enrich_questions_with_cheat_sheet(
+                    questions=parsed_questions,
+                    resume_text=resume_txt,
+                    jd_text=job_desc,
+                    language=session_row.get("language") or "English",
+                    difficulty=safe_diff,
+                )
+
+            # Ensure Technical / Coding interviews ALWAYS contain live coding challenges
+            is_coding_eligible = any(k in iv_type.lower() for k in ("coding", "technical", "tech", "software", "developer"))
+            has_coding = any(
+                isinstance(q, dict) and (q.get("question_type") == "coding" or bool(q.get("coding_task")))
+                for q in parsed_questions
+            )
+            if is_coding_eligible and not has_coding:
+                try:
+                    from app.data.coding_graph import _offline_coding_fallback, generate_coding_task
+                    from app.data.interview_graphs import _detect_candidate_tech_stack
+                    profile_blob = f"{job_desc}\n{resume_txt}"
+                    detected_lang = _detect_candidate_tech_stack(profile_blob)
+                    task_obj = None
+                    try:
+                        task_obj = generate_coding_task(profile_blob, [], interview_type="Technical", industry=session_row.get("industry") or "General")
+                    except Exception:
+                        pass
+                    if not task_obj or not task_obj.get("title"):
+                        task_obj = _offline_coding_fallback(profile_blob)
+                    if task_obj and task_obj.get("title"):
+                        task_obj["recommended_language"] = task_obj.get("recommended_language") or detected_lang
+                        ct_title = task_obj.get("title", "Coding Challenge")
+                        ct_desc = task_obj.get("description", "")
+                        coding_item = {
+                            "id": len(parsed_questions) + 1,
+                            "question": f"Live Coding Challenge: {ct_title} — {ct_desc[:240]}...",
+                            "quick_summary": f"Live Coding Challenge: {ct_title} — Candidate implements solution in Monaco Code Editor with test execution.",
+                            "key_points": [
+                                "Optimal time/space complexity",
+                                "Handles edge cases & boundary conditions",
+                                "Passes visible and hidden automated test cases",
+                                "Clean, readable syntax & modular logic",
+                            ],
+                            "model_answer": (
+                                f"Optimal algorithmic approach for {ct_title}: Expected complexity O(N) or O(N log N). "
+                                f"Starter function: `{task_obj.get('starter_function_signature') or task_obj.get('function_name') or 'solve'}`. "
+                                f"Candidate must explain data structure selection, trade-offs, and run test verification."
+                            ),
+                            "category": "Coding Challenge",
+                            "difficulty": (task_obj.get("difficulty") or safe_diff).capitalize(),
+                            "question_type": "coding",
+                            "coding_task": task_obj,
+                        }
+                        insert_pos = min(len(parsed_questions), 2)
+                        parsed_questions.insert(insert_pos, coding_item)
+                except Exception as code_inj_err:
+                    logger.warning(f"[RecruiterCopilot] Coding injection warning: {code_inj_err}")
+        except Exception as cheat_err:
+            logger.warning(f"[RecruiterCopilot] Cheat-sheet generation fallback triggered for {canonical_link_id}: {cheat_err}")
+            if not parsed_questions:
+                custom_lines = [q.strip() for q in str(custom_qs or "").split("\n") if q.strip()]
+                seed_texts = custom_lines[:5] + [
+                    "Walk me through the most complex project on your resume and the architectural decisions you made.",
+                    "How do you diagnose and resolve a production bottleneck or failure in your core tech stack?",
+                    "What trade-offs do you consider when designing APIs, state, or databases for scale?",
+                    "Tell me about a time you collaborated across teams or resolved a technical disagreement.",
+                ]
+                parsed_questions = [
+                    _build_recruiter_fallback_item(idx, qt, difficulty=safe_diff)
+                    for idx, qt in enumerate(seed_texts[:7], start=1)
+                ]
+            else:
+                repaired = []
+                for idx, q in enumerate(parsed_questions, start=1):
+                    repaired.append(_clean_recruiter_question_item(q, idx, fallback_difficulty=safe_diff))
+                parsed_questions = repaired
+
+        cleaned_questions = [
+            _clean_recruiter_question_item(q, idx, fallback_difficulty=safe_diff)
+            for idx, q in enumerate(parsed_questions, start=1)
+        ]
+        questions_json = _safe_json_dumps(cleaned_questions)
+
+        try:
+            iv_update_payload = {
+                "id": interview_id,
+                "link_id": canonical_link_id,
+                "source": "Recruiter-Led Live Call",
+                "profile_text": (job_desc or resume_txt)[:5000],
+                "job_description": job_desc,
+                "resume_text": resume_txt,
+                "difficulty": safe_diff,
+                "questions": questions_json,
+                "candidate_name": session_row.get("candidate_name") or "Candidate",
+                "candidate_email": session_row.get("candidate_email") or "",
+                "language": session_row.get("language") or "English",
+                "interview_format": "Recruiter-Led",
+                "interview_mode": "recruiter_led",
+                "interview_type": iv_type,
+            }
+            if iv_doc:
+                interviews_collection.update_one(
+                    {"_id": iv_doc["_id"]},
+                    {"$set": {
+                        "questions": questions_json,
+                        "link_id": canonical_link_id,
+                        "interview_format": "Recruiter-Led",
+                        "interview_mode": "recruiter_led",
+                        "difficulty": safe_diff,
+                    }}
+                )
+            else:
+                interviews_collection.update_one(
+                    {"$or": [{"id": interview_id}, {"link_id": canonical_link_id}]},
+                    {
+                        "$set": iv_update_payload,
+                        "$setOnInsert": {
+                            "created_at": now_iso,
+                            "status": session_row.get("status") or "pending",
+                        }
+                    },
+                    upsert=True,
+                )
+        except Exception as iv_sync_err:
+            logger.warning(f"[RecruiterCopilot] interviews_collection sync warning for {canonical_link_id}: {iv_sync_err}")
+
+        try:
+            session_updates: Dict[str, Any] = {}
+            if not session_row.get("interview_id"):
+                session_updates["interview_id"] = interview_id
+            if needs_generation or needs_enrichment or not session_row.get("pre_generated_questions"):
+                session_updates["pre_generated_questions"] = questions_json
+            if session_updates:
+                interview_sessions_collection.update_one({"_id": session_row["_id"]}, {"$set": session_updates})
+        except Exception as sess_sync_err:
+            logger.warning(f"[RecruiterCopilot] interview_sessions_collection sync warning for {canonical_link_id}: {sess_sync_err}")
+
+        saved_evals = session_row.get("recruiter_evaluations")
+        if saved_evals is None and iv_doc:
+            saved_evals = iv_doc.get("recruiter_evaluations")
+
+        safe_response_questions = json.loads(questions_json)
+
+        return {
+            "status": "success",
+            "link_id": canonical_link_id,
+            "interview_id": interview_id,
+            "candidate_name": session_row.get("candidate_name") or "Candidate",
+            "candidate_email": session_row.get("candidate_email") or "",
+            "experience": experience_val,
+            "interview_title": session_row.get("interview_title") or session_row.get("job_title") or "",
+            "interview_duration": session_row.get("interview_duration") or 30,
+            "interview_type": iv_type,
+            "interview_format": "Recruiter-Led",
+            "interview_mode": "recruiter_led",
+            "session_status": session_row.get("status") or "pending",
+            "resume_text": resume_txt,
+            "job_description": job_desc,
+            "questions": safe_response_questions,
+            "evaluations": saved_evals or [],
+            "active_question_index": int(session_row.get("active_question_index") or 0),
+            "overall_notes": session_row.get("overall_notes") or "",
+            "overall_recommendation": session_row.get("overall_recommendation") or "",
+            "score": session_row.get("score"),
+            "external_meeting_url": session_row.get("external_meeting_url") or "",
+            "external_call_mode": bool(session_row.get("external_call_mode") or session_row.get("external_meeting_url")),
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception(f"[RecruiterCopilot] Critical fallback triggered for session {canonical_link_id}: {exc}")
+        return _build_emergency_recruiter_response(session_row, canonical_link_id, session_row.get("interview_id"), exc)
+
+
+import threading
+from collections import defaultdict as _recruiter_defaultdict
+
+_recruiter_gen_locks = _recruiter_defaultdict(threading.Lock)
+
+
+@router.post("/recruiter/session/{link_id}/generate-more-questions")
+def recruiter_generate_more_questions(
+    link_id: str,
+    payload: Dict[str, Any] = Body(default_factory=dict),
+    current_admin: dict = Depends(get_current_admin_details),
+):
+    """
+    Generate on-demand additional cheat-sheet questions during a live Recruiter-Led interview.
+    Enables continuous, infinite questions until the recruiter decides to conclude the call,
+    with strict multi-layer deduplication across discussion, case-study, and coding questions.
+    """
+    from app.data.interview_graphs import (
+        generate_recruiter_cheat_sheet_questions,
+        _build_recruiter_fallback_item,
+        is_recruiter_question_duplicate,
+        extract_coding_title_from_text,
+    )
+
+    session_row = _find_session_by_any_id(link_id)
+    if not session_row:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    _require_admin_session_access(session_row, current_admin)
+    canonical_link_id = str(session_row.get("link_id") or link_id)
+
+    try:
+        with _recruiter_gen_locks[canonical_link_id]:
+            # Re-fetch fresh session & interview docs inside the lock so rapid requests never overlap
+            fresh_session = _find_session_by_any_id(canonical_link_id) or session_row
+            interview_id = fresh_session.get("interview_id") or session_row.get("interview_id")
+
+            iv_doc = None
+            if interview_id:
+                try:
+                    iv_doc = interviews_collection.find_one({"id": interview_id})
+                except Exception:
+                    iv_doc = None
+            if not iv_doc:
+                try:
+                    iv_doc = interviews_collection.find_one({"link_id": canonical_link_id})
+                except Exception:
+                    iv_doc = None
+
+            # Read existing questions from session/interview doc
+            existing_questions: List[Dict[str, Any]] = []
+            raw_questions = (iv_doc or {}).get("questions") or fresh_session.get("pre_generated_questions")
+            if isinstance(raw_questions, str):
+                try:
+                    loaded = json.loads(raw_questions)
+                    if isinstance(loaded, list):
+                        existing_questions = loaded
+                except Exception:
+                    pass
+            elif isinstance(raw_questions, list):
+                existing_questions = raw_questions
+
+            # Number of new questions requested (support both num_questions and count; default 5)
+            requested_count = int(payload.get("num_questions") or payload.get("count") or 5)
+            requested_count = max(1, min(requested_count, 10))
+
+            # Collect ALL existing question texts, coding titles, coding functions, and case-study titles
+            exclude_list: List[str] = []
+            exclude_coding_titles: List[str] = []
+            exclude_coding_functions: List[str] = []
+            exclude_case_titles: List[str] = []
+
+            for q in existing_questions:
+                if not isinstance(q, dict):
+                    continue
+                qt = str(q.get("question") or q.get("text") or "").strip()
+                if qt:
+                    exclude_list.append(qt)
+                    extracted_ct = extract_coding_title_from_text(qt)
+                    if extracted_ct:
+                        exclude_coding_titles.append(extracted_ct)
+                ct = q.get("coding_task")
+                if isinstance(ct, dict):
+                    if ct.get("title"):
+                        exclude_coding_titles.append(str(ct.get("title")).strip())
+                    if ct.get("function_name"):
+                        exclude_coding_functions.append(str(ct.get("function_name")).strip())
+                cs = q.get("case_study")
+                if isinstance(cs, dict) and cs.get("title"):
+                    exclude_case_titles.append(str(cs.get("title")).strip())
+
+            job_desc = fresh_session.get("job_description") or (iv_doc or {}).get("job_description") or ""
+            resume_txt = fresh_session.get("resume_text") or (iv_doc or {}).get("resume_text") or ""
+            iv_type = fresh_session.get("interview_type") or (iv_doc or {}).get("interview_type") or "Technical"
+            diff_val = _safe_str_difficulty(fresh_session.get("project_difficulty") or fresh_session.get("difficulty"))
+            industry_val = fresh_session.get("industry") or "General"
+            language_val = fresh_session.get("language") or "English"
+
+            start_num = len(existing_questions) + 1
+
+            try:
+                new_items = generate_recruiter_cheat_sheet_questions(
+                    resume_text=resume_txt,
+                    jd_text=job_desc,
+                    num_questions=requested_count,
+                    interview_type=iv_type,
+                    industry=industry_val,
+                    language=language_val,
+                    difficulty=diff_val,
+                    custom_questions="",  # Never re-inject initial custom questions on continuation
+                    ai_instructions=fresh_session.get("ai_instructions") or "",
+                    exclude_questions=exclude_list,
+                    start_id=start_num,
+                    exclude_coding_titles=exclude_coding_titles,
+                    exclude_coding_functions=exclude_coding_functions,
+                    exclude_case_titles=exclude_case_titles,
+                )
+            except Exception as gen_err:
+                logger.warning(f"[RecruiterCopilot] Infinite question generator fallback for {canonical_link_id}: {gen_err}")
+                more_seeds = [
+                    f"How do you approach scalability and maintainability tradeoffs in {iv_type} contexts?",
+                    "Walk me through a challenging bug or design flaw you encountered and how you solved it.",
+                    "What observability and telemetry metrics would you track in production for this system?",
+                    "How would you explain your architecture and technical decisions to non-technical stakeholders?",
+                    "How do you validate backward compatibility when rolling out breaking API or schema changes?",
+                    "What testing pyramid strategy ensures high confidence without slowing down release cycles?",
+                ]
+                new_items = [
+                    _build_recruiter_fallback_item(
+                        start_num + i,
+                        text,
+                        category="Core Technical" if "tech" in iv_type.lower() else "Case Study",
+                        difficulty=diff_val,
+                    )
+                    for i, text in enumerate(more_seeds)
+                ]
+
+            # Final hard deduplication pass against existing_questions AND within new_items itself
+            deduped_new_items: List[Dict[str, Any]] = []
+            running_texts = list(exclude_list)
+            running_coding_titles = list(exclude_coding_titles)
+            running_coding_functions = list(exclude_coding_functions)
+            running_case_titles = list(exclude_case_titles)
+
+            for item in new_items:
+                if not isinstance(item, dict):
+                    continue
+                qt = str(item.get("question") or item.get("text") or "").strip()
+                ct_obj = item.get("coding_task") if isinstance(item.get("coding_task"), dict) else {}
+                cs_obj = item.get("case_study") if isinstance(item.get("case_study"), dict) else {}
+                c_title = str(ct_obj.get("title") or extract_coding_title_from_text(qt) or "").strip()
+                c_fn = str(ct_obj.get("function_name") or "").strip()
+                cs_title = str(cs_obj.get("title") or "").strip()
+
+                if is_recruiter_question_duplicate(
+                    qt,
+                    running_texts,
+                    coding_title=c_title,
+                    coding_function=c_fn,
+                    existing_coding_titles=running_coding_titles,
+                    existing_coding_functions=running_coding_functions,
+                    case_title=cs_title,
+                    existing_case_titles=running_case_titles,
+                ):
+                    continue
+
+                running_texts.append(qt)
+                if c_title:
+                    running_coding_titles.append(c_title)
+                if c_fn:
+                    running_coding_functions.append(c_fn)
+                if cs_title:
+                    running_case_titles.append(cs_title)
+                deduped_new_items.append(item)
+                if len(deduped_new_items) >= requested_count:
+                    break
+
+            # Combine existing and strictly unique new questions
+            combined_raw = existing_questions + deduped_new_items
+            cleaned_combined = [
+                _clean_recruiter_question_item(q, idx, fallback_difficulty=diff_val)
+                for idx, q in enumerate(combined_raw, start=1)
+            ]
+            combined_json = _safe_json_dumps(cleaned_combined)
+
+            # Persist updated list to DB
+            if deduped_new_items:
+                try:
+                    interview_sessions_collection.update_one(
+                        {"_id": fresh_session["_id"]},
+                        {"$set": {"pre_generated_questions": combined_json}}
+                    )
+                except Exception as s_err:
+                    logger.warning(f"[RecruiterCopilot] Session update error in generate_more: {s_err}")
+
+                if interview_id:
+                    try:
+                        interviews_collection.update_one(
+                            {"id": interview_id},
+                            {"$set": {"questions": combined_json}}
+                        )
+                    except Exception as iv_err:
+                        logger.warning(f"[RecruiterCopilot] Interview update error in generate_more: {iv_err}")
+
+            safe_new_items = [
+                _clean_recruiter_question_item(item, start_num + idx, fallback_difficulty=diff_val)
+                for idx, item in enumerate(deduped_new_items)
+            ]
+            safe_all_items = json.loads(combined_json)
+
+            return {
+                "status": "success",
+                "new_questions": safe_new_items,
+                "added_count": len(safe_new_items),
+                "questions": safe_all_items,
+                "total_questions": len(safe_all_items),
+            }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception(f"[RecruiterCopilot] Error in recruiter_generate_more_questions: {exc}")
+        return {
+            "status": "error",
+            "message": str(exc),
+            "new_questions": [],
+            "added_count": 0,
+            "questions": existing_questions if 'existing_questions' in locals() else [],
+            "total_questions": len(existing_questions) if 'existing_questions' in locals() else 0,
+        }
+
+
+@router.post("/interview/{interview_id}/auto-save-progress")
+def auto_save_recruiter_progress(
+    interview_id: str,
+    payload: AutoSaveRecruiterProgressRequest,
+    current_admin: dict = Depends(get_current_admin_details),
+):
+    """Persist in-flight recruiter ratings & notes on question step transitions."""
+    session_row = _find_session_by_any_id(interview_id)
+    if not session_row:
+        raise HTTPException(status_code=404, detail="Interview session not found")
+
+    _require_admin_session_access(session_row, current_admin)
+    canonical_link_id = str(session_row.get("link_id") or "")
+    actual_iv_id = session_row.get("interview_id") or interview_id
+    eval_dicts = _normalize_recruiter_eval_items(payload.evaluations)
+    preview_score = _compute_recruiter_score(eval_dicts)
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    updates = {
+        "recruiter_evaluations": eval_dicts,
+        "active_question_index": max(0, int(payload.active_question_index or 0)),
+        "overall_notes": payload.overall_notes or "",
+        "last_autosaved_at": now_iso,
+    }
+    if canonical_link_id:
+        interview_sessions_collection.update_one({"link_id": canonical_link_id}, {"$set": updates})
+    interviews_collection.update_one(
+        {"$or": [{"id": actual_iv_id}, {"link_id": canonical_link_id or interview_id}]},
+        {"$set": updates},
+    )
+    return {
+        "status": "saved",
+        "active_question_index": updates["active_question_index"],
+        "saved_count": len(eval_dicts),
+        "preview_score": preview_score,
+    }
+
+
+def _sanitize_external_meeting_link(raw_url: Optional[str]) -> str:
+    url = (raw_url or "").strip()
+    if not url:
+        return ""
+    lower = url.lower()
+    if not (lower.startswith("http://") or lower.startswith("https://")):
+        import re as _re
+        if _re.match(r"^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(/.*)?$", url):
+            url = "https://" + url
+        else:
+            raise HTTPException(status_code=400, detail="Please enter a valid Google Meet or Zoom URL (https://...)")
+    return url[:500]
+
+
+@router.post("/recruiter/session/{link_id}/external-meeting")
+def update_recruiter_external_meeting(
+    link_id: str,
+    payload: ExternalMeetingUpdateRequest,
+    current_admin: dict = Depends(get_current_admin_details),
+):
+    """Toggle External Call Mode (Google Meet / Zoom) and persist meeting URL."""
+    session_row = _find_session_by_any_id(link_id)
+    if not session_row:
+        raise HTTPException(status_code=404, detail="Interview session not found")
+
+    _require_admin_session_access(session_row, current_admin)
+    canonical_link_id = str(session_row.get("link_id") or link_id)
+    actual_iv_id = session_row.get("interview_id") or ""
+    clean_url = _sanitize_external_meeting_link(payload.external_meeting_url) if payload.external_meeting_url else ""
+    enabled = bool(payload.external_call_mode)
+
+    updates = {
+        "external_call_mode": enabled,
+        "external_meeting_url": clean_url,
+    }
+    interview_sessions_collection.update_one({"link_id": canonical_link_id}, {"$set": updates})
+    if actual_iv_id:
+        interviews_collection.update_one({"id": actual_iv_id}, {"$set": updates})
+
+    return {
+        "status": "success",
+        "link_id": canonical_link_id,
+        "external_call_mode": enabled,
+        "external_meeting_url": clean_url,
+    }
+
+
+@router.post("/interview/{interview_id}/save-recruiter-evaluation")
+def save_recruiter_evaluation(
+    interview_id: str,
+    payload: SaveRecruiterEvaluationRequest,
+    current_admin: dict = Depends(get_current_admin_details),
+):
+    """
+    Finalize a Recruiter-Led interview with deterministic scoring:
+    Correct=100, Partial=50, Incorrect=0, Skip=excluded from average.
+    Zero runtime LLM calls.
+    """
+    session_row = _find_session_by_any_id(interview_id)
+    if not session_row:
+        raise HTTPException(status_code=404, detail="Interview session not found")
+
+    _require_admin_session_access(session_row, current_admin)
+    canonical_link_id = str(session_row.get("link_id") or "")
+    actual_iv_id = session_row.get("interview_id") or interview_id
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    raw_rec = str(payload.recommendation or "Hold").strip()
+    canonical_rec = _VALID_RECRUITER_RECOMMENDATIONS.get(raw_rec.lower(), raw_rec or "Hold")
+
+    eval_dicts = _normalize_recruiter_eval_items(payload.evaluations)
+    computed = _compute_recruiter_score(eval_dicts)
+    final_score = computed if computed is not None else 0.0
+    graded_items = [e for e in eval_dicts if e.get("score") is not None]
+
+    correct_cnt = sum(1 for e in eval_dicts if e.get("rating") == "Correct")
+    partial_cnt = sum(1 for e in eval_dicts if e.get("rating") == "Partial")
+    incorrect_cnt = sum(1 for e in eval_dicts if e.get("rating") == "Incorrect")
+    skip_cnt = sum(1 for e in eval_dicts if e.get("rating") == "Skip")
+
+    recruiter_name = current_admin.get("name") or current_admin.get("username") or "Recruiter"
+    overall_notes = (payload.overall_notes or "").strip()
+
+    strengths_text = (
+        f"Recruiter-Led live assessment by {recruiter_name}: "
+        f"{correct_cnt} Correct, {partial_cnt} Partial, {incorrect_cnt} Incorrect, {skip_cnt} Skipped."
+    )
+    weaknesses_text = overall_notes or "No additional weaknesses or concerns noted by recruiter."
+    rubric_reason = (
+        f"Evaluated directly by {recruiter_name} during live human interview ({canonical_rec})."
+    )
+
+    session_update = {
+        "status": "completed",
+        "completed_at": now_iso,
+        "submitted_at": now_iso,
+        "completion_reason": "recruiter_submitted",
+        "interview_id": actual_iv_id,
+        "interview_format": "Recruiter-Led",
+        "interview_mode": "recruiter_led",
+        "score": final_score,
+        "avg_score": final_score,
+        "ai_score": final_score,
+        "round1_score": final_score,
+        "round2_score": final_score,
+        "overall_recommendation": canonical_rec,
+        "recruiter_evaluations": eval_dicts,
+        "overall_notes": overall_notes,
+        "active_question_index": int(payload.active_question_index or 0),
+        "evaluated_by": current_admin.get("admin_id") or current_admin.get("email"),
+        "evaluated_by_name": recruiter_name,
+        "strengths_summary": strengths_text,
+        "weaknesses_summary": weaknesses_text,
+        "communication_score": final_score,
+        "communication_reasoning": rubric_reason,
+        "skills_score": final_score,
+        "skills_reasoning": rubric_reason,
+        "competencies_score": final_score,
+        "competencies_reasoning": rubric_reason,
+        "personality_score": final_score,
+        "personality_reasoning": rubric_reason,
+        "culture_fit_score": final_score,
+        "culture_fit_reasoning": rubric_reason,
+        "job_success_score": final_score,
+        "job_success_reasoning": rubric_reason,
+    }
+
+    if canonical_link_id:
+        interview_sessions_collection.update_one({"link_id": canonical_link_id}, {"$set": session_update})
+
+    interviews_collection.update_one(
+        {"$or": [{"id": actual_iv_id}, {"link_id": canonical_link_id or interview_id}]},
+        {"$set": {
+            "status": "completed",
+            "completed_at": now_iso,
+            "score": final_score,
+            "avg_score": final_score,
+            "overall_recommendation": canonical_rec,
+            "recruiter_evaluations": eval_dicts,
+            "overall_notes": overall_notes,
+            "evaluated_by_name": recruiter_name,
+        }},
+    )
+
+    # Persist question-level rows into answers_collection for View Results & PDF reports
+    for idx, ev in enumerate(eval_dicts, start=1):
+        qid = ev.get("question_id") or idx
+        rating = ev.get("rating") or "Skip"
+        notes = ev.get("notes") or ""
+        q_score = ev.get("score")
+        q_text = ev.get("question") or f"Question {qid}"
+        q_cat = str(ev.get("category") or "").strip()
+        is_coding = bool(
+            ev.get("is_coding")
+            or "coding" in q_cat.lower()
+            or "coding" in q_text.lower()
+            or "live coding challenge" in q_text.lower()
+            or "case study" in q_cat.lower()
+            or "case study" in q_text.lower()
+            or (
+                "input:" in q_text.lower()
+                and "output:" in q_text.lower()
+                and any(k in q_text.lower() for k in ("function", "code", "algorithm", "constraints", "o("))
+            )
+        )
+        answers_collection.update_one(
+            {"interview_id": actual_iv_id, "question_id": qid},
+            {"$set": {
+                "interview_id": actual_iv_id,
+                "link_id": canonical_link_id,
+                "question_id": qid,
+                "question_text": q_text,
+                "answer_text": f"[Recruiter Rating: {rating}]" + (f" — {notes}" if notes else ""),
+                "ai_score": q_score,
+                "content_score": q_score,
+                "relevance_score": q_score,
+                "ai_feedback": notes or f"Marked '{rating}' by {recruiter_name}.",
+                "corrected_answer": ev.get("model_answer") or ev.get("corrected_answer") or "Recruiter-Led Live Assessment",
+                "recruiter_rating": rating,
+                "recruiter_notes": notes,
+                "is_coding": is_coding,
+                "question_type": "coding" if is_coding else "verbal",
+                "category": q_cat or ("Coding" if is_coding else "Technical"),
+                "scoring_status": "complete",
+                "created_at": now_iso,
+            }},
+            upsert=True,
+        )
+
+    if canonical_link_id:
+        try:
+            sync_session_to_application(canonical_link_id)
+        except Exception as _sync_err:
+            logger.warning(f"sync_session_to_application failed for {canonical_link_id}: {_sync_err}")
+
+    try:
+        from app.db.redis_manager import broadcast_interview_event
+        broadcast_interview_event(
+            event_type="interview_completed",
+            session_id=canonical_link_id or actual_iv_id,
+            company_id=session_row.get("company_id"),
+            created_by=session_row.get("created_by"),
+            extra={
+                "candidate_name": session_row.get("candidate_name"),
+                "score": final_score,
+                "recommendation": canonical_rec,
+                "interview_mode": "recruiter_led",
+            },
+        )
+    except Exception:
+        pass
+
+    return {
+        "status": "success",
+        "interview_id": actual_iv_id,
+        "link_id": canonical_link_id,
+        "final_score": final_score,
+        "recommendation": canonical_rec,
+        "graded_count": len(graded_items),
+        "total_count": len(eval_dicts),
+    }
+
+
+@router.get("/interview/{interview_id}")
+def get_interview_details_guarded(
+    interview_id: str,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_optional_admin_bearer),
+):
+    """
+    Fetch interview metadata with strict Anti-Cheat Guard:
+    Candidates and unauthenticated callers NEVER receive model_answer,
+    quick_summary, key_points, or recruiter evaluation notes.
+    """
+    iv_doc = interviews_collection.find_one({"$or": [{"id": interview_id}, {"link_id": interview_id}]})
+    session_row = _find_session_by_any_id(interview_id)
+    if not iv_doc and not session_row:
+        raise HTTPException(status_code=404, detail="Interview not found")
+
+    is_authorized_admin = False
+    if credentials and credentials.credentials:
+        try:
+            admin_details = get_current_admin_details(credentials)
+            if session_row:
+                _require_admin_session_access(session_row, admin_details)
+            is_authorized_admin = True
+        except HTTPException:
+            is_authorized_admin = False
+        except Exception:
+            is_authorized_admin = False
+
+    raw_qs = (iv_doc or {}).get("questions") or (session_row or {}).get("pre_generated_questions") or "[]"
+    questions = []
+    if isinstance(raw_qs, str):
+        try:
+            parsed = json.loads(raw_qs)
+            if isinstance(parsed, list):
+                questions = parsed
+        except Exception:
+            questions = []
+    elif isinstance(raw_qs, list):
+        questions = raw_qs
+
+    # Strip any internal MongoDB _id or non-serializable fields
+    cleaned_qs = []
+    for idx, q in enumerate(questions, start=1):
+        if isinstance(q, dict):
+            c = {k: v for k, v in q.items() if k != "_id"}
+            c["id"] = _safe_recruiter_id(c.get("id"), idx)
+            cleaned_qs.append(c)
+        else:
+            cleaned_qs.append(q)
+
+    if not is_authorized_admin:
+        cleaned_qs = _strip_cheat_sheet_list(cleaned_qs)
+
+    safe_response_qs = json.loads(_safe_json_dumps(cleaned_qs))
+
+    payload: Dict[str, Any] = {
+        "status": "success",
+        "interview_id": (iv_doc or {}).get("id") or (session_row or {}).get("interview_id") or interview_id,
+        "link_id": (iv_doc or {}).get("link_id") or (session_row or {}).get("link_id") or "",
+        "candidate_name": (session_row or iv_doc or {}).get("candidate_name") or "Candidate",
+        "interview_format": (session_row or iv_doc or {}).get("interview_format") or "Standard",
+        "interview_mode": (session_row or iv_doc or {}).get("interview_mode") or "standard",
+        "interview_type": (session_row or iv_doc or {}).get("interview_type") or "Technical",
+        "language": (session_row or iv_doc or {}).get("language") or "English",
+        "questions": safe_response_qs,
+    }
+    if is_authorized_admin:
+        payload["evaluations"] = (session_row or iv_doc or {}).get("recruiter_evaluations") or []
+        payload["overall_notes"] = (session_row or iv_doc or {}).get("overall_notes") or ""
+        payload["overall_recommendation"] = (session_row or iv_doc or {}).get("overall_recommendation") or ""
+        payload["score"] = (session_row or iv_doc or {}).get("score")
+    return payload

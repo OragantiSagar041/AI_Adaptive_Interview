@@ -101,7 +101,10 @@ class CreateSession(BaseModel):
     admin_id: str
     interview_duration: int = 30  # minutes
     record_video: bool = True
-    interview_format: str = "Standard"  # "Standard" or "Voice"
+    interview_format: str = "Standard"  # "Standard", "Voice", or "Recruiter-Led"
+    interview_mode: Optional[str] = None  # "standard", "voice", or "recruiter_led"
+    external_meeting_url: str = ""
+    external_call_mode: bool = False
     interview_type: str = "Technical"
     industry: str = "General"
     language: str = "English"

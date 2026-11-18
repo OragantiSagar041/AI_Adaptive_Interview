@@ -31,6 +31,7 @@ class RedisConnectionManager:
         # Only retry Redis once per 60 seconds after a failure
         self._redis_retry_cooldown = 60.0
         self._loop = None
+        self.instance_id = os.urandom(4).hex()
 
     async def connect_redis(self):
         """Try to connect to Redis. After a failure, retry at most once per cooldown period.
@@ -55,8 +56,8 @@ class RedisConnectionManager:
                 return  # already connected on current loop
 
         now = time.monotonic()
-                # Reset flag so we actually attempt again
-        self._redis_failed = False
+        if self._redis_failed and (now - self._redis_last_attempt) < self._redis_retry_cooldown:
+            return
         self._redis_last_attempt = now
         try:
             import ssl as _ssl
@@ -77,7 +78,8 @@ class RedisConnectionManager:
             logger.info(f"Connected to Redis at {REDIS_URL}")
         except Exception as e:
             logger.warning(f"Could not connect to Redis: {e}. Falling back to in-memory routing.")
-            self._redis_failed = False # patched to allow immediate reconnect
+            self._redis_failed = True
+            self._redis_last_attempt = time.monotonic()
             self.redis = None
             self.pubsub = None
 
@@ -106,6 +108,10 @@ class RedisConnectionManager:
                     except Exception:
                         continue
 
+                    # Skip messages published by this exact instance to avoid double-delivery
+                    if data.get("sender_instance") == getattr(self, "instance_id", None):
+                        continue
+
                     # Channel format: session:{link_id}:{role}
                     parts = channel.split(":")
                     if len(parts) == 3 and parts[0] == "session":
@@ -127,6 +133,19 @@ class RedisConnectionManager:
                                             await admins_map[target_admin].send_json(data)
                                         except Exception as e:
                                             logger.error(f"Error sending to local admin {target_admin}: {e}")
+                                    elif not str(target_admin).startswith("spectator_"):
+                                        # Target admin_id may be stale after Cockpit reload; deliver to active admins
+                                        fallback_payload = dict(data)
+                                        active_admin_ids = [aid for aid in admins_map.keys() if not str(aid).startswith("spectator_")]
+                                        if len(active_admin_ids) == 1:
+                                            fallback_payload["target_admin_id"] = active_admin_ids[0]
+                                        else:
+                                            fallback_payload.pop("target_admin_id", None)
+                                        for ws in list(local_group.get("admins", [])):
+                                            try:
+                                                await ws.send_json(fallback_payload)
+                                            except Exception as e:
+                                                logger.error(f"Error fallback-sending to local admin: {e}")
                                 else:
                                     recipients = list(local_group["admins"]) + list(local_group.get("spectators", []))
                                     for ws in recipients:
@@ -143,15 +162,20 @@ class RedisConnectionManager:
             # Mark as failed so next connect_redis call can retry after cooldown
             self.redis = None
             self.pubsub = None
-            self._redis_failed = False # patched to allow immediate reconnect
+            self._redis_failed = True
+            self._redis_last_attempt = time.monotonic()
 
     # ─── Candidate connection ────────────────────────────────────────────────────
 
-    async def connect_candidate(self, websocket: WebSocket, link_id: str):
+    async def connect_candidate(self, websocket: WebSocket, link_id: str, alias_id: Optional[str] = None):
         await websocket.accept()
         if link_id not in self.local_connections:
-            self.local_connections[link_id] = {"candidate": None, "admins": [], "admins_map": {}}
+            self.local_connections[link_id] = {"candidate": None, "admins": [], "admins_map": {}, "spectators": []}
+        elif "spectators" not in self.local_connections[link_id]:
+            self.local_connections[link_id]["spectators"] = []
         self.local_connections[link_id]["candidate"] = websocket
+        if alias_id and alias_id != link_id:
+            self.local_connections[alias_id] = self.local_connections[link_id]
 
         # Attempt Redis subscription — failure is non-fatal, we fall back to in-memory
         await self.connect_redis()
@@ -164,33 +188,49 @@ class RedisConnectionManager:
                 )
                 self.redis = None
                 self.pubsub = None
-                self._redis_failed = False # patched to allow immediate reconnect
+                self._redis_failed = True
+                self._redis_last_attempt = time.monotonic()
 
-    def disconnect_candidate(self, link_id: str):
-        if link_id in self.local_connections:
-            self.local_connections[link_id]["candidate"] = None
-            if not self.local_connections[link_id]["admins"]:
-                del self.local_connections[link_id]
-                if self.pubsub:
-                    asyncio.create_task(
-                        self._safe_unsubscribe(
-                            f"session:{link_id}:candidate",
-                            f"session:{link_id}:admins",
-                        )
+    def disconnect_candidate(self, link_id: str, websocket: Optional[WebSocket] = None, alias_id: Optional[str] = None) -> bool:
+        group = self.local_connections.get(link_id)
+        if not group:
+            return False
+        # Do not clear or clean up if a newer WebSocket replaced this one (e.g. React StrictMode remount)
+        if websocket is not None and group.get("candidate") is not websocket:
+            return False
+        group["candidate"] = None
+        if not group.get("admins") and not group.get("spectators"):
+            self.local_connections.pop(link_id, None)
+            if alias_id and alias_id != link_id and self.local_connections.get(alias_id) is group:
+                self.local_connections.pop(alias_id, None)
+            if self.pubsub:
+                asyncio.create_task(
+                    self._safe_unsubscribe(
+                        f"session:{link_id}:candidate",
+                        f"session:{link_id}:admins",
                     )
+                )
+        return True
 
     # ─── Admin connection ────────────────────────────────────────────────────────
 
-    async def connect_admin(self, websocket: WebSocket, link_id: str, admin_id: Optional[str] = None):
+    async def connect_admin(self, websocket: WebSocket, link_id: str, admin_id: Optional[str] = None, alias_id: Optional[str] = None):
         await websocket.accept()
         if link_id not in self.local_connections:
-            self.local_connections[link_id] = {"candidate": None, "admins": [], "admins_map": {}}
-        elif "admins_map" not in self.local_connections[link_id]:
-            self.local_connections[link_id]["admins_map"] = {}
+            self.local_connections[link_id] = {"candidate": None, "admins": [], "admins_map": {}, "spectators": []}
+        else:
+            if "admins_map" not in self.local_connections[link_id]:
+                self.local_connections[link_id]["admins_map"] = {}
+            if "spectators" not in self.local_connections[link_id]:
+                self.local_connections[link_id]["spectators"] = []
 
-        self.local_connections[link_id]["admins"].append(websocket)
+        if websocket not in self.local_connections[link_id]["admins"]:
+            self.local_connections[link_id]["admins"].append(websocket)
         if admin_id:
             self.local_connections[link_id]["admins_map"][admin_id] = websocket
+
+        if alias_id and alias_id != link_id:
+            self.local_connections[alias_id] = self.local_connections[link_id]
 
         # Attempt Redis subscription — failure is non-fatal, we fall back to in-memory
         await self.connect_redis()
@@ -203,33 +243,43 @@ class RedisConnectionManager:
                 )
                 self.redis = None
                 self.pubsub = None
-                self._redis_failed = False # patched to allow immediate reconnect
+                self._redis_failed = True
+                self._redis_last_attempt = time.monotonic()
 
-    def disconnect_admin(self, websocket: WebSocket, link_id: str, admin_id: Optional[str] = None):
-        if link_id in self.local_connections:
-            if websocket in self.local_connections[link_id]["admins"]:
-                self.local_connections[link_id]["admins"].remove(websocket)
-            admins_map = self.local_connections[link_id].get("admins_map", {})
-            if admin_id and admin_id in admins_map:
+    def disconnect_admin(self, websocket: WebSocket, link_id: str, admin_id: Optional[str] = None, alias_id: Optional[str] = None) -> bool:
+        group = self.local_connections.get(link_id)
+        if not group:
+            return False
+        if websocket in group.get("admins", []):
+            group["admins"].remove(websocket)
+        admins_map = group.get("admins_map", {})
+        still_present = False
+        if admin_id and admin_id in admins_map:
+            if admins_map[admin_id] is websocket:
                 del admins_map[admin_id]
             else:
-                keys_to_del = [k for k, v in admins_map.items() if v is websocket]
-                for k in keys_to_del:
-                    del admins_map[k]
+                still_present = True
+        else:
+            keys_to_del = [k for k, v in admins_map.items() if v is websocket]
+            for k in keys_to_del:
+                del admins_map[k]
 
-            if (
-                not self.local_connections[link_id]["admins"]
-                and not self.local_connections[link_id]["candidate"]
-                and not self.local_connections[link_id].get("spectators")
-            ):
-                del self.local_connections[link_id]
-                if self.pubsub:
-                    asyncio.create_task(
-                        self._safe_unsubscribe(
-                            f"session:{link_id}:candidate",
-                            f"session:{link_id}:admins",
-                        )
+        if (
+            not group.get("admins")
+            and not group.get("candidate")
+            and not group.get("spectators")
+        ):
+            self.local_connections.pop(link_id, None)
+            if alias_id and alias_id != link_id and self.local_connections.get(alias_id) is group:
+                self.local_connections.pop(alias_id, None)
+            if self.pubsub:
+                asyncio.create_task(
+                    self._safe_unsubscribe(
+                        f"session:{link_id}:candidate",
+                        f"session:{link_id}:admins",
                     )
+                )
+        return not still_present
 
     async def _safe_unsubscribe(self, *channels):
         try:
@@ -257,7 +307,8 @@ class RedisConnectionManager:
                 )
                 self.redis = None
                 self.pubsub = None
-                self._redis_failed = False # patched to allow immediate reconnect
+                self._redis_failed = True
+                self._redis_last_attempt = time.monotonic()
 
         if link_id not in self.local_connections:
             self.local_connections[link_id] = {"candidate": None, "admins": [], "admins_map": {}, "spectators": []}
@@ -365,40 +416,33 @@ class RedisConnectionManager:
     # ─── Message routing ─────────────────────────────────────────────────────────
 
     async def send_to_candidate(self, link_id: str, message: dict):
-        """Publish a message to the candidate's channel (Redis if available, in-memory otherwise)."""
-        await self.connect_redis()
-        if self.redis:
-            try:
-                await self.redis.publish(f"session:{link_id}:candidate", json.dumps(message))
-                return
-            except Exception as e:
-                logger.warning(f"Redis publish failed: {e}. Falling back to in-memory.")
-                self.redis = None
-                self.pubsub = None
-                self._redis_failed = False # patched to allow immediate reconnect
-        # In-memory fallback
+        """Send message to candidate: local delivery first (0ms latency), plus Redis broadcast for clusters."""
+        # 1. Local delivery immediately to local WebSocket
         local_group = self.local_connections.get(link_id)
         if local_group:
-            cand_ws = local_group["candidate"]
+            cand_ws = local_group.get("candidate")
             if cand_ws:
                 try:
                     await cand_ws.send_json(message)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Error sending directly to local candidate: {e}")
 
-    async def send_to_admins(self, link_id: str, message: dict):
-        """Publish a message to the admins' channel (Redis if available, in-memory otherwise)."""
-        await self.connect_redis()
+        # 2. Redis broadcast to other instances
         if self.redis:
             try:
-                await self.redis.publish(f"session:{link_id}:admins", json.dumps(message))
-                return
+                msg_copy = dict(message)
+                msg_copy["sender_instance"] = getattr(self, "instance_id", "")
+                await self.redis.publish(f"session:{link_id}:candidate", json.dumps(msg_copy))
             except Exception as e:
-                logger.warning(f"Redis publish failed: {e}. Falling back to in-memory.")
+                logger.warning(f"Redis publish failed: {e}. Cooldown initiated.")
                 self.redis = None
                 self.pubsub = None
-                self._redis_failed = False # patched to allow immediate reconnect
-        # In-memory fallback — fans out to both admins and spectators
+                self._redis_failed = True
+                self._redis_last_attempt = time.monotonic()
+
+    async def send_to_admins(self, link_id: str, message: dict):
+        """Send message to watching admins: local delivery first, plus Redis broadcast."""
+        # 1. Local delivery immediately to local WebSockets
         local_group = self.local_connections.get(link_id)
         if local_group:
             recipients = list(local_group.get("admins", [])) + list(local_group.get("spectators", []))
@@ -408,23 +452,25 @@ class RedisConnectionManager:
                 except Exception:
                     pass
 
+        # 2. Redis broadcast to other instances
+        if self.redis:
+            try:
+                msg_copy = dict(message)
+                msg_copy["sender_instance"] = getattr(self, "instance_id", "")
+                await self.redis.publish(f"session:{link_id}:admins", json.dumps(msg_copy))
+            except Exception as e:
+                logger.warning(f"Redis publish failed: {e}. Cooldown initiated.")
+                self.redis = None
+                self.pubsub = None
+                self._redis_failed = True
+                self._redis_last_attempt = time.monotonic()
+
     async def send_to_specific_admin(self, link_id: str, admin_id: str, message: dict):
-        """Send a message specifically to one admin (via Redis with target_admin_id or local admins_map)."""
+        """Send a message specifically to one admin: local delivery first, plus Redis broadcast."""
         if "target_admin_id" not in message:
             message["target_admin_id"] = admin_id
 
-        await self.connect_redis()
-        if self.redis:
-            try:
-                await self.redis.publish(f"session:{link_id}:admins", json.dumps(message))
-                return
-            except Exception as e:
-                logger.warning(f"Redis publish failed: {e}. Falling back to in-memory.")
-                self.redis = None
-                self.pubsub = None
-                self._redis_failed = False # patched to allow immediate reconnect
-
-        # In-memory fallback
+        # 1. Local delivery immediately to local target admin (with stale-admin fallback for 1:1 calls)
         local_group = self.local_connections.get(link_id)
         if local_group:
             admins_map = local_group.get("admins_map", {})
@@ -434,6 +480,31 @@ class RedisConnectionManager:
                     await admin_ws.send_json(message)
                 except Exception:
                     pass
+            elif not str(admin_id).startswith("spectator_") and local_group.get("admins"):
+                fallback_msg = dict(message)
+                active_admin_ids = [aid for aid in admins_map.keys() if not str(aid).startswith("spectator_")]
+                if len(active_admin_ids) == 1:
+                    fallback_msg["target_admin_id"] = active_admin_ids[0]
+                else:
+                    fallback_msg.pop("target_admin_id", None)
+                for ws in list(local_group.get("admins", [])):
+                    try:
+                        await ws.send_json(fallback_msg)
+                    except Exception:
+                        pass
+
+        # 2. Redis broadcast to other instances
+        if self.redis:
+            try:
+                msg_copy = dict(message)
+                msg_copy["sender_instance"] = getattr(self, "instance_id", "")
+                await self.redis.publish(f"session:{link_id}:admins", json.dumps(msg_copy))
+            except Exception as e:
+                logger.warning(f"Redis publish failed: {e}. Cooldown initiated.")
+                self.redis = None
+                self.pubsub = None
+                self._redis_failed = True
+                self._redis_last_attempt = time.monotonic()
 
     async def publish_interview_event(
         self,
@@ -468,7 +539,8 @@ class RedisConnectionManager:
                 logger.warning(f"Redis publish failed: {e}. Falling back to in-memory broadcast.")
                 self.redis = None
                 self.pubsub = None
-                self._redis_failed = False # patched to allow immediate reconnect
+                self._redis_failed = True
+                self._redis_last_attempt = time.monotonic()
 
         # In-memory fallback
         await self.broadcast_dashboard(payload)
@@ -533,4 +605,3 @@ def broadcast_interview_event(
         r.close()
     except Exception as e:
         logger.warning(f"Sync Redis broadcast failed: {e}")
-

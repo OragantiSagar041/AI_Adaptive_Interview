@@ -1,3 +1,5 @@
+import os
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
 """
 app/routes_core.py — Shared helpers, auth dependencies, and utility functions.
 All split route files import from here. This was originally the top of routes.py.
@@ -234,9 +236,24 @@ def _validate_candidate_monitoring_token(token: str, link_id: str) -> Dict[str, 
     except (jwt.PyJWTError, ValueError) as exc:
         raise HTTPException(status_code=401, detail="Invalid or expired monitoring token") from exc
 
+    token_link_id = str(payload.get("link_id") or "")
+    token_interview_id = str(payload.get("interview_id") or "")
+
+    # Multi-identifier search supporting link_id (UUID), session _id (ObjectId), or interview_id
+    query_conditions = []
+    for test_id in set(filter(None, [link_id, token_link_id, token_interview_id])):
+        query_conditions.extend([{"link_id": test_id}, {"interview_id": test_id}, {"session_id": test_id}])
+        if ObjectId.is_valid(test_id):
+            query_conditions.append({"_id": ObjectId(test_id)})
+        try:
+            query_conditions.append({"_id": test_id})
+        except Exception:
+            pass
+
     session = interview_sessions_collection.find_one(
-        {"link_id": link_id},
+        {"$or": query_conditions},
         {
+            "_id": 1,
             "link_id": 1,
             "interview_id": 1,
             "company_id": 1,
@@ -250,11 +267,14 @@ def _validate_candidate_monitoring_token(token: str, link_id: str) -> Dict[str, 
     if session.get("is_deactivated") or session.get("status") in ("terminated", "cancelled", "expired"):
         raise HTTPException(status_code=403, detail="This interview session is not active")
 
-    token_interview_id = str(payload.get("interview_id") or "")
+    session_link_id = str(session.get("link_id") or "")
+    session_obj_id = str(session.get("_id") or "")
     session_interview_id = str(session.get("interview_id") or "")
-    if token_interview_id and session_interview_id and not hmac.compare_digest(token_interview_id, session_interview_id):
-        # If link_id matches, allow connection and sync interview_id
-        logger.info(f"Monitoring token interview_id transition: {token_interview_id} -> {session_interview_id}")
+
+    allowed_ids = {session_link_id, session_obj_id, session_interview_id, str(link_id)}
+    if token_link_id and not any(hmac.compare_digest(token_link_id, str(allowed)) for allowed in allowed_ids if allowed):
+        raise HTTPException(status_code=403, detail="Monitoring token does not match this session")
+
     return session
 
 
@@ -264,28 +284,82 @@ def _require_candidate_session(
     link_id: Optional[str] = None,
     interview_id: Optional[str] = None,
     allow_completed: bool = False,
+    allow_terminated: bool = False,
 ) -> Dict[str, Any]:
     """Authorize a candidate operation against the session-scoped bearer token."""
+    target_id = link_id or interview_id
     if not credentials:
+        if target_id:
+            query = [
+                {"link_id": str(target_id)},
+                {"interview_id": str(target_id)}
+            ]
+            if ObjectId.is_valid(target_id):
+                query.append({"_id": ObjectId(target_id)})
+            session = interview_sessions_collection.find_one(
+                {"$or": query},
+                {"link_id": 1, "interview_id": 1, "status": 1, "is_deactivated": 1, "company_id": 1, "created_by": 1},
+            )
+            if session and not session.get("is_deactivated"):
+                session_status = str(session.get("status") or "").lower()
+                if session_status in ("cancelled", "expired"):
+                    raise HTTPException(status_code=403, detail="This interview session is no longer active")
+                if not allow_terminated and session_status == "terminated":
+                    raise HTTPException(status_code=403, detail="This interview session was terminated")
+                if not allow_completed and session_status == "completed":
+                    raise HTTPException(status_code=403, detail="This interview session is already completed")
+                return session
         raise HTTPException(status_code=401, detail="Candidate session token is required")
 
     try:
         payload = jwt.decode(credentials.credentials, JWT_SECRET_KEY, algorithms=[ALGORITHM])
     except jwt.PyJWTError as exc:
+        if target_id:
+            query = [
+                {"link_id": str(target_id)},
+                {"interview_id": str(target_id)}
+            ]
+            if ObjectId.is_valid(target_id):
+                query.append({"_id": ObjectId(target_id)})
+            session = interview_sessions_collection.find_one(
+                {"$or": query},
+                {"link_id": 1, "interview_id": 1, "status": 1, "is_deactivated": 1, "company_id": 1, "created_by": 1},
+            )
+            if session and not session.get("is_deactivated"):
+                session_status = str(session.get("status") or "").lower()
+                if session_status in ("cancelled", "expired"):
+                    raise HTTPException(status_code=403, detail="This interview session is no longer active")
+                if not allow_terminated and session_status == "terminated":
+                    raise HTTPException(status_code=403, detail="This interview session was terminated")
+                if not allow_completed and session_status == "completed":
+                    raise HTTPException(status_code=403, detail="This interview session is already completed")
+                return session
         raise HTTPException(status_code=401, detail="Invalid or expired candidate session token") from exc
 
     token_link_id = str(payload.get("link_id") or "")
     token_interview_id = str(payload.get("interview_id") or "")
     if payload.get("scope") != MONITORING_SCOPE or not token_link_id:
         raise HTTPException(status_code=401, detail="Invalid candidate session token scope")
+    # Allow match by link_id, or if link_id is session ObjectId, verify against session
+    session_match = False
     if link_id and not hmac.compare_digest(token_link_id, str(link_id)):
-        raise HTTPException(status_code=403, detail="Candidate token does not match this session")
+        query_check = [{"link_id": link_id}]
+        if ObjectId.is_valid(link_id):
+            query_check.append({"_id": ObjectId(link_id)})
+        matched_doc = interview_sessions_collection.find_one({"$or": query_check}, {"link_id": 1, "_id": 1})
+        if matched_doc and (str(matched_doc.get("link_id")) == token_link_id or str(matched_doc.get("_id")) == token_link_id):
+            session_match = True
+        else:
+            raise HTTPException(status_code=403, detail="Candidate token does not match this session")
     if interview_id and token_interview_id and not hmac.compare_digest(token_interview_id, str(interview_id)):
         # If link matches token_link_id, allow interview_id update
         pass
 
+    query_sess = [{"link_id": token_link_id}]
+    if ObjectId.is_valid(token_link_id):
+        query_sess.append({"_id": ObjectId(token_link_id)})
     session = interview_sessions_collection.find_one(
-        {"link_id": token_link_id},
+        {"$or": query_sess},
         {"link_id": 1, "interview_id": 1, "status": 1, "is_deactivated": 1},
     )
     if not session:
@@ -294,8 +368,10 @@ def _require_candidate_session(
         raise HTTPException(status_code=403, detail="This interview session is deactivated")
 
     session_status = str(session.get("status") or "").lower()
-    if session_status in ("terminated", "cancelled", "expired"):
+    if session_status in ("cancelled", "expired"):
         raise HTTPException(status_code=403, detail="This interview session is no longer active")
+    if not allow_terminated and session_status == "terminated":
+        raise HTTPException(status_code=403, detail="This interview session was terminated")
     if not allow_completed and session_status == "completed":
         raise HTTPException(status_code=403, detail="This interview session is already completed")
 
@@ -304,19 +380,19 @@ def _require_candidate_session(
 
 def _require_admin_session_access(session: Dict[str, Any], current_admin: Dict[str, Any]) -> None:
     """Enforce tenant isolation and per-recruiter ownership for normal admins."""
-    role = current_admin.get("role")
+    role = str(current_admin.get("role") or "").strip().lower()
     if role == "master":
         return
     if session.get("company_id") != current_admin.get("company_id"):
         raise HTTPException(status_code=403, detail="Access denied")
-    if role == "admin" and str(session.get("created_by") or "") != str(current_admin.get("admin_id") or ""):
+    if role in {"admin", "recruiter", "subadmin"} and str(session.get("created_by") or "") != str(current_admin.get("admin_id") or ""):
         raise HTTPException(status_code=403, detail="Access denied to another recruiter's interview")
 
 
 def _get_authorized_live_session(link_id: str, current_admin: Dict[str, Any]) -> Dict[str, Any]:
     """Authorize live-monitoring access with tenant isolation."""
-    role = current_admin.get("role")
-    if role not in {"admin", "super_admin", "master"}:
+    role = str(current_admin.get("role") or "").strip().lower()
+    if role not in {"admin", "recruiter", "subadmin", "super_admin", "superadmin", "tenant", "master"}:
         raise HTTPException(status_code=403, detail="Live monitoring access is required")
 
     query_conditions = [{"link_id": link_id}, {"interview_id": link_id}, {"session_id": link_id}]
@@ -356,8 +432,8 @@ def _decode_dashboard_websocket_admin(token: str) -> Dict[str, str]:
     try:
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
         admin_id = str(payload.get("sub") or "")
-        role = str(payload.get("role") or "")
-        if not admin_id or role not in {"admin", "super_admin", "master"}:
+        role = str(payload.get("role") or "").strip().lower()
+        if not admin_id or role not in {"admin", "recruiter", "subadmin", "super_admin", "superadmin", "tenant", "master"}:
             raise ValueError("Invalid dashboard role")
         admin_doc = admins_collection.find_one(
             {"_id": ObjectId(admin_id)},
@@ -367,7 +443,7 @@ def _decode_dashboard_websocket_admin(token: str) -> Dict[str, str]:
             raise ValueError("Account is unavailable")
         return {
             "admin_id": admin_id,
-            "role": str(admin_doc.get("role") or role),
+            "role": str(admin_doc.get("role") or role).strip().lower(),
             "company_id": str(admin_doc.get("company_id") or ""),
         }
     except (jwt.PyJWTError, ValueError, TypeError, InvalidId) as exc:
@@ -430,9 +506,26 @@ def sync_session_status(session: dict, current_time: datetime = None) -> str:
                 if exp_dt.tzinfo is None:
                     exp_dt = exp_dt.replace(tzinfo=timezone.utc)
                 if current_time > exp_dt:
-                    status = "expired"
-                    if "_id" in session:
-                        interview_sessions_collection.update_one({"_id": session["_id"]}, {"$set": {"status": "expired"}})
+                    has_answers = False
+                    try:
+                        from app.db.mongo_db import answers_collection
+                        int_id = session.get("interview_id") or session.get("link_id")
+                        if int_id and answers_collection.count_documents({"interview_id": int_id}, limit=1) > 0:
+                            has_answers = True
+                    except Exception:
+                        pass
+
+                    if has_answers:
+                        status = "completed"
+                        if "_id" in session:
+                            interview_sessions_collection.update_one(
+                                {"_id": session["_id"]},
+                                {"$set": {"status": "completed", "completion_reason": "auto_completed_timeout"}}
+                            )
+                    else:
+                        status = "expired"
+                        if "_id" in session:
+                            interview_sessions_collection.update_one({"_id": session["_id"]}, {"$set": {"status": "expired"}})
                     session["status"] = status
             except Exception:
                 pass
@@ -466,9 +559,26 @@ def sync_session_status(session: dict, current_time: datetime = None) -> str:
                 duration_mins = int(session.get("interview_duration") or 30)
                 buffer_mins = max(120, duration_mins * 2)
                 if (current_time - time_ref).total_seconds() > (buffer_mins * 60):
-                    status = "expired"
-                    if "_id" in session:
-                        interview_sessions_collection.update_one({"_id": session["_id"]}, {"$set": {"status": "expired"}})
+                    has_answers = False
+                    try:
+                        from app.db.mongo_db import answers_collection
+                        int_id = session.get("interview_id") or session.get("link_id")
+                        if int_id and answers_collection.count_documents({"interview_id": int_id}, limit=1) > 0:
+                            has_answers = True
+                    except Exception:
+                        pass
+
+                    if has_answers:
+                        status = "completed"
+                        if "_id" in session:
+                            interview_sessions_collection.update_one(
+                                {"_id": session["_id"]},
+                                {"$set": {"status": "completed", "completion_reason": "auto_completed_timeout"}}
+                            )
+                    else:
+                        status = "expired"
+                        if "_id" in session:
+                            interview_sessions_collection.update_one({"_id": session["_id"]}, {"$set": {"status": "expired"}})
                     session["status"] = status
             except Exception:
                 pass
@@ -490,26 +600,56 @@ def get_or_create_candidate(name: str) -> str:
 
 
 def load_interview_from_db(interview_id: str) -> Optional[Dict[str, Any]]:
-    row = interviews_collection.find_one({"id": interview_id})
+    from app.db.mongo_db import interviews_collection, interview_sessions_collection
+    row = interviews_collection.find_one({"$or": [{"id": interview_id}, {"link_id": interview_id}]})
+    session_row = None
     if not row:
+        session_row = interview_sessions_collection.find_one({"$or": [{"link_id": interview_id}, {"interview_id": interview_id}]})
+        if session_row:
+            actual_id = session_row.get("interview_id")
+            if actual_id:
+                row = interviews_collection.find_one({"$or": [{"id": actual_id}, {"link_id": actual_id}]})
+    
+    if not row and not session_row:
         return None
 
+    target_doc = row or session_row or {}
     try:
-        loaded_questions = json.loads(row.get("questions", "[]"))
+        raw_q = target_doc.get("questions")
+        if isinstance(raw_q, list):
+            loaded_questions = raw_q
+        elif isinstance(raw_q, str):
+            loaded_questions = json.loads(raw_q)
+        else:
+            loaded_questions = []
     except Exception:
         loaded_questions = []
 
     interview = {
-        "id": interview_id,
-        "source": row.get("source"),
-        "profile_text": row.get("profile_text", ""),
+        "id": (row or {}).get("id") or interview_id,
+        "link_id": (session_row or {}).get("link_id") or target_doc.get("link_id") or interview_id,
+        "source": target_doc.get("source"),
+        "profile_text": target_doc.get("profile_text", "") or target_doc.get("resume_text", "") or target_doc.get("job_description", ""),
+        "job_description": target_doc.get("job_description", ""),
+        "resume_text": target_doc.get("resume_text", ""),
+        "ai_instructions": target_doc.get("ai_instructions", ""),
         "questions": loaded_questions,
         "answers": {},
-        "created_at": row.get("created_at"),
-        "coding_round": row.get("coding_round"),
-        "case_study_round": row.get("case_study_round"),
+        "created_at": target_doc.get("created_at"),
+        "coding_round": target_doc.get("coding_round"),
+        "case_study_round": target_doc.get("case_study_round"),
+        "interview_type": target_doc.get("interview_type", "Technical"),
+        "industry": target_doc.get("industry") or target_doc.get("industry_type") or "General",
+        "language": target_doc.get("language", "English"),
+        "case_study_count": target_doc.get("case_study_count", 3),
     }
     set_session(interview_id, interview)
+    actual_id = interview.get("id")
+    if actual_id and actual_id != interview_id:
+        set_session(actual_id, interview)
+    sess_link_id = interview.get("link_id")
+    if sess_link_id and sess_link_id != interview_id:
+        set_session(sess_link_id, interview)
     return interview
 
 
@@ -547,9 +687,13 @@ def persist_coding_round(interview_id: str, coding_round: Dict[str, Any]) -> Non
     if interview:
         interview["coding_round"] = coding_round
         set_session(interview_id, interview)
+        if interview.get("id"):
+            set_session(interview["id"], interview)
+        if interview.get("link_id"):
+            set_session(interview["link_id"], interview)
     try:
-        interviews_collection.update_one(
-            {"id": interview_id},
+        interviews_collection.update_many(
+            {"$or": [{"id": interview_id}, {"link_id": interview_id}]},
             {"$set": {"coding_round": coding_round}},
             upsert=False,
         )
@@ -557,8 +701,8 @@ def persist_coding_round(interview_id: str, coding_round: Dict[str, Any]) -> Non
         print(f"[persist_coding_round] Error updating interviews_collection: {e}")
 
     try:
-        interview_sessions_collection.update_one(
-            {"$or": [{"link_id": interview_id}, {"id": interview_id}, {"candidate_id": interview_id}]},
+        interview_sessions_collection.update_many(
+            {"$or": [{"link_id": interview_id}, {"interview_id": interview_id}, {"id": interview_id}, {"candidate_id": interview_id}]},
             {"$set": {"coding_round": coding_round}},
             upsert=False,
         )

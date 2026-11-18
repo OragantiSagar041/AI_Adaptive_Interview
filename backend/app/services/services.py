@@ -2856,22 +2856,6 @@ def queue_or_send_interview_email(session_doc: Dict[str, Any], link_url: str, sk
     send_at = compute_invite_send_at(scheduled_start)
     now = datetime.now(timezone.utc)
 
-    if send_at and send_at > now:
-        if not skip_db_update:
-            interview_sessions_collection.update_one(
-                {"_id": session_doc["_id"]},
-                {"$set": {
-                    "invite_email_status": "pending",
-                    "invite_email_send_at": send_at.isoformat(),
-                    "invite_email_sent_at": None
-                }}
-            )
-        return {
-            "email_sent": False,
-            "email_scheduled": True,
-            "email_send_at": send_at.isoformat()
-        }
-
     # Check if Celery worker is explicitly enabled; otherwise use reliable native background thread
     use_celery = os.getenv("USE_CELERY", "false").lower() in ("true", "1", "yes")
     email_sent = False

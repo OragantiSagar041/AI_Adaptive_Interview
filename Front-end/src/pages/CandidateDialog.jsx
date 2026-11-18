@@ -1,3 +1,4 @@
+import { API_BASE_URL as fallbackBaseUrl } from '../apiConfig'
 import React, { useState, useEffect } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
@@ -14,6 +15,7 @@ import {
 } from "lucide-react"
 import { jsPDF } from 'jspdf'
 import { detectNonEnglishText, translateText, translateQAPairs } from '../utils/translation'
+import { formatFeedbackForRecruiter } from '../utils/adminFormatters'
 
 // ── Score Ring ──────────────────────────────────────────────────────────────
 function ScoreRing({ value, size = 140, strokeWidth = 12, label, tone }) {
@@ -78,6 +80,8 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
   const [error, setError] = useState(null)
   const [showResumeModal, setShowResumeModal] = useState(false)
   const [showRecordingModal, setShowRecordingModal] = useState(false)
+  const [camVideoError, setCamVideoError] = useState(false)
+  const [screenVideoError, setScreenVideoError] = useState(false)
   const [showTranscriptModal, setShowTranscriptModal] = useState(false)
 
   // New States
@@ -149,6 +153,8 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
     setDetail(null)
     setAtsData(null)
     setError(null)
+    setCamVideoError(false)
+    setScreenVideoError(false)
     setTranslations({})
     setTranslatingKeys({})
 
@@ -324,7 +330,11 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
   const email = c.candidate_email || c.email || candidate.candidate_email || candidate.email || "No email provided"
   const phone = c.candidate_phone || c.phone || candidate.candidate_phone || "N/A"
   const aiScore = Number(c.avg_score || c.score || candidate.score || 0)
-  const isQualified = (c.decision || candidate.decision) === 'selected'
+  const decisionVal = String(c.decision || candidate.decision || '').toLowerCase().trim()
+  const isSelected = decisionVal === 'selected' || decisionVal === 'hired' || c.status === 'qualified' || candidate.status === 'qualified'
+  const isRejected = decisionVal === 'rejected'
+  const isUnderReview = !isSelected && !isRejected
+  const isQualified = isSelected
   const status = c.status || candidate.status || ''
   // Resume/profile text from any field available
   const resumeText = c.profile_text || c.resume_text || ''
@@ -343,17 +353,38 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
     { label: "Application Received", done: true },
     { label: "AI Interview Assigned", done: true },
     { label: "Interview Completed", done: status === 'completed' || !!c.answers?.length },
-    { label: isQualified ? "Selected ✓" : "Rejected ✗", done: !!(c.decision || candidate.decision), bad: !isQualified }
+    { 
+      label: isSelected ? "Selected ✓" : isRejected ? "Rejected ✗" : "Under Review", 
+      done: isSelected || isRejected, 
+      bad: isRejected 
+    }
   ]
 
   const formatMediaUrl = (url) => {
-    if (!url) return null
-    if (url.startsWith('http')) return url
-    return `${API_BASE_URL}/${url.replace(/^\/+/, '')}`
+    if (!url || typeof url !== 'string') return null
+    const clean = url.trim()
+    if (!clean || clean === 'None' || clean === 'null' || clean === 'undefined') return null
+    if (clean.startsWith('cloudinary-authenticated://')) {
+      return null
+    }
+    if (clean.startsWith('http://') || clean.startsWith('https://')) {
+      return clean
+    }
+    const fname = clean.split(/[\\/]/).pop()
+    if (!fname || fname === 'None' || fname === 'null' || fname === 'undefined') return null
+    const isVideo = /\.(webm|mp4|mov|mkv|ogg)$/i.test(fname)
+    if (!isVideo && !clean.includes('recordings/') && !clean.includes('uploads/')) {
+      return null
+    }
+    const cleanBase = (API_BASE_URL || fallbackBaseUrl || '').replace(/\/+$/, '')
+    const apiPrefix = cleanBase.endsWith('/api') ? cleanBase : (cleanBase ? `${cleanBase}/api` : '/api')
+    return `${apiPrefix}/admin/recordings/stream/${fname}`
   }
 
-  const recordingUrl = formatMediaUrl(c.recording_url)
-  const screenRecordingUrl = formatMediaUrl(c.screen_recording_url)
+  const rawCam = c.recording_url || candidate?.recording_url || c.recording_path || candidate?.recording_path
+  const rawScreen = c.screen_recording_url || candidate?.screen_recording_url || c.screen_recording_path || candidate?.screen_recording_path
+  const recordingUrl = formatMediaUrl(rawCam)
+  const screenRecordingUrl = formatMediaUrl(rawScreen)
 
   const handleDecision = async (newDecision) => {
     if (!candidate) return;
@@ -384,7 +415,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
     }
 
     try {
-      await dispatch(handleUpdateDecision({ linkId, decision: newDecision, talent_pool_status: talentPoolStatus })).unwrap()
+      await dispatch(handleUpdateDecision({ linkId, decision: newDecision, ...(talentPoolStatus ? { talent_pool_status: talentPoolStatus } : {}) })).unwrap()
       Swal.fire('Success', `Candidate marked as ${newDecision.toUpperCase()}`, 'success')
       onOpenChange(false)
       const basePath = window.location.pathname.startsWith('/superadmin') ? '/superadmin' : '/admin'
@@ -455,6 +486,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
       .replace(/\u2022/g, '*')
       .replace(/[\u0080-\uFFFF]/g, '')
   }
+
   const handleDownloadTranscript = () => {
     if (!c.answers || c.answers.length === 0) return
 
@@ -473,11 +505,11 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
 
     doc.setFontSize(16)
     doc.setFont('helvetica', 'bold')
-    doc.text(`Interview Q&A: ${c.candidate_name || 'Unknown Candidate'}`, margin, y)
+    doc.text(`Interview Q&A: ${cleanForPdf(c.candidate_name) || 'Unknown Candidate'}`, margin, y)
     y += 10
     doc.setFontSize(11)
     doc.setFont('helvetica', 'normal')
-    doc.text(`Status: ${c.status || 'Completed'}`, margin, y)
+    doc.text(`Status: ${cleanForPdf(c.status) || 'Completed'}`, margin, y)
     y += 6
     doc.text(`Total Score: ${c.score || c.avg_score || 0}/100`, margin, y)
     y += 10
@@ -486,7 +518,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
     y += 10
 
     c.answers.forEach((a, index) => {
-      const questionLines = doc.splitTextToSize(`Q${index + 1}: ${a.question_text || 'No question recorded'}`, pageWidth - 2 * margin)
+      const questionLines = doc.splitTextToSize(cleanForPdf(`Q${index + 1}: ${a.question_text || 'No question recorded'}`), pageWidth - 2 * margin)
       checkPageBreak(questionLines.length * 5 + 30)
       doc.setFont('helvetica', 'bold')
       doc.text(questionLines, margin, y)
@@ -513,7 +545,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
       doc.text("Candidate's Answer:", margin, y)
       y += 5
       checkPageBreak(5)
-      const answerLines = doc.splitTextToSize(a.answer_text || 'No answer provided', pageWidth - 2 * margin)
+      const answerLines = doc.splitTextToSize(cleanForPdf(a.answer_text || 'No answer provided'), pageWidth - 2 * margin)
       answerLines.forEach((line) => {
         checkPageBreak(5)
         doc.text(line, margin, y)
@@ -526,7 +558,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
         doc.text('AI Feedback:', margin, y)
         y += 5
         doc.setFont('helvetica', 'normal')
-        const feedbackLines = doc.splitTextToSize(a.ai_feedback, pageWidth - 2 * margin)
+        const feedbackLines = doc.splitTextToSize(cleanForPdf(formatFeedbackForRecruiter(a.ai_feedback)), pageWidth - 2 * margin)
         feedbackLines.forEach((line) => {
           checkPageBreak(5)
           doc.text(line, margin, y)
@@ -541,7 +573,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
       y += 10
     })
 
-    doc.save(`${c.candidate_name?.replace(/\s+/g, '_') || 'Candidate'}_interview_qa.pdf`)
+    doc.save(`${cleanForPdf(c.candidate_name)?.replace(/\s+/g, '_') || 'Candidate'}_interview_qa.pdf`)
   }
 
 
@@ -664,11 +696,14 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                 <h2 className="text-2xl font-black text-foreground truncate">{name}</h2>
                 <p className="text-sm font-medium text-muted-foreground mt-0.5">{jobTitle}</p>
                 <div className="flex flex-wrap items-center gap-2 mt-3">
-                  <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${isQualified ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'}`}>
-                    {isQualified ? 'Hire' : 'Rejected'}
-                  </span>
-                  <span className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary px-2.5 py-1 text-xs font-semibold text-foreground">
-                    {isQualified ? 'Qualified' : 'Rejected'}
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${
+                    isSelected 
+                      ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30' 
+                      : isRejected 
+                      ? 'bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30' 
+                      : 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+                  }`}>
+                    {isSelected ? 'Selected' : isRejected ? 'Rejected' : 'Under Review'}
                   </span>
                   <span className="text-xs font-medium text-muted-foreground">ID: {candidate.link_id || candidate.id}</span>
                   {(c.decision_by_name || c.last_action_by_name) && (
@@ -762,11 +797,17 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                 </h3>
                 <div className="rounded-xl border border-border bg-secondary p-4">
                   <div className="flex items-center gap-2 mb-3">
-                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${isQualified ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'}`}>
-                      {c.overall_recommendation || (isQualified ? 'Hire' : 'Reject')}
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${
+                      isSelected 
+                        ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30' 
+                        : isRejected 
+                        ? 'bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30' 
+                        : 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+                    }`}>
+                      {c.overall_recommendation || (isSelected ? 'Hire' : isRejected ? 'Reject' : 'Under Review')}
                     </span>
                     <span className="text-sm font-medium text-foreground">
-                      {isQualified ? 'Ready for Technical Round / Hiring' : 'Does not meet required threshold'}
+                      {isSelected ? 'Ready for Technical Round / Hiring' : isRejected ? 'Does not meet required threshold' : 'Awaiting recruiter decision'}
                     </span>
                   </div>
                   {c.strengths_summary && (
@@ -790,26 +831,20 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
               {/* Integrity */}
               {c.integrity && (() => {
                 const violationsList = c.violations || c.alerts || []
-                const tabTypes = ['tab_switch', 'screen_casting', 'screen_share_detected', 'screen_recording', 'screenshare_stopped', 'multiple_displays', 'multi_monitor', 'fullscreen_exit', 'window_blur']
+                const tabTypes = ['tab_switch', 'screen_casting', 'screen_share_detected', 'screen_recording', 'screenshare_stopped', 'multiple_displays', 'multi_monitor', 'fullscreen_exit']
                 const noiseTypes = ['noise_alert', 'background_noise', 'noise']
                 
-                let tabSwitches = Number(c.integrity.total_tab_switches || 0)
-                let faceAlerts = Number(c.integrity.total_face_alerts || 0)
-                let noiseAlerts = Number(c.integrity.total_noise_alerts || 0)
-                
-                if (violationsList.length > 0) {
-                  const screenCount = violationsList.filter(v => tabTypes.includes(v.type || v.violation_type)).length
-                  const noiseCount = violationsList.filter(v => noiseTypes.includes(v.type || v.violation_type)).length
-                  const trueFaceCount = violationsList.filter(v => !tabTypes.includes(v.type || v.violation_type) && !noiseTypes.includes(v.type || v.violation_type)).length
+                const tabSwitches = c.integrity.total_tab_switches !== undefined
+                  ? Number(c.integrity.total_tab_switches || 0)
+                  : violationsList.filter(v => tabTypes.includes(v.type || v.violation_type)).length
                   
-                  if (screenCount > 0) {
-                    tabSwitches = Math.max(tabSwitches, screenCount)
-                    faceAlerts = trueFaceCount
-                  }
-                  if (noiseCount > 0) {
-                    noiseAlerts = Math.max(noiseAlerts, noiseCount)
-                  }
-                }
+                const faceAlerts = c.integrity.total_face_alerts !== undefined
+                  ? Number(c.integrity.total_face_alerts || 0)
+                  : violationsList.filter(v => !tabTypes.includes(v.type || v.violation_type) && !noiseTypes.includes(v.type || v.violation_type) && (v.type || v.violation_type) !== 'window_blur').length
+                  
+                const noiseAlerts = c.integrity.total_noise_alerts !== undefined
+                  ? Number(c.integrity.total_noise_alerts || 0)
+                  : violationsList.filter(v => noiseTypes.includes(v.type || v.violation_type)).length
 
                 return (
                   <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
@@ -820,7 +855,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                       <StatCard label="Tab Switches" value={tabSwitches} />
                       <StatCard label="Face Alerts" value={faceAlerts} />
                       <StatCard label="Noise Alerts" value={noiseAlerts} />
-                      <StatCard label="Total Duration" value={`${c.integrity.total_time_minutes} min`} />
+                      <StatCard label="Total Duration" value={`${c.integrity.total_time_minutes ?? 0} min`} />
                     </div>
                   </section>
                 )
@@ -929,13 +964,35 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                           <div className="text-xs text-slate-400 font-medium">Interview video feed</div>
                         </div>
                       </div>
-                      {recordingUrl ? (
-                        <video controls className="w-full aspect-video object-contain rounded-lg border border-slate-200 bg-black max-h-48" src={recordingUrl}>
-                          Your browser does not support video.
-                        </video>
+                      {recordingUrl && !camVideoError ? (
+                        <div className="flex flex-col gap-2">
+                          <video 
+                            controls 
+                            preload="metadata" 
+                            playsInline 
+                            onError={() => setCamVideoError(true)}
+                            className="w-full aspect-video object-contain rounded-lg border border-slate-200 bg-black max-h-48" 
+                            src={recordingUrl}
+                          >
+                            <source src={recordingUrl} type="video/mp4" />
+                            <source src={recordingUrl} type="video/webm" />
+                            Your browser does not support video playback.
+                          </video>
+                          <div className="flex justify-end">
+                            <a href={recordingUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold text-indigo-600 hover:underline">
+                              Open video in new tab ↗
+                            </a>
+                          </div>
+                        </div>
                       ) : (
-                        <div className="h-28 flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
-                          No camera recording available
+                        <div className="h-28 flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-slate-200 p-2 text-center text-xs font-medium text-slate-400">
+                          <p>{camVideoError ? "Camera playback unavailable." : "No camera recording available"}</p>
+                          {recordingUrl && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <a href={recordingUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-bold text-indigo-600 hover:underline">Open direct link ↗</a>
+                              <button type="button" onClick={() => setCamVideoError(false)} className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">Retry</button>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -949,13 +1006,35 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                           <div className="text-xs text-slate-400 font-medium">Screen share capture</div>
                         </div>
                       </div>
-                      {screenRecordingUrl ? (
-                        <video controls className="w-full aspect-video object-contain rounded-lg border border-slate-200 bg-black max-h-48" src={screenRecordingUrl}>
-                          Your browser does not support video.
-                        </video>
+                      {screenRecordingUrl && !screenVideoError ? (
+                        <div className="flex flex-col gap-2">
+                          <video 
+                            controls 
+                            preload="metadata" 
+                            playsInline 
+                            onError={() => setScreenVideoError(true)}
+                            className="w-full aspect-video object-contain rounded-lg border border-slate-200 bg-black max-h-48" 
+                            src={screenRecordingUrl}
+                          >
+                            <source src={screenRecordingUrl} type="video/mp4" />
+                            <source src={screenRecordingUrl} type="video/webm" />
+                            Your browser does not support video playback.
+                          </video>
+                          <div className="flex justify-end">
+                            <a href={screenRecordingUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold text-emerald-600 hover:underline">
+                              Open video in new tab ↗
+                            </a>
+                          </div>
+                        </div>
                       ) : (
-                        <div className="h-28 flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
-                          No screen recording available
+                        <div className="h-28 flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-slate-200 p-2 text-center text-xs font-medium text-slate-400">
+                          <p>{screenVideoError ? "Screen playback unavailable." : "No screen recording available"}</p>
+                          {screenRecordingUrl && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <a href={screenRecordingUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-bold text-emerald-600 hover:underline">Open direct link ↗</a>
+                              <button type="button" onClick={() => setScreenVideoError(false)} className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">Retry</button>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1064,7 +1143,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                           )
                         })()}
                         {a.ai_feedback && (
-                          <p className="mt-2 text-xs text-slate-500 italic border-t border-slate-200 pt-2">{a.ai_feedback}</p>
+                          <p className="mt-2 text-xs text-slate-500 italic border-t border-slate-200 pt-2">{formatFeedbackForRecruiter(a.ai_feedback)}</p>
                         )}
                       </div>
                     ))}
