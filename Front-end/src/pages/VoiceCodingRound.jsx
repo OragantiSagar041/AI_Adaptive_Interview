@@ -639,29 +639,29 @@ export default function VoiceCodingRound({
       ? "Thank you for the interview."
       : "We are saving your interview, please wait.";
 
-    // Speak the message and submit the code concurrently, wait for both
-    const speakPromise = new Promise(resolve => {
-      aiSay(message, resolve)
-    })
+    // Speak asynchronously without blocking transition
+    speak(message).catch(() => {})
 
-    const fetchPromise = candidateFetch(`${API_BASE_URL}/coding-round/submit`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ interview_id: interviewId, code, language: selectedLang })
-    }).then(res => {
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    })
+    // Send code to backend with a 6-second timeout so it never hangs
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 6000)
 
     try {
-      await Promise.all([speakPromise, fetchPromise])
-      setTimeout(() => onComplete?.(), 500)
+      await candidateFetch(`${API_BASE_URL}/coding-round/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ interview_id: interviewId, code, language: selectedLang }),
+        signal: controller.signal
+      })
     } catch (err) {
-      console.error("Failed to submit coding round:", err)
-      alert("Failed to save your code. Please check your connection and try submitting again.")
-      setIsSubmitting(false)
-      submittingRef.current = false
+      console.warn("Non-fatal coding round submit error:", err)
+    } finally {
+      clearTimeout(timeoutId)
     }
-  }, [stopListening, interviewId, code, selectedLang, onComplete, aiSay])
+
+    // Immediately trigger onComplete so parent VoiceInterviewPage transitions to 'submitting' round!
+    onComplete?.()
+  }, [stopListening, interviewId, code, selectedLang, onComplete, speak])
 
   const handleSubmitRef = useRef(handleSubmit)
   useEffect(() => {

@@ -1481,6 +1481,66 @@ def _run_coding_feedback(req: CodingRoundCheckpointRequest, feedback_mode: str) 
             "cached": True,
         }
 
+    if feedback_mode == "final":
+        now_iso = datetime.now(timezone.utc).isoformat()
+        if latest_code.strip():
+            try:
+                from app.services.services import run_code_against_tests
+                run_result = run_code_against_tests(latest_code, coding_round["task"], req.language or "python")
+                coding_round["latest_run"] = {
+                    "at": now_iso,
+                    **run_result,
+                }
+            except Exception as e:
+                print(f"Auto-eval execution failed: {e}")
+
+        coding_round["latest_code"] = latest_code
+        coding_round["latest_explanation"] = latest_explanation
+        coding_round["language"] = req.language
+        coding_round["status"] = "completed"
+        coding_round["completed_at"] = now_iso
+        coding_round["updated_at"] = now_iso
+        persist_coding_round(req.interview_id, coding_round)
+
+        # Offload slow LLM evaluation to a background daemon thread so candidate submission returns instantly
+        def _async_eval():
+            try:
+                fb = run_coding_round(
+                    task=coding_round["task"],
+                    answer_summary=coding_round.get("answer_summary", ""),
+                    code=latest_code,
+                    explanation=latest_explanation,
+                    language=req.language,
+                    prior_feedback=coding_round.get("latest_feedback", ""),
+                    feedback_mode="final",
+                )
+                now_ts = datetime.now(timezone.utc).isoformat()
+                coding_round["latest_feedback"] = fb
+                coding_round["final_evaluation"] = fb
+                coding_round.setdefault("checkpoints", []).append({
+                    "at": now_ts,
+                    "language": req.language,
+                    "code_length": len(latest_code),
+                    "explanation_length": len(latest_explanation),
+                    "feedback": fb,
+                    "mode": "final",
+                })
+                persist_coding_round(req.interview_id, coding_round)
+            except Exception as exc:
+                print(f"Background final coding evaluation error: {exc}")
+
+        threading.Thread(target=_async_eval, daemon=True).start()
+
+        return {
+            "interview_id": req.interview_id,
+            "coding_round": coding_round,
+            "feedback": "Code submitted successfully.",
+            "status": "completed",
+            "ai_feedback_count": coding_round.get("ai_feedback_count", 0),
+            "ai_feedback_remaining": 0,
+            "cached": False,
+        }
+
     feedback = run_coding_round(
         task=coding_round["task"],
         answer_summary=coding_round.get("answer_summary", ""),
