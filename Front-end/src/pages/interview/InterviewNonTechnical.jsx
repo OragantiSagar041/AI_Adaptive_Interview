@@ -255,8 +255,7 @@ export const InterviewNonTechnical = () => {
       />
     )
   }
-  // Show upload progress / Thank-You screen FIRST — takes priority so the
-  // upload spinner remains visible even after isCompleted is set to true.
+  // Render Video uploading progress & "All Set!" screen
   if (showAllSet || uploadingText) {
     return (
       <div className="container">
@@ -311,7 +310,6 @@ export const InterviewNonTechnical = () => {
       </div>
     )
   }
-
   if (isCompleted) {
     return (
       <div className="flex justify-center items-center h-screen flex-col p-6 text-center">
