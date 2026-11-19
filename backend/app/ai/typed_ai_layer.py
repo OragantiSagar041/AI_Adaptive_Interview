@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import re
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from app.ai.ai_client import chat_completion
 from app.ai.ai_schemas import AnswerScore, FollowupQuestion, InterviewSummary, ResumeAnalysis
@@ -58,6 +58,165 @@ _FOLLOWUP_SYSTEM = (
 def _truncate(text: str, limit: int) -> str:
     text = (text or "").strip()
     return text[:limit] if len(text) > limit else text
+
+
+def sanitize_verbal_question_text(text: str) -> str:
+    """
+    Ensure technical questions are framed for verbal/spoken answers.
+    Converts prompts like 'Write a python function to...' into verbal walk-through questions.
+    """
+    if not text:
+        return text
+    cleaned = text.strip()
+
+    # Replace "Write a SQL query to ..." -> "How would you structure a SQL query to ..."
+    cleaned = re.sub(
+        r'(?i)^(?:can you\s+|please\s+)?write (?:a |an )?(sql query|query)\s+(?:to|that|for)\s+',
+        r'How would you structure a \1 to ',
+        cleaned
+    )
+    # Replace "Write a [python/java/...] function/method/script/program/algorithm to ..." -> "How would you approach designing a \1 to ..."
+    cleaned = re.sub(
+        r'(?i)^(?:can you\s+|please\s+)?write (?:a |an )?((?:python |java |javascript |c\+\+ |go |sql )?(?:function|method|script|program|algorithm|code snippet|query))\s+(?:to|that|for)\s+',
+        r'How would you approach designing a \1 to ',
+        cleaned
+    )
+    # Replace "Write code to ..." -> "Walk me through how you would structure code to "
+    cleaned = re.sub(
+        r'(?i)^(?:can you\s+|please\s+)?write (?:some |the )?code\s+(?:to|that|for)\s+',
+        r'Walk me through how you would structure code to ',
+        cleaned
+    )
+    # Replace any leftover "write a query/function to" inside sentence
+    cleaned = re.sub(
+        r'(?i)\bwrite (?:a |an )?(sql query|query)\s+(?:to|that|for)\s+',
+        r'structure a \1 to ',
+        cleaned
+    )
+    cleaned = re.sub(
+        r'(?i)\bwrite (?:a |an )?((?:python |java |javascript |c\+\+ |go )?(?:function|script|method))\s+(?:to|that|for)\s+',
+        r'design a \1 to ',
+        cleaned
+    )
+    # Replace "code a solution..." or "implement a function to..."
+    cleaned = re.sub(
+        r'(?i)^(?:can you\s+|please\s+)?(?:implement|code) (?:a |an )?((?:python |java |javascript )?(?:function|method|solution|query))\s+(?:to|that|for)\s+',
+        r'How would you approach implementing a \1 to ',
+        cleaned
+    )
+    if cleaned != text.strip() and not re.search(r'\b(walk me through|explain|describe)\b', cleaned, re.IGNORECASE):
+        if cleaned.endswith('.'):
+            cleaned = cleaned[:-1] + '. Walk me through your approach verbally.'
+        elif cleaned.endswith('?'):
+            cleaned = cleaned[:-1] + ', and walk me through your approach?'
+    return cleaned
+
+
+# ── Phonetic & Acoustic Normalizer for Spoken Tech Interviews ─────────────
+
+_PHONETIC_REPLACEMENTS: List[Tuple[re.Pattern, str]] = [
+    # Clustering & ML
+    (re.compile(r'\b(?:the\s+)?elbo\s+method\b', re.IGNORECASE), 'elbow method'),
+    (re.compile(r'\belbo\s+(curve|graph|plot|point|technique|rule)\b', re.IGNORECASE), r'elbow \1'),
+    (re.compile(r'\b(?:sihlhout|silhoute|silhoutte|silhoutee|silhouete|silhuette|silhuet|silhout)\s*(?:method|score|analysis|technique)?\b', re.IGNORECASE), 'silhouette method'),
+    (re.compile(r'\b(?:k\s*means|k\s*mean)\b', re.IGNORECASE), 'K-Means'),
+    (re.compile(r'\b(?:k\s*n\s*n)\b', re.IGNORECASE), 'KNN'),
+    (re.compile(r'\b(?:s\s*v\s*m)\b', re.IGNORECASE), 'SVM'),
+    (re.compile(r'\b(?:p\s*c\s*a)\b', re.IGNORECASE), 'PCA'),
+    (re.compile(r'\b(?:x\s*g\s*boost|xg\s*boost)\b', re.IGNORECASE), 'XGBoost'),
+    (re.compile(r'\b(?:circuit\s+learn|scikit\s+learn|sci\s*kit\s*learn)\b', re.IGNORECASE), 'Scikit-Learn'),
+    (re.compile(r'\b(?:pie\s*torch|py\s*torch)\b', re.IGNORECASE), 'PyTorch'),
+    (re.compile(r'\b(?:tensor\s*flow)\b', re.IGNORECASE), 'TensorFlow'),
+    (re.compile(r'\b(?:gradient\s+descent|stochastic\s+gradient\s+descent)\b', re.IGNORECASE), 'Gradient Descent'),
+    (re.compile(r'\b(?:over\s*fitting)\b', re.IGNORECASE), 'overfitting'),
+    (re.compile(r'\b(?:under\s*fitting)\b', re.IGNORECASE), 'underfitting'),
+    (re.compile(r'\b(?:hyper\s*parameter|hyper\s*parameters)\b', re.IGNORECASE), 'hyperparameter'),
+
+    # Databases & Backend
+    (re.compile(r'\b(?:sequel|cquel)\b', re.IGNORECASE), 'SQL'),
+    (re.compile(r'\b(?:no\s*sequel|no\s*sql)\b', re.IGNORECASE), 'NoSQL'),
+    (re.compile(r'\b(?:postgres\s*sequel|postgre\s*sql|postgres)\b', re.IGNORECASE), 'PostgreSQL'),
+    (re.compile(r'\b(?:mongo\s*db|mongo)\b', re.IGNORECASE), 'MongoDB'),
+    (re.compile(r'\b(?:reddis|red-is)\b', re.IGNORECASE), 'Redis'),
+    (re.compile(r'\b(?:elastic\s*search)\b', re.IGNORECASE), 'Elasticsearch'),
+
+    # Web & DevOps
+    (re.compile(r'\b(?:jason|j\s*son)\b', re.IGNORECASE), 'JSON'),
+    (re.compile(r'\b(?:rest\s*full|rest\s*api|rest\s*apis)\b', re.IGNORECASE), 'REST API'),
+    (re.compile(r'\b(?:graph\s*q\s*l|graph\s*ql)\b', re.IGNORECASE), 'GraphQL'),
+    (re.compile(r'\b(?:kubernets|k\s*8\s*s|k8s)\b', re.IGNORECASE), 'Kubernetes'),
+    (re.compile(r'\b(?:dockers)\b', re.IGNORECASE), 'Docker'),
+    (re.compile(r'\b(?:git\s*hub)\b', re.IGNORECASE), 'GitHub'),
+    (re.compile(r'\b(?:git\s*lab)\b', re.IGNORECASE), 'GitLab'),
+    (re.compile(r'\b(?:c\s*i\s*c\s*d|ci\s*cd)\b', re.IGNORECASE), 'CI/CD'),
+
+    # Programming & Architecture
+    (re.compile(r'\b(?:a\s*sync|a-sync)\b', re.IGNORECASE), 'async'),
+    (re.compile(r'\b(?:a\s*sync\s*await|async\s*a\s*wait)\b', re.IGNORECASE), 'async/await'),
+    (re.compile(r'\b(?:oops|oops\s*concepts?)\b', re.IGNORECASE), 'OOP'),
+    (re.compile(r'\b(?:micro\s*services?|micro\s*service)\b', re.IGNORECASE), 'microservices'),
+    (re.compile(r'\b(?:multi\s*threading|multi\s*threaded)\b', re.IGNORECASE), 'multithreading'),
+    (re.compile(r'\b(?:data\s*base|data\s*bases)\b', re.IGNORECASE), 'database'),
+]
+
+
+def normalize_stt_technical_terms(text: str) -> str:
+    """
+    Clean and normalize common phonetic Speech-to-Text misspellings of tech terms.
+    Preserves original meaning while fixing acoustic recognition errors.
+    """
+    if not text or not isinstance(text, str):
+        return text or ""
+
+    normalized = text
+    for pattern, replacement in _PHONETIC_REPLACEMENTS:
+        normalized = pattern.sub(replacement, normalized)
+
+    normalized = re.sub(r'\s+', ' ', normalized).strip()
+    return normalized
+
+
+def sanitize_spoken_interview_question(q_text: str) -> str:
+    """
+    Ensures interview questions are verbally/conversationally answerable in a spoken interview
+    where no code editor or code writing box is available.
+    Transforms 'Write code to...', 'Provide code examples', etc. into oral explanations.
+    """
+    if not q_text or not isinstance(q_text, str):
+        return q_text or ""
+    
+    cleaned = q_text.strip()
+
+    # 1. Trailing or embedded "Provide code examples for both." / "Provide code examples." / "Include code examples."
+    cleaned = re.sub(
+        r'(?i)(?:please\s+)?(?:provide|include|give)\s+(?:working\s+)?code\s+(?:examples?|snippets?)(?:\s+(?:for|to|of)\s+[^.?!]+)?[.?!]?',
+        'Explain the key technical differences and how each is implemented in practice.',
+        cleaned
+    )
+    cleaned = re.sub(r'(?i)include\s+code\s+for\s+([^.?!]+)[.?!]?', r'Explain your step-by-step approach for \1.', cleaned)
+    cleaned = re.sub(r'(?i)provide\s+code\s+for\s+([^.?!]+)[.?!]?', r'Walk through how you would implement \1.', cleaned)
+
+    # 2. "Write code to combine them..." -> "Explain how you would combine them..."
+    cleaned = re.sub(r'(?i)\bwrite\s+code\s+to\s+', 'Explain how you would ', cleaned)
+    cleaned = re.sub(r'(?i)\bwrite\s+code\s+that\s+', 'Explain how you would design a solution that ', cleaned)
+    cleaned = re.sub(r'(?i)\bwrite\s+code\s+for\s+', 'Walk me through your implementation logic for ', cleaned)
+    cleaned = re.sub(r'(?i)\bwrite\s+(?:a|an)\s+(?:python\s+)?(?:function|script|method|program|pipeline|routine)\s+(?:that|to)\s+', 'Walk me through how you would design and implement a solution that ', cleaned)
+    cleaned = re.sub(r'(?i)\bwrite\s+(?:a|an)\s+(?:sql\s+)?query\s+(?:that|to)\s+', 'Explain how you would structure the SQL query and logic to ', cleaned)
+    cleaned = re.sub(r'(?i)\bwrite\s+(?:a\s+)?unit\s+test(?:\s+\(using\s+pytest\))?\s+for\s+', 'Explain how you would structure unit tests (e.g. using pytest) for ', cleaned)
+    cleaned = re.sub(r'(?i)\bwrite\s+(?:a\s+)?performant\s+python\s+snippet(?:\s+\([^)]+\))?\s+that\s+', 'Walk through how you would architect a performant Python solution that ', cleaned)
+    cleaned = re.sub(r'(?i)\bsketch\s+(?:the\s+)?(?:fastapi\s+)?route\s+implementation,\s+including\s+', 'Walk me through how you would architect the FastAPI route implementation, including ', cleaned)
+    cleaned = re.sub(r'(?i)\bsketch\s+code\s+(?:for|to)\s+', 'Explain your approach and architecture to ', cleaned)
+
+    # 3. Clean up non-printable control characters, escaped hex artifacts like \x7f, and bullet artifacts
+    cleaned = re.sub(r'\\x[0-9a-fA-F]{2}', '', cleaned)
+    cleaned = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\uf000-\uf8ff]', '', cleaned)
+    cleaned = re.sub(r"'\s+([^']+?)\s*'", r"'\1'", cleaned)
+    cleaned = re.sub(r'"\s+([^"]+?)\s*"', r'"\1"', cleaned)
+
+    # 4. Clean up double spaces or awkward repeated punctuation
+    cleaned = re.sub(r'\s{2,}', ' ', cleaned)
+    cleaned = re.sub(r'\.\s*\.', '.', cleaned)
+    return cleaned.strip()
 
 
 def _extract_json_robust(text: str) -> Optional[Dict]:
@@ -307,6 +466,7 @@ def generate_followup(
     current_q_id: int,
     followup_streak: int,
     language: str = "English",
+    ai_instructions: str = "",
 ) -> dict:
     """
     Generate a dynamic follow-up question.
@@ -316,8 +476,10 @@ def generate_followup(
     resume_short = _truncate(resume_context, 500)
     jd_short = _truncate(jd_text, 500)
 
+    inst_block = f"\nCustom Interviewer Instructions/Rules to Strictly Follow:\n{ai_instructions}\n" if ai_instructions else ""
+
     if followup_streak < 3:
-        user_msg = f"""Generate ONE follow-up interview question in {language} based on this answer.
+        user_msg = f"""Generate ONE follow-up interview question in {language} based on this answer.{inst_block}
 Candidate's Last Answer: "{answer_short}"
 Resume Context: {resume_short}
 
@@ -328,7 +490,7 @@ Rules:
 
 Return JSON: {{"question": "...", "difficulty": "Medium", "type": "Follow-up", "category": "Deep Dive"}}"""
     else:
-        user_msg = f"""Change topic. Generate ONE new interview question in {language} from this JD.
+        user_msg = f"""Change topic. Generate ONE new interview question in {language} from this JD.{inst_block}
 Job Description: {jd_short}
 
 Rules: Ask a role-specific question. Under 2 sentences.
@@ -347,10 +509,14 @@ Return JSON: {{"question": "...", "difficulty": "Medium", "type": "JD-Based", "c
         question=random.choice(OFFLINE_FALLBACKS.get(language, OFFLINE_FALLBACKS["English"])),
     )
 
+    system_prompt = _FOLLOWUP_SYSTEM
+    if ai_instructions:
+        system_prompt += f"\nCRITICAL INTERVIEWER PERSONA AND BEHAVIORAL RULES:\n{ai_instructions}"
+
     try:
         raw = chat_completion(
             messages=[
-                {"role": "system", "content": _FOLLOWUP_SYSTEM},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_msg},
             ],
             model="openai/gpt-4o-mini",
@@ -359,11 +525,17 @@ Return JSON: {{"question": "...", "difficulty": "Medium", "type": "JD-Based", "c
         )
         result = _parse_with_schema(raw, FollowupQuestion, fallback)
         result.id = current_q_id + 1
-        return result.to_dict()
+        res_dict = result.to_dict()
+        if res_dict.get("question"):
+            res_dict["question"] = sanitize_verbal_question_text(res_dict["question"])
+        return res_dict
     except Exception as e:
         print(f"[typed_ai_layer] generate_followup error: {e}")
         fallback.id = current_q_id + 1
-        return fallback.to_dict()
+        fb_dict = fallback.to_dict()
+        if fb_dict.get("question"):
+            fb_dict["question"] = sanitize_verbal_question_text(fb_dict["question"])
+        return fb_dict
 
 def detect_spoken_language(text: str) -> str:
     """
