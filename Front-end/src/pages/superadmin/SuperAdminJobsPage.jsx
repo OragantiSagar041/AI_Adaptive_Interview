@@ -109,7 +109,7 @@ const JobCardSkills = ({ skills, jobId, expandedSkills, setExpandedSkills }) => 
         const lastBadgeRight = lastBadge.getBoundingClientRect().right - containerRect.left;
         if (containerWidth - lastBadgeRight < 48) {
           fit = Math.max(1, fit - 1);
-        }
+        } 
       }
 
       setMaxFit(fit);

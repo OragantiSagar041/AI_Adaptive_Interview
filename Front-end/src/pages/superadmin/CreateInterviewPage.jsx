@@ -80,6 +80,7 @@ export default function CreateInterviewPage() {
       interviewType: 'Technical',
       language: 'English',
       caseStudyCount: 3,
+      externalMeetingUrl: '',
       duration: 30,
       scheduledStart: '',
       scheduledEnd: '',
@@ -187,6 +188,7 @@ export default function CreateInterviewPage() {
       interviewType: 'Technical',
       language: 'English',
       caseStudyCount: 3,
+      externalMeetingUrl: '',
       duration: 30,
       scheduledStart: '',
       scheduledEnd: '',
@@ -1090,7 +1092,9 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
         ats_score: atsScoreData ? atsScoreData.score : null,
         jd_file_url: singleCandidate.jdFileUrl || null,
         job_id: singleCandidate.jobId || "",
-        interview_title: singleCandidate.jobTitle || ""
+        interview_title: singleCandidate.jobTitle || "",
+        external_meeting_url: (singleCandidate.externalMeetingUrl || '').trim(),
+        external_call_mode: Boolean(interviewFormat === 'Recruiter-Led' && singleCandidate.externalMeetingUrl?.trim())
       })).unwrap()
 
       let msg = `Secure interview link created successfully!`
@@ -1101,15 +1105,16 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
       }
 
       Swal.fire({
-        title: 'Success!',
+        title: 'Interview Created!',
         text: msg,
         icon: 'success',
+        confirmButtonText: 'Done',
         confirmButtonColor: '#6366f1'
       })
 
       setSingleCreatedLinks(prev => [
         ...prev,
-        { name, url: data.link_url, id: data.link_id, email }
+        { name, url: data.link_url, id: data.link_id, email, interviewFormat: singleCandidate.interviewFormat }
       ])
 
       setSingleCandidate(prev => ({
@@ -1129,7 +1134,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
         projectDifficulty: 'hard',
         projectResumeDismissed: false,
         scheduledStart: '',
-        scheduledEnd: ''
+        scheduledEnd: '',
+        externalMeetingUrl: ''
       }))
       setSingleProjectQuestionsAdded(false)
       setNewSingleQuestion('')
@@ -1220,7 +1226,9 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
         })(),
         voice_clone: bulkConfig.voiceCloning,
         custom_voice_id: bulkConfig.customVoiceId || "",
-        jd_file_url: bulkConfig.jdFileUrl || null
+        jd_file_url: bulkConfig.jdFileUrl || null,
+        external_meeting_url: (bulkConfig.externalMeetingUrl || '').trim(),
+        external_call_mode: Boolean(interviewFormat === 'Recruiter-Led' && bulkConfig.externalMeetingUrl?.trim())
       })).unwrap()
 
       Swal.fire({
@@ -1239,7 +1247,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
         projectQuestions: [],
         projectText: '',
         projectFileName: '',
-        projectDifficulty: 'hard'
+        projectDifficulty: 'hard',
+        externalMeetingUrl: ''
       }))
       setBulkProjectQuestionsAdded(false)
       setNewBulkQuestion('')

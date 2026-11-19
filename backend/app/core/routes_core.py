@@ -1,3 +1,5 @@
+import os
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
 """
 app/routes_core.py — Shared helpers, auth dependencies, and utility functions.
 All split route files import from here. This was originally the top of routes.py.
@@ -378,18 +380,18 @@ def _require_candidate_session(
 
 def _require_admin_session_access(session: Dict[str, Any], current_admin: Dict[str, Any]) -> None:
     """Enforce tenant isolation and per-recruiter ownership for normal admins."""
-    role = current_admin.get("role")
+    role = str(current_admin.get("role") or "").strip().lower()
     if role == "master":
         return
     if session.get("company_id") != current_admin.get("company_id"):
         raise HTTPException(status_code=403, detail="Access denied")
-    if role == "admin" and str(session.get("created_by") or "") != str(current_admin.get("admin_id") or ""):
+    if role in {"admin", "recruiter", "subadmin"} and str(session.get("created_by") or "") != str(current_admin.get("admin_id") or ""):
         raise HTTPException(status_code=403, detail="Access denied to another recruiter's interview")
 
 
 def _get_authorized_live_session(link_id: str, current_admin: Dict[str, Any]) -> Dict[str, Any]:
     """Authorize live-monitoring access with tenant isolation."""
-    role = current_admin.get("role")
+    role = str(current_admin.get("role") or "").strip().lower()
     if role not in {"admin", "recruiter", "subadmin", "super_admin", "superadmin", "tenant", "master"}:
         raise HTTPException(status_code=403, detail="Live monitoring access is required")
 
@@ -430,7 +432,7 @@ def _decode_dashboard_websocket_admin(token: str) -> Dict[str, str]:
     try:
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
         admin_id = str(payload.get("sub") or "")
-        role = str(payload.get("role") or "")
+        role = str(payload.get("role") or "").strip().lower()
         if not admin_id or role not in {"admin", "recruiter", "subadmin", "super_admin", "superadmin", "tenant", "master"}:
             raise ValueError("Invalid dashboard role")
         admin_doc = admins_collection.find_one(
@@ -441,7 +443,7 @@ def _decode_dashboard_websocket_admin(token: str) -> Dict[str, str]:
             raise ValueError("Account is unavailable")
         return {
             "admin_id": admin_id,
-            "role": str(admin_doc.get("role") or role),
+            "role": str(admin_doc.get("role") or role).strip().lower(),
             "company_id": str(admin_doc.get("company_id") or ""),
         }
     except (jwt.PyJWTError, ValueError, TypeError, InvalidId) as exc:

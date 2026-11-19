@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useDispatch, useSelector } from 'react-redux'
-import { Search, X, Download, Trash2, Video, Eye, Calendar, PhoneCall, Phone } from 'lucide-react'
+import { Search, X, Download, Trash2, Video, Eye, Calendar, PhoneCall, Phone, Play } from 'lucide-react'
+import Swal from 'sweetalert2'
 import Button from '../Button'
 import Badge from '../Badge'
 import { initiateAICall } from '../../store/slices/candidatesSlice'
@@ -341,6 +342,42 @@ export function CandidateTable({
                     </td>
                     <td className="px-4 py-3.5 text-sm text-right pr-6">
                       <div className="inline-flex items-center gap-2">
+                        {(c.interview_mode === 'recruiter_led' || String(c.interview_format || '').toLowerCase() === 'recruiter-led' || String(c.interview_format || '').toLowerCase() === 'recruiter_led') && computedStatus !== 'completed' && computedStatus !== 'expired' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const sid = c.link_id || c.id
+                              const safeName = String(c.candidate_name || 'Candidate').replace(/[<>&"]/g, '')
+                              Swal.fire({
+                                title: 'Start Recruiter-Led Interview',
+                                html: `
+                                  <div style="text-align: left; font-size: 13px; color: #475569; line-height: 1.5; padding: 4px 0;">
+                                    <p style="margin-bottom: 10px;">This session for <strong>${safeName}</strong> is configured as <strong>Recruiter-Led</strong>.</p>
+                                    <p style="margin-bottom: 0;">How would you like to enter this interview?</p>
+                                  </div>
+                                `,
+                                icon: 'question',
+                                showCancelButton: true,
+                                showDenyButton: true,
+                                confirmButtonText: 'Conduct as Recruiter (Cockpit)',
+                                denyButtonText: 'Preview as Candidate',
+                                cancelButtonText: 'Cancel',
+                                confirmButtonColor: '#059669',
+                                denyButtonColor: '#4f46e5',
+                                cancelButtonColor: '#94a3b8',
+                              }).then((result) => {
+                                if (result.isConfirmed) {
+                                  window.open(`/interview/recruiter-copilot/${sid}`, '_blank', 'noopener,noreferrer')
+                                } else if (result.isDenied) {
+                                  window.open(`/interview?session_id=${sid}`, '_blank', 'noopener,noreferrer')
+                                }
+                              })
+                            }}
+                            className="px-2.5 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded hover:bg-indigo-700 transition-colors flex items-center gap-1 cursor-pointer border-none shadow-xs"
+                          >
+                            <Play size={12} /> Start Interview
+                          </button>
+                        )}
                         {computedStatus === 'completed' && (
                           <button
                             onClick={() => handleOpenScorecard(c)}
@@ -349,7 +386,7 @@ export function CandidateTable({
                             <Eye size={12} /> View Results
                           </button>
                         )}
-                        {computedStatus === 'started' && (
+                        {computedStatus === 'started' && !(c.interview_mode === 'recruiter_led' || String(c.interview_format || '').toLowerCase() === 'recruiter-led' || String(c.interview_format || '').toLowerCase() === 'recruiter_led') && (
                           <button
                             onClick={() => handleOpenScorecard(c)}
                             className="px-2.5 py-1.5 bg-primary text-white text-xs font-bold rounded hover:bg-primary-hover transition-colors flex items-center gap-1 cursor-pointer border-none"
@@ -381,7 +418,7 @@ export function CandidateTable({
                             Reschedule
                           </button>
                         )}
-                        {computedStatus === 'pending' && (
+                        {(computedStatus === 'pending' || computedStatus === 'started') && (
                           <button
                             onClick={(e) => {
                               navigator.clipboard.writeText(`${window.location.origin}/interview?session_id=${c.link_id || c.id}`)
