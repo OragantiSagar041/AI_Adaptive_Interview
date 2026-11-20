@@ -264,8 +264,15 @@ export default function VoiceCaseStudy({
         }, 150)
       }
     }
+    const isFsActive = () => !!(
+      document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.mozFullScreenElement ||
+      document.msFullscreenElement
+    )
+
     const handleFullscreenChange = async () => {
-      if (!document.fullscreenElement) {
+      if (!isFsActive()) {
         Swal.fire({
           icon: 'warning',
           title: '⚠️ Fullscreen Required',
@@ -277,8 +284,13 @@ export default function VoiceCaseStudy({
           allowEscapeKey: false
         }).then((result) => {
           if (result.isConfirmed) {
-            if (document.documentElement.requestFullscreen) {
-              document.documentElement.requestFullscreen().catch(() => {})
+            const elem = document.documentElement
+            if (elem.requestFullscreen) {
+              elem.requestFullscreen().catch(() => {})
+            } else if (elem.webkitRequestFullscreen) {
+              elem.webkitRequestFullscreen().catch(() => {})
+            } else if (elem.msRequestFullscreen) {
+              elem.msRequestFullscreen().catch(() => {})
             }
           } else {
             window.location.href = '/dashboard'
@@ -286,11 +298,17 @@ export default function VoiceCaseStudy({
         })
       }
     }
+
+    // Verify fullscreen state immediately on mount
+    handleFullscreenChange()
+
     document.addEventListener('keydown', handleKeyDown)
     document.addEventListener('fullscreenchange', handleFullscreenChange)
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
       document.removeEventListener('fullscreenchange', handleFullscreenChange)
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
     }
   }, [])
 

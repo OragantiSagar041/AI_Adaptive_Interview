@@ -57,26 +57,64 @@ export const useInterviewSecurity = ({
   useEffect(() => {
     if (!isDisclaimerAccepted) return
 
+    const isFullscreenActive = () => {
+      return !!(
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.mozFullScreenElement ||
+        document.msFullscreenElement
+      )
+    }
+
     const checkFullscreen = () => {
-      if (!document.fullscreenElement) {
+      if (!isFullscreenActive()) {
         setFullscreenWarning(true)
       } else {
         setFullscreenWarning(false)
       }
     }
+
+    // Immediately verify fullscreen state upon disclaimer acceptance / mount
+    checkFullscreen()
+
     document.addEventListener('fullscreenchange', checkFullscreen)
+    document.addEventListener('webkitfullscreenchange', checkFullscreen)
+    document.addEventListener('mozfullscreenchange', checkFullscreen)
+    document.addEventListener('MSFullscreenChange', checkFullscreen)
 
     return () => {
       document.removeEventListener('fullscreenchange', checkFullscreen)
+      document.removeEventListener('webkitfullscreenchange', checkFullscreen)
+      document.removeEventListener('mozfullscreenchange', checkFullscreen)
+      document.removeEventListener('MSFullscreenChange', checkFullscreen)
     }
   }, [isDisclaimerAccepted])
 
-  const enableFullscreen = () => {
+  const enableFullscreen = async () => {
     const elem = document.documentElement
-    if (elem.requestFullscreen) {
-      elem.requestFullscreen().catch(err => console.log(err))
+    try {
+      if (elem.requestFullscreen) {
+        await elem.requestFullscreen()
+      } else if (elem.webkitRequestFullscreen) {
+        await elem.webkitRequestFullscreen()
+      } else if (elem.mozRequestFullScreen) {
+        await elem.mozRequestFullScreen()
+      } else if (elem.msRequestFullscreen) {
+        await elem.msRequestFullscreen()
+      }
+      setFullscreenWarning(false)
+    } catch (err) {
+      console.warn("[FULLSCREEN] Request error:", err)
+      const isFullscreen = !!(
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.mozFullScreenElement ||
+        document.msFullscreenElement
+      )
+      if (!isFullscreen) {
+        setFullscreenWarning(true)
+      }
     }
-    setFullscreenWarning(false)
   }
 
   const handleScreenShareStop = () => {

@@ -481,7 +481,7 @@ export const InterviewNonTechnical = () => {
               <ShieldAlert size={32} className="animate-pulse" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-white">Anti-Cheating Alert</h2>
+              <h2 className="text-xl font-bold text-white">Full Screen Mode Required</h2>
               <p className="text-slate-300 text-sm mt-2 leading-relaxed">
                 Full Screen Mode is REQUIRED to take this interview. Exiting fullscreen compromises proctoring validation.
               </p>
