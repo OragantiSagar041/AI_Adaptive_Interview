@@ -703,21 +703,34 @@ export default function VoiceCodingRound({
         }, 150)
       }
     }
+    const isFsActive = () => !!(
+      document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.mozFullScreenElement ||
+      document.msFullscreenElement
+    )
+
     const handleFullscreenChange = async () => {
-      if (!document.fullscreenElement) {
+      if (!isFsActive()) {
         clearTimeout(fullscreenAlertTimerRef.current)
         setFullscreenAlert(true)
         fullscreenAlertTimerRef.current = setTimeout(() => setFullscreenAlert(false), 5000)
       }
     }
+
+    // Verify fullscreen state immediately on mount
+    handleFullscreenChange()
+
     document.addEventListener('keydown', handleKeyDown)
     document.addEventListener('fullscreenchange', handleFullscreenChange)
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
     return () => {
       stopListening()
       clearTimeout(codeChangeTimer.current)
       clearTimeout(silenceTimerRef.current)
       document.removeEventListener('keydown', handleKeyDown)
       document.removeEventListener('fullscreenchange', handleFullscreenChange)
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
     }
   }, [stopListening])
 
