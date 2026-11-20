@@ -105,6 +105,8 @@ export const InterviewTechnical = () => {
       interviewId,
       sessionDetail,
       sessionId,
+      setUploadingText,
+      setUploadPercentage,
       handleSubmitInterview,
       showDeviceCheck,
       setShowDeviceCheck,
@@ -372,13 +374,16 @@ export const InterviewTechnical = () => {
     };
     const handleSubmitCodingAndInterview = async () => {
       const iid = interviewId || sessionDetail?.interview_id || sessionId
+      // Immediately switch to submitting UI state so the candidate sees instant feedback!
+      setUploadingText?.("Submitting your results...")
+      setUploadPercentage?.(15)
       try {
         await api.post(`/coding-round/submit`, {
           interview_id: iid,
           code: codeAnswer,
           explanation: codeAnswer,
           language: selectedLanguage
-        })
+        }, { timeout: 8000 })
       } catch (e) {
         console.error("Failed to submit coding answer:", e)
       }
@@ -1003,7 +1008,9 @@ export const InterviewTechnical = () => {
     screenShareWarning,
     screenShareViolations,
     uploadPercentage,
+    setUploadPercentage,
     uploadingText,
+    setUploadingText,
     skipCountdown,
     showSkipButton,
     transcriptionText,
@@ -1145,8 +1152,7 @@ export const InterviewTechnical = () => {
       />
     )
   }
-  // Show upload progress / Thank-You screen FIRST — takes priority so the
-  // upload spinner remains visible even after isCompleted is set to true.
+  // Render Video uploading progress & "All Set!" screen
   if (showAllSet || uploadingText) {
     return (
       <div className="container">
@@ -1202,7 +1208,6 @@ export const InterviewTechnical = () => {
       </div>
     )
   }
-
   if (isCompleted) {
     return (
       <div className="flex justify-center items-center h-screen flex-col p-6 text-center">

@@ -7,6 +7,7 @@ import {
   Eye, FileText, ExternalLink, Award, Layers, Loader2, AlertCircle, RotateCcw
 } from 'lucide-react'
 import Swal from 'sweetalert2'
+import { API_BASE_URL } from '../../apiConfig'
 
 // ─── Job Title Extraction & Sanitization Helper ──────────────────────────────
 export function extractJobTitle(raw) {
@@ -813,7 +814,6 @@ export default function PreviousInterviewsModal({
     setIsIgnoring(true)
     try {
       const token = localStorage.getItem('superadminToken') || localStorage.getItem('adminToken')
-      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
       const response = await axios.post(
         `${API_BASE_URL}/admin/candidate/ignore`,
@@ -913,7 +913,6 @@ export default function PreviousInterviewsModal({
     setIsRestoring(true)
     try {
       const token = localStorage.getItem('superadminToken') || localStorage.getItem('adminToken')
-      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
       const response = await axios.post(
         `${API_BASE_URL}/admin/candidate/restore`,
