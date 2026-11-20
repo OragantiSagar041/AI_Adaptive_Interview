@@ -112,6 +112,8 @@ export const InterviewTechnical = () => {
       interviewId,
       sessionDetail,
       sessionId,
+      setUploadingText,
+      setUploadPercentage,
       handleSubmitInterview,
       showDeviceCheck,
       setShowDeviceCheck,
@@ -406,13 +408,16 @@ export const InterviewTechnical = () => {
 
     const handleSubmitCodingAndInterview = async () => {
       const iid = interviewId || sessionDetail?.interview_id || sessionId
+      // Immediately switch to submitting UI state so the candidate sees instant feedback!
+      setUploadingText?.("Submitting your results...")
+      setUploadPercentage?.(15)
       try {
         await api.post(`/coding-round/submit`, {
           interview_id: iid,
           code: codeAnswer,
           explanation: codeAnswer,
           language: selectedLanguage
-        })
+        }, { timeout: 8000 })
       } catch (e) {
         console.error("Failed to submit coding answer:", e)
       }
@@ -1067,7 +1072,9 @@ export const InterviewTechnical = () => {
     screenShareWarning,
     screenShareViolations,
     uploadPercentage,
+    setUploadPercentage,
     uploadingText,
+    setUploadingText,
     skipCountdown,
     showSkipButton,
     transcriptionText,
@@ -1219,154 +1226,6 @@ export const InterviewTechnical = () => {
       />
     )
   }
-
-  if (isCompleted) {
-    return (
-      <div className="flex justify-center items-center h-screen flex-col p-6 text-center">
-        <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mb-6">
-          <svg className="w-8 h-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
-        </div>
-        <h2 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">Interview Already Completed</h2>
-        <p className="text-slate-600 mt-2 max-w-md text-base">
-          Thank you for your time. Your interview session has already been completed and submitted successfully.
-        </p>
-        <p className="text-slate-500 mt-4 text-sm">
-          Please contact the recruiter or HR via email for any further updates or questions.
-        </p>
-      </div>
-    )
-  }
-
-  // Render Disclaimer Page first
-  if (!isDisclaimerAccepted) {
-    return (
-      <div className="max-w-2xl mx-auto my-16 px-6">
-        <div className="bg-white/90 backdrop-blur-md border border-slate-200 rounded-3xl p-6 shadow-[0_18px_45px_rgba(15,23,42,0.12)] flex flex-col gap-6">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Secure Interview Environment</h2>
-            <p className="text-slate-500 text-sm mt-1">Acme Proctoring Portal — {sessionDetail?.interview_title}</p>
-          </div>
-
-          <div className="flex flex-col gap-3.5 bg-slate-50 p-5 rounded-2xl border border-slate-200 text-sm">
-            <strong className="text-warning block">⚠️ Security Guidelines & Integrity Checks:</strong>
-            <ul className="pl-5 flex flex-col gap-2 text-slate-600 list-disc">
-              <li>Entire screen share and webcam streams will be recorded continuously.</li>
-              <li>Leaving full-screen or switching tabs will flag alerts in the system.</li>
-              <li>AI face detection checks eye contact and flags cell phone usage.</li>
-              <li>Please complete the assessment individually in a quiet room.</li>
-            </ul>
-          </div>
-
-          <div className="flex gap-2.5 items-center">
-            <input
-              type="checkbox"
-              id="agree"
-              checked={agreeChecked}
-              onChange={(e) => setAgreeChecked(e.target.checked)}
-              className="w-4 h-4 cursor-pointer"
-            />
-            <label htmlFor="agree" className="cursor-pointer font-semibold text-sm text-slate-900 select-none">I agree to follow the proctoring guidelines above.</label>
-          </div>
-
-          <button
-            onClick={acceptDisclaimer}
-            disabled={!agreeChecked}
-            className="w-full py-3.5 rounded-full font-semibold text-sm bg-primary hover:bg-primary-hover text-white transition-all disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer border-none shadow-[0_4px_14px_rgba(99,102,241,0.15)]"
-          >
-            I Understand & Start Interview
-          </button>
-        </div>
-
-        {/* Device Check Modal */}
-        {session.showDeviceCheck && (
-          <DeviceCheckModal
-            onSuccess={() => {
-              session.setShowDeviceCheck(false);
-              session.promptScreenShare();
-            }}
-            onCancel={() => session.setShowDeviceCheck(false)}
-          />
-        )}
-      </div>
-    )
-  }
-
-  // ── Voice Clone Setup Screen ──────────────────────────────────────────────
-  if (showVoiceCloneSetup) return (
-    <div style={{ minHeight: '100vh', background: '#0a0f1e', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white', padding: '24px', fontFamily: "'Inter',sans-serif" }}>
-      <style>{`
-        @keyframes vcWave{0%,100%{transform:scaleY(.4)}50%{transform:scaleY(1)}}
-        .vc-bar{animation:vcWave 0.9s ease-in-out infinite;transform-origin:bottom;background:linear-gradient(to top,#7c3aed,#a78bfa);width:5px;border-radius:99px;height:32px;}
-      `}</style>
-      <div style={{ maxWidth: '520px', width: '100%', textAlign: 'center' }}>
-        <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: 'linear-gradient(135deg,#7c3aed,#6366f1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px', boxShadow: '0 0 40px rgba(139,92,246,0.4)' }}>
-          <i className="fas fa-waveform-lines" style={{ fontSize: '28px' }} />
-        </div>
-        <h1 style={{ fontSize: '28px', fontWeight: '900', marginBottom: '8px' }}>Voice Cloning Setup</h1>
-        <p style={{ color: '#94a3b8', marginBottom: '32px', fontSize: '15px' }}>Read the sentence below aloud so we can clone your voice for the AI interviewer.</p>
-
-        <div style={{ background: '#0d1117', border: '1px solid rgba(139,92,246,0.3)', borderRadius: '16px', padding: '24px', marginBottom: '28px' }}>
-          <p style={{ fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '2px', color: '#a78bfa', marginBottom: '12px' }}>Read this clearly:</p>
-          <p style={{ color: 'white', fontSize: '18px', fontWeight: '600', lineHeight: '1.6', fontStyle: 'italic' }}>"The quick brown fox jumps over the lazy dog. Please read this sentence clearly."</p>
-        </div>
-
-        {vcStep === 'recording' && (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', height: '40px' }}>
-              {Array.from({ length: 9 }).map((_, i) => <div key={i} className="vc-bar" style={{ animationDelay: `${i * 0.1}s` }} />)}
-            </div>
-            <p style={{ color: '#c4b5fd', fontSize: '14px', fontWeight: '600' }}>🔴 Recording... speak now</p>
-            <button onClick={stopVcRecording} style={{ padding: '10px 24px', background: '#dc2626', color: 'white', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '14px' }}>
-              ⏹ Stop Recording
-            </button>
-          </div>
-        )}
-
-        {vcStep === 'uploading' && (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-            <div style={{ width: '44px', height: '44px', borderRadius: '50%', border: '4px solid rgba(139,92,246,0.3)', borderTop: '4px solid #7c3aed', animation: 'spin 0.8s linear infinite' }} />
-            <p style={{ color: '#a78bfa', fontSize: '14px' }}>Cloning your voice with ElevenLabs AI...</p>
-          </div>
-        )}
-
-        {vcStep === 'done' && (
-          <div style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '16px', padding: '20px', marginBottom: '20px', color: '#34d399' }}>
-            <div style={{ fontSize: '32px', marginBottom: '8px' }}>✅</div>
-            <p style={{ fontWeight: '700', marginBottom: '4px' }}>Voice Cloned Successfully!</p>
-            <p style={{ fontSize: '13px', color: '#6ee7b7' }}>The AI will now speak in your voice during the interview.</p>
-          </div>
-        )}
-
-        {vcStep === 'error' && (
-          <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '16px', padding: '20px', marginBottom: '20px', color: '#f87171' }}>
-            <div style={{ fontSize: '24px', marginBottom: '8px' }}>⚠️</div>
-            <p style={{ fontSize: '13px' }}>{vcError || 'An error occurred. The interview will use the default AI voice.'}</p>
-          </div>
-        )}
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {vcStep === 'idle' && (
-            <button onClick={startVcRecording} style={{ padding: '16px', background: 'linear-gradient(90deg,#7c3aed,#6366f1)', color: 'white', borderRadius: '12px', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '16px', boxShadow: '0 4px 30px rgba(139,92,246,0.4)' }}>
-              🎙️ Start Recording (max 10s)
-            </button>
-          )}
-          {(vcStep === 'done' || vcStep === 'error') && (
-            <button onClick={() => completeVoiceCloneSetup(localVoiceId)} style={{ padding: '16px', background: 'linear-gradient(90deg,#10b981,#059669)', color: 'white', borderRadius: '12px', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '16px', boxShadow: '0 4px 30px rgba(16,185,129,0.4)' }}>
-              Continue to Interview →
-            </button>
-          )}
-          {vcStep === 'idle' && (
-            <button onClick={() => completeVoiceCloneSetup(null)} style={{ padding: '12px', background: 'rgba(255,255,255,0.05)', color: '#94a3b8', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', fontSize: '14px' }}>
-              Skip — use default AI voice
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-
   // Render Video uploading progress & "All Set!" screen
   if (showAllSet || uploadingText) {
     return (
@@ -1425,6 +1284,144 @@ export const InterviewTechnical = () => {
       </div>
     )
   }
+  if (isCompleted) {
+    return (
+      <div className="flex justify-center items-center h-screen flex-col p-6 text-center">
+        <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mb-6">
+          <svg className="w-8 h-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <h2 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">
+          {isAlreadyCompleted ? 'Interview Already Completed' : 'Interview Completed'}
+        </h2>
+        <p className="text-slate-600 mt-2 max-w-md text-base">
+          {isAlreadyCompleted
+            ? 'Thank you for your time. Your interview session has already been completed and submitted successfully.'
+            : 'Thank you for your time. Your interview session has been completed and submitted successfully.'}
+        </p>
+        <p className="text-slate-500 mt-4 text-sm">
+          Please contact the recruiter or HR via email for any further updates or questions.
+        </p>
+      </div>
+    )
+  }
+  // Render Disclaimer Page first
+  if (!isDisclaimerAccepted) {
+    return (
+      <div className="max-w-2xl mx-auto my-16 px-6">
+        <div className="bg-white/90 backdrop-blur-md border border-slate-200 rounded-3xl p-6 shadow-[0_18px_45px_rgba(15,23,42,0.12)] flex flex-col gap-6">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Secure Interview Environment</h2>
+            <p className="text-slate-500 text-sm mt-1">Acme Proctoring Portal — {sessionDetail?.interview_title}</p>
+          </div>
+          <div className="flex flex-col gap-3.5 bg-slate-50 p-5 rounded-2xl border border-slate-200 text-sm">
+            <strong className="text-warning block">⚠️ Security Guidelines & Integrity Checks:</strong>
+            <ul className="pl-5 flex flex-col gap-2 text-slate-600 list-disc">
+              <li>Entire screen share and webcam streams will be recorded continuously.</li>
+              <li>Leaving full-screen or switching tabs will flag alerts in the system.</li>
+              <li>AI face detection checks eye contact and flags cell phone usage.</li>
+              <li>Please complete the assessment individually in a quiet room.</li>
+            </ul>
+          </div>
+          <div className="flex gap-2.5 items-center">
+            <input
+              type="checkbox"
+              id="agree"
+              checked={agreeChecked}
+              onChange={(e) => setAgreeChecked(e.target.checked)}
+              className="w-4 h-4 cursor-pointer"
+            />
+            <label htmlFor="agree" className="cursor-pointer font-semibold text-sm text-slate-900 select-none">I agree to follow the proctoring guidelines above.</label>
+          </div>
+          <button
+            onClick={acceptDisclaimer}
+            disabled={!agreeChecked}
+            className="w-full py-3.5 rounded-full font-semibold text-sm bg-primary hover:bg-primary-hover text-white transition-all disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer border-none shadow-[0_4px_14px_rgba(99,102,241,0.15)]"
+          >
+            I Understand & Start Interview
+          </button>
+        </div>
+        {/* Device Check Modal */}
+        {session.showDeviceCheck && (
+          <DeviceCheckModal
+            onSuccess={() => {
+              session.setShowDeviceCheck(false);
+              session.promptScreenShare();
+            }}
+            onCancel={() => session.setShowDeviceCheck(false)}
+          />
+        )}
+      </div>
+    )
+  }
+  // ── Voice Clone Setup Screen ──────────────────────────────────────────────
+  if (showVoiceCloneSetup) return (
+    <div style={{ minHeight: '100vh', background: '#0a0f1e', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white', padding: '24px', fontFamily: "'Inter',sans-serif" }}>
+      <style>{`
+        @keyframes vcWave{0%,100%{transform:scaleY(.4)}50%{transform:scaleY(1)}}
+        .vc-bar{animation:vcWave 0.9s ease-in-out infinite;transform-origin:bottom;background:linear-gradient(to top,#7c3aed,#a78bfa);width:5px;border-radius:99px;height:32px;}
+      `}</style>
+      <div style={{ maxWidth: '520px', width: '100%', textAlign: 'center' }}>
+        <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: 'linear-gradient(135deg,#7c3aed,#6366f1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px', boxShadow: '0 0 40px rgba(139,92,246,0.4)' }}>
+          <i className="fas fa-waveform-lines" style={{ fontSize: '28px' }} />
+        </div>
+        <h1 style={{ fontSize: '28px', fontWeight: '900', marginBottom: '8px' }}>Voice Cloning Setup</h1>
+        <p style={{ color: '#94a3b8', marginBottom: '32px', fontSize: '15px' }}>Read the sentence below aloud so we can clone your voice for the AI interviewer.</p>
+        <div style={{ background: '#0d1117', border: '1px solid rgba(139,92,246,0.3)', borderRadius: '16px', padding: '24px', marginBottom: '28px' }}>
+          <p style={{ fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '2px', color: '#a78bfa', marginBottom: '12px' }}>Read this clearly:</p>
+          <p style={{ color: 'white', fontSize: '18px', fontWeight: '600', lineHeight: '1.6', fontStyle: 'italic' }}>"The quick brown fox jumps over the lazy dog. Please read this sentence clearly."</p>
+        </div>
+        {vcStep === 'recording' && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', height: '40px' }}>
+              {Array.from({ length: 9 }).map((_, i) => <div key={i} className="vc-bar" style={{ animationDelay: `${i * 0.1}s` }} />)}
+            </div>
+            <p style={{ color: '#c4b5fd', fontSize: '14px', fontWeight: '600' }}>🔴 Recording... speak now</p>
+            <button onClick={stopVcRecording} style={{ padding: '10px 24px', background: '#dc2626', color: 'white', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '14px' }}>
+              ⏹ Stop Recording
+            </button>
+          </div>
+        )}
+        {vcStep === 'uploading' && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+            <div style={{ width: '44px', height: '44px', borderRadius: '50%', border: '4px solid rgba(139,92,246,0.3)', borderTop: '4px solid #7c3aed', animation: 'spin 0.8s linear infinite' }} />
+            <p style={{ color: '#a78bfa', fontSize: '14px' }}>Cloning your voice with ElevenLabs AI...</p>
+          </div>
+        )}
+        {vcStep === 'done' && (
+          <div style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '16px', padding: '20px', marginBottom: '20px', color: '#34d399' }}>
+            <div style={{ fontSize: '32px', marginBottom: '8px' }}>✅</div>
+            <p style={{ fontWeight: '700', marginBottom: '4px' }}>Voice Cloned Successfully!</p>
+            <p style={{ fontSize: '13px', color: '#6ee7b7' }}>The AI will now speak in your voice during the interview.</p>
+          </div>
+        )}
+        {vcStep === 'error' && (
+          <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '16px', padding: '20px', marginBottom: '20px', color: '#f87171' }}>
+            <div style={{ fontSize: '24px', marginBottom: '8px' }}>⚠️</div>
+            <p style={{ fontSize: '13px' }}>{vcError || 'An error occurred. The interview will use the default AI voice.'}</p>
+          </div>
+        )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {vcStep === 'idle' && (
+            <button onClick={startVcRecording} style={{ padding: '16px', background: 'linear-gradient(90deg,#7c3aed,#6366f1)', color: 'white', borderRadius: '12px', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '16px', boxShadow: '0 4px 30px rgba(139,92,246,0.4)' }}>
+              🎙️ Start Recording (max 10s)
+            </button>
+          )}
+          {(vcStep === 'done' || vcStep === 'error') && (
+            <button onClick={() => completeVoiceCloneSetup(localVoiceId)} style={{ padding: '16px', background: 'linear-gradient(90deg,#10b981,#059669)', color: 'white', borderRadius: '12px', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '16px', boxShadow: '0 4px 30px rgba(16,185,129,0.4)' }}>
+              Continue to Interview →
+            </button>
+          )}
+          {vcStep === 'idle' && (
+            <button onClick={() => completeVoiceCloneSetup(null)} style={{ padding: '12px', background: 'rgba(255,255,255,0.05)', color: '#94a3b8', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', fontSize: '14px' }}>
+              Skip — use default AI voice
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
 
   const currentQuestionText = currentQuestion?.text || currentQuestion?.question || currentQuestion?.prompt || ''
 
@@ -1463,7 +1460,7 @@ export const InterviewTechnical = () => {
               <ShieldAlert size={32} className="animate-pulse" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-white">Anti-Cheating Alert</h2>
+              <h2 className="text-xl font-bold text-white">Full Screen Mode Required</h2>
               <p className="text-slate-300 text-sm mt-2 leading-relaxed">
                 Full Screen Mode is REQUIRED to take this interview. Exiting fullscreen compromises proctoring validation.
               </p>

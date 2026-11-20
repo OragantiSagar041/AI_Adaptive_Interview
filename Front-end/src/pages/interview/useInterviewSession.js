@@ -694,6 +694,31 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     return () => clearInterval(interval)
   }, [isDisclaimerAccepted, showAllSet, globalCountdown, questions.length])
 
+
+  // Safety Overtime Guardrail & Immediate Auto-Submit on Round Time Expiration
+  useEffect(() => {
+    if (!isTimeExpired || !isDisclaimerAccepted || showAllSet) return
+
+    const currentQ = questions[currentQuestionIndex]
+    const isRoundTwoOrSpecialized = isRoundTwo || currentQ?.type === 'coding' || currentQ?.type === 'case_study'
+
+    if (isRoundTwoOrSpecialized) {
+      console.log("[ROUND_EXPIRY] Timer reached 00:00 in Round 2. Submitting immediately and redirecting to results.")
+      setUploadingText("Submitting your results...")
+      setUploadPercentage(15)
+      // Call handleSubmitInterview immediately without 120s delay!
+      handleSubmitInterview(true, "Round 2 time expired")
+      return
+    }
+
+    // Round 1 (Verbal/Q&A): Give candidate a grace window to finish their sentence before auto-advancing
+    const overtimeTimer = setTimeout(() => {
+      console.warn("Safety overtime guardrail (120s) reached at 00:00. Auto-advancing round.")
+      handleNextQuestion()
+    }, 120000)
+    return () => clearTimeout(overtimeTimer)
+  }, [isTimeExpired, isDisclaimerAccepted, showAllSet, isRoundTwo, currentQuestionIndex, questions])
+
   // Tab close protection while saving/uploading
   useEffect(() => {
     if (!isSaving) return
@@ -1866,21 +1891,26 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       }
       api.post(`/save-behavioral-data`, payload).catch(() => {})
 
+      // 1. Coding Question Submit
+      if (currentQuestion.type === 'coding') {
+        setUploadingText("Submitting your results...")
+        setUploadPercentage(15)
+        try {
+          await api.post(`/coding-round/submit`, {
+            interview_id: iid,
+            code: codeAnswer,
+            explanation: codeAnswer,
+            language: selectedLanguage
+          }, { timeout: 8000 })
+        } catch (e) { }
+        handleSubmitInterview()
+        return
+      }
+
       if (currentQuestionIndex === questions.length - 1) {
-        const isCodingQ = currentQuestion.type === 'coding'
         const isCaseStudyQ = currentQuestion.type === 'case_study'
 
-        if (isCodingQ) {
-          try {
-            await api.post(`/coding-round/submit`, {
-              interview_id: iid,
-              code: codeAnswer,
-              explanation: codeAnswer,
-              language: selectedLanguage
-            })
-          } catch (e) { }
-          handleSubmitInterview()
-        } else if (isCaseStudyQ) {
+        if (isCaseStudyQ) {
           handleSubmitInterview()
         } else if (!isRoundTwo && sessionDetail?.interview_type !== 'Normal') {
           accumulatedTranscriptRef.current = ''
@@ -2037,8 +2067,22 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     // This prevents the interview from staying visible during async cleanup,
     // and stops back-navigation from re-showing the interview.
     setIsCompleted(true)
-    setUploadingText("Finalizing interview...")
-    setUploadPercentage(10)
+    setUploadingText("Submitting your results...")
+    setUploadPercentage(15)
+
+    // Ensure coding answer is persisted to coding-round/submit
+    try {
+      const iid = interviewIdRef.current || sessionDetail?.interview_id || sessionId
+      const currentQ = questions[currentQuestionIndex] || {}
+      if (currentQ?.type === 'coding' || isRoundTwo) {
+        api.post(`/coding-round/submit`, {
+          interview_id: iid,
+          code: codeAnswer || '',
+          explanation: codeAnswer || '',
+          language: selectedLanguage || 'python'
+        }, { timeout: 8000 }).catch(err => console.warn("Background coding submit warn:", err))
+      }
+    } catch (_) { }
 
     if (window.speechSynthesis) window.speechSynthesis.cancel()
     stopSilenceTimer()
@@ -2214,6 +2258,13 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         answerForm.append('time_limit_seconds', '120')
         const token = monitoringTokenRef.current || monitoringToken || getCandidateSessionToken()
         if (token) answerForm.append('monitoring_token', token)
+        if (currentQuestion.type === 'case_study') {
+          api.post(`/case-study/submit-answer`, {
+            interview_id: iid,
+            question_index: currentQuestion.caseStudyIndex,
+            answer_text: finalAnswer || ' '
+          }).catch(() => {})
+        }
         try {
           await api.post(`/save-answer`, answerForm, {
             headers: {
@@ -2393,7 +2444,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     screenShareWarning,
     screenShareViolations,
     uploadPercentage,
+    setUploadPercentage,
     uploadingText,
+    setUploadingText,
     skipCountdown,
     showSkipButton,
     transcriptionText,

@@ -2,9 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 // ── Tunable thresholds (Production Calibrated to eliminate false alarms) ──
 const DETECT_INTERVAL_MS = Number(import.meta.env?.VITE_PROCTORING_INTERVAL_MS) || 250          // frame cadence (4 FPS, detects within sub-second)
-const PHONE_ALERT_CONFIDENCE = Number(import.meta.env?.VITE_PROCTORING_PHONE_CONFIDENCE) || 0.22 // calibrated threshold: reliably detects handheld phones from any angle
-const PHONE_CONSECUTIVE_FRAMES = 2      // 2 frames (~0.5s) of sustained visibility required to detect quickly
-const PHONE_COOLDOWN_MS = 10000         // 10 seconds cooldown between phone alerts
+const PHONE_ALERT_CONFIDENCE = Number(import.meta.env?.VITE_PROCTORING_PHONE_CONFIDENCE) || 0.55 // calibrated threshold: reliably detects handheld phones from any angle while eliminating noise/false alarms
+const PHONE_CONSECUTIVE_FRAMES = 4      // 4 frames (~1.0s) of sustained visibility required to detect reliably while eliminating glints
+const PHONE_COOLDOWN_MS = 20000         // 20 seconds cooldown between phone alerts
 
 const MULTI_FACE_CONSECUTIVE_FRAMES = 6 // 6 consecutive frames (~2.4s) to ignore background posters/glitches
 const NO_FACE_CONSECUTIVE_FRAMES = 12   // 12 consecutive frames (~4.8s) allows sneezing / natural posture shifts
@@ -439,19 +439,17 @@ export function useProctoring({
     const topPhone = phoneCandidates?.length > 0 ? phoneCandidates[0] : null
     const isPhone = Boolean(topPhone && topPhone.score >= PHONE_ALERT_CONFIDENCE)
 
-    if (topPhone && topPhone.score >= 0.18) {
+    if (topPhone && topPhone.score >= 0.35) {
       console.log(`[useProctoring] 📱 Object detected: ${topPhone.label || 'phone'} (score: ${topPhone.score.toFixed(2)}, threshold: ${PHONE_ALERT_CONFIDENCE}, streak: ${streak.phone})`)
     }
 
-    // Sub-second phone detection: 3 frames (~750ms) of sustained visibility required.
-    // Avoids triggering on momentary glints (250-500ms) to ensure fairness.
     const requiredFrames = PHONE_CONSECUTIVE_FRAMES
 
     streak.phone = isPhone ? streak.phone + 1 : Math.max(0, streak.phone - 1)
     if (streak.phone >= requiredFrames) {
       const now = Date.now()
       if (now - lastPhoneAlertTimeRef.current >= PHONE_COOLDOWN_MS) {
-        raiseViolation('phone', 'Mobile phone / camera detected in frame')
+        raiseViolation('phone', 'Mobile phone detected in frame')
         lastPhoneAlertTimeRef.current = now
       }
       streak.phone = 0

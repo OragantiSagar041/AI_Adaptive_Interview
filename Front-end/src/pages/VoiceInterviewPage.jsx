@@ -2588,9 +2588,16 @@ export default function VoiceInterviewPage() {
     }
 
     // Fullscreen change detection with interactive modal
+    const isFsActive = () => !!(
+      document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.mozFullScreenElement ||
+      document.msFullscreenElement
+    )
+
     const handleFullscreenChange = async () => {
       if (round === 'coding') return
-      if (!document.fullscreenElement && round !== 'done' && round !== 'pre_checks' && round !== 'intro' && round !== 'submitting') {
+      if (!isFsActive() && round !== 'done' && round !== 'pre_checks' && round !== 'intro' && round !== 'submitting') {
         logProctoringAlert('fullscreen_exit', 'User exited fullscreen')
 
         Swal.fire({
@@ -2604,8 +2611,13 @@ export default function VoiceInterviewPage() {
           allowEscapeKey: false
         }).then((result) => {
           if (result.isConfirmed) {
-            if (document.documentElement.requestFullscreen) {
-              document.documentElement.requestFullscreen().catch(() => { })
+            const elem = document.documentElement
+            if (elem.requestFullscreen) {
+              elem.requestFullscreen().catch(() => { })
+            } else if (elem.webkitRequestFullscreen) {
+              elem.webkitRequestFullscreen().catch(() => { })
+            } else if (elem.msRequestFullscreen) {
+              elem.msRequestFullscreen().catch(() => { })
             }
           } else {
             completeInterview({ isTimeout: true, reason: 'Terminated due to fullscreen mode exit.' })
@@ -2614,9 +2626,13 @@ export default function VoiceInterviewPage() {
       }
     }
 
+    // Verify fullscreen state immediately when entering an active round
+    handleFullscreenChange()
+
     document.addEventListener('visibilitychange', handleFocusLoss)
     window.addEventListener('blur', handleFocusLoss)
     document.addEventListener('fullscreenchange', handleFullscreenChange)
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
 
     return () => {
       // NOTE: We DO NOT call window.speechSynthesis?.cancel() here anymore.
@@ -2625,6 +2641,7 @@ export default function VoiceInterviewPage() {
       document.removeEventListener('visibilitychange', handleFocusLoss)
       window.removeEventListener('blur', handleFocusLoss)
       document.removeEventListener('fullscreenchange', handleFullscreenChange)
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
     }
     // We intentionally omit logProctoringAlert and completeInterview to prevent re-bind loops muting the AI.
     // eslint-disable-next-line react-hooks/exhaustive-deps

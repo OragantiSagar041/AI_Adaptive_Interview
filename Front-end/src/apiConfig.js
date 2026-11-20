@@ -14,7 +14,7 @@ const isLocalHostname = (hostname) => {
 const isLocalUrl = (urlStr) => {
   try {
     const parsed = new URL(urlStr);
-    return ["localhost", "127.0.0.1"].includes(parsed.hostname);
+    return ["localhost", "127.0.0.1", "0.0.0.0"].includes(parsed.hostname);
   } catch (_) {
     return false;
   }
@@ -38,6 +38,10 @@ export function resolveApiBaseUrl(
   }
 
   if (cleanConfigured) {
+    // Guard: never allow a localhost/loopback API URL when accessed on a public production domain
+    if (!isLocal && isLocalUrl(cleanConfigured)) {
+      return "https://hireiq.co.in/api";
+    }
     if (isLocal && winHostname) {
       try {
         const parsed = new URL(cleanConfigured);
