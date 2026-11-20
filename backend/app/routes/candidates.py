@@ -488,11 +488,31 @@ def get_previous_interviews(
         role = current_admin.get("role")
         if role not in ["super_admin", "master"]:
             comp_id = current_admin.get("company_id")
+            admin_id = current_admin.get("admin_id") or str(current_admin.get("_id"))
+            admin_ids = [str(admin_id)]
+            try:
+                admin_ids.append(ObjectId(str(admin_id)))
+            except Exception:
+                pass
             if comp_id:
-                query["company_id"] = comp_id
+                comp_ids = [str(comp_id)]
+                try:
+                    comp_ids.append(ObjectId(str(comp_id)))
+                except Exception:
+                    pass
+                query["$and"] = [
+                    {"$or": [
+                        {"candidate_email": {"$regex": f"^{re.escape(clean_email)}$", "$options": "i"}},
+                        {"email": {"$regex": f"^{re.escape(clean_email)}$", "$options": "i"}}
+                    ]},
+                    {"$or": [
+                        {"company_id": {"$in": comp_ids}},
+                        {"created_by": {"$in": admin_ids}}
+                    ]}
+                ]
+                query.pop("$or", None)
             else:
-                admin_id = current_admin.get("admin_id") or str(current_admin.get("_id"))
-                query["created_by"] = admin_id
+                query["created_by"] = {"$in": admin_ids}
 
         # Exclude the current session if specified and not explicitly including current
         if current_link_id and not include_current:
@@ -590,6 +610,83 @@ def get_previous_interviews(
                 best_resume_text = s_item.get("resume_text").strip()
             if not latest_job_role and (s_item.get("interview_title") or s_item.get("job_title") or s_item.get("job_description")):
                 latest_job_role = s_item.get("interview_title") or s_item.get("job_title") or s_item.get("job_description")
+
+        # Fallback profile enrichment if sessions did not yield full info
+        if not cand_name_val or not best_resume_text or not cand_phone_val:
+            try:
+                # 1. Search in job_applications_collection
+                app_doc = job_applications_collection.find_one(
+                    {"email": {"$regex": f"^{re.escape(clean_email)}$", "$options": "i"}},
+                    sort=[("applied_at", -1), ("created_at", -1)]
+                )
+                if app_doc:
+                    if not cand_name_val:
+                        cand_name_val = app_doc.get("name") or app_doc.get("candidate_name") or ""
+                    if not cand_phone_val:
+                        cand_phone_val = app_doc.get("phone") or ""
+                    if not cand_id_val:
+                        cand_id_val = app_doc.get("candidate_id") or app_doc.get("candidate_code") or ""
+                    if not cand_loc_val:
+                        cand_loc_val = app_doc.get("location") or ""
+                    if not cand_exp_val:
+                        cand_exp_val = app_doc.get("experience") or ""
+                    if not best_resume_text and (app_doc.get("resume_text") or "").strip():
+                        best_resume_text = app_doc.get("resume_text").strip()
+                    if not latest_job_role:
+                        latest_job_role = app_doc.get("job_title") or app_doc.get("role") or app_doc.get("job_description") or ""
+            except Exception as ex:
+                logger.warning(f"Error fallback query job_applications_collection: {ex}")
+
+        if not cand_name_val or not best_resume_text or not cand_phone_val:
+            try:
+                # 2. Search in omni_call_logs_collection
+                call_doc = omni_call_logs_collection.find_one(
+                    {
+                        "$or": [
+                            {"email": {"$regex": f"^{re.escape(clean_email)}$", "$options": "i"}},
+                            {"candidate_email": {"$regex": f"^{re.escape(clean_email)}$", "$options": "i"}}
+                        ]
+                    },
+                    sort=[("created_at", -1)]
+                )
+                if call_doc:
+                    if not cand_name_val:
+                        cand_name_val = call_doc.get("candidate_name") or call_doc.get("name") or ""
+                    if not cand_phone_val:
+                        cand_phone_val = call_doc.get("phone_number") or call_doc.get("phone") or ""
+                    if not cand_id_val:
+                        cand_id_val = call_doc.get("candidate_id") or ""
+                    if not best_resume_text:
+                        best_resume_text = (call_doc.get("resume_text") or call_doc.get("parsed_resume") or "").strip()
+                    if not latest_job_role:
+                        latest_job_role = call_doc.get("role") or call_doc.get("interview_title") or ""
+            except Exception as ex:
+                logger.warning(f"Error fallback query omni_call_logs_collection: {ex}")
+
+        if not cand_name_val or not best_resume_text or not cand_phone_val:
+            try:
+                # 3. Search in candidates_collection
+                cand_doc = candidates_collection.find_one(
+                    {"email": {"$regex": f"^{re.escape(clean_email)}$", "$options": "i"}},
+                    sort=[("created_at", -1)]
+                )
+                if cand_doc:
+                    if not cand_name_val:
+                        cand_name_val = cand_doc.get("name") or cand_doc.get("candidate_name") or ""
+                    if not cand_phone_val:
+                        cand_phone_val = cand_doc.get("phone") or ""
+                    if not cand_id_val:
+                        cand_id_val = cand_doc.get("candidate_code") or str(cand_doc.get("_id", ""))
+                    if not cand_loc_val:
+                        cand_loc_val = cand_doc.get("location") or ""
+                    if not cand_exp_val:
+                        cand_exp_val = cand_doc.get("experience") or ""
+                    if not best_resume_text and (cand_doc.get("resume_text") or "").strip():
+                        best_resume_text = cand_doc.get("resume_text").strip()
+                    if not latest_job_role:
+                        latest_job_role = cand_doc.get("job_applied") or cand_doc.get("interview_title") or ""
+            except Exception as ex:
+                logger.warning(f"Error fallback query candidates_collection: {ex}")
 
         cand_skills = extract_skills_from_resume_text(best_resume_text) if best_resume_text else ""
 
@@ -789,6 +886,102 @@ def get_previous_interviews(
                 "is_current": bool(current_link_id and link_id_val == current_link_id)
             })
 
+        if not sessions:
+            try:
+                app_query = {
+                    "email": {"$regex": f"^{re.escape(clean_email)}$", "$options": "i"}
+                }
+                if role not in ["super_admin", "master"] and current_admin.get("company_id"):
+                    comp_id = current_admin.get("company_id")
+                    c_ids = [str(comp_id)]
+                    try:
+                        c_ids.append(ObjectId(str(comp_id)))
+                    except Exception:
+                        pass
+                    app_query["$or"] = [
+                        {"company_id": {"$in": c_ids}},
+                        {"company_id": {"$exists": False}},
+                        {"company_id": None}
+                    ]
+                applications = list(job_applications_collection.find(app_query).sort("applied_at", -1).limit(10))
+                for app in applications:
+                    app_date = app.get("applied_at") or app.get("created_at") or ""
+                    if isinstance(app_date, datetime):
+                        app_date = app_date.strftime("%Y-%m-%d %H:%M")
+                    app_status = (app.get("status") or "pending").lower().strip()
+                    app_dec = (app.get("decision") or app_status).lower().strip()
+                    is_app_sel = app_dec in ["selected", "hired", "shortlisted"]
+                    is_app_rej = app_dec in ["rejected"]
+                    is_app_pend = not is_app_sel and not is_app_rej
+
+                    app_cand_details = {
+                        "name": app.get("name") or app.get("candidate_name") or cand_name_val or "Candidate",
+                        "email": clean_email,
+                        "phone": app.get("phone") or cand_phone_val or "N/A",
+                        "candidate_id": app.get("candidate_id") or app.get("candidate_code") or cand_id_val or "CAND-0001",
+                        "skills": app.get("skills") or cand_skills or "N/A",
+                        "experience": app.get("experience") or cand_exp_val or "N/A",
+                        "location": app.get("location") or cand_loc_val or "N/A",
+                        "current_company": app.get("current_company") or "N/A",
+                        "current_ctc": app.get("current_ctc") or "N/A",
+                        "expected_ctc": app.get("expected_ctc") or "N/A",
+                        "notice_period": app.get("notice_period") or "N/A",
+                        "gender": app.get("gender") or "N/A",
+                        "qualification": app.get("qualification") or "N/A",
+                        "resume_url": app.get("resume_url", "")
+                    }
+
+                    app_role = app.get("job_title") or app.get("role") or "Career Portal Application"
+                    history_list.append({
+                        "link_id": str(app.get("_id", "")),
+                        "job_code": app.get("job_code") or app.get("job_id") or "APP-PORTAL",
+                        "candidate_id": app.get("candidate_id") or app.get("candidate_code") or cand_id_val or "CAND-0001",
+                        "recruiter_name": current_admin.get("name") or "Recruiter",
+                        "company_name": current_admin.get("company_name") or "HireIQ",
+                        "location": app.get("location") or cand_loc_val or "N/A",
+                        "job_type": app.get("job_type") or "Job Application",
+                        "interview_mode": "Career Portal Application",
+                        "gender": app.get("gender") or "N/A",
+                        "qualification": app.get("qualification") or "N/A",
+                        "relevant_experience": app.get("experience") or "N/A",
+                        "mandatory_skills": app.get("skills") or cand_skills or "N/A",
+                        "preferred_skills": app.get("preferred_skills") or "N/A",
+                        "salary_budget": "N/A",
+                        "monthly_salary": "N/A",
+                        "candidate_details": app_cand_details,
+                        "rejection_reason": app.get("rejection_reason"),
+                        "rejected_by": app.get("rejected_by"),
+                        "rejected_at": app.get("rejected_at"),
+                        "interview_date": str(app_date),
+                        "interviewed_skills": app.get("skills") or cand_skills or "N/A",
+                        "job_role": app_role,
+                        "job_description": app.get("job_description") or "",
+                        "ai_score": app.get("score") if app.get("score") is not None else app.get("overall_score"),
+                        "decision": app.get("decision", "pending"),
+                        "status": app_status,
+                        "is_selected": is_app_sel,
+                        "is_attended": True,
+                        "is_rejected": is_app_rej,
+                        "is_ignored": False,
+                        "is_expired": False,
+                        "is_pending": is_app_pend,
+                        "is_current": False
+                    })
+                    if is_app_sel: selected_count += 1
+                    if is_app_rej: rejected_count += 1
+                    if is_app_pend: pending_count += 1
+                    attended_count += 1
+
+                    r_key = app_role.strip()
+                    if r_key not in role_map:
+                        role_map[r_key] = {"role": r_key, "count": 0, "attended": 0, "rejected": 0, "ignored": 0, "expired": 0, "pending": 0, "scores": []}
+                    role_map[r_key]["count"] += 1
+                    role_map[r_key]["attended"] += 1
+                    if is_app_rej: role_map[r_key]["rejected"] += 1
+                    if is_app_pend: role_map[r_key]["pending"] += 1
+            except Exception as ex:
+                logger.warning(f"Error fetching job applications for history: {ex}")
+
         domain_summaries = []
         for d_info in sorted(domain_map.values(), key=lambda x: x["count"], reverse=True):
             avg_sc = round(sum(d_info["scores"]) / len(d_info["scores"]), 1) if d_info["scores"] else None
@@ -818,7 +1011,7 @@ def get_previous_interviews(
             })
 
         summary = {
-            "total": len(sessions),
+            "total": len(sessions) if sessions else len(history_list),
             "selected": selected_count,
             "rejected": rejected_count,
             "pending": pending_count,
