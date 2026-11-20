@@ -625,34 +625,6 @@ export default function CreateInterviewPage() {
         setCandidateStatusInfo(null)
       }
 
-      if (history.length === 0) {
-        setPreviousInterviewsModal(prev => ({ ...prev, isOpen: false, loading: false }))
-        await Swal.fire({
-          title: 'No Previous Interviews Found',
-          html: `
-            <div class="flex flex-col items-center text-center p-3 gap-2">
-              <div class="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mb-1">
-                <i class="fas fa-history text-xl"></i>
-              </div>
-              <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                No previous interviews recorded for <strong class="text-indigo-600">${escapeHtml(cleanEmail)}</strong>.
-              </p>
-              <p class="text-xs text-slate-500 dark:text-slate-400">
-                This appears to be the candidate's first interview session in the system.
-              </p>
-            </div>
-          `,
-          icon: 'info',
-          confirmButtonText: 'OK',
-          confirmButtonColor: '#6366f1',
-          customClass: {
-            popup: 'rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl p-6 bg-white dark:bg-[#161c2d]',
-            confirmButton: 'px-6 py-2.5 rounded-xl font-bold text-xs text-white shadow-md'
-          }
-        })
-        return
-      }
-
       const serverCand = response.data?.candidate || {}
       setPreviousInterviewsModal({
         isOpen: true,
@@ -661,29 +633,40 @@ export default function CreateInterviewPage() {
           ...serverCand,
           email: cleanEmail,
           candidate_email: cleanEmail,
-          candidate_name: serverCand.candidate_name || response.data.candidate_name || candidateData?.candidate_name || singleCandidate.name,
-          candidate_phone: serverCand.candidate_phone || response.data.candidate_phone || candidateData?.candidate_phone || singleCandidate.phone,
-          candidate_id: serverCand.candidate_id || response.data.candidate_id || candidateData?.candidate_id || (history[0]?.candidate_id) || '',
-          skills: serverCand.skills || response.data.skills || candidateData?.skills || (history[0]?.mandatory_skills) || '',
-          job_role: serverCand.job_role || response.data.job_role || candidateData?.job_role || (history[0]?.job_role) || '',
-          job_description: serverCand.job_description || response.data.job_description || candidateData?.job_description || (history[0]?.job_description) || '',
-          resume_text: serverCand.resume_text || response.data.resume_text || candidateData?.resume_text || singleCandidate.resumeText
+          candidate_name: serverCand.candidate_name || response.data?.candidate_name || candidateData?.candidate_name || singleCandidate.name || 'Candidate',
+          candidate_phone: serverCand.candidate_phone || response.data?.candidate_phone || candidateData?.candidate_phone || singleCandidate.phone || '',
+          candidate_id: serverCand.candidate_id || response.data?.candidate_id || candidateData?.candidate_id || (history[0]?.candidate_id) || 'CAND-0001',
+          skills: serverCand.skills || response.data?.skills || candidateData?.skills || (history[0]?.mandatory_skills) || '',
+          job_role: serverCand.job_role || response.data?.job_role || candidateData?.job_role || (history[0]?.job_role) || '',
+          job_description: serverCand.job_description || response.data?.job_description || candidateData?.job_description || (history[0]?.job_description) || '',
+          resume_text: serverCand.resume_text || response.data?.resume_text || candidateData?.resume_text || singleCandidate.resumeText || ''
         },
         history,
-        summary,
+        summary: summary || {
+          total: history.length,
+          selected: 0,
+          rejected: 0,
+          pending: history.length,
+          ignored_noshow: 0,
+          attended: 0,
+          expired: 0,
+          pending_other: history.length,
+          avg_ai_score: null,
+          domains: [],
+          roles: []
+        },
         loading: false,
         error: null
       })
     } catch (err) {
       console.error('Failed to fetch previous interviews:', err)
-      setPreviousInterviewsModal(prev => ({ ...prev, isOpen: false, loading: false, error: err.message }))
       const detailMsg = err.response?.data?.detail || err.message || 'Failed to fetch previous interview history.'
-      Swal.fire({
-        title: 'Error Fetching History',
-        text: detailMsg,
-        icon: 'error',
-        confirmButtonColor: '#6366f1'
-      })
+      setPreviousInterviewsModal(prev => ({
+        ...prev,
+        isOpen: true,
+        loading: false,
+        error: detailMsg
+      }))
     }
   }
 
