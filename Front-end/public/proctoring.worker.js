@@ -40,7 +40,7 @@ const MODEL_URLS = {
     'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/int8/1/efficientdet_lite0.tflite',
 };
 
-const OBJECT_DETECTOR_SCORE_THRESHOLD = 0.10;
+const OBJECT_DETECTOR_SCORE_THRESHOLD = 0.30;
 
 const LANDMARK = {
   NOSE_TIP: 1,
@@ -113,7 +113,11 @@ function computeIoU(boxA, boxB) {
   return unionArea > 0 ? interArea / unionArea : 0;
 }
 
-const BENIGN_OBJECTS = ['bottle', 'cup', 'wine glass', 'bowl', 'mug', 'book', 'mouse', 'apple', 'orange', 'banana'];
+const BENIGN_OBJECTS = [
+  'bottle', 'cup', 'wine glass', 'bowl', 'mug', 'book', 'mouse',
+  'apple', 'orange', 'banana', 'laptop', 'keyboard', 'tv', 'monitor',
+  'chair', 'couch', 'clock', 'tie', 'remote'
+];
 
 function extractPhoneCandidates(detections, faceLandmarks, bitmap, pose) {
   const candidates = [];
@@ -134,31 +138,53 @@ function extractPhoneCandidates(detections, faceLandmarks, bitmap, pose) {
     }
   }
 
-  // Pre-compute candidate turned ear landmark if head is turned (pose.yaw)
-  const isHeadTurned = Boolean(pose && Math.abs(pose.yaw) > 0.18);
-  const activeEar = (isHeadTurned && faceLandmarks && faceLandmarks.length >= 468)
-    ? (pose.yaw > 0.18 ? faceLandmarks[LANDMARK.EAR_LEFT] : faceLandmarks[LANDMARK.EAR_RIGHT])
-    : null;
+  // Pre-compute face geometry if face landmarks are available
   const forehead = (faceLandmarks && faceLandmarks.length >= 468) ? faceLandmarks[LANDMARK.FOREHEAD] : null;
   const chin = (faceLandmarks && faceLandmarks.length >= 468) ? faceLandmarks[LANDMARK.CHIN] : null;
   const faceHeight = (forehead && chin) ? Math.max(0.12, Math.abs(chin.y - forehead.y)) : 0.20;
+  const earLeft = (faceLandmarks && faceLandmarks.length >= 468) ? faceLandmarks[LANDMARK.EAR_LEFT] : null;
+  const earRight = (faceLandmarks && faceLandmarks.length >= 468) ? faceLandmarks[LANDMARK.EAR_RIGHT] : null;
+  const noseTip = (faceLandmarks && faceLandmarks.length >= 468) ? faceLandmarks[LANDMARK.NOSE_TIP] : null;
+  const eyeL = (faceLandmarks && faceLandmarks.length >= 468) ? faceLandmarks[LANDMARK.EYE_OUTER_LEFT] : null;
+  const eyeR = (faceLandmarks && faceLandmarks.length >= 468) ? faceLandmarks[LANDMARK.EYE_OUTER_RIGHT] : null;
 
   for (const d of detections) {
     for (const cat of d.categories ?? []) {
       const label = `${cat.categoryName ?? ''} ${cat.displayName ?? ''}`.toLowerCase();
-      const isTarget =
-        label.includes('cell phone') ||
-        label.includes('mobile phone') ||
-        label.includes('phone') ||
-        label.includes('camera') ||
+
+      // Explicitly reject non-phone classes (remotes, cameras, microphones, earphones, laptops)
+      const isExcluded =
         label.includes('remote') ||
-        label.includes('tablet');
+        label.includes('camera') ||
+        label.includes('headphone') ||
+        label.includes('earphone') ||
+        label.includes('microphone') ||
+        label.includes('mic') ||
+        label.includes('laptop') ||
+        label.includes('keyboard') ||
+        label.includes('mouse') ||
+        label.includes('pen') ||
+        label.includes('book');
+
+      if (isExcluded) continue;
+
+      // Only target actual mobile / cell phones
+      const isTarget =
+        label === 'cell phone' ||
+        label === 'mobile phone' ||
+        label.includes('cell phone') ||
+        label.includes('mobile phone');
 
       if (isTarget) {
         const score = cat.score ?? 0;
 
+        // Discard low-confidence noise detections below 0.50
+        if (score < 0.50) {
+          continue;
+        }
+
         // 1. Direct Competitor Suppression:
-        // If the top prediction for this exact bounding box is actually a bottle/cup/etc. with a higher score, ignore phone
+        // If the top prediction for this bounding box is actually a benign object with higher score, ignore phone
         const topCatName = (d.categories?.[0]?.categoryName || '').toLowerCase();
         const topCatScore = d.categories?.[0]?.score || 0;
         if (BENIGN_OBJECTS.some((b) => topCatName.includes(b)) && topCatScore >= score) {
@@ -166,10 +192,10 @@ function extractPhoneCandidates(detections, faceLandmarks, bitmap, pose) {
         }
 
         // 2. Spatial Overlap Suppression:
-        // If this detection overlaps significantly with a detected water bottle/cup that has equal or higher confidence
+        // If this detection overlaps significantly with a detected desk object (e.g. laptop, cup, mouse)
         let suppressedByOverlap = false;
         for (const b of benignDetections) {
-          if (computeIoU(d.boundingBox, b.boundingBox) > 0.25 && b.score >= score) {
+          if (computeIoU(d.boundingBox, b.boundingBox) > 0.25 && b.score >= score * 0.9) {
             suppressedByOverlap = true;
             break;
           }
@@ -178,29 +204,63 @@ function extractPhoneCandidates(detections, faceLandmarks, bitmap, pose) {
           continue;
         }
 
-        // 3. Head-Turn, Bare Ear Profile & In-Ear Earbud Suppression:
-        // When a candidate turns their head (Math.abs(pose.yaw) > 0.18), the bare ear profile or an in-ear
-        // earbud (AirPods, wired earphones) against the background can trigger weak 'cell phone' / 'camera' blips.
-        // We suppress if the detection is centered directly on the active ear landmark (distToEar < faceHeight * 0.35)
-        // AND either:
-        //   a) The confidence score is < 0.50 (low/moderate artifact), OR
-        //   b) The bounding box is small (< 50% face height), proving it is an earbud/ear and not a handheld phone.
-        // Real phones held to the ear have a large bounding box (>= 60% face height) covering the cheek and jaw.
-        // Handheld phones in front of the camera, lap, chest, or held up at any angle are not centered on the ear!
-        if (activeEar && bitmap && d.boundingBox) {
-          const centerX = (d.boundingBox.originX + d.boundingBox.width / 2) / bitmap.width;
-          const centerY = (d.boundingBox.originY + d.boundingBox.height / 2) / bitmap.height;
-          const distToEar = Math.hypot(centerX - activeEar.x, centerY - activeEar.y);
-
-          const boxWidthNorm = d.boundingBox.width / bitmap.width;
-          const boxHeightNorm = d.boundingBox.height / bitmap.height;
+        // 3. Physical & Geometric Validation
+        if (bitmap && d.boundingBox) {
+          const boxW = d.boundingBox.width;
+          const boxH = d.boundingBox.height;
+          const boxAreaNorm = (boxW * boxH) / (bitmap.width * bitmap.height);
+          const boxWidthNorm = boxW / bitmap.width;
+          const boxHeightNorm = boxH / bitmap.height;
           const boxMaxDim = Math.max(boxWidthNorm, boxHeightNorm);
 
-          const isAtEar = distToEar < faceHeight * 0.30;
-          const isEarbudOrArtifact = score < 0.20 && boxMaxDim < faceHeight * 0.35;
+          // Discard tiny noise specks (< 1.2% frame area or < 4% width/height)
+          if (boxAreaNorm < 0.012 || boxWidthNorm < 0.04 || boxHeightNorm < 0.04) {
+            continue;
+          }
 
-          if (isAtEar && isEarbudOrArtifact) {
-            continue; // Suppressed: only tiny in-ear earbud artifacts with low score during head turn
+          // Discard oversized boxes (> 38% frame area or > 60% in both dimensions)
+          if (boxAreaNorm > 0.38 || (boxWidthNorm > 0.60 && boxHeightNorm > 0.60)) {
+            continue;
+          }
+
+          // Aspect ratio validation: smartphones are elongated rectangles (typically 1.3:1 to 2.5:1)
+          const aspectRatio = Math.max(boxW, boxH) / Math.max(1, Math.min(boxW, boxH));
+          if (aspectRatio < 1.15 || aspectRatio > 3.6) {
+            continue;
+          }
+
+          // Relative to candidate face size:
+          if (faceLandmarks && faceLandmarks.length >= 468) {
+            // A real phone held in view is at least 25% of face height
+            if (boxMaxDim < faceHeight * 0.25) {
+              continue;
+            }
+
+            const centerX = (d.boundingBox.originX + boxW / 2) / bitmap.width;
+            const centerY = (d.boundingBox.originY + boxH / 2) / bitmap.height;
+
+            // Eyeglasses / Spectacles suppression (bridge of nose / eyes)
+            if (noseTip && eyeL && eyeR) {
+              const eyeCenterY = (eyeL.y + eyeR.y) / 2;
+              const eyeCenterX = (eyeL.x + eyeR.x) / 2;
+              const distToGlasses = Math.hypot(centerX - eyeCenterX, centerY - eyeCenterY);
+              if (distToGlasses < faceHeight * 0.25 && boxHeightNorm < faceHeight * 0.40) {
+                continue; // Spectacles frames false positive
+              }
+            }
+
+            // Headset, Earbuds, and Ear Profile Suppression (Both ears, any angle)
+            const distToEarL = earLeft ? Math.hypot(centerX - earLeft.x, centerY - earLeft.y) : Infinity;
+            const distToEarR = earRight ? Math.hypot(centerX - earRight.x, centerY - earRight.y) : Infinity;
+            const minDistToEar = Math.min(distToEarL, distToEarR);
+
+            if (minDistToEar < faceHeight * 0.45) {
+              // Real phone held to ear covers the cheek and jaw (box height >= 58% face height)
+              // In-ear earbuds or headphone cups are compact and don't extend down to jaw
+              if (boxHeightNorm < faceHeight * 0.58 && score < 0.80) {
+                continue; // Suppressed: earbud / headphone artifact
+              }
+            }
           }
         }
 
