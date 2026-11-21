@@ -511,7 +511,9 @@ export default function RecruiterCopilotRoom() {
         setExternalUrlInput(initialExtUrl)
         setExternalCallMode(initialExtMode)
         const qList = Array.isArray(data.questions) ? data.questions : []
-        setQuestions(qList)
+        const isNonTech = String(data.interview_type || '').toLowerCase().includes('non-tech') || String(data.interview_type || '').toLowerCase().includes('case')
+        const sanitizedQList = isNonTech ? qList.filter((q) => !checkIsCodingQuestion(q)) : qList
+        setQuestions(sanitizedQList)
         setActiveIndex(
           Math.min(Math.max(0, Number(data.active_question_index || 0)), Math.max(0, qList.length - 1))
         )
@@ -904,10 +906,15 @@ export default function RecruiterCopilotRoom() {
     }
   }, [audioBlocked, unlockRemoteAudio])
 
+  const isNonTechnical = useMemo(() => {
+    const t = String(sessionData?.interview_type || '').toLowerCase()
+    return t.includes('non-technical') || t.includes('non technical') || t.includes('non_technical') || t.includes('case')
+  }, [sessionData?.interview_type])
+
   const activeQuestion = questions[activeIndex] || null
   const activeQId = activeQuestion ? toSafeQId(activeQuestion.id, activeIndex + 1) : 0
-  const isCodingQuestion = checkIsCodingQuestion(activeQuestion)
-  const isCaseStudyQuestion = checkIsCaseStudyQuestion(activeQuestion)
+  const isCodingQuestion = !isNonTechnical && checkIsCodingQuestion(activeQuestion)
+  const isCaseStudyQuestion = isNonTechnical || checkIsCaseStudyQuestion(activeQuestion)
   const activeEval = evaluationsMap[activeQId] || {
     question_id: activeQId,
     question: activeQuestion?.question || '',
@@ -1031,8 +1038,10 @@ export default function RecruiterCopilotRoom() {
         { headers }
       )
       if (data?.questions && Array.isArray(data.questions)) {
-        const added = data.added_count ?? Math.max(0, data.questions.length - questions.length)
-        setQuestions(data.questions)
+        const isNonTech = String(sessionData?.interview_type || '').toLowerCase().includes('non-tech') || String(sessionData?.interview_type || '').toLowerCase().includes('case')
+        const sanitizedDataQuestions = isNonTech ? data.questions.filter((q) => !checkIsCodingQuestion(q)) : data.questions
+        const added = data.added_count ?? Math.max(0, sanitizedDataQuestions.length - questions.length)
+        setQuestions(sanitizedDataQuestions)
         setGenNotice(
           added > 0
             ? `Added ${added} new unique question${added === 1 ? '' : 's'} to the cheat sheet!`
@@ -2642,8 +2651,8 @@ export default function RecruiterCopilotRoom() {
                     const qId = toSafeQId(q.id, idx + 1)
                     const r = evaluationsMap[qId]?.rating
                     const isCurrent = idx === activeIndex
-                    const isCode = q.question_type === 'coding' || Boolean(q.coding_task)
-                    const isCase = q.question_type === 'case_study' || Boolean(q.case_study)
+                    const isCode = !isNonTechnical && (q.question_type === 'coding' || Boolean(q.coding_task))
+                    const isCase = isNonTechnical || (q.question_type === 'case_study' || Boolean(q.case_study))
 
                     let pillCls = 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
                     if (r === 'Correct') pillCls = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
