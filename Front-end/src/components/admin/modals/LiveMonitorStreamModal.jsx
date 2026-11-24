@@ -427,13 +427,13 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
 
       // If no video track arrives within 25 s, retry the offer automatically (or wait if candidate is initializing)
       streamTimeoutRef.current = setTimeout(() => {
-        if (mountedRef.current && statusRef.current !== 'streaming') {
+        if (mountedRef.current && statusRef.current !== 'streaming' && statusRef.current !== 'waiting_tracks') {
           console.warn('[AdminWebRTC] No stream in 25 s — retrying offer...')
           if (sendOfferRef.current && wsRef.current?.readyState === WebSocket.OPEN) {
             sendOfferRef.current(wsRef.current)
           }
         }
-      }, 12000)
+      }, 25000)
 
     } catch (err) {
       console.error('[AdminWebRTC] sendOffer error:', err)
@@ -511,6 +511,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
 
         if (msg.type === 'candidate_not_ready') {
           console.log('[AdminWebRTC] Candidate media tracks initializing (device check or permissions). Waiting for candidate...')
+          clearTimeout(streamTimeoutRef.current)
           if (mountedRef.current && statusRef.current !== 'streaming') {
             setStatus('waiting_tracks')
           }
@@ -557,6 +558,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
           }
 
         } else if (msg.type === 'candidate_disconnected') {
+          clearTimeout(streamTimeoutRef.current)
           if (mountedRef.current) {
             // Only set disconnected if the peer connection is not actively streaming media
             if (!pcRef.current || pcRef.current.connectionState !== 'connected') {
@@ -601,7 +603,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
         if (wsRef.current?.readyState !== WebSocket.OPEN) {
           console.log('[AdminWebRTC] Tab focused: socket closed. Reconnecting...')
           setRetryCount(c => c + 1)
-        } else if (statusRef.current !== 'streaming') {
+        } else if (statusRef.current !== 'streaming' && statusRef.current !== 'waiting_tracks' && statusRef.current !== 'connecting') {
           console.log('[AdminWebRTC] Tab focused: stream inactive. Retrying offer...')
           if (sendOfferRef.current && wsRef.current) {
             sendOfferRef.current(wsRef.current)

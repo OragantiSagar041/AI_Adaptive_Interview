@@ -159,16 +159,16 @@ function CandidateStreamCard({ session, token, onSelectCandidate }) {
           stream_tier: 'low'
         }))
 
-        // Auto-retry offer after 12s if stream has not begun flowing
+        // Auto-retry offer after 25s if stream has not begun flowing and candidate is not waiting
         clearTimeout(streamTimeoutRef.current)
         streamTimeoutRef.current = setTimeout(() => {
-          if (mountedRef.current && statusRef.current !== 'streaming') {
-            console.warn('[MultiCandidateStream] No stream in 12s - retrying offer for', linkId)
+          if (mountedRef.current && statusRef.current !== 'streaming' && statusRef.current !== 'waiting_tracks') {
+            console.warn('[MultiCandidateStream] No stream in 25s - retrying offer for', linkId)
             if (wsRef.current?.readyState === WebSocket.OPEN) {
               sendOffer()
             }
           }
-        }, 12000)
+        }, 25000)
 
       } catch (err) {
         console.warn('[MultiCandidateStream] Failed to create/set offer:', err)
@@ -206,8 +206,10 @@ function CandidateStreamCard({ session, token, onSelectCandidate }) {
             sendOffer()
           }
         } else if (message.type === 'candidate_not_ready') {
+          clearTimeout(streamTimeoutRef.current)
           setStatus('waiting_tracks')
         } else if (message.type === 'candidate_disconnected') {
+          clearTimeout(streamTimeoutRef.current)
           if (!pcRef.current || pcRef.current.connectionState !== 'connected') {
             setStatus('disconnected')
             setIssue(true)
@@ -254,12 +256,14 @@ function CandidateStreamCard({ session, token, onSelectCandidate }) {
       if (mountedRef.current) {
         setStatus('disconnected')
         setIssue(true)
-        // Auto-reconnect after 3s
-        reconnectTimerRef.current = setTimeout(() => {
-          if (mountedRef.current) {
-            setRetryTrigger(c => c + 1)
-          }
-        }, 3000)
+        // Auto-reconnect after 4s (unless permanently closed with policy code 1008)
+        if (e.code !== 1008) {
+          reconnectTimerRef.current = setTimeout(() => {
+            if (mountedRef.current) {
+              setRetryTrigger(c => c + 1)
+            }
+          }, 4000)
+        }
       }
     }
 
@@ -268,7 +272,7 @@ function CandidateStreamCard({ session, token, onSelectCandidate }) {
       if (document.visibilityState === 'visible' && mountedRef.current) {
         if (wsRef.current?.readyState !== WebSocket.OPEN) {
           setRetryTrigger(c => c + 1)
-        } else if (statusRef.current !== 'streaming') {
+        } else if (statusRef.current !== 'streaming' && statusRef.current !== 'waiting_tracks' && statusRef.current !== 'connecting') {
           sendOffer()
         }
       }

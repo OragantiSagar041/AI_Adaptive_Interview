@@ -50,6 +50,7 @@ import Card from "../../components/Card";
 import Button from "../../components/Button";
 import Badge from "../../components/Badge";
 import Input from "../../components/Input";
+import LiveMonitorStreamModal from "../../components/admin/modals/LiveMonitorStreamModal";
 
 const Progress = ({ value, className = "", ...props }) => (
   <div className={`overflow-hidden rounded-full bg-slate-200 ${className}`} {...props}>
@@ -96,7 +97,7 @@ function initials(name) {
   return name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase();
 }
 
-export default function OverviewDashboardPage() {
+export default function OverviewDashboardPage(props = {}) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const [selectedCandidate, setSelectedCandidate] = useState(null);
@@ -117,6 +118,9 @@ export default function OverviewDashboardPage() {
   const [pipelineFilter, setPipelineFilter] = useState("all");
   const [positionFilter, setPositionFilter] = useState("all");
   const [sortBy, setSortBy] = useState("score");
+
+  const [localLiveSession, setLocalLiveSession] = useState(null);
+  const [localLiveOpen, setLocalLiveOpen] = useState(false);
 
   const handleOpenRecordsModal = useCallback(async (filterType, title) => {
     setListModalFilterType(filterType);
@@ -161,7 +165,17 @@ export default function OverviewDashboardPage() {
   const ongoingAlertCount = useSelector((state) => state.dashboard.ongoingAlertCount);
   const dashboardStatus = useSelector((state) => state.dashboard.status);
   const liveSessions = useSelector((state) => state.dashboard.liveSessions);
-  const { handleOpenLiveStreamAction } = useOutletContext() || {};
+  const outletCtx = useOutletContext() || {};
+  const handleOpenLiveStreamAction = props?.handleOpenLiveStreamAction || outletCtx.handleOpenLiveStreamAction;
+
+  const handleMonitorClick = (session) => {
+    if (handleOpenLiveStreamAction) {
+      handleOpenLiveStreamAction(session);
+    } else {
+      setLocalLiveSession(session);
+      setLocalLiveOpen(true);
+    }
+  };
 
   useEffect(() => {
     dispatch(loadDashboardData());
@@ -480,8 +494,8 @@ export default function OverviewDashboardPage() {
                       <Button 
                         size="sm" 
                         variant="outline" 
-                        onClick={() => handleOpenLiveStreamAction && handleOpenLiveStreamAction(session)}
-                        className="h-8 text-xs font-semibold hover:bg-indigo-50 hover:text-indigo-600 border-indigo-100 transition-colors bg-white dark:bg-slate-800/60 shadow-sm"
+                        onClick={() => handleMonitorClick(session)}
+                        className="h-8 px-3 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 dark:hover:bg-slate-700 dark:hover:text-white transition-colors shadow-sm cursor-pointer"
                       >
                         <Eye className="w-3.5 h-3.5 mr-1.5" /> Monitor
                       </Button>
@@ -952,6 +966,16 @@ export default function OverviewDashboardPage() {
                 }
               }
             }}
+          />
+        )}
+        {!handleOpenLiveStreamAction && (
+          <LiveMonitorStreamModal
+            isOpen={localLiveOpen}
+            onClose={() => {
+              setLocalLiveOpen(false);
+              setLocalLiveSession(null);
+            }}
+            session={localLiveSession}
           />
         )}
       </main>
