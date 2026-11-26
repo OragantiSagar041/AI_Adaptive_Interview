@@ -50,6 +50,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const [error, setError] = useState(null)
   const [scheduledStart, setScheduledStart] = useState(null)
   const [isCompleted, setIsCompleted] = useState(false)
+  const [isAlreadyCompleted, setIsAlreadyCompleted] = useState(false)
   const _sessionKey = sessionId ? `interview_session_${sessionId}` : null
   const _savedSession = _sessionKey ? (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || 'null') } catch { return null } })() : null
 
@@ -307,6 +308,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const [activeRightTab, setActiveRightTab] = useState('code')
   const [compiling, setCompiling] = useState(false)
   const [globalCountdown, setGlobalCountdown] = useState(0)
+  const [isTimeExpired, setIsTimeExpired] = useState(false)
+  const isTimeExpiredRef = useRef(false)
   const [totalDuration, setTotalDuration] = useState(0)
   // (isRoundTwo and isRoundTwoRef defined above with session states)
   const [showRound2Confirm, setShowRound2Confirm] = useState(false)
@@ -677,22 +680,23 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     sessionStorage.setItem(_sessionKey, JSON.stringify({ ...existing, codeAnswer, selectedLanguage }))
   }, [codeAnswer, selectedLanguage])
 
-  // Interview Countdown Timer
+  // Interview Countdown Timer (Time-Driven Model - Pins at 00:00)
   useEffect(() => {
     let interval;
     if (isDisclaimerAccepted && !showAllSet && globalCountdown > 0) {
       interval = setInterval(() => {
-        setGlobalCountdown(prev => prev - 1)
+        setGlobalCountdown(prev => {
+          if (prev <= 1) {
+            setIsTimeExpired(true)
+            isTimeExpiredRef.current = true
+            return 0 // Pin at 00:00! DO NOT trigger abrupt round switch! Let candidate finish their response.
+          }
+          return prev - 1
+        })
       }, 1000)
-    } else if (globalCountdown === 0 && isDisclaimerAccepted && !showAllSet && questions.length > 0) {
-      if (!isRoundTwo && totalDuration > 0 && sessionDetail?.interview_type !== 'Normal') {
-        startNextRound()
-      } else {
-        handleSubmitInterview()
-      }
     }
     return () => clearInterval(interval)
-  }, [isDisclaimerAccepted, showAllSet, globalCountdown, questions.length])
+  }, [isDisclaimerAccepted, showAllSet, globalCountdown])
 
 
   // Safety Overtime Guardrail & Immediate Auto-Submit on Round Time Expiration
@@ -751,6 +755,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       // completed screen immediately without waiting for the API round-trip.
       try {
         if (sessionStorage.getItem(`interview_done_${sessionId}`) === '1') {
+          setIsAlreadyCompleted(true)
           setIsCompleted(true)
           setLoading(false)
           return
@@ -784,6 +789,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           throw new Error(`This interview is scheduled to start on ${startTime.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'short', timeStyle: 'short' })}. Please try again at the scheduled time.`)
         }
         if (payload.session_status === 'completed') {
+          setIsAlreadyCompleted(true)
           setIsCompleted(true)
           setLoading(false)
           return
@@ -814,6 +820,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           throw new Error("This interview session is scheduled for a future time window.")
         }
         if (startPayload.session_status === 'completed') {
+          setIsAlreadyCompleted(true)
           setIsCompleted(true)
           setLoading(false)
           return
@@ -917,6 +924,10 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
             const roundDur = isSingleRound ? fullDuration : fullDuration / 2
             const remaining = Math.max(0, roundDur - elapsedSeconds)
             setGlobalCountdown(remaining)
+            if (remaining <= 0) {
+              setIsTimeExpired(true)
+              isTimeExpiredRef.current = true
+            }
             if (_savedSession.isRoundTwo) {
               setIsRoundTwo(true)
               isRoundTwoRef.current = true
@@ -1712,6 +1723,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       if (totalDuration > 0) {
         setGlobalCountdown(totalDuration / 2)
       }
+      setIsTimeExpired(false)
+      isTimeExpiredRef.current = false
     } catch (err) {
       console.error("Failed to start round 2:", err)
       isStartingRoundTwoRef.current = false
@@ -1905,6 +1918,33 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         } catch (e) { }
         handleSubmitInterview()
         return
+      }
+
+      // 2. Strict Round Progression on Time Expiration
+      // When time is expired (globalCountdown <= 0 or pinned at 00:00), candidate finished answering.
+      // Strictly advance to Round 2 or Final Submission. NO new verbal questions may be served!
+      if (isTimeExpiredRef.current || (globalCountdown <= 0 && totalDuration > 0)) {
+        const iType = sessionDetail?.interview_type || 'Normal'
+        if (!isRoundTwo && (iType === 'Technical' || iType === 'Non-Technical')) {
+          accumulatedTranscriptRef.current = ''
+          currentSessionFinalRef.current = ''
+          interimTextRef.current = ''
+          whisperAudioChunksRef.current = []
+          whisperFinalizedTranscriptRef.current = ''
+          liveInterimGhostRef.current = ''
+          segmentHasSpeechRef.current = false
+          setTranscriptionText('')
+          setInterimTranscriptText('')
+          setCodeAnswer('')
+          setCodeOutput('')
+          behavioralStatsRef.current = { wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0, noiseAlerts: 0 }
+          questionStartTimeRef.current = Date.now()
+          startNextRound()
+          return
+        } else {
+          handleSubmitInterview()
+          return
+        }
       }
 
       if (currentQuestionIndex === questions.length - 1) {
@@ -2475,6 +2515,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     setCodeOutputState: setCodeOutput,
     globalCountdown,
     totalDuration,
+    isTimeExpired,
     isRoundTwo,
     setIsRoundTwo,
     showRound2Confirm,
@@ -2506,6 +2547,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     isSpeechRecordingRef,
     interimTranscriptText,
     isCompleted,
+    isAlreadyCompleted,
     scheduledStart,
     isOnline
   }

@@ -196,7 +196,7 @@ def score_answer_task(
                     "ai_keywords": keywords_str,
                     "corrected_answer": ai_result.get("corrected_answer", "N/A"),
                     "scoring_status": "complete",
-                }
+                } 
             },
         )
         if update_result.matched_count == 0:
@@ -332,7 +332,7 @@ def score_answer_task(
                             
                             interview_sessions_collection.update_one(
                                 {"_id": session["_id"]},
-                                {"$set": {
+                                {"$set": { 
                                     "multi_dimensional_analysis": dimensions
                                 }}
                             )
@@ -629,6 +629,7 @@ def send_recruiter_credentials_email_task(
         try:
             from celery.exceptions import MaxRetriesExceededError
             self.retry(exc=e, countdown=2 ** self.request.retries)
+            
         except MaxRetriesExceededError:
             logger.error("Max retries exceeded for credentials email.")
         raise

@@ -107,6 +107,7 @@ export const InterviewNonTechnical = () => {
     error,
     scheduledStart,
     isCompleted,
+    isAlreadyCompleted,
     isDisclaimerAccepted,
     agreeChecked,
     setAgreeChecked,
