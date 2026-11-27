@@ -1139,8 +1139,6 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     handleUpdateDecision: handleUpdateDecisionAction,
     handleUpdateCreditRequest: handleUpdateCreditRequestAction,
     handleOpenScorecard: handleOpenScorecardAction,
-    handleOpenLiveStreamAction,
-    handleOpenLiveStream: handleOpenLiveStreamAction,
     selectedCandidate,
     setSelectedCandidate: (c) => dispatch(setSelectedCandidate(c)),
     candidateDetail,
