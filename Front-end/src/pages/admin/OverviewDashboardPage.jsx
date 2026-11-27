@@ -14,6 +14,7 @@ import CandidateDialog from '../../components/superadmin/CandidateDialog';
 import CallDetailsModal from "./CallDetailsModal";
 import { CandidateFilters } from "../../components/admin/AdminSubComponents";
 import Modal from "../../components/Modal";
+import { getComputedStatus } from "../../utils/adminFormatters";
 
 import {
   Search,
@@ -131,9 +132,13 @@ export default function OverviewDashboardPage() {
 
       let filtered = [];
       if (filterType === "pending") {
-        filtered = allCandidates.filter(c => (c.status || "").toLowerCase() === "pending");
+        filtered = allCandidates.filter(c => getComputedStatus(c) === "pending");
       } else if (filterType === "live") {
-        filtered = allCandidates.filter(c => (c.status || "").toLowerCase() === "started" || c.online);
+        filtered = allCandidates.filter(c => getComputedStatus(c) === "started" || c.online);
+      } else if (filterType === "expired") {
+        filtered = allCandidates.filter(c => getComputedStatus(c) === "expired");
+      } else if (filterType === "completed") {
+        filtered = allCandidates.filter(c => getComputedStatus(c) === "completed");
       } else if (filterType === "alerts") {
         filtered = allCandidates.filter(c => parseInt(c.proctoring_alerts || 0) > 0);
       } else if (filterType === "rejected") {
@@ -188,7 +193,7 @@ export default function OverviewDashboardPage() {
       if (!matchesSearch) return false;
 
       if (statusFilter !== "all") {
-        const computedStatus = (c.status || "").toLowerCase();
+        const computedStatus = getComputedStatus(c);
         if (statusFilter === "completed" && computedStatus !== "completed") return false;
         if (statusFilter === "pending" && computedStatus !== "pending") return false;
         if (statusFilter === "started" && computedStatus !== "started") return false;
@@ -215,7 +220,7 @@ export default function OverviewDashboardPage() {
         if (cDate > endD) return false;
       }
 
-      const computedStatus = (c.status || "").toLowerCase();
+      const computedStatus = getComputedStatus(c);
       const decision = (c.decision || "").toLowerCase();
       const alerts = parseInt(c.proctoring_alerts || 0);
 
@@ -893,19 +898,26 @@ export default function OverviewDashboardPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3.5">
-                        <Badge
-                          variant="outline"
-                          className={
-                            (c.decision === "selected" || c.decision === "hired")
-                              ? "border-success/30 bg-success/10 text-success"
-                              : c.decision === "rejected"
-                                ? "border-destructive/30 bg-destructive/10 text-destructive"
-                                : "border-warning/30 bg-warning/10 text-warning-foreground"
-                          }
-                        >
-                          <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${(c.decision === "selected" || c.decision === "hired") ? "bg-success" : c.decision === "rejected" ? "bg-destructive" : "bg-warning"}`} />
-                          {c.decision ? (c.decision.charAt(0).toUpperCase() + c.decision.slice(1)) : (c.status ? c.status.charAt(0).toUpperCase() + c.status.slice(1) : "Pending")}
-                        </Badge>
+                        {(() => {
+                          const displaySt = getComputedStatus(c);
+                          const isSuccess = c.decision === "selected" || c.decision === "hired";
+                          const isDestructive = c.decision === "rejected" || displaySt === "expired";
+                          return (
+                            <Badge
+                              variant="outline"
+                              className={
+                                isSuccess
+                                  ? "border-success/30 bg-success/10 text-success"
+                                  : isDestructive
+                                    ? "border-destructive/30 bg-destructive/10 text-destructive"
+                                    : "border-warning/30 bg-warning/10 text-warning-foreground"
+                              }
+                            >
+                              <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${isSuccess ? "bg-success" : isDestructive ? "bg-destructive" : "bg-warning"}`} />
+                              {c.decision ? (c.decision.charAt(0).toUpperCase() + c.decision.slice(1)) : (displaySt ? (displaySt.charAt(0).toUpperCase() + displaySt.slice(1)) : "Pending")}
+                            </Badge>
+                          );
+                        })()}
                       </td>
                       <td className="px-4 py-3.5 text-right">
                         <Button
