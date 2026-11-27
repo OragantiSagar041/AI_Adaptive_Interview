@@ -1,13 +1,4 @@
 export function getComputedStatus(candidate) {
-  if (!candidate) return 'pending'
-  const st = (candidate.status || 'pending').toLowerCase()
-  if (st === 'expired') return 'expired'
-  if (st === 'pending' && candidate.expires_at) {
-    const exp = parseDateStringToUtc(candidate.expires_at)
-    if (exp && !Number.isNaN(exp.getTime()) && exp.getTime() < Date.now()) {
-      return 'expired'
-    }
-  }
   return candidate.status || 'pending'
 }
 
