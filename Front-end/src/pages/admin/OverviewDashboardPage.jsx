@@ -481,7 +481,7 @@ export default function OverviewDashboardPage() {
                         size="sm" 
                         variant="outline" 
                         onClick={() => handleOpenLiveStreamAction && handleOpenLiveStreamAction(session)}
-                        className="h-8 text-xs font-semibold hover:bg-indigo-50 hover:text-indigo-600 border-indigo-100 transition-colors bg-white dark:bg-slate-800/60 shadow-sm"
+                        className="h-8 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-slate-700 dark:hover:text-white border border-slate-200 dark:border-slate-700 transition-colors bg-white dark:bg-slate-800/60 shadow-sm cursor-pointer"
                       >
                         <Eye className="w-3.5 h-3.5 mr-1.5" /> Monitor
                       </Button>
