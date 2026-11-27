@@ -5,24 +5,17 @@ export default function Button({
   onClick,
   type = 'button',
   variant = 'primary',
-  size = 'md',
   disabled = false,
   loading = false,
   icon = null,
   className = '',
   ...props
 }) {
-  const sizeStyles = {
-    sm: 'px-3 py-1.5 text-xs',
-    md: 'px-6 py-3 text-sm',
-    lg: 'px-8 py-3.5 text-base',
-  }
-  const baseStyle = `inline-flex items-center justify-center gap-2 rounded-[5px] font-semibold cursor-pointer transition-all duration-200 outline-none select-none disabled:opacity-45 disabled:cursor-not-allowed disabled:transform-none ${sizeStyles[size] || sizeStyles.md}`
+  const baseStyle = 'inline-flex items-center justify-center gap-2 px-6 py-3 rounded-[5px] font-semibold text-sm cursor-pointer transition-all duration-200 outline-none select-none disabled:opacity-45 disabled:cursor-not-allowed disabled:transform-none'
   
   const variants = {
     primary: 'bg-primary hover:bg-primary-hover text-white shadow-[0_18px_40px_rgba(99,102,241,0.18)] hover:-translate-y-0.5 hover:shadow-[0_22px_48px_rgba(99,102,241,0.22)]',
     secondary: 'bg-white/75 hover:bg-white text-slate-900 border border-slate-200 shadow-[0_10px_28px_rgba(15,23,42,0.06)] hover:-translate-y-0.5',
-    outline: 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm hover:-translate-y-0.5',
     danger: 'bg-red-500 hover:bg-red-600 text-white shadow-[0_4px_14px_rgba(239,68,68,0.15)] hover:-translate-y-0.5',
     warning: 'bg-amber-500 hover:bg-amber-600 text-white shadow-[0_4px_14px_rgba(245,158,11,0.15)] hover:-translate-y-0.5',
     ghost: 'bg-transparent hover:bg-slate-900/5 text-slate-700 border border-transparent hover:-translate-y-0.5'
