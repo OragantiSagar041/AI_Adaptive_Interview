@@ -14,6 +14,7 @@ import CandidateDialog from '../../components/superadmin/CandidateDialog';
 import CallDetailsModal from "./CallDetailsModal";
 import { CandidateFilters } from "../../components/admin/AdminSubComponents";
 import Modal from "../../components/Modal";
+import LiveMonitorStreamModal from "../../components/admin/modals/LiveMonitorStreamModal";
 
 import {
   Search,
@@ -96,7 +97,7 @@ function initials(name) {
   return name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase();
 }
 
-export default function OverviewDashboardPage() {
+export default function OverviewDashboardPage(props = {}) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const [selectedCandidate, setSelectedCandidate] = useState(null);
@@ -105,6 +106,8 @@ export default function OverviewDashboardPage() {
   const [listModalCandidates, setListModalCandidates] = useState([]);
   const [listModalFilterType, setListModalFilterType] = useState(null);
   const [loadingModalRecords, setLoadingModalRecords] = useState(false);
+  const [internalLiveModalOpen, setInternalLiveModalOpen] = useState(false);
+  const [internalLiveSession, setInternalLiveSession] = useState(null);
 
   // Keep these states so existing code (like activeFilter references) does not break
   const [activeActionFilter, setActiveActionFilter] = useState(null);
@@ -161,7 +164,17 @@ export default function OverviewDashboardPage() {
   const ongoingAlertCount = useSelector((state) => state.dashboard.ongoingAlertCount);
   const dashboardStatus = useSelector((state) => state.dashboard.status);
   const liveSessions = useSelector((state) => state.dashboard.liveSessions);
-  const { handleOpenLiveStreamAction } = useOutletContext() || {};
+  const outletCtx = useOutletContext() || {};
+  const parentHandleOpenLiveStream = props.handleOpenLiveStreamAction || outletCtx.handleOpenLiveStreamAction || props.handleOpenLiveStream || outletCtx.handleOpenLiveStream;
+
+  const handleMonitorClick = useCallback((session) => {
+    if (parentHandleOpenLiveStream) {
+      parentHandleOpenLiveStream(session);
+    } else {
+      setInternalLiveSession(session);
+      setInternalLiveModalOpen(true);
+    }
+  }, [parentHandleOpenLiveStream]);
 
   useEffect(() => {
     dispatch(loadDashboardData());
@@ -480,7 +493,7 @@ export default function OverviewDashboardPage() {
                       <Button 
                         size="sm" 
                         variant="outline" 
-                        onClick={() => handleOpenLiveStreamAction && handleOpenLiveStreamAction(session)}
+                        onClick={() => handleMonitorClick(session)}
                         className="h-8 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-slate-700 dark:hover:text-white border border-slate-200 dark:border-slate-700 transition-colors bg-white dark:bg-slate-800/60 shadow-sm cursor-pointer"
                       >
                         <Eye className="w-3.5 h-3.5 mr-1.5" /> Monitor
@@ -954,6 +967,14 @@ export default function OverviewDashboardPage() {
             }}
           />
         )}
+        <LiveMonitorStreamModal
+          isOpen={internalLiveModalOpen}
+          onClose={() => {
+            setInternalLiveModalOpen(false);
+            setInternalLiveSession(null);
+          }}
+          session={internalLiveSession}
+        />
       </main>
     </div>
   );
