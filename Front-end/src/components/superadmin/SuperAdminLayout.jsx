@@ -802,6 +802,10 @@ export default function SuperAdminLayout() {
                     src={adminUser?.profile_image || adminUser?.avatar || "https://ui-avatars.com/api/?name=Super+Admin&background=random"}
                     alt="Avatar"
                     className="w-8 h-8 rounded-full object-cover border border-slate-200"
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(userName || 'Super Admin')}&background=random`;
+                    }}
                   />
                   <div className="text-left hidden sm:block">
                     <div className="text-[13px] font-semibold text-slate-800 dark:text-slate-100 leading-none">{userName}</div>

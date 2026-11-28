@@ -831,8 +831,8 @@ def generate_recruiter_cheat_sheet_questions(
     start_id = max(1, int(start_id or 1))
     is_continuation = start_id > 1 or bool(exclude_questions)
     iv_type_norm = (interview_type or "").strip().lower()
-    is_non_tech = any(k in iv_type_norm for k in ("non-technical", "non technical", "normal", "case", "behavioral", "management", "hr"))
-    is_coding_eligible = any(k in iv_type_norm for k in ("coding", "technical", "tech", "software", "developer"))
+    is_non_tech = any(k in iv_type_norm for k in ("non-technical", "non technical", "non_technical", "nontech", "normal", "case", "behavioral", "management", "hr"))
+    is_coding_eligible = (not is_non_tech) and any(k in iv_type_norm for k in ("coding", "technical", "tech", "software", "developer"))
 
     # Build ordered exclusion lists (preserve all existing questions + coding/case titles)
     seen_texts: List[str] = [str(q).strip() for q in (exclude_questions or []) if str(q).strip()]
@@ -884,9 +884,11 @@ def generate_recruiter_cheat_sheet_questions(
     # ── 1. Non-Technical / Normal: Scenario-Based Case Studies ─────────────────
     if is_non_tech:
         sys_prompt = (
-            f"You are an executive HR and business case interviewer preparing a 2-second glanceable case-study cheat sheet "
-            f"for a human recruiter conducting a live {interview_type} interview in the {industry} industry.\n"
+            f"You are an executive HR and business strategy case interviewer preparing a 2-second glanceable case-study cheat sheet "
+            f"for a human recruiter conducting a live {interview_type} (Case Studies) interview in the {industry} industry.\n"
+            f"CRITICAL REQUIREMENT: This is a strictly NON-TECHNICAL case study assessment. You MUST NOT generate any coding tasks, programming challenges, algorithms, or code implementations under any circumstances.\n"
             f"Generate EXACTLY {llm_target_count} realistic, completely unique scenario-based case study challenges based on the Candidate Resume and Job Description.\n"
+            f"Focus on business dilemmas, strategic trade-offs, crisis management, cross-functional stakeholder alignment, resource optimization, and operational problem solving.\n"
             f"NEVER repeat or rephrase any previously asked scenario or dilemma.\n"
             f"For EVERY question you MUST return valid JSON with:\n"
             f"1. 'question': Clear scenario prompt & core dilemma the recruiter can read or display to the candidate.\n"
@@ -940,12 +942,37 @@ def generate_recruiter_cheat_sheet_questions(
             if not q_text:
                 continue
 
-            q_type = str(item.get("question_type") or ("case_study" if is_non_tech else "discussion")).strip().lower()
-            if q_type not in ("discussion", "coding", "case_study"):
-                q_type = "case_study" if is_non_tech else "discussion"
-
-            coding_payload = item.get("coding_task") if q_type == "coding" and isinstance(item.get("coding_task"), dict) else None
-            case_payload = item.get("case_study") if q_type == "case_study" and isinstance(item.get("case_study"), dict) else None
+            # Strict guardrail: Non-Technical (Case Studies) must NEVER contain coding questions
+            if is_non_tech:
+                if (
+                    item.get("coding_task")
+                    or item.get("question_type") == "coding"
+                    or "coding" in str(item.get("category") or "").lower()
+                    or "coding challenge" in q_text.lower()
+                    or "live coding" in q_text.lower()
+                    or "write a function" in q_text.lower()
+                    or "implement an algorithm" in q_text.lower()
+                ):
+                    continue
+                q_type = "case_study"
+                coding_payload = None
+                case_payload = item.get("case_study") if isinstance(item.get("case_study"), dict) else None
+                if not case_payload:
+                    case_payload = {
+                        "title": item.get("title") or q_text[:60],
+                        "scenario": q_text,
+                        "dilemma": item.get("quick_summary") or "Analyze strategic trade-offs and propose actionable solutions.",
+                        "competencies": item.get("key_points") or ["Strategic Thinking", "Stakeholder Communication", "Execution"],
+                        "probing_questions": ["What metrics would you monitor?", "How would you address pushback from leadership?"],
+                    }
+                q_cat = "Case Study"
+            else:
+                q_type = str(item.get("question_type") or "discussion").strip().lower()
+                if q_type not in ("discussion", "coding", "case_study"):
+                    q_type = "discussion"
+                coding_payload = item.get("coding_task") if q_type == "coding" and isinstance(item.get("coding_task"), dict) else None
+                case_payload = item.get("case_study") if q_type == "case_study" and isinstance(item.get("case_study"), dict) else None
+                q_cat = item.get("category") or ("Coding Challenge" if q_type == "coding" else "Core Technical")
 
             c_title = (coding_payload or {}).get("title") or extract_coding_title_from_text(q_text)
             c_fn = (coding_payload or {}).get("function_name") or ""
@@ -1126,39 +1153,95 @@ def generate_recruiter_cheat_sheet_questions(
             except Exception as case_fb_err:
                 print(f"[RecruiterCheatSheet] Case study fallback error: {case_fb_err}")
 
-        defaults = [
-            ("Walk me through the most complex project on your resume and the architectural decisions you made.", "Resume Deep Dive"),
-            ("How do you debug a performance bottleneck or production outage in your primary stack?", "Problem Solving"),
-            ("What trade-offs do you consider when designing data storage and caching for scale?", "System Design"),
-            ("Tell me about a technical disagreement with a teammate and how you resolved it.", "Behavioral"),
-            ("How do you balance technical debt vs shipping new features under tight deadlines?", "Engineering Leadership"),
-            ("Describe how you design secure APIs and handle authentication/authorization at scale.", "System Security"),
-            ("How do you approach end-to-end testing, observability, and zero-downtime deployments?", "DevOps & SRE"),
-            ("How would you design a rate limiter for a high-traffic public REST API across multiple instances?", "System Design"),
-            ("Explain how you prevent race conditions and ensure idempotency in payment or order-processing workflows.", "Distributed Systems"),
-            ("How do you diagnose and resolve memory leaks or high CPU spikes in a running backend service?", "Performance"),
-            ("What database indexing strategies do you apply when slow queries emerge under growing table sizes?", "Database Engineering"),
-            ("How would you structure a CI/CD rollback plan when a schema migration causes unexpected failures?", "DevOps & SRE"),
-            ("Compare synchronous REST calls with asynchronous message queues—when would you pick one over the other?", "Architecture"),
-            ("How do you protect web applications against XSS, CSRF, SQL injection, and broken access control?", "System Security"),
-            ("Explain how you design graceful degradation and circuit breakers when a third-party dependency slows down.", "Resilience"),
-            ("Walk through how you conduct code reviews to raise engineering quality without blocking team velocity.", "Engineering Leadership"),
-            ("How do you choose between SQL and NoSQL data models for a multi-tenant SaaS application?", "Database Engineering"),
-            ("What metrics, logs, and distributed traces do you instrument first when launching a new microservice?", "Observability"),
-            ("How do you optimize frontend bundle size, rendering latency, and API caching for slow client networks?", "Frontend Performance"),
-            ("Tell me about a production bug that slipped past tests—what systemic safeguard did you add afterward?", "Incident Response"),
-            ("How would you migrate a monolithic feature into an independent service without disrupting active users?", "Architecture"),
-            ("Explain how you handle eventual consistency and stale cache invalidation across distributed nodes.", "Distributed Systems"),
-            ("How do you prioritize and communicate scope trade-offs when an unexpected deadline change hits mid-sprint?", "Collaboration"),
-            ("What concurrency primitives or async patterns do you rely on to prevent deadlocks and thread starvation?", "Core Technical"),
-        ]
-        for qt, cat in defaults:
-            if len(parsed_items) >= num_questions:
-                break
-            if is_recruiter_question_duplicate(qt, seen_texts):
-                continue
-            seen_texts.append(qt)
-            parsed_items.append(_build_recruiter_fallback_item(start_id + len(parsed_items), qt, category=cat, difficulty=difficulty))
+            # Additional Non-Technical Case Studies fallback (ensures strictly case studies, zero coding)
+            non_tech_case_defaults = [
+                (
+                    "Case Scenario: A major enterprise client threatens to terminate their contract due to repeated SLA delays caused by cross-team scope creep.\n\nCore Question: How do you prioritize corrective actions, negotiate client expectations, and establish internal accountability?",
+                    "Client Escalation & Retention",
+                    "Prioritize SLA recovery, transparent communication with executive stakeholders, and internal sprint guardrails."
+                ),
+                (
+                    "Case Scenario: Your annual department budget is reduced by 25% mid-year, but core delivery milestones cannot be moved.\n\nCore Question: How do you renegotiate project scope, reallocate headcount, and maintain team engagement under constrained resources?",
+                    "Budget & Resource Optimization",
+                    "Triage low-ROI deliverables, automate repetitive overhead, and transparently align the team around top impact metrics."
+                ),
+                (
+                    "Case Scenario: Two senior department heads hold conflicting strategic priorities on the rollout of a business-critical initiative.\n\nCore Question: How do you mediate the impasse, achieve consensus, and keep execution moving forward?",
+                    "Executive Stakeholder Alignment",
+                    "Anchor on shared business KPIs, evaluate objective trade-offs, and establish a staged rollout compromise."
+                ),
+                (
+                    "Case Scenario: A vital external logistics and cloud partner suffers a severe 48-hour outage impacting customer operations.\n\nCore Question: Walk through your incident communication plan, operational mitigation, and post-crisis vendor review.",
+                    "Crisis Management & Continuity",
+                    "Immediate proactive client notifications, activation of contingency channels, and contractual SLA review."
+                ),
+                (
+                    "Case Scenario: Customer onboarding drop-off increased by 30% after a major process overhaul.\n\nCore Question: What diagnostic framework do you apply to isolate friction points and execute a rapid turnaround?",
+                    "Operational Diagnosis & Turnaround",
+                    "Funnel data telemetry analysis, direct customer interview triage, and rapid incremental UX rollback/adjustments."
+                ),
+                (
+                    "Case Scenario: A top-performing team member delivers outstanding individual results but displays toxic, dismissive behavior toward peers.\n\nCore Question: How do you address the behavior while safeguarding team psychological safety and business performance?",
+                    "People Leadership & Culture",
+                    "Direct feedback with specific behavioral expectations, clear accountability boundaries, and continuous coaching."
+                ),
+            ]
+            for cs_q, cs_title, cs_summary in non_tech_case_defaults:
+                if len(parsed_items) >= num_questions:
+                    break
+                if is_recruiter_question_duplicate(cs_q, seen_texts, case_title=cs_title, existing_case_titles=seen_case_titles):
+                    continue
+                seen_texts.append(cs_q)
+                seen_case_titles.append(cs_title)
+                c_struct = {
+                    "title": cs_title,
+                    "scenario": cs_q,
+                    "dilemma": cs_summary,
+                    "competencies": ["Strategic Decision Making", "Crisis Management", "Stakeholder Communication"],
+                    "probing_questions": ["What immediate risks must be contained?", "How do you measure success 30 days after implementation?"],
+                }
+                parsed_items.append(_build_recruiter_fallback_item(
+                    start_id + len(parsed_items),
+                    cs_q,
+                    category="Case Study",
+                    difficulty=difficulty,
+                    question_type="case_study",
+                    case_study=c_struct,
+                ))
+        else:
+            defaults = [
+                ("Walk me through the most complex project on your resume and the architectural decisions you made.", "Resume Deep Dive"),
+                ("How do you debug a performance bottleneck or production outage in your primary stack?", "Problem Solving"),
+                ("What trade-offs do you consider when designing data storage and caching for scale?", "System Design"),
+                ("Tell me about a technical disagreement with a teammate and how you resolved it.", "Behavioral"),
+                ("How do you balance technical debt vs shipping new features under tight deadlines?", "Engineering Leadership"),
+                ("Describe how you design secure APIs and handle authentication/authorization at scale.", "System Security"),
+                ("How do you approach end-to-end testing, observability, and zero-downtime deployments?", "DevOps & SRE"),
+                ("How would you design a rate limiter for a high-traffic public REST API across multiple instances?", "System Design"),
+                ("Explain how you prevent race conditions and ensure idempotency in payment or order-processing workflows.", "Distributed Systems"),
+                ("How do you diagnose and resolve memory leaks or high CPU spikes in a running backend service?", "Performance"),
+                ("What database indexing strategies do you apply when slow queries emerge under growing table sizes?", "Database Engineering"),
+                ("How would you structure a CI/CD rollback plan when a schema migration causes unexpected failures?", "DevOps & SRE"),
+                ("Compare synchronous REST calls with asynchronous message queues—when would you pick one over the other?", "Architecture"),
+                ("How do you protect web applications against XSS, CSRF, SQL injection, and broken access control?", "System Security"),
+                ("Explain how you design graceful degradation and circuit breakers when a third-party dependency slows down.", "Resilience"),
+                ("Walk through how you conduct code reviews to raise engineering quality without blocking team velocity.", "Engineering Leadership"),
+                ("How do you choose between SQL and NoSQL data models for a multi-tenant SaaS application?", "Database Engineering"),
+                ("What metrics, logs, and distributed traces do you instrument first when launching a new microservice?", "Observability"),
+                ("How do you optimize frontend bundle size, rendering latency, and API caching for slow client networks?", "Frontend Performance"),
+                ("Tell me about a production bug that slipped past tests—what systemic safeguard did you add afterward?", "Incident Response"),
+                ("How would you migrate a monolithic feature into an independent service without disrupting active users?", "Architecture"),
+                ("Explain how you handle eventual consistency and stale cache invalidation across distributed nodes.", "Distributed Systems"),
+                ("How do you prioritize and communicate scope trade-offs when an unexpected deadline change hits mid-sprint?", "Collaboration"),
+                ("What concurrency primitives or async patterns do you rely on to prevent deadlocks and thread starvation?", "Core Technical"),
+            ]
+            for qt, cat in defaults:
+                if len(parsed_items) >= num_questions:
+                    break
+                if is_recruiter_question_duplicate(qt, seen_texts):
+                    continue
+                seen_texts.append(qt)
+                parsed_items.append(_build_recruiter_fallback_item(start_id + len(parsed_items), qt, category=cat, difficulty=difficulty))
 
     # Re-index cleanly from start_id
     for i, item in enumerate(parsed_items[:num_questions], start=start_id):

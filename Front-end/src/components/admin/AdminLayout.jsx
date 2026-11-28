@@ -470,6 +470,10 @@ export default function AdminLayout({
                     src={adminUser?.profile_image || adminUser?.avatar || "https://ui-avatars.com/api/?name=Recruiter&background=random"}
                     alt="Avatar"
                     className="w-8 h-8 rounded-full object-cover border border-slate-200 dark:border-slate-700"
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(adminUser?.name || 'Recruiter')}&background=random`;
+                    }}
                   />
                   <div className="text-left hidden sm:block">
                     <div className="text-[13px] font-semibold text-slate-800 dark:text-slate-100 leading-none">

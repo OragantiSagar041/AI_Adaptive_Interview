@@ -2142,6 +2142,9 @@ def get_recruiter_session_questions(
         custom_qs = session_row.get("custom_questions") or ""
         ai_instr = session_row.get("ai_instructions") or ""
         iv_type = session_row.get("interview_type") or (iv_doc or {}).get("interview_type") or "Technical"
+        iv_type_norm = (iv_type or "").strip().lower()
+        is_non_tech = any(k in iv_type_norm for k in ("non-technical", "non technical", "non_technical", "nontech", "normal", "case", "behavioral", "management", "hr"))
+        is_coding_eligible = (not is_non_tech) and any(k in iv_type_norm for k in ("coding", "technical", "tech", "software", "developer"))
         experience_val = str(session_row.get("experience") or "")
         safe_diff = _safe_str_difficulty(session_row.get("project_difficulty") or session_row.get("difficulty"))
 
@@ -2167,67 +2170,146 @@ def get_recruiter_session_questions(
                     difficulty=safe_diff,
                 )
 
-            # Ensure Technical / Coding interviews ALWAYS contain live coding challenges
-            is_coding_eligible = any(k in iv_type.lower() for k in ("coding", "technical", "tech", "software", "developer"))
-            has_coding = any(
-                isinstance(q, dict) and (q.get("question_type") == "coding" or bool(q.get("coding_task")))
-                for q in parsed_questions
-            )
-            if is_coding_eligible and not has_coding:
-                try:
-                    from app.data.coding_graph import _offline_coding_fallback, generate_coding_task
-                    from app.data.interview_graphs import _detect_candidate_tech_stack
-                    profile_blob = f"{job_desc}\n{resume_txt}"
-                    detected_lang = _detect_candidate_tech_stack(profile_blob)
-                    task_obj = None
+            # Strict guardrail: Non-Technical (Case Studies) must NEVER contain coding questions
+            if is_non_tech:
+                clean_case_questions = []
+                for q in parsed_questions:
+                    if not isinstance(q, dict):
+                        continue
+                    q_type = str(q.get("question_type") or "").lower()
+                    is_code = (
+                        q_type == "coding"
+                        or bool(q.get("coding_task"))
+                        or "coding" in str(q.get("category") or "").lower()
+                        or "coding challenge" in str(q.get("question") or "").lower()
+                        or "live coding" in str(q.get("question") or "").lower()
+                        or "write a function" in str(q.get("question") or "").lower()
+                        or "implement an algorithm" in str(q.get("question") or "").lower()
+                    )
+                    if not is_code:
+                        if q_type != "case_study":
+                            q["question_type"] = "case_study"
+                        if "case" not in str(q.get("category") or "").lower():
+                            q["category"] = "Case Study"
+                        if not q.get("case_study"):
+                            q["case_study"] = {
+                                "title": q.get("title") or str(q.get("question") or "")[:60],
+                                "scenario": str(q.get("question") or ""),
+                                "dilemma": q.get("quick_summary") or "Analyze strategic trade-offs and propose actionable solutions.",
+                                "competencies": q.get("key_points") or ["Strategic Thinking", "Stakeholder Communication", "Execution"],
+                                "probing_questions": ["What metrics would you monitor?", "How would you address pushback from leadership?"],
+                            }
+                        clean_case_questions.append(q)
+                parsed_questions = clean_case_questions
+
+                # If purging coding questions left fewer than 6, generate additional case studies
+                if len(parsed_questions) < 6:
                     try:
-                        task_obj = generate_coding_task(profile_blob, [], interview_type="Technical", industry=session_row.get("industry") or "General")
-                    except Exception:
-                        pass
-                    if not task_obj or not task_obj.get("title"):
-                        task_obj = _offline_coding_fallback(profile_blob)
-                    if task_obj and task_obj.get("title"):
-                        task_obj["recommended_language"] = task_obj.get("recommended_language") or detected_lang
-                        ct_title = task_obj.get("title", "Coding Challenge")
-                        ct_desc = task_obj.get("description", "")
-                        coding_item = {
-                            "id": len(parsed_questions) + 1,
-                            "question": f"Live Coding Challenge: {ct_title} — {ct_desc[:240]}...",
-                            "quick_summary": f"Live Coding Challenge: {ct_title} — Candidate implements solution in Monaco Code Editor with test execution.",
-                            "key_points": [
-                                "Optimal time/space complexity",
-                                "Handles edge cases & boundary conditions",
-                                "Passes visible and hidden automated test cases",
-                                "Clean, readable syntax & modular logic",
-                            ],
-                            "model_answer": (
-                                f"Optimal algorithmic approach for {ct_title}: Expected complexity O(N) or O(N log N). "
-                                f"Starter function: `{task_obj.get('starter_function_signature') or task_obj.get('function_name') or 'solve'}`. "
-                                f"Candidate must explain data structure selection, trade-offs, and run test verification."
-                            ),
-                            "category": "Coding Challenge",
-                            "difficulty": (task_obj.get("difficulty") or safe_diff).capitalize(),
-                            "question_type": "coding",
-                            "coding_task": task_obj,
-                        }
-                        insert_pos = min(len(parsed_questions), 2)
-                        parsed_questions.insert(insert_pos, coding_item)
-                except Exception as code_inj_err:
-                    logger.warning(f"[RecruiterCopilot] Coding injection warning: {code_inj_err}")
+                        more_cases = generate_recruiter_cheat_sheet_questions(
+                            resume_text=resume_txt,
+                            jd_text=job_desc,
+                            num_questions=8 - len(parsed_questions),
+                            interview_type=iv_type,
+                            industry=session_row.get("industry") or "General",
+                            language=session_row.get("language") or "English",
+                            difficulty=safe_diff,
+                            ai_instructions=ai_instr,
+                            exclude_questions=[str(q.get("question") or "") for q in parsed_questions if isinstance(q, dict)],
+                            start_id=len(parsed_questions) + 1,
+                        )
+                        parsed_questions.extend(more_cases)
+                    except Exception as more_err:
+                        logger.warning(f"[RecruiterCopilot] Case study fill warning: {more_err}")
+
+            # Ensure Technical / Coding interviews ALWAYS contain live coding challenges (STRICTLY for Technical interviews)
+            elif is_coding_eligible:
+                has_coding = any(
+                    isinstance(q, dict) and (q.get("question_type") == "coding" or bool(q.get("coding_task")))
+                    for q in parsed_questions
+                )
+                if not has_coding:
+                    try:
+                        from app.data.coding_graph import _offline_coding_fallback, generate_coding_task
+                        from app.data.interview_graphs import _detect_candidate_tech_stack
+                        profile_blob = f"{job_desc}\n{resume_txt}"
+                        detected_lang = _detect_candidate_tech_stack(profile_blob)
+                        task_obj = None
+                        try:
+                            task_obj = generate_coding_task(profile_blob, [], interview_type="Technical", industry=session_row.get("industry") or "General")
+                        except Exception:
+                            pass
+                        if not task_obj or not task_obj.get("title"):
+                            task_obj = _offline_coding_fallback(profile_blob)
+                        if task_obj and task_obj.get("title"):
+                            task_obj["recommended_language"] = task_obj.get("recommended_language") or detected_lang
+                            ct_title = task_obj.get("title", "Coding Challenge")
+                            ct_desc = task_obj.get("description", "")
+                            coding_item = {
+                                "id": len(parsed_questions) + 1,
+                                "question": f"Live Coding Challenge: {ct_title} — {ct_desc[:240]}...",
+                                "quick_summary": f"Live Coding Challenge: {ct_title} — Candidate implements solution in Monaco Code Editor with test execution.",
+                                "key_points": [
+                                    "Optimal time/space complexity",
+                                    "Handles edge cases & boundary conditions",
+                                    "Passes visible and hidden automated test cases",
+                                    "Clean, readable syntax & modular logic",
+                                ],
+                                "model_answer": (
+                                    f"Optimal algorithmic approach for {ct_title}: Expected complexity O(N) or O(N log N). "
+                                    f"Starter function: `{task_obj.get('starter_function_signature') or task_obj.get('function_name') or 'solve'}`. "
+                                    f"Candidate must explain data structure selection, trade-offs, and run test verification."
+                                ),
+                                "category": "Coding Challenge",
+                                "difficulty": (task_obj.get("difficulty") or safe_diff).capitalize(),
+                                "question_type": "coding",
+                                "coding_task": task_obj,
+                            }
+                            insert_pos = min(len(parsed_questions), 2)
+                            parsed_questions.insert(insert_pos, coding_item)
+                    except Exception as code_inj_err:
+                        logger.warning(f"[RecruiterCopilot] Coding injection warning: {code_inj_err}")
         except Exception as cheat_err:
             logger.warning(f"[RecruiterCopilot] Cheat-sheet generation fallback triggered for {canonical_link_id}: {cheat_err}")
             if not parsed_questions:
-                custom_lines = [q.strip() for q in str(custom_qs or "").split("\n") if q.strip()]
-                seed_texts = custom_lines[:5] + [
-                    "Walk me through the most complex project on your resume and the architectural decisions you made.",
-                    "How do you diagnose and resolve a production bottleneck or failure in your core tech stack?",
-                    "What trade-offs do you consider when designing APIs, state, or databases for scale?",
-                    "Tell me about a time you collaborated across teams or resolved a technical disagreement.",
-                ]
-                parsed_questions = [
-                    _build_recruiter_fallback_item(idx, qt, difficulty=safe_diff)
-                    for idx, qt in enumerate(seed_texts[:7], start=1)
-                ]
+                if is_non_tech:
+                    seed_texts = [
+                        "A critical enterprise project is two weeks behind schedule due to unexpected stakeholder scope changes. How do you triage deliverable priorities, renegotiate expectations, and maintain internal team morale?",
+                        "Your department's operating budget has been cut by 25% mid-year while annual key performance targets remain fixed. How do you realign resource allocation and execute the strategy?",
+                        "Two executive department leaders hold fundamentally opposing priorities on an organization-wide initiative. As the program lead, how do you resolve the disagreement and achieve alignment?",
+                        "A core third-party technology vendor suffers a multi-day service interruption. Walk through your client escalation, operational continuity, and risk mitigation plan.",
+                        "User retention in your core business unit declined by 20% following a major policy rollout. What diagnostic approach do you take to identify the issue and execute a turnaround?",
+                        "A high-performing employee is consistently disruptive and uncooperative toward team members. How do you handle this situation while safeguarding team culture and business continuity?",
+                        "You must roll out an essential operational change that faces significant skepticism from long-tenured employees. How do you communicate and lead this transition?",
+                    ]
+                    parsed_questions = [
+                        _build_recruiter_fallback_item(
+                            idx,
+                            qt,
+                            category="Case Study",
+                            difficulty=safe_diff,
+                            question_type="case_study",
+                            case_study={
+                                "title": qt.split("?")[0][:60],
+                                "scenario": qt,
+                                "dilemma": "Analyze strategic trade-offs, stakeholder impact, and execution risk.",
+                                "competencies": ["Strategic Thinking", "Crisis Management", "Stakeholder Communication"],
+                                "probing_questions": ["What metrics would you monitor?", "How would you handle pushback from leadership?"],
+                            }
+                        )
+                        for idx, qt in enumerate(seed_texts[:7], start=1)
+                    ]
+                else:
+                    custom_lines = [q.strip() for q in str(custom_qs or "").split("\n") if q.strip()]
+                    seed_texts = custom_lines[:5] + [
+                        "Walk me through the most complex project on your resume and the architectural decisions you made.",
+                        "How do you diagnose and resolve a production bottleneck or failure in your core tech stack?",
+                        "What trade-offs do you consider when designing APIs, state, or databases for scale?",
+                        "Tell me about a time you collaborated across teams or resolved a technical disagreement.",
+                    ]
+                    parsed_questions = [
+                        _build_recruiter_fallback_item(idx, qt, difficulty=safe_diff)
+                        for idx, qt in enumerate(seed_texts[:7], start=1)
+                    ]
             else:
                 repaired = []
                 for idx, q in enumerate(parsed_questions, start=1):
@@ -2425,6 +2507,8 @@ def recruiter_generate_more_questions(
             job_desc = fresh_session.get("job_description") or (iv_doc or {}).get("job_description") or ""
             resume_txt = fresh_session.get("resume_text") or (iv_doc or {}).get("resume_text") or ""
             iv_type = fresh_session.get("interview_type") or (iv_doc or {}).get("interview_type") or "Technical"
+            iv_type_norm = (iv_type or "").strip().lower()
+            is_non_tech = any(k in iv_type_norm for k in ("non-technical", "non technical", "non_technical", "nontech", "normal", "case", "behavioral", "management", "hr"))
             diff_val = _safe_str_difficulty(fresh_session.get("project_difficulty") or fresh_session.get("difficulty"))
             industry_val = fresh_session.get("industry") or "General"
             language_val = fresh_session.get("language") or "English"
@@ -2450,23 +2534,49 @@ def recruiter_generate_more_questions(
                 )
             except Exception as gen_err:
                 logger.warning(f"[RecruiterCopilot] Infinite question generator fallback for {canonical_link_id}: {gen_err}")
-                more_seeds = [
-                    f"How do you approach scalability and maintainability tradeoffs in {iv_type} contexts?",
-                    "Walk me through a challenging bug or design flaw you encountered and how you solved it.",
-                    "What observability and telemetry metrics would you track in production for this system?",
-                    "How would you explain your architecture and technical decisions to non-technical stakeholders?",
-                    "How do you validate backward compatibility when rolling out breaking API or schema changes?",
-                    "What testing pyramid strategy ensures high confidence without slowing down release cycles?",
-                ]
-                new_items = [
-                    _build_recruiter_fallback_item(
-                        start_num + i,
-                        text,
-                        category="Core Technical" if "tech" in iv_type.lower() else "Case Study",
-                        difficulty=diff_val,
-                    )
-                    for i, text in enumerate(more_seeds)
-                ]
+                if is_non_tech:
+                    more_seeds = [
+                        "A critical cross-functional project is two weeks behind schedule due to unexpected stakeholder scope adjustments. How do you assess deliverable priorities, negotiate milestones with executive leadership, and manage client expectations?",
+                        "Two executive department leaders hold fundamentally opposing priorities on an organization-wide initiative. As the program lead, how do you resolve the disagreement and achieve alignment?",
+                        "A core third-party technology vendor suffers a multi-day service interruption. Walk through your client escalation, operational continuity, and risk mitigation plan.",
+                        "Your department's operating budget has been cut by 20% mid-year while annual key performance targets remain fixed. How do you realign resource allocation and execute the strategy?",
+                        "User retention in your core business unit declined by 20% following a major policy rollout. What diagnostic approach do you take to identify the issue and execute a turnaround?",
+                    ]
+                    new_items = [
+                        _build_recruiter_fallback_item(
+                            start_num + i,
+                            text,
+                            category="Case Study",
+                            difficulty=diff_val,
+                            question_type="case_study",
+                            case_study={
+                                "title": text.split("?")[0][:60],
+                                "scenario": text,
+                                "dilemma": "Analyze strategic trade-offs, stakeholder impact, and execution risk.",
+                                "competencies": ["Strategic Thinking", "Crisis Management", "Stakeholder Communication"],
+                                "probing_questions": ["What metrics would you monitor?", "How would you handle pushback from leadership?"],
+                            }
+                        )
+                        for i, text in enumerate(more_seeds)
+                    ]
+                else:
+                    more_seeds = [
+                        f"How do you approach scalability and maintainability tradeoffs in {iv_type} contexts?",
+                        "Walk me through a challenging bug or design flaw you encountered and how you solved it.",
+                        "What observability and telemetry metrics would you track in production for this system?",
+                        "How would you explain your architecture and technical decisions to non-technical stakeholders?",
+                        "How do you validate backward compatibility when rolling out breaking API or schema changes?",
+                        "What testing pyramid strategy ensures high confidence without slowing down release cycles?",
+                    ]
+                    new_items = [
+                        _build_recruiter_fallback_item(
+                            start_num + i,
+                            text,
+                            category="Core Technical",
+                            difficulty=diff_val,
+                        )
+                        for i, text in enumerate(more_seeds)
+                    ]
 
             # Final hard deduplication pass against existing_questions AND within new_items itself
             deduped_new_items: List[Dict[str, Any]] = []
@@ -2479,6 +2589,32 @@ def recruiter_generate_more_questions(
                 if not isinstance(item, dict):
                     continue
                 qt = str(item.get("question") or item.get("text") or "").strip()
+                if not qt:
+                    continue
+
+                # Strict guardrail: Non-Technical interviews must NEVER contain coding questions
+                if is_non_tech:
+                    if (
+                        item.get("question_type") == "coding"
+                        or bool(item.get("coding_task"))
+                        or "coding" in str(item.get("category") or "").lower()
+                        or "coding challenge" in qt.lower()
+                        or "live coding" in qt.lower()
+                        or "write a function" in qt.lower()
+                        or "implement an algorithm" in qt.lower()
+                    ):
+                        continue
+                    item["question_type"] = "case_study"
+                    item["category"] = "Case Study"
+                    if not item.get("case_study"):
+                        item["case_study"] = {
+                            "title": item.get("title") or qt[:60],
+                            "scenario": qt,
+                            "dilemma": item.get("quick_summary") or "Strategic analysis and operational decision-making.",
+                            "competencies": item.get("key_points") or ["Strategic Thinking", "Stakeholder Management"],
+                            "probing_questions": ["What metrics would you monitor?", "How would you address pushback?"],
+                        }
+
                 ct_obj = item.get("coding_task") if isinstance(item.get("coding_task"), dict) else {}
                 cs_obj = item.get("case_study") if isinstance(item.get("case_study"), dict) else {}
                 c_title = str(ct_obj.get("title") or extract_coding_title_from_text(qt) or "").strip()
